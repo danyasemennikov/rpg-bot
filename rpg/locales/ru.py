@@ -1,0 +1,351 @@
+# ============================================================
+# locales/ru.py — русский язык
+# ============================================================
+
+STRINGS = {
+
+    # ── ОБЩЕЕ ───────────────────────────────────────────────
+    'common': {
+        'yes':          'Да',
+        'no':           'Нет',
+        'back':         '◀️ Назад',
+        'cancel':       '❌ Отмена',
+        'confirm':      '✅ Подтвердить',
+        'error':        '❌ Ошибка',
+        'no_character': '❌ Сначала создай персонажа — /start',
+        'level':        'Уровень',
+        'exp':          'Опыт',
+        'gold':         'Золото',
+        'hp':           'HP',
+        'mana':         'Мана',
+        'level_short':  'Ур.',
+    },
+
+    # ── СОЗДАНИЕ ПЕРСОНАЖА ──────────────────────────────────
+    'start': {
+        'welcome':      '⚔️ Добро пожаловать в <b>Осколки Вечности</b>!\n\nКак зовут твоего героя?',
+        'name_taken':   '❌ Это имя уже занято. Выбери другое:',
+        'name_short':   '❌ Имя слишком короткое (минимум 2 символа):',
+        'name_long':    '❌ Имя слишком длинное (максимум 20 символов):',
+        'distribute':   '✅ Персонаж {name} создан!\n\nРаспредели 6 стартовых очков:',
+        'created':      '🎉 Герой {name} готов к приключениям!\n\nИспользуй кнопки внизу для навигации.',
+    },
+
+    # ── ПРОФИЛЬ ─────────────────────────────────────────────
+    'profile': {
+        'title':        '👤 <b>{name}</b>',
+        'level':        '⭐ Уровень: <b>{level}</b>',
+        'exp':          '✨ Опыт: <b>{exp}/{next_exp}</b>',
+        'gold':         '💰 Золото: <b>{gold}</b>',
+        'hp':           '❤️ HP: <b>{hp}/{max_hp}</b>',
+        'mana':         '🔵 Мана: <b>{mana}/{max_mana}</b>',
+        'location':     '📍 Локация: <b>{location}</b>',
+        'stats_title':  '📊 <b>Характеристики</b>',
+        'strength':     '💪 Сила: <b>{val}</b>',
+        'agility':      '🤸 Ловкость: <b>{val}</b>',
+        'intuition':    '🔮 Интуиция: <b>{val}</b>',
+        'vitality':     '❤️ Живучесть: <b>{val}</b>',
+        'wisdom':       '🧠 Мудрость: <b>{val}</b>',
+        'luck':         '🍀 Удача: <b>{val}</b>',
+        'stat_points':  '🔸 Свободных очков: <b>{val}</b>',
+        'reset_btn':     '🔄 Сбросить статы ({cost} 💰)',
+        'reset_ask':     '⚠️ <b>Сброс статов</b>\n\nСтоимость: <b>{cost} 💰</b>\nБудет возвращено очков: <b>{points}</b>\n\nВсе статы вернутся к <b>1</b>, а все вложенные и свободные очки будут возвращены.\n\nПодтверждаешь?',
+        'reset_confirm_btn': '✅ Да, сбросить',
+        'reset_cancel_btn':  '❌ Отмена',
+        'reset_ok':      '✅ <b>Статы сброшены!</b>\nПотрачено: <b>{cost} 💰</b>  |  Получено очков: <b>{points}</b>\n\n',
+        'saved_ok':      '✅ <b>Статы сохранены!</b>\n\n',
+        'reset_no_gold': '❌ Недостаточно золота! Нужно {cost} 💰',
+        'reset_success': '✅ Статы сброшены!',
+    },
+
+    # ── КЛАВИАТУРА ──────────────────────────────────────────
+    'keyboard': {
+        'location':     '📍 Локация',
+        'profile':      '👤 Профиль',
+        'inventory':    '🎒 Инвентарь',
+        'skills':       '🔮 Скиллы',
+        'quests':       '📋 Квесты',
+        'stats':        '📊 Статы',
+        'help':         '❓ Помощь',
+        'settings':     '⚙️ Настройки',
+    },
+
+    # ── ЛОКАЦИИ ─────────────────────────────────────────────
+    'location': {
+        'title':        '📍 <b>{name}</b>',
+        'description':  '{description}',
+        'mobs_title':   '\n👾 <b>Существа:</b>',
+        'travel_to':    '🚶 Идти в {name}',
+        'traveling':    '🚶 Ты идёшь в <b>{name}</b>...\nПрибытие через {seconds} сек.',
+        'arrived':      '✅ Ты прибыл в <b>{name}</b>!',
+        'in_battle':    '❌ Ты в бою! Сначала заверши сражение.',
+        'diff_easy':    '🟢 Лёгкий',
+        'diff_normal':  '🟡 Средний',
+        'diff_hard':    '🔴 Сложный',
+        'diff_deadly':  '💀 Смертельный',
+        'diff_unknown': '⚫ Неизвестно',
+        'safe_zone':        '⚠️ Безопасная зона',
+        'level_range':      'Ур. {min}–{max}',
+        'mobs_nearby':      '👁️ <b>Существа поблизости:</b>',
+        'aggressive_tag':   ' <b>[агр]</b>',
+        'attack_mob_btn':   '⚔️ Атаковать {name}',
+        'gather_title':     '🌿 <b>Можно собрать:</b>',
+        'gather_btn':       '🌿 Собирать ресурсы',
+        'shop_btn':         '🏪 Магазин',
+        'inn_btn':          '🏨 Таверна',
+        'quests_btn':       '📋 Квесты',
+        'travel_title':     '🗺️ <b>Перейти в:</b>',
+        'go_to_btn':        '➡️ {name}',
+        'locked_btn':       '🔒 {name} (Ур.{req})',
+        'not_found':        '❌ Локация не найдена!',
+        'level_required':   '❌ Нужен {level} уровень!',
+        'in_battle_move':   '⚔️ Нельзя уйти во время боя!',
+        'traveling':        '🚶 Ты направляешься в <b>{name}</b>...\n\n⏳ Переход займёт <b>15 секунд</b>.\n\n<i>Дорога петляет через {description}</i>',
+        'aggro_alert':      '⚠️ <b>{mob_name}</b> нападает на тебя!\n\nУр. {level}  ❤️ {hp} HP\n\n🏃 Побег: шанс <b>20%</b>. При провале моб атакует первым!',
+        'aggro_fight_btn':      '⚔️ Принять бой!',
+        'aggro_flee_btn':       '🏃 Сбежать! (20%)',
+        'aggro_fight_first_btn':'⚔️ Принять бой (моб ходит первым)!',
+        'aggro_flee_fail':  '❌ Сбежать не удалось! <b>{mob_name}</b> перехватывает тебя!\n\n😤 Моб атакует первым!\nУр. {level}  ❤️ {hp} HP',
+        'in_battle_block': '⚔️ Сначала разберись с противником!',
+    },
+
+    # ── БОЙ ─────────────────────────────────────────────────
+    'battle': {
+        
+        'attack_btn':   '⚔️ Атаковать',
+        'flee_btn':     '🏃 Сбежать',
+        'potions_btn':  '🧪 Зелья',
+ 
+        # UI боя
+        'player_label':  'Ты',
+        'unarmed':       'Кулаки',
+        'choose_potion': '🧪 <b>Выбери зелье:</b>',
+ 
+        # Сообщения атак
+        'attack_hit':   '⚔️ Ты наносишь <b>{damage}</b> урона.',
+        'attack_crit':  '💥 <b>КРИТ!</b> Ты наносишь <b>{damage}</b> урона!',
+        'mob_attack':   '🩸 {mob_name} атакует — <b>{damage}</b> урона.',
+        'player_dodge': '🌀 Ты уклоняешься от атаки!',
+        'mob_dodge':    '🌀 {mob_name} уклоняется!',
+        'stunned':      '💫 {mob_name} оглушён и пропускает ход!',
+ 
+        # Зелья
+        'potion_heal':  '❤️ +{amount} HP',
+        'potion_mana':  ' 🔵 +{amount} маны',
+        'potion_used':  'Использовано!',
+        'no_potions':   '❌ Нет зелий!',
+    
+        # Исход боя
+        'victory':     '🏆 <b>Победа!</b> {mob_name} повержен!\n\n✨ Опыт: +{exp}\n💰 Золото: +{gold}',
+        'loot':        '🎒 Получено: {items}',
+        'levelup':     '🎉 <b>УРОВЕНЬ!</b> Теперь ты {level} уровня!\n✨ Получено 3 очка статов — используй /stats',
+        'death':       '💀 <b>Ты погиб!</b>\n\n😵 Ты очнулся в <b>деревне</b> с 30% HP...\n\n📉 Потеряно: <b>{exp_loss}</b> опыта и <b>{gold_loss}</b> золота.\n\n<i>В следующий раз повезёт!</i>',
+        'death_first_strike': '💀 <b>{mob_name}</b> убивает тебя с первого удара!\n\n😵 Ты очнулся в деревне...\n📉 Потеряно: {exp_loss} опыта и {gold_loss} золота.',
+    
+        # Побег
+        'flee_success': '🏃 Ты успешно сбегаешь от <b>{mob_name}</b>!\n\n<i>Сердце колотится, но ты в безопасности...</i>',
+        'flee_fail':    '❌ Сбежать не удалось! {mob_name} бьёт тебя на <b>{damage}</b> урона!',
+        'flee_death':   '💀 Ты пытаешься сбежать, но <b>{mob_name}</b> настигает тебя!\n\n😵 Ты очнулся в деревне...\n📉 Потеряно: {exp_loss} опыта и {gold_loss} золота.',
+    
+        # Мастерство
+        'mastery_up':      '\n🗡️ Владение → Ур.<b>{level}</b>!',
+        'skill_unlocked':  '✨ Открыт: <b>{skill_name}</b>!',
+    
+        # Баффы
+        'buff_defense':     '🛡️ Защита -{value}% ({turns} ход)',
+        'buff_berserk':     '😤 Берсерк +{value}% ({turns} ход)',
+        'buff_blessing':    '✨ Благословение +{value}% ({turns} ход)',
+        'buff_regen':       '♻️ Реген ❤️+{amount} ({turns} ход)',
+        'buff_resurrection':'💫 Воскрешение готово',
+        'parry_reflect': '🔄 Парировано! Моб получает {damage} урона!',
+        'buff_resurrection_proc': '💫 Воскрешение сработало! ❤️ +{hp} HP',
+        'buff_invincible':      '🌟 Неуязвимость: {turns} хода',
+        'buff_dodge':           '🌀 Уклонение +{value}%: {turns} хода',
+        'buff_guaranteed_crit': '🎯 Гарантированный крит: {turns} атак',
+        'buff_hunters_mark':    '🔍 Метка охотника: {turns} хода',
+        'buff_vulnerability':   '💢 Уязвимость цели: {turns} хода',
+        'buff_disarm':          '🤺 Обезоружен: {turns} хода',
+        'buff_fire_shield':     '🔆 Огненный щит {value} урона: {turns} хода',
+        'counter_attack': '⚔️ Контратака! {damage} урона в ответ',
+        'invincible': '🌟 Неуязвимость! Удар отражён.',
+        'fire_shield_reflect': '🔆 Огненный щит — {damage} урона отражено!',
+            
+        # Ошибки / состояния
+        'mob_not_found':     '❌ Моб не найден!',
+        'already_in_battle': '❌ Ты уже в бою!',
+        'state_lost':        '❌ Состояние боя потеряно — бот был перезапущен.\nИди в /location и начни новый бой.',
+        'already_over':      '❌ Этот бой уже завершён',
+    
+        # Эффекты (уже были)
+        'effect_poison': '☠️ Яд наносит {damage} урона!',
+        'effect_burn':   '🔥 Горение наносит {damage} урона!',
+        'regen':         '♻️ Реген восстанавливает {amount} HP.',
+    },
+ 
+
+    # ── ИНВЕНТАРЬ ───────────────────────────────────────────
+    'inventory': {
+        'title':            '🎒 <b>Инвентарь</b>',
+        'empty':            '<i>Здесь пусто</i>',
+        'tab_weapon':       '⚔️ Оружие',
+        'tab_armor':        '🛡️ Броня',
+        'tab_potion':       '🧪 Зелья',
+        'tab_material':     '📦 Материалы',
+        'equipped':         ' ✅',
+        'equip_btn':        '📥 Надеть',
+        'unequip_btn':      '📤 Снять',
+        'use_btn':          '💊 Использовать',
+        'drop_btn':         '🗑️ Выбросить',
+        'transfer_btn':     '📨 Передать',
+        'equipped_tag':     ' <b>[надет]</b>',
+        'req_level':        '❌ Нужен {level} уровень!',
+        'req_strength':     '❌ Нужно {val} Силы!',
+        'req_agility':      '❌ Нужно {val} Ловкости!',
+        'req_intuition':    '❌ Нужно {val} Интуиции!',
+        'req_wisdom':       '❌ Нужно {val} Мудрости!',
+        'equipped_ok':      '✅ {name} надет!',
+        'unequipped_ok':    '📤 Снято!',
+        'drop_equipped':    '❌ Сначала сними предмет!',
+        'dropped':          '🗑️ {name} выброшен!',
+        'healed':           '❤️ +{val} HP',
+        'mana_restored':    '🔵 +{val} маны',
+        'transfer_prompt':  '📨 <b>Передача предмета</b>\n\nНапиши @username игрока:\n\n<i>Напиши /inventory чтобы отменить</i>',
+        'transfer_ok':      '✅ <b>{name}</b> передан игроку @{username}!',
+        'transfer_self':    '❌ Нельзя передать самому себе!',
+        'transfer_not_found': '❌ Игрок @{username} не найден!',
+        'item_not_found':   '❌ Предмет не найден!',
+        'item_missing':     '❌ Предмет не найден!',
+        'used_ok':          'Использовано!',
+        'back_btn':         '◀️ Назад',
+        'weight':           '⚖️ Вес: {val}',
+        'quantity':         '📦 Количество: {val}',
+        'reqs':             '📋 Требования: {val}',
+        'bonuses':          '✨ Бонусы: {val}',
+        'damage':           '⚔️ Урон: <b>{min}–{max}</b>',
+        'defense':          '🛡️ Защита: <b>{val}</b>',
+        'rarity_common':    '⚪',
+        'rarity_uncommon':  '🟢',
+        'rarity_rare':      '🔵',
+        'rarity_epic':      '🟣',
+        'rarity_legendary': '🟡',
+    },
+
+    # ── СКИЛЛЫ ──────────────────────────────────────────────
+    'skills': {
+        'title':            '⚔️ <b>Навыки</b>',
+        'weapon_label':     '🗡️ Оружие: <b>{name}</b>',
+        'mastery_level':    'Владение Ур.<b>{level}</b>/20',
+        'skill_points':     'Очков скиллов: <b>{points}</b>',
+        'branch_a':         '⚔️ Ветка A',
+        'branch_b':         '🛡️ Ветка B',
+        'branch_base':      '📖 Базовые',
+        'locked':           '🔒 {name} (нужно Ур.{level})',
+        'not_learned':      '⭕ {name} — не изучен',
+        'max_level':        '✅ {name} — Ур.{level}/{max} МАКС',
+        'can_upgrade':      '🔶 {name} — Ур.{level}/{max}',
+        'learn_btn':        '⭕ {name} — изучить (1 очко)',
+        'upgrade_btn':      '🔶 {name} Ур.{level} → {next} (1 очко)',
+        'no_points':        '❌ Нет очков скиллов',
+        'upgraded':         '✅ {name} → Ур.{level}!',
+        'base_skills':      '📖 Базовые навыки',
+        'cooldown':         'Кулдаун: <b>{turns} хода</b>',
+        'no_cooldown':      'Кулдаун: <b>нет</b>',
+        'scale_stat':       'Масштабируется: {stat}',
+        'current_effect':   '📊 Текущий эффект: <b>{val}</b>',
+        'next_level':       '📈 Следующий уровень: <b>{val}</b>',
+        'upgrade_cost':     '⬆️ Прокачать (1 очко)',
+        'back_btn':      '◀️ Назад',
+        'unarmed':       '👊 Кулаки',
+        'skill_not_found': '❌ Скилл не найден',
+        'mastery_info':  'Владение Ур.<b>{level}</b>/20 | Очков: <b>{points}</b>',
+        'tree_btn':      '📖 {name} Ур.{level}',
+        # ответы скиллов из боя
+        'not_learned_simple': '❌ Скилл не изучен!',
+        'on_cooldown':        '⏳ {name} — кулдаун {cd} ход(а)',
+        'no_mana':            '🔵 Не хватает маны! Нужно {cost}',
+        'log_damage':         '{name} — {dmg} урона 🔵-{cost}',
+        'log_damage_multi':   '{name} — {hits} ударов: [{parts}] = {total} урона 🔵-{cost}',
+        'log_damage_effect':  '{name} — {dmg} урона + эффект 🔵-{cost}',
+        'log_heal':           '{name} — ❤️ +{hp} HP 🔵-{cost}',
+        'log_buff':           '{name} — активирован на {turns} хода 🔵-{cost}',
+        'log_regen':          '{name} — ❤️+{amount}/ход на {turns} хода 🔵-{cost}',
+        'log_defense':        '{name} — 🛡️ -{value}% урона на {turns} хода 🔵-{cost}',
+        'log_berserker':      '{name} — ⚔️+{value}% урона, 🛡️-30% защиты на 3 хода 🔵-{cost}',
+        'log_blessing':       '{name} — ✨ все статы +{value}% на {turns} хода 🔵-{cost}',
+        'log_resurrection':   '{name} — 💫 воскреснешь с {value}% HP если погибнешь 🔵-{cost}',
+        'log_parry':          '{name} — следующая атака врага отразится 🔵-{cost}',
+        'log_lifesteal':      ' ❤️+{hp}',
+        'log_piercing':       ' (непробиваемый!)',
+        'log_effect_ok':      ' + {effect}!',
+        'log_effect_applied': '{name} — наложен {effect} на {turns} хода 🔵-{cost}',
+        'log_effect_fail':    '{name} — эффект не применился 🔵-{cost}',
+        'effect_poison':      'Яд',
+        'effect_burn':        'Горение',
+        'effect_stun':        'Оглушение',
+        'effect_freeze':      'Заморозка',
+        'effect_slow':        'Замедление',
+        'skills.log_damage_effect': '{name} — {dmg} урона + эффект 🔵-{cost}',
+        'log_disarm': '{name} — ⚔️ урон врага -{value}% на 2 хода 🔵-{cost}',
+        'log_dodge_buff': '{name} — 🌀 уклонение +{value}% на {turns} хода 🔵-{cost}',
+        'log_guaranteed_crit': '{name} — 🎯 гарантированный крит на {turns} атак 🔵-{cost}',
+        'log_invincible':      '{name} — 🌟 неуязвимость на {turns} хода 🔵-{cost}',
+        'battle.invincible':          '🌟 Неуязвимость! Удар отражён.',
+        
+        'log_backstab_crit': '{name} — 💥 КРИТ по уязвимой цели! {dmg} урона 🔵-{cost}',
+        'log_envenom': '{name} — 🐍 следующий яд наносит двойной урон 🔵-{cost}',
+        'log_hunters_mark': '{name} — 🔍 цель помечена, урон +{value}% на 3 хода 🔵-{cost}',
+        'log_blizzard': '{name} — 🌨️ точность врага -{value}% на 3 хода 🔵-{cost}',
+        'log_venom_storm': '{name} — ☠️ 3 стека яда по {dmg}/ход 🔵-{cost}',
+        'log_sword_rush': '{name} — ⚡ {dmg} урона + уязвимость цели на 2 хода 🔵-{cost}',
+        'log_fire_shield': '{name} — 🔆 щит отражает {value} урона на {turns} хода 🔵-{cost}',
+
+    },
+
+    # ── КВЕСТЫ ──────────────────────────────────────────────
+    'quests': {
+        'title':            '📋 <b>Квесты</b>',
+        'active':           '📋 <b>Активные квесты</b>',
+        'available':        '📜 Доступные квесты',
+        'completed':        '✅ Выполненные',
+        'empty_active':     '<i>Нет активных квестов</i>',
+        'empty_available':  '<i>Нет доступных квестов</i>',
+        'accept_btn':       '📜 Принять квест',
+        'accepted':         '✅ Квест принят: <b>{title}</b>',
+        'already_taken':    '❌ Квест уже принят',
+        'step_done':        '✅ Шаг выполнен!',
+        'quest_done':       '🎉 Квест выполнен!',
+        'reward_exp':       '✨ +{val} опыта',
+        'reward_gold':      '💰 +{val} золота',
+        'reward_item':      '📦 Получен предмет: {name}',
+        'low_level':        '❌ Нужен {level} уровень',
+        'progress':         'Прогресс: {current}/{total}',
+        'challenge_fail':   '❌ Условие не выполнено',
+        'talk_to':          '💬 Поговори с {npc}',
+        'find_clue':        '🔍 Найди улику',
+        'kill_mob':         '⚔️ Убей {mob}',
+        'deliver_item':     '📦 Принеси {item}',
+    },
+
+    # ── НАСТРОЙКИ ───────────────────────────────────────────
+    'settings': {
+        'title':            '⚙️ <b>Настройки</b>',
+        'language':         '🌍 Язык игры',
+        'language_set':     '✅ Язык изменён!',
+        'current_lang': 'Текущий язык: {lang_name}',
+    },
+
+    # ── ПОМОЩЬ ──────────────────────────────────────────────
+    'help': {
+        'title':    '❓ <b>Помощь</b>',
+        'commands': (
+            '/start — создать персонажа\n'
+            '/profile — профиль\n'
+            '/inventory — инвентарь\n'
+            '/skills — навыки\n'
+            '/quests — квесты\n'
+            '/settings — настройки\n'
+            '/unstuck — застрял? используй это\n'
+            '/help — эта справка'
+        ),
+    },
+}
