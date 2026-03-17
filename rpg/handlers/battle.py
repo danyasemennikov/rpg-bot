@@ -7,7 +7,7 @@ sys.path.append('/content/rpg_bot')
 import random
 
 from game.skill_engine import get_battle_skills, use_skill, apply_mob_effects, apply_player_buffs
-from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns, get_skill_level
+from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -15,7 +15,7 @@ from database import get_player, get_connection
 from game.mobs import get_mob
 from game.combat import (
     init_battle, process_turn, calc_rewards,
-    calc_death_penalty, hp_bar
+    calc_death_penalty, hp_bar, resolve_enemy_response
 )
 from game.balance import exp_to_next_level, calc_max_hp
 from game.items_data import get_item
@@ -82,7 +82,8 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
         new_level += 1
         leveled_up = True
 
-    stat_points = player['stat_points'] + (3 if leveled_up else 0)
+    levels_gained = new_level - player['level']
+    stat_points = player['stat_points'] + (3 * levels_gained)
 
     conn = get_connection()
     try:
@@ -128,6 +129,9 @@ def apply_death(telegram_id: int, player: dict):
            WHERE telegram_id=?''',
         (new_exp, new_gold, revive_hp, telegram_id)
     )
+    conn.commit()
+    conn.close()
+
     conn2 = get_connection()
     conn2.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (telegram_id,))
     conn2.commit()
@@ -529,14 +533,8 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             await safe_edit(query, victory_text + mastery_text, parse_mode='HTML')
             return
 
-        # Ход моба
-        from game.combat import mob_attack
+        # Ход моба: используем единый путь ответа врага после действия игрока
         mob_state['effects'] = battle_state.get('mob_effects', [])
-
-        mob_stunned = any(
-            e['type'] in ('stun', 'freeze', 'slow')
-            for e in mob_state['effects']
-        )
 
         eff_dmg, eff_log = apply_mob_effects(mob_state)
         if eff_dmg > 0:
@@ -550,51 +548,8 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         battle_state['mob_effects'] = mob_state.get('effects', [])
 
         if battle_state['mob_hp'] > 0:
-            if mob_stunned:
-                log.append(t('battle.stunned', lang, mob_name=get_mob_name(mob['id'], lang)))
-            elif battle_state.get('parry_active'):
-                mob_result = mob_attack(mob, p)
-                parry_dmg = int(mob_result['damage'] * battle_state.get('parry_value', 1.0))
-                battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - parry_dmg)
-                battle_state['parry_active'] = False
-                log.append(t('battle.parry_reflect', lang, damage=parry_dmg))
-            else:
-                mob_dodged = False
-
-                if battle_state.get('invincible_turns', 0) > 0:
-                    mob_dodged = True
-                    battle_state['invincible_turns'] -= 1
-                    log.append(t('battle.invincible', lang))
-                elif battle_state.get('dodge_buff_turns', 0) > 0:
-                    dodge_chance = battle_state['dodge_buff_value'] / 100
-                    if random.random() < dodge_chance:
-                        mob_dodged = True
-                        log.append(t('battle.player_dodge', lang))
-                    battle_state['dodge_buff_turns'] -= 1
-
-                if not mob_dodged:
-                    mob_result = mob_attack(mob, p)
-                    mob_dmg = mob_result['damage']
-                    if battle_state.get('defense_buff_turns', 0) > 0:
-                        mob_dmg = int(mob_dmg * (1 - battle_state['defense_buff_value'] / 100))
-                    if battle_state.get('disarm_turns', 0) > 0:
-                        mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
-                        battle_state['disarm_turns'] -= 1
-                    battle_state['player_hp'] = max(0, battle_state['player_hp'] - mob_dmg)
-                    log.append(t('battle.mob_attack', lang,
-                                 mob_name=get_mob_name(mob['id'], lang), damage=mob_dmg))
-                    if battle_state.get('fire_shield_turns', 0) > 0:
-                        shield_dmg = battle_state['fire_shield_value']
-                        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - shield_dmg)
-                        battle_state['fire_shield_turns'] -= 1
-                        log.append(t('battle.fire_shield_reflect', lang, damage=shield_dmg))
-                    counter_level = get_skill_level(user.id, 'counter')
-                    if counter_level > 0 and mob_dmg > 0:
-                        counter_chance = 0.30 + 0.05 * (counter_level - 1)
-                        if random.random() < counter_chance:
-                            counter_dmg = int(mob_dmg * (0.5 + 0.1 * counter_level))
-                            battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - counter_dmg)
-                            log.append(t('battle.counter_attack', lang, damage=counter_dmg))
+            p['hp'] = battle_state['player_hp']
+            log.extend(resolve_enemy_response(mob, p, battle_state, lang=lang, user_id=user.id))
 
         tick_cooldowns(user.id)
         battle_state['log'] = log[-6:]
