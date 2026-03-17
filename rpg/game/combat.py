@@ -48,6 +48,89 @@ def hp_bar(current: int, maximum: int, length: int = 10) -> str:
     filled = max(0, min(length, filled))
     return '█' * filled + '░' * (length - filled)
 
+
+def resolve_enemy_response(
+    mob: dict,
+    player: dict,
+    battle_state: dict,
+    lang: str = 'ru',
+    user_id: int | None = None,
+) -> list[str]:
+    """
+    Единый ответ моба после действия игрока.
+    Обновляет HP/эффекты в battle_state и возвращает лог строками.
+    """
+    log = []
+
+    mob_effects = battle_state.get('mob_effects', [])
+    mob_stunned = any(e['type'] in ('stun', 'freeze', 'slow') for e in mob_effects)
+    if mob_stunned:
+        log.append(t('battle.stunned', lang, mob_name=get_mob_name(mob['id'], lang)))
+        battle_state['player_hp'] = player['hp']
+        return log
+
+    if battle_state.get('parry_active'):
+        mob_result = mob_attack(mob, player)
+        parry_dmg = int(mob_result['damage'] * battle_state.get('parry_value', 1.0))
+        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - parry_dmg)
+        battle_state['parry_active'] = False
+        log.append(t('battle.parry_reflect', lang, damage=parry_dmg))
+        battle_state['player_hp'] = player['hp']
+        return log
+
+    mob_dodged = False
+    if battle_state.get('invincible_turns', 0) > 0:
+        mob_dodged = True
+        battle_state['invincible_turns'] -= 1
+        log.append(t('battle.invincible', lang))
+    elif battle_state.get('dodge_buff_turns', 0) > 0:
+        dodge_chance = battle_state.get('dodge_buff_value', 0) / 100
+        if random.random() < dodge_chance:
+            mob_dodged = True
+            log.append(t('battle.player_dodge', lang))
+        battle_state['dodge_buff_turns'] -= 1
+
+    if mob_dodged:
+        battle_state['player_hp'] = player['hp']
+        return log
+
+    mob_result = mob_attack(mob, player)
+    if mob_result.get('type') == 'dodge':
+        log.append(t('battle.player_dodge', lang))
+        battle_state['player_hp'] = player['hp']
+        return log
+
+    mob_dmg = mob_result['damage']
+    if battle_state.get('defense_buff_turns', 0) > 0:
+        mob_dmg = int(mob_dmg * (1 - battle_state['defense_buff_value'] / 100))
+    if battle_state.get('disarm_turns', 0) > 0:
+        mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
+        battle_state['disarm_turns'] -= 1
+
+    player['hp'] = max(0, player['hp'] - mob_dmg)
+    battle_state['player_hp'] = player['hp']
+    log.append(t('battle.mob_attack', lang,
+                 mob_name=get_mob_name(mob['id'], lang),
+                 damage=mob_dmg))
+
+    if battle_state.get('fire_shield_turns', 0) > 0:
+        shield_dmg = battle_state['fire_shield_value']
+        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - shield_dmg)
+        battle_state['fire_shield_turns'] -= 1
+        log.append(t('battle.fire_shield_reflect', lang, damage=shield_dmg))
+
+    if user_id is not None and mob_dmg > 0:
+        from game.weapon_mastery import get_skill_level
+        counter_level = get_skill_level(user_id, 'counter')
+        if counter_level > 0:
+            counter_chance = 0.30 + 0.05 * (counter_level - 1)
+            if random.random() < counter_chance:
+                counter_dmg = int(mob_dmg * (0.5 + 0.1 * counter_level))
+                battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - counter_dmg)
+                log.append(t('battle.counter_attack', lang, damage=counter_dmg))
+
+    return log
+
 # ────────────────────────────────────────
 # ОДИН ХОД ИГРОКА
 # ────────────────────────────────────────
@@ -206,7 +289,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
 # ОБРАБОТКА ПОЛНОГО ХОДА
 # ────────────────────────────────────────
 
-def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru') -> dict:
+def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', user_id: int | None = None) -> dict:
     log = []
     mob_state = {'hp': battle_state['mob_hp'], 'defense': mob.get('defense', 0)}
 
@@ -228,31 +311,6 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru') 
             if stat in player:
                 player[stat] = int(player[stat] * mult)
 
-    def mob_is_stunned():
-        return any(
-            e['type'] in ('stun', 'freeze', 'slow')
-            for e in battle_state.get('mob_effects', [])
-        )
-
-    def handle_mob_attack():
-        if mob_is_stunned():
-            log.append(t('battle.stunned', lang, mob_name=get_mob_name(mob['id'], lang)))
-            return
-        mob_result = mob_attack(mob, player)
-        if battle_state.get('parry_active'):
-            parry_dmg = int(mob_result['damage'] * battle_state.get('parry_value', 1.0))
-            mob_state['hp'] = max(0, mob_state['hp'] - parry_dmg)
-            battle_state['parry_active'] = False
-            log.append(t('battle.parry_reflect', lang, damage=parry_dmg))
-        elif mob_result.get('type') == 'dodge':
-            player['hp'] = mob_result['player_hp']
-            log.append(t('battle.player_dodge', lang))
-        else:
-            player['hp'] = mob_result['player_hp']
-            log.append(t('battle.mob_attack', lang,
-                         mob_name=get_mob_name(mob['id'], lang),
-                         damage=mob_result['damage']))
-
     if battle_state['player_goes_first']:
         result = player_attack(player, mob_state)
         if battle_state.get('hunters_mark_turns', 0) > 0:
@@ -271,9 +329,13 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru') 
             log.append(t('battle.attack_hit', lang, damage=result['damage']))
 
         if not result['mob_dead']:
-            handle_mob_attack()
+            battle_state['mob_hp'] = mob_state['hp']
+            log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
+            mob_state['hp'] = battle_state['mob_hp']
     else:
-        handle_mob_attack()
+        battle_state['mob_hp'] = mob_state['hp']
+        log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
+        mob_state['hp'] = battle_state['mob_hp']
 
         if player['hp'] > 0:
             result = player_attack(player, mob_state)
