@@ -598,7 +598,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             p['guaranteed_crit'] = True
             battle_state['guaranteed_crit_turns'] -= 1
 
-        battle_state = process_turn(p, mob, battle_state, lang)
+        battle_state = process_turn(p, mob, battle_state, lang, user_id=user.id)
         context.user_data['battle'] = battle_state
 
         tick_cooldowns(user.id)
@@ -690,10 +690,10 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             await query.answer()
             return
         else:
-            from game.combat import mob_attack
-            mob_result = mob_attack(mob, p)
-            new_hp     = mob_result['player_hp']
-            battle_state['player_hp'] = new_hp
+            p['hp'] = battle_state['player_hp']
+            prev_hp = battle_state['player_hp']
+            flee_log = resolve_enemy_response(mob, p, battle_state, lang=lang, user_id=user.id)
+            new_hp = battle_state['player_hp']
             context.user_data['battle'] = battle_state
 
             if new_hp <= 0:
@@ -710,10 +710,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 )
                 return
 
+            damage_taken = max(0, prev_hp - new_hp)
             flee_fail_header = t('battle.flee_fail', lang,
                                   mob_name=get_mob_name(mob['id'], lang),
-                                  damage=mob_result['damage'])
-            text, keyboard = build_battle_message(p, mob, battle_state, [])
+                                  damage=damage_taken)
+            text, keyboard = build_battle_message(p, mob, battle_state, flee_log)
             await safe_edit(query, 
                 flee_fail_header + '\n\n' + text,
                 reply_markup=keyboard,

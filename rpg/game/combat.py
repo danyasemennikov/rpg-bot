@@ -289,7 +289,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
 # ОБРАБОТКА ПОЛНОГО ХОДА
 # ────────────────────────────────────────
 
-def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru') -> dict:
+def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', user_id: int | None = None) -> dict:
     log = []
     mob_state = {'hp': battle_state['mob_hp'], 'defense': mob.get('defense', 0)}
 
@@ -330,11 +330,11 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru') 
 
         if not result['mob_dead']:
             battle_state['mob_hp'] = mob_state['hp']
-            log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang))
+            log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
             mob_state['hp'] = battle_state['mob_hp']
     else:
         battle_state['mob_hp'] = mob_state['hp']
-        log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang))
+        log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
         mob_state['hp'] = battle_state['mob_hp']
 
         if player['hp'] > 0:
