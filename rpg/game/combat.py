@@ -70,6 +70,24 @@ def apply_pre_enemy_response_ticks(mob: dict, battle_state: dict) -> list[str]:
     return log
 
 
+def apply_mob_effect_ticks(mob: dict, battle_state: dict) -> list[str]:
+    """Mob-only ticking для normal attack flow (без player buffs)."""
+    log = []
+    mob_state = {
+        'hp': battle_state['mob_hp'],
+        'defense': mob.get('defense', 0),
+        'effects': battle_state.get('mob_effects', []),
+    }
+
+    eff_dmg, eff_log = apply_mob_effects(mob_state)
+    if eff_dmg > 0:
+        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - eff_dmg)
+        log.append(eff_log)
+
+    battle_state['mob_effects'] = mob_state.get('effects', [])
+    return log
+
+
 
 def resolve_enemy_response(
     mob: dict,
@@ -313,7 +331,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
 
 def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', user_id: int | None = None) -> dict:
     log = []
-    log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
+    log.extend(apply_mob_effect_ticks(mob, battle_state))
     mob_state = {'hp': battle_state['mob_hp'], 'defense': mob.get('defense', 0)}
 
     player = dict(player)
@@ -369,6 +387,9 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
                 log.append(t('battle.attack_crit', lang, damage=result['damage']))
             else:
                 log.append(t('battle.attack_hit', lang, damage=result['damage']))
+
+    # Сохраняем прежний тайминг normal attack flow: player buffs тикают после exchange
+    apply_player_buffs(battle_state)
 
     battle_state['mob_dead']    = mob_state['hp'] <= 0
     battle_state['player_dead'] = player['hp'] <= 0
