@@ -82,8 +82,7 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
         new_level += 1
         leveled_up = True
 
-    levels_gained = new_level - player['level']
-    stat_points = player['stat_points'] + (3 * levels_gained)
+    stat_points = player['stat_points'] + (3 if leveled_up else 0)
 
     conn = get_connection()
     try:
@@ -129,9 +128,6 @@ def apply_death(telegram_id: int, player: dict):
            WHERE telegram_id=?''',
         (new_exp, new_gold, revive_hp, telegram_id)
     )
-    conn.commit()
-    conn.close()
-
     conn2 = get_connection()
     conn2.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (telegram_id,))
     conn2.commit()
@@ -679,10 +675,10 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             await query.answer()
             return
         else:
-            p['hp'] = battle_state['player_hp']
-            prev_hp = battle_state['player_hp']
-            flee_log = resolve_enemy_response(mob, p, battle_state, lang=lang, user_id=user.id)
-            new_hp = battle_state['player_hp']
+            from game.combat import mob_attack
+            mob_result = mob_attack(mob, p)
+            new_hp     = mob_result['player_hp']
+            battle_state['player_hp'] = new_hp
             context.user_data['battle'] = battle_state
 
             if new_hp <= 0:
@@ -699,16 +695,16 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 )
                 return
 
-            damage_taken = max(0, prev_hp - new_hp)
             flee_fail_header = t('battle.flee_fail', lang,
                                   mob_name=get_mob_name(mob['id'], lang),
-                                  damage=damage_taken)
-            text, keyboard = build_battle_message(p, mob, battle_state, flee_log)
+                                  damage=mob_result['damage'])
+            text, keyboard = build_battle_message(p, mob, battle_state, [])
             await safe_edit(query, 
                 flee_fail_header + '\n\n' + text,
                 reply_markup=keyboard,
                 parse_mode='HTML'
             )
+
 
     try:
         await query.answer()
