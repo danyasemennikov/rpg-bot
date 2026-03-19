@@ -441,6 +441,23 @@ async def _handle_death_or_resurrection(
     )
     return True
 
+def _resolve_post_skill_combat_resolution(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    log: list,
+    lang: str,
+    user_id: int,
+) -> None:
+    """Единый post-skill combat resolution: тики перед ответом и ответ моба."""
+    log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
+
+    if battle_state['mob_hp'] > 0:
+        player['hp'] = battle_state['player_hp']
+        log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
+
+    battle_state['log'] = log[-6:]
+
 async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data  = query.data
@@ -602,15 +619,17 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             )
             return
 
-        # Ход моба: единый pre-turn ticking + единый ответ врага
-        log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
-
-        if battle_state['mob_hp'] > 0:
-            p['hp'] = battle_state['player_hp']
-            log.extend(resolve_enemy_response(mob, p, battle_state, lang=lang, user_id=user.id))
+        # Ход моба после скилла: pre-turn ticking + ответ врага + обновление лога
+        _resolve_post_skill_combat_resolution(
+            player=p,
+            mob=mob,
+            battle_state=battle_state,
+            log=log,
+            lang=lang,
+            user_id=user.id,
+        )
 
         tick_cooldowns(user.id)
-        battle_state['log'] = log[-6:]
         context.user_data['battle'] = battle_state
 
         conn = get_connection()
