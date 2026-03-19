@@ -6,7 +6,7 @@ import sys, json
 sys.path.append('/content/rpg_bot')
 import random
 
-from game.skill_engine import get_battle_skills, use_skill
+from game.skill_engine import get_battle_skills
 from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -15,7 +15,7 @@ from database import get_player, get_connection
 from game.mobs import get_mob
 from game.combat import (
     init_battle, process_turn, calc_rewards,
-    calc_death_penalty, hp_bar, resolve_enemy_response, apply_pre_enemy_response_ticks
+    calc_death_penalty, hp_bar, resolve_enemy_response, process_skill_turn
 )
 from game.balance import exp_to_next_level, calc_max_hp
 from game.items_data import get_item
@@ -441,23 +441,6 @@ async def _handle_death_or_resurrection(
     )
     return True
 
-def _resolve_post_skill_combat_resolution(
-    player: dict,
-    mob: dict,
-    battle_state: dict,
-    log: list,
-    lang: str,
-    user_id: int,
-) -> None:
-    """Единый post-skill combat resolution: тики перед ответом и ответ моба."""
-    log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
-
-    if battle_state['mob_hp'] > 0:
-        player['hp'] = battle_state['player_hp']
-        log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
-
-    battle_state['log'] = log[-6:]
-
 async def _resolve_post_attack_combat_resolution(
     query,
     context,
@@ -640,42 +623,27 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         skill_id, mob_id = rest.split('|', 1)
 
         mob = context.user_data.get('battle_mob')
-        p['hp']   = battle_state['player_hp']
-        p['mana'] = battle_state['player_mana']
-        mob_state = {
-            'hp':      battle_state['mob_hp'],
-            'defense': mob.get('defense', 0),
-            'effects': battle_state.get('mob_effects', []),
-        }
+        turn_result = process_skill_turn(
+            skill_id=skill_id,
+            player=p,
+            mob=mob,
+            battle_state=battle_state,
+            user_id=user.id,
+            lang=lang,
+        )
 
-        result = use_skill(skill_id, p, mob_state, battle_state, user.id, lang)
-
-        if not result['success']:
-            await query.answer(result['log'], show_alert=True)
+        skill_result = turn_result['skill_result']
+        if not turn_result['success']:
+            await query.answer(skill_result['log'], show_alert=True)
             return
 
-        log = battle_state.get('log', [])
-        log.append(result['log'])
-
-        if result['damage'] > 0:
-            battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - result['damage'])
-
-        if result['heal'] > 0:
-            battle_state['player_hp'] = min(
-                battle_state['player_max_hp'],
-                battle_state['player_hp'] + result['heal']
-            )
-
-        if result['effects']:
-            if 'mob_effects' not in battle_state:
-                battle_state['mob_effects'] = []
-            battle_state['mob_effects'].extend(result['effects'])
+        battle_state = turn_result['battle_state']
 
         weapon_id = battle_state.get('weapon_id', 'unarmed')
         add_mastery_exp(user.id, weapon_id, 5)
 
         # Проверяем смерть моба после скилла
-        if battle_state['mob_hp'] <= 0:
+        if battle_state.get('mob_dead'):
             context.user_data['battle'] = battle_state
             await _handle_victory_cleanup(
                 query=query,
@@ -689,20 +657,10 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             )
             return
 
-        # Ход моба после скилла: pre-turn ticking + ответ врага + обновление лога
-        _resolve_post_skill_combat_resolution(
-            player=p,
-            mob=mob,
-            battle_state=battle_state,
-            log=log,
-            lang=lang,
-            user_id=user.id,
-        )
-
         tick_cooldowns(user.id)
         context.user_data['battle'] = battle_state
 
-        if battle_state['player_hp'] <= 0:
+        if battle_state.get('player_dead'):
             conn = get_connection()
             conn.execute(
                 'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
@@ -719,7 +677,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 mob=mob,
                 battle_state=battle_state,
                 lang=lang,
-                log=log,
+                log=battle_state['log'],
                 death_key='battle.death',
                 clear_player_dead_flag=False,
                 answer_on_resurrection=True,
