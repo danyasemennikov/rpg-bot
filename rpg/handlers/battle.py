@@ -696,11 +696,6 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
     # ── АТАКА ──
     if data.startswith('battle_attack_'):
-        p['guaranteed_crit'] = False
-        if battle_state.get('guaranteed_crit_turns', 0) > 0:
-            p['guaranteed_crit'] = True
-            battle_state['guaranteed_crit_turns'] -= 1
-
         battle_state = process_turn(p, mob, battle_state, lang, user_id=user.id)
         context.user_data['battle'] = battle_state
 

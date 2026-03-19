@@ -12,7 +12,12 @@ from game.balance import (
     calc_crit_reduction, calc_action_priority
 )
 from game.i18n import t, get_mob_name
-from game.skill_engine import apply_player_buffs, apply_mob_effects, use_skill
+from game.skill_engine import (
+    apply_player_buffs,
+    apply_mob_effects,
+    build_skill_result_log,
+    use_skill,
+)
 
 
 # ────────────────────────────────────────
@@ -113,6 +118,88 @@ def tick_post_action_timed_trigger_buffs(
         battle_state['resurrection_active'] = False
 
 
+def apply_direct_damage_action_modifiers(
+    battle_state: dict,
+    base_damage: int,
+    *,
+    can_consume_guaranteed_crit: bool,
+) -> dict:
+    """
+    Применяет модификаторы только к прямому урону действия игрока.
+    Возвращает итоговый урон и информацию, что именно было применено.
+    """
+    damage = max(0, base_damage)
+    modifiers_applied = False
+    guaranteed_crit_applied = False
+
+    if damage <= 0:
+        return {
+            'damage': damage,
+            'modifiers_applied': modifiers_applied,
+            'guaranteed_crit_applied': guaranteed_crit_applied,
+        }
+
+    if can_consume_guaranteed_crit and battle_state.get('guaranteed_crit_turns', 0) > 0:
+        damage = int(damage * 2.5)
+        battle_state['guaranteed_crit_turns'] -= 1
+        modifiers_applied = True
+        guaranteed_crit_applied = True
+
+    if battle_state.get('hunters_mark_turns', 0) > 0:
+        bonus = int(damage * battle_state['hunters_mark_value'] / 100)
+        damage += bonus
+        battle_state['hunters_mark_turns'] -= 1
+        modifiers_applied = True
+
+    if battle_state.get('vulnerability_turns', 0) > 0:
+        bonus = int(damage * battle_state['vulnerability_value'] / 100)
+        damage += bonus
+        battle_state['vulnerability_turns'] -= 1
+        modifiers_applied = True
+
+    return {
+        'damage': damage,
+        'modifiers_applied': modifiers_applied,
+        'guaranteed_crit_applied': guaranteed_crit_applied,
+    }
+
+
+def finalize_direct_damage_skill_result(skill_result: dict, lang: str) -> None:
+    """
+    Финализирует structured-результат direct-damage скилла после модификаторов урона.
+    """
+    if not skill_result.get('direct_damage_skill'):
+        return
+
+    final_damage = skill_result.get('damage', 0)
+    log_params = skill_result.get('log_params', {})
+    original_total = log_params.get('total')
+    log_key = skill_result.get('log_key')
+
+    # Для multi-hit при модификаторах урона не показываем старые части ударов.
+    # Переключаемся на честный итоговый лог с финальным уроном.
+    if log_key == 'skills.log_damage_multi' and original_total is not None and original_total != final_damage:
+        skill_result['log_key'] = 'skills.log_damage'
+        skill_result['log_params'] = {
+            'name': log_params.get('name', ''),
+            'dmg': final_damage,
+            'cost': log_params.get('cost', 0),
+        }
+        skill_result['log_suffixes'] = []
+        log_params = skill_result['log_params']
+
+    if 'dmg' in log_params:
+        log_params['dmg'] = final_damage
+    if 'total' in log_params:
+        log_params['total'] = final_damage
+
+    lifesteal_ratio = skill_result.get('lifesteal_ratio', 0)
+    if lifesteal_ratio > 0:
+        skill_result['heal'] = int(final_damage * lifesteal_ratio)
+
+    skill_result['log'] = build_skill_result_log(skill_result, lang)
+
+
 def process_skill_turn(
     skill_id: str,
     player: dict,
@@ -144,11 +231,19 @@ def process_skill_turn(
             'battle_state': battle_state,
         }
 
+    direct_damage = skill_result.get('damage', 0)
+    if direct_damage > 0:
+        damage_result = apply_direct_damage_action_modifiers(
+            battle_state,
+            direct_damage,
+            can_consume_guaranteed_crit=True,
+        )
+        skill_result['damage'] = damage_result['damage']
+        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - skill_result['damage'])
+        finalize_direct_damage_skill_result(skill_result, lang)
+
     log = battle_state.get('log', [])
     log.append(skill_result['log'])
-
-    if skill_result['damage'] > 0:
-        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - skill_result['damage'])
 
     if skill_result['heal'] > 0:
         battle_state['player_hp'] = min(
@@ -442,18 +537,26 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
             if stat in player:
                 player[stat] = int(player[stat] * mult)
 
+    should_force_crit = battle_state.get('guaranteed_crit_turns', 0) > 0
+    player['guaranteed_crit'] = should_force_crit
+
     if battle_state['player_goes_first']:
         result = player_attack(player, mob_state)
-        if battle_state.get('hunters_mark_turns', 0) > 0:
-            bonus = int(result['damage'] * battle_state['hunters_mark_value'] / 100)
-            result['damage'] += bonus
-            mob_state['hp'] = max(0, mob_state['hp'] - bonus)
-            battle_state['hunters_mark_turns'] -= 1
-        if battle_state.get('vulnerability_turns', 0) > 0:
-            bonus = int(result['damage'] * battle_state['vulnerability_value'] / 100)
-            result['damage'] += bonus
-            mob_state['hp'] = max(0, mob_state['hp'] - bonus)
-            battle_state['vulnerability_turns'] -= 1
+        damage_result = apply_direct_damage_action_modifiers(
+            battle_state,
+            result['damage'],
+            can_consume_guaranteed_crit=False,
+        )
+        adjusted_damage = damage_result['damage']
+        bonus_damage = max(0, adjusted_damage - result['damage'])
+        if bonus_damage > 0:
+            mob_state['hp'] = max(0, mob_state['hp'] - bonus_damage)
+            result['damage'] = adjusted_damage
+            result['mob_dead'] = mob_state['hp'] <= 0
+
+        if result.get('is_crit') and should_force_crit:
+            battle_state['guaranteed_crit_turns'] -= 1
+
         if result.get('is_crit'):
             log.append(t('battle.attack_crit', lang, damage=result['damage']))
         else:
@@ -470,16 +573,21 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
 
         if player['hp'] > 0:
             result = player_attack(player, mob_state)
-            if battle_state.get('hunters_mark_turns', 0) > 0:
-                bonus = int(result['damage'] * battle_state['hunters_mark_value'] / 100)
-                result['damage'] += bonus
-                mob_state['hp'] = max(0, mob_state['hp'] - bonus)
-                battle_state['hunters_mark_turns'] -= 1
-            if battle_state.get('vulnerability_turns', 0) > 0:
-                bonus = int(result['damage'] * battle_state['vulnerability_value'] / 100)
-                result['damage'] += bonus
-                mob_state['hp'] = max(0, mob_state['hp'] - bonus)
-                battle_state['vulnerability_turns'] -= 1
+            damage_result = apply_direct_damage_action_modifiers(
+                battle_state,
+                result['damage'],
+                can_consume_guaranteed_crit=False,
+            )
+            adjusted_damage = damage_result['damage']
+            bonus_damage = max(0, adjusted_damage - result['damage'])
+            if bonus_damage > 0:
+                mob_state['hp'] = max(0, mob_state['hp'] - bonus_damage)
+                result['damage'] = adjusted_damage
+                result['mob_dead'] = mob_state['hp'] <= 0
+
+            if result.get('is_crit') and should_force_crit:
+                battle_state['guaranteed_crit_turns'] -= 1
+
             if result.get('is_crit'):
                 log.append(t('battle.attack_crit', lang, damage=result['damage']))
             else:
