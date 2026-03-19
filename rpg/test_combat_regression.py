@@ -133,6 +133,77 @@ class CombatRegressionTests(unittest.TestCase):
 
         self.assertEqual(call_order, ['enemy_response', 'player_buffs'])
 
+    def test_skill_turn_uses_pre_enemy_response_ticks_before_enemy_response(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        call_order = []
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 5, 'heal': 0, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', side_effect=lambda *_args, **_kwargs: call_order.append('pre_ticks') or []), \
+             patch('game.combat.resolve_enemy_response', side_effect=lambda *_args, **_kwargs: call_order.append('enemy_response') or []):
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertEqual(call_order, ['pre_ticks', 'enemy_response'])
+
+    def test_skill_turn_skips_enemy_response_if_mob_dies_from_skill(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 3,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks') as pre_ticks_mock, \
+             patch('game.combat.resolve_enemy_response') as response_mock:
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(result['battle_state']['mob_dead'])
+        self.assertEqual(pre_ticks_mock.call_count, 0)
+        self.assertEqual(response_mock.call_count, 0)
+
+    def test_skill_turn_pre_enemy_ticks_can_kill_mob_and_skip_enemy_response(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 10,
+            'mob_effects': [],
+            'log': [],
+            'turn': 7,
+        }
+
+        def pre_ticks_side_effect(_mob, state):
+            state['mob_hp'] = 0
+            return ['dot']
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', side_effect=pre_ticks_side_effect), \
+             patch('game.combat.resolve_enemy_response') as response_mock:
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertTrue(result['battle_state']['mob_dead'])
+        self.assertEqual(result['battle_state']['turn'], 7)
+        self.assertEqual(response_mock.call_count, 0)
+
 
 class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
     async def test_normal_attack_kill_uses_victory_path_and_handler_does_not_reenter_enemy_response(self):
@@ -174,7 +245,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('battle', context.user_data)
         self.assertNotIn('battle_mob', context.user_data)
 
-    async def test_skill_action_triggers_enemy_response_once_when_battle_continues(self):
+    async def test_skill_action_calls_combat_core_once_when_battle_continues(self):
         update = _DummyUpdate('battle_skill_fireball|wolf')
         battle_state = {
             'player_hp': 100,
@@ -190,9 +261,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
-             patch('handlers.battle.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 5, 'heal': 0, 'effects': []}), \
-             patch('handlers.battle.apply_pre_enemy_response_ticks', return_value=[]), \
-             patch('handlers.battle.resolve_enemy_response', return_value=['enemy']) as response_mock, \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 5, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=45, player_hp=90, player_dead=False, mob_dead=False, log=['cast', 'enemy'])}) as skill_turn_mock, \
              patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
              patch('handlers.battle.tick_cooldowns'), \
              patch('handlers.battle.get_connection') as conn_mock, \
@@ -206,42 +275,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             conn_mock.return_value = conn
             await battle_handler.handle_battle_buttons(update, context)
 
-        self.assertEqual(response_mock.call_count, 1)
-
-    async def test_skill_flow_uses_pre_enemy_response_ticks_before_enemy_response(self):
-        update = _DummyUpdate('battle_skill_fireball|wolf')
-        battle_state = {
-            'player_hp': 100,
-            'player_max_hp': 100,
-            'player_mana': 80,
-            'player_max_mana': 100,
-            'mob_hp': 50,
-            'mob_effects': [],
-            'log': [],
-            'weapon_id': 'unarmed',
-        }
-        mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
-        context = _DummyContext(battle_state, mob)
-        call_order = []
-
-        with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
-             patch('handlers.battle.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 5, 'heal': 0, 'effects': []}), \
-             patch('handlers.battle.apply_pre_enemy_response_ticks', side_effect=lambda *_args, **_kwargs: call_order.append('pre_ticks') or []), \
-             patch('handlers.battle.resolve_enemy_response', side_effect=lambda *_args, **_kwargs: call_order.append('enemy_response') or []), \
-             patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
-             patch('handlers.battle.tick_cooldowns'), \
-             patch('handlers.battle.get_connection') as conn_mock, \
-             patch('handlers.battle.build_battle_message', return_value=('msg', None)), \
-             patch('handlers.battle.safe_edit', new=AsyncMock()), \
-             patch('handlers.battle.t', side_effect=lambda key, lang='ru', **kwargs: key):
-            conn = Mock()
-            conn.execute.return_value = None
-            conn.commit.return_value = None
-            conn.close.return_value = None
-            conn_mock.return_value = conn
-            await battle_handler.handle_battle_buttons(update, context)
-
-        self.assertEqual(call_order, ['pre_ticks', 'enemy_response'])
+        self.assertEqual(skill_turn_mock.call_count, 1)
 
     async def test_skill_flow_skips_enemy_response_if_pre_response_ticks_kill_mob(self):
         update = _DummyUpdate('battle_skill_fireball|wolf')
@@ -258,14 +292,8 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
         context = _DummyContext(battle_state, mob)
 
-        def pre_ticks_side_effect(_mob, state):
-            state['mob_hp'] = 0
-            return ['dot']
-
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
-             patch('handlers.battle.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}), \
-             patch('handlers.battle.apply_pre_enemy_response_ticks', side_effect=pre_ticks_side_effect), \
-             patch('handlers.battle.resolve_enemy_response') as response_mock, \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=0, mob_dead=True, player_dead=False, log=['cast', 'dot'])}) as skill_turn_mock, \
              patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
              patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}), \
              patch('handlers.battle.end_battle'), \
@@ -275,7 +303,45 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('handlers.battle.get_mob_name', return_value='wolf'):
             await battle_handler.handle_battle_buttons(update, context)
 
+        self.assertEqual(skill_turn_mock.call_count, 1)
+
+    async def test_skill_pre_ticks_kill_routes_to_victory_cleanup(self):
+        update = _DummyUpdate('battle_skill_fireball|wolf')
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'player_max_mana': 100,
+            'mob_hp': 10,
+            'mob_effects': [],
+            'log': [],
+            'weapon_id': 'unarmed',
+            'turn': 4,
+        }
+        mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
+        context = _DummyContext(battle_state, mob)
+
+        def pre_ticks_side_effect(_mob, state):
+            state['mob_hp'] = 0
+            return ['dot']
+
+        with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
+             patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', side_effect=pre_ticks_side_effect), \
+             patch('game.combat.resolve_enemy_response') as response_mock, \
+             patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
+             patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}) as rewards_mock, \
+             patch('handlers.battle.end_battle') as end_battle_mock, \
+             patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
+             patch('handlers.battle.safe_edit', new=AsyncMock()), \
+             patch('handlers.battle.t', side_effect=lambda key, lang='ru', **kwargs: key), \
+             patch('handlers.battle.get_mob_name', return_value='wolf'):
+            await battle_handler.handle_battle_buttons(update, context)
+
         self.assertEqual(response_mock.call_count, 0)
+        self.assertEqual(rewards_mock.call_count, 1)
+        self.assertEqual(end_battle_mock.call_count, 1)
+        self.assertEqual(battle_state['turn'], 4)
 
     async def test_failed_flee_triggers_enemy_response_once(self):
         update = _DummyUpdate('battle_flee_wolf')
@@ -322,8 +388,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
-             patch('handlers.battle.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}), \
-             patch('handlers.battle.resolve_enemy_response') as response_mock, \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=0, mob_dead=True, player_dead=False, log=['cast'])}) as skill_turn_mock, \
              patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
              patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}), \
              patch('handlers.battle.end_battle'), \
@@ -333,7 +398,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('handlers.battle.get_mob_name', return_value='wolf'):
             await battle_handler.handle_battle_buttons(update, context)
 
-        self.assertEqual(response_mock.call_count, 0)
+        self.assertEqual(skill_turn_mock.call_count, 1)
 
     async def test_skill_kill_uses_victory_path_and_skips_enemy_response(self):
         update = _DummyUpdate('battle_skill_fireball|wolf')
@@ -351,8 +416,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
-             patch('handlers.battle.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}), \
-             patch('handlers.battle.resolve_enemy_response') as response_mock, \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=0, mob_dead=True, player_dead=False, log=['cast'])}) as skill_turn_mock, \
              patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
              patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}) as rewards_mock, \
              patch('handlers.battle.end_battle') as end_battle_mock, \
@@ -362,7 +426,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('handlers.battle.get_mob_name', return_value='wolf'):
             await battle_handler.handle_battle_buttons(update, context)
 
-        self.assertEqual(response_mock.call_count, 0)
+        self.assertEqual(skill_turn_mock.call_count, 1)
         self.assertEqual(rewards_mock.call_count, 1)
         self.assertEqual(end_battle_mock.call_count, 1)
 
@@ -382,14 +446,8 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
         context = _DummyContext(battle_state, mob)
 
-        def enemy_response_side_effect(*args, **kwargs):
-            args[2]['player_hp'] = 0
-            return ['enemy']
-
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
-             patch('handlers.battle.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}), \
-             patch('handlers.battle.apply_pre_enemy_response_ticks', return_value=[]), \
-             patch('handlers.battle.resolve_enemy_response', side_effect=enemy_response_side_effect), \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, player_hp=0, player_dead=True, mob_dead=False, log=['cast', 'enemy'])}), \
              patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
              patch('handlers.battle.tick_cooldowns'), \
              patch('handlers.battle.apply_death', return_value={'exp_loss': 1, 'gold_loss': 1}) as death_mock, \
@@ -429,14 +487,8 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
         context = _DummyContext(battle_state, mob)
 
-        def enemy_response_side_effect(*args, **kwargs):
-            args[2]['player_hp'] = 0
-            return ['enemy']
-
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
-             patch('handlers.battle.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}), \
-             patch('handlers.battle.apply_pre_enemy_response_ticks', return_value=[]), \
-             patch('handlers.battle.resolve_enemy_response', side_effect=enemy_response_side_effect), \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, player_hp=0, player_dead=True, mob_dead=False, log=['cast', 'enemy'])}), \
              patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
              patch('handlers.battle.tick_cooldowns'), \
              patch('handlers.battle.apply_death') as death_mock, \

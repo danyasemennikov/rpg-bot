@@ -12,7 +12,7 @@ from game.balance import (
     calc_crit_reduction, calc_action_priority
 )
 from game.i18n import t, get_mob_name
-from game.skill_engine import apply_player_buffs, apply_mob_effects
+from game.skill_engine import apply_player_buffs, apply_mob_effects, use_skill
 
 
 # ────────────────────────────────────────
@@ -86,6 +86,72 @@ def apply_mob_effect_ticks(mob: dict, battle_state: dict) -> list[str]:
 
     battle_state['mob_effects'] = mob_state.get('effects', [])
     return log
+
+
+def process_skill_turn(
+    skill_id: str,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    user_id: int,
+    lang: str = 'ru',
+) -> dict:
+    """
+    Обрабатывает ход игрока через скилл.
+    Сохраняет текущий порядок шагов из handler-логики:
+    use_skill -> применение результата -> pre-enemy ticks -> ответ моба.
+    """
+    player_state = dict(player)
+    player_state['hp'] = battle_state['player_hp']
+    player_state['mana'] = battle_state['player_mana']
+
+    mob_state = {
+        'hp': battle_state['mob_hp'],
+        'defense': mob.get('defense', 0),
+        'effects': battle_state.get('mob_effects', []),
+    }
+
+    skill_result = use_skill(skill_id, player_state, mob_state, battle_state, user_id, lang)
+    if not skill_result.get('success'):
+        return {
+            'success': False,
+            'skill_result': skill_result,
+            'battle_state': battle_state,
+        }
+
+    log = battle_state.get('log', [])
+    log.append(skill_result['log'])
+
+    if skill_result['damage'] > 0:
+        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - skill_result['damage'])
+
+    if skill_result['heal'] > 0:
+        battle_state['player_hp'] = min(
+            battle_state['player_max_hp'],
+            battle_state['player_hp'] + skill_result['heal']
+        )
+
+    if skill_result['effects']:
+        if 'mob_effects' not in battle_state:
+            battle_state['mob_effects'] = []
+        battle_state['mob_effects'].extend(skill_result['effects'])
+
+    if battle_state['mob_hp'] > 0:
+        log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
+
+    if battle_state['mob_hp'] > 0:
+        player_state['hp'] = battle_state['player_hp']
+        log.extend(resolve_enemy_response(mob, player_state, battle_state, lang=lang, user_id=user_id))
+
+    battle_state['mob_dead'] = battle_state['mob_hp'] <= 0
+    battle_state['player_dead'] = battle_state['player_hp'] <= 0
+    battle_state['log'] = log[-6:]
+
+    return {
+        'success': True,
+        'skill_result': skill_result,
+        'battle_state': battle_state,
+    }
 
 
 
