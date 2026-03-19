@@ -458,6 +458,76 @@ def _resolve_post_skill_combat_resolution(
 
     battle_state['log'] = log[-6:]
 
+async def _resolve_post_attack_combat_resolution(
+    query,
+    context,
+    user_id: int,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str,
+) -> bool:
+    """Единый post-attack combat resolution: victory/death/persist/render."""
+    # Моб убит
+    if battle_state['mob_dead']:
+        await _handle_victory_cleanup(
+            query=query,
+            context=context,
+            user_id=user_id,
+            player=player,
+            mob=mob,
+            battle_state=battle_state,
+            lang=lang,
+            levelup_before_loot=False,
+        )
+        return True
+
+    # Игрок убит
+    if battle_state['player_dead']:
+        await _handle_death_or_resurrection(
+            query=query,
+            context=context,
+            user_id=user_id,
+            player=player,
+            mob=mob,
+            battle_state=battle_state,
+            lang=lang,
+            log=battle_state['log'],
+            death_key='battle.death',
+            clear_player_dead_flag=True,
+            answer_on_resurrection=False,
+        )
+        return True
+
+    await _handle_battle_continues_update(
+        query=query,
+        user_id=user_id,
+        player=player,
+        mob=mob,
+        battle_state=battle_state,
+    )
+    return False
+
+async def _handle_battle_continues_update(
+    query,
+    user_id: int,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+) -> None:
+    """Общий путь для продолжающегося боя: persist hp/mana + рендер."""
+    conn = get_connection()
+    conn.execute(
+        'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
+        (battle_state['player_hp'], battle_state['player_mana'], user_id)
+    )
+    conn.commit()
+    conn.close()
+
+    # Бой продолжается
+    text, keyboard = build_battle_message(player, mob, battle_state, battle_state['log'])
+    await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+
 async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data  = query.data
@@ -632,15 +702,15 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         tick_cooldowns(user.id)
         context.user_data['battle'] = battle_state
 
-        conn = get_connection()
-        conn.execute(
-            'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
-            (battle_state['player_hp'], battle_state['player_mana'], user.id)
-        )
-        conn.commit()
-        conn.close()
-
         if battle_state['player_hp'] <= 0:
+            conn = get_connection()
+            conn.execute(
+                'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
+                (battle_state['player_hp'], battle_state['player_mana'], user.id)
+            )
+            conn.commit()
+            conn.close()
+
             await _handle_death_or_resurrection(
                 query=query,
                 context=context,
@@ -656,8 +726,13 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             )
             return
 
-        text, keyboard = build_battle_message(p, mob, battle_state, battle_state['log'])
-        await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+        await _handle_battle_continues_update(
+            query=query,
+            user_id=user.id,
+            player=p,
+            mob=mob,
+            battle_state=battle_state,
+        )
         await query.answer()
         return
 
@@ -673,49 +748,17 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
         tick_cooldowns(user.id)
 
-        # Моб убит
-        if battle_state['mob_dead']:
-            await _handle_victory_cleanup(
-                query=query,
-                context=context,
-                user_id=user.id,
-                player=p,
-                mob=mob,
-                battle_state=battle_state,
-                lang=lang,
-                levelup_before_loot=False,
-            )
-            return
-
-        # Игрок убит
-        if battle_state['player_dead']:
-            await _handle_death_or_resurrection(
-                query=query,
-                context=context,
-                user_id=user.id,
-                player=p,
-                mob=mob,
-                battle_state=battle_state,
-                lang=lang,
-                log=battle_state['log'],
-                death_key='battle.death',
-                clear_player_dead_flag=True,
-                answer_on_resurrection=False,
-            )
-            return
-
-        # Сохраняем HP и ману в БД после каждого хода
-        conn = get_connection()
-        conn.execute(
-            'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
-            (battle_state['player_hp'], battle_state['player_mana'], user.id)
+        handled = await _resolve_post_attack_combat_resolution(
+            query=query,
+            context=context,
+            user_id=user.id,
+            player=p,
+            mob=mob,
+            battle_state=battle_state,
+            lang=lang,
         )
-        conn.commit()
-        conn.close()
-
-        # Бой продолжается
-        text, keyboard = build_battle_message(p, mob, battle_state, battle_state['log'])
-        await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+        if handled:
+            return
 
     # ── ПОБЕГ ──
     elif data.startswith('battle_flee_'):
