@@ -359,6 +359,322 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertTrue(result['battle_state']['resurrection_active'])
         self.assertEqual(result['battle_state']['resurrection_turns'], 5)
 
+    def test_guaranteed_crit_is_consumed_by_normal_attack_in_combat_core(self):
+        player = {
+            'hp': 120,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'mob_hp': 100,
+            'player_hp': 120,
+            'player_goes_first': True,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'blessing_turns': 0,
+            'blessing_value': 0,
+            'turn': 1,
+        }
+
+        with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.apply_player_buffs', return_value=''):
+            result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
+
+        self.assertEqual(result['guaranteed_crit_turns'], 0)
+        self.assertLess(result['mob_hp'], 100)
+
+    def test_guaranteed_crit_is_consumed_by_damage_skill_but_not_by_non_damage_skill(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 10, 'heal': 0, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result_damage = combat.process_skill_turn('fireball', player, mob, dict(battle_state), user_id=101, lang='ru')
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 0, 'heal': 15, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result_heal = combat.process_skill_turn('heal', player, mob, dict(battle_state), user_id=101, lang='ru')
+
+        self.assertEqual(result_damage['battle_state']['guaranteed_crit_turns'], 0)
+        self.assertEqual(result_heal['battle_state']['guaranteed_crit_turns'], 1)
+
+    def test_hunters_mark_bonus_applies_to_normal_attack_and_decrements_on_use(self):
+        result = combat.apply_direct_damage_action_modifiers(
+            {'hunters_mark_turns': 2, 'hunters_mark_value': 50, 'vulnerability_turns': 0, 'vulnerability_value': 0, 'guaranteed_crit_turns': 0},
+            20,
+            can_consume_guaranteed_crit=False,
+        )
+        self.assertEqual(result['damage'], 30)
+
+    def test_hunters_mark_bonus_applies_to_damage_skill_and_decrements_only_on_damage(self):
+        state = {
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 2,
+            'hunters_mark_value': 50,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+        }
+
+        damage_result = combat.apply_direct_damage_action_modifiers(state, 20, can_consume_guaranteed_crit=True)
+        turns_after_damage = state['hunters_mark_turns']
+        heal_result = combat.apply_direct_damage_action_modifiers(state, 0, can_consume_guaranteed_crit=True)
+
+        self.assertEqual(damage_result['damage'], 30)
+        self.assertEqual(turns_after_damage, 1)
+        self.assertEqual(heal_result['damage'], 0)
+        self.assertEqual(state['hunters_mark_turns'], 1)
+
+    def test_vulnerability_bonus_applies_to_normal_attack_and_decrements_on_use(self):
+        state = {
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 2,
+            'vulnerability_value': 25,
+        }
+        result = combat.apply_direct_damage_action_modifiers(state, 20, can_consume_guaranteed_crit=False)
+        self.assertEqual(result['damage'], 25)
+        self.assertEqual(state['vulnerability_turns'], 1)
+
+    def test_vulnerability_bonus_applies_to_damage_skill_and_decrements_only_on_damage(self):
+        state = {
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 2,
+            'vulnerability_value': 25,
+        }
+        damage_result = combat.apply_direct_damage_action_modifiers(state, 20, can_consume_guaranteed_crit=True)
+        turns_after_damage = state['vulnerability_turns']
+        control_result = combat.apply_direct_damage_action_modifiers(state, 0, can_consume_guaranteed_crit=True)
+
+        self.assertEqual(damage_result['damage'], 25)
+        self.assertEqual(turns_after_damage, 1)
+        self.assertEqual(control_result['damage'], 0)
+        self.assertEqual(state['vulnerability_turns'], 1)
+
+    def test_non_damage_skill_action_does_not_consume_direct_damage_modifiers(self):
+        state = {
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 2,
+            'hunters_mark_value': 30,
+            'vulnerability_turns': 2,
+            'vulnerability_value': 30,
+        }
+        result = combat.apply_direct_damage_action_modifiers(state, 0, can_consume_guaranteed_crit=True)
+
+        self.assertEqual(result['damage'], 0)
+        self.assertEqual(state['guaranteed_crit_turns'], 1)
+        self.assertEqual(state['hunters_mark_turns'], 2)
+        self.assertEqual(state['vulnerability_turns'], 2)
+
+    def test_damage_skill_log_matches_final_modified_damage(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 1,
+            'vulnerability_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 0,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_damage',
+                'log_params': {'name': 'Fireball', 'dmg': 10, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        # 10 -> crit 25 -> hunter 30 -> vulnerability 36
+        self.assertEqual(result['skill_result']['damage'], 36)
+        self.assertIn('36', result['battle_state']['log'][-1])
+        self.assertNotIn('10', result['battle_state']['log'][-1])
+
+    def test_lifesteal_heal_stays_consistent_with_final_modified_damage(self):
+        player = {'hp': 40, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 40,
+            'player_max_hp': 200,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 3,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_damage',
+                'log_params': {'name': 'Drain', 'dmg': 10, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.30,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('drain', player, mob, battle_state, user_id=101, lang='ru')
+
+        # 10 -> crit 25 -> hunter 30, heal scales from 3 to 9
+        self.assertEqual(result['skill_result']['damage'], 30)
+        self.assertEqual(result['skill_result']['heal'], 9)
+        self.assertEqual(result['battle_state']['player_hp'], 49)
+        self.assertIn('30', result['battle_state']['log'][-1])
+        self.assertIn('❤️+9', result['battle_state']['log'][-1])
+
+    def test_non_damage_skill_flow_keeps_existing_log_unchanged(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 1,
+            'vulnerability_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'Heal +15', 'damage': 0, 'heal': 15, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('heal', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['log'][-1], 'Heal +15')
+
+    def test_disarm_log_matches_final_modified_damage(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 0,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_damage_effect',
+                'log_params': {'name': 'Disarm', 'dmg': 10, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('disarm', player, mob, battle_state, user_id=101, lang='ru')
+
+        # 10 -> crit 25 -> hunter 30
+        self.assertEqual(result['skill_result']['damage'], 30)
+        self.assertIn('30', result['battle_state']['log'][-1])
+        self.assertNotIn('10', result['battle_state']['log'][-1])
+
+    def test_multi_hit_skill_with_modifiers_uses_consistent_final_log(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 300,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 1,
+            'vulnerability_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 30,
+                'heal': 0,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_damage_multi',
+                'log_params': {'name': 'Flurry', 'hits': 3, 'parts': '8, 11, 11', 'total': 30, 'cost': 7},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('flurry', player, mob, battle_state, user_id=101, lang='ru')
+
+        # 30 -> crit 75 -> hunter 90 -> vulnerability 108
+        self.assertEqual(result['skill_result']['damage'], 108)
+        final_log = result['battle_state']['log'][-1]
+        self.assertIn('108', final_log)
+        self.assertNotIn('[8, 11, 11]', final_log)
+
 
 class SkillEngineRegressionTests(unittest.TestCase):
     def test_resurrection_skill_sets_runtime_turns_from_duration(self):
@@ -384,6 +700,38 @@ class SkillEngineRegressionTests(unittest.TestCase):
 
 
 class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_handler_attack_path_does_not_manually_consume_guaranteed_crit_before_process_turn(self):
+        update = _DummyUpdate('battle_attack_wolf')
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 50,
+            'player_max_mana': 100,
+            'mob_hp': 40,
+            'log': [],
+            'weapon_id': 'unarmed',
+            'guaranteed_crit_turns': 2,
+            'mob_dead': False,
+            'player_dead': False,
+        }
+        mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
+        context = _DummyContext(battle_state, mob)
+        captured_turns = {}
+
+        def process_turn_side_effect(_p, _mob, state, _lang, user_id=None):
+            captured_turns['value'] = state.get('guaranteed_crit_turns')
+            return dict(state, mob_dead=False, player_dead=False, log=['hit'])
+
+        with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 50, 'lang': 'ru'}), \
+             patch('handlers.battle.process_turn', side_effect=process_turn_side_effect), \
+             patch('handlers.battle.tick_cooldowns'), \
+             patch('handlers.battle.build_battle_message', return_value=('msg', None)), \
+             patch('handlers.battle.safe_edit', new=AsyncMock()), \
+             patch('handlers.battle.t', side_effect=lambda key, lang='ru', **kwargs: key):
+            await battle_handler.handle_battle_buttons(update, context)
+
+        self.assertEqual(captured_turns['value'], 2)
+
     async def test_normal_attack_kill_uses_victory_path_and_handler_does_not_reenter_enemy_response(self):
         update = _DummyUpdate('battle_attack_wolf')
         battle_state = {

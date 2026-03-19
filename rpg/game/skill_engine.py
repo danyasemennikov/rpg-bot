@@ -10,6 +10,30 @@ from game.weapon_mastery import get_skill_level, get_skill_cooldown, set_skill_c
 from game.balance import calc_final_damage
 from game.i18n import t, get_skill_name
 
+def build_skill_result_log(skill_result: dict, lang: str) -> str:
+    """
+    Строит человекочитаемый лог по структурированным данным skill_result.
+    Для non-damage скиллов остаётся fallback на готовую строку `log`.
+    """
+    log_key = skill_result.get('log_key')
+    log_params = skill_result.get('log_params', {})
+
+    if not log_key:
+        return skill_result.get('log', '')
+
+    text = t(log_key, lang, **log_params)
+
+    if skill_result.get('lifesteal_ratio', 0) > 0 and skill_result.get('heal', 0) > 0:
+        text += t('skills.log_lifesteal', lang, hp=skill_result['heal'])
+
+    for suffix in skill_result.get('log_suffixes', []):
+        suffix_key = suffix.get('key')
+        suffix_params = suffix.get('params', {})
+        text += t(suffix_key, lang, **suffix_params)
+
+    return text
+
+
 def calc_skill_value(skill: dict, skill_level: int, player: dict) -> float:
     """
     Считает итоговое значение скилла с учётом уровня и статов.
@@ -64,6 +88,11 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         'log':     '',
         'effects': [],
         'buff':    None,
+        'direct_damage_skill': False,
+        'log_key': None,
+        'log_params': {},
+        'log_suffixes': [],
+        'lifesteal_ratio': 0.0,
     }
 
     skill_type = skill['type']
@@ -71,6 +100,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
     # ── УРОН ────────────────────────────────
     if skill_type == 'damage':
+        result['direct_damage_skill'] = True
         stats = {k: player.get(k, 1) for k in
                  ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
         weapon_type = battle_state.get('weapon_type', 'melee')
@@ -93,10 +123,14 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 total  += hit_dmg
                 log_parts.append(str(hit_dmg))
             result['damage'] = total
-            result['log'] = t('skills.log_damage_multi', lang,
-                               name=get_skill_name(skill_id, lang),
-                               hits=hits, parts=', '.join(log_parts),
-                               total=total, cost=mana_cost)
+            result['log_key'] = 'skills.log_damage_multi'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'hits': hits,
+                'parts': ', '.join(log_parts),
+                'total': total,
+                'cost': mana_cost,
+            }
         else:
             dmg     = int(value * random.uniform(0.9, 1.1))
             defense = mob_state.get('defense', 0)
@@ -110,17 +144,26 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 has_debuff = any(e['type'] in ('stun', 'freeze', 'poison') for e in mob_effects)
                 if has_debuff:
                     dmg = int(dmg * 2.0)
-                    result['log'] = t('skills.log_backstab_crit', lang,
-                                      name=get_skill_name(skill_id, lang),
-                                      dmg=dmg, cost=mana_cost)
+                    result['log_key'] = 'skills.log_backstab_crit'
+                    result['log_params'] = {
+                        'name': get_skill_name(skill_id, lang),
+                        'dmg': dmg,
+                        'cost': mana_cost,
+                    }
                 else:
-                    result['log'] = t('skills.log_damage', lang,
-                                      name=get_skill_name(skill_id, lang),
-                                      dmg=dmg, cost=mana_cost)
+                    result['log_key'] = 'skills.log_damage'
+                    result['log_params'] = {
+                        'name': get_skill_name(skill_id, lang),
+                        'dmg': dmg,
+                        'cost': mana_cost,
+                    }
             else:
-                result['log'] = t('skills.log_damage', lang,
-                                   name=get_skill_name(skill_id, lang),
-                                   dmg=dmg, cost=mana_cost)
+                result['log_key'] = 'skills.log_damage'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': dmg,
+                    'cost': mana_cost,
+                }
 
             result['damage'] = dmg
 
@@ -128,19 +171,22 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         if skill_id == 'sword_rush':
             battle_state['vulnerability_turns'] = 2
             battle_state['vulnerability_value'] = 30
-            result['log'] = t('skills.log_sword_rush', lang,
-                               name=get_skill_name(skill_id, lang),
-                               dmg=result['damage'], cost=mana_cost)
+            result['log_key'] = 'skills.log_sword_rush'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': result['damage'],
+                'cost': mana_cost,
+            }
 
         # Пробивание
         if skill.get('piercing'):
-            result['log'] += t('skills.log_piercing', lang)
+            result['log_suffixes'].append({'key': 'skills.log_piercing', 'params': {}})
 
         # Вампиризм
         if skill.get('lifesteal'):
-            heal = int(result['damage'] * skill['lifesteal'])
+            result['lifesteal_ratio'] = skill['lifesteal']
+            heal = int(result['damage'] * result['lifesteal_ratio'])
             result['heal']  = heal
-            result['log'] += t('skills.log_lifesteal', lang, hp=heal)
 
         # Эффект при попадании
         if skill.get('effect') and result['damage'] > 0:
@@ -159,8 +205,12 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'value':    dot_value,
                     'skill_id': skill_id,
                 })
-                result['log'] += t('skills.log_effect_ok', lang,
-                                    effect=t(f'skills.effect_{eff_type}', lang))
+                result['log_suffixes'].append({
+                    'key': 'skills.log_effect_ok',
+                    'params': {'effect': t(f'skills.effect_{eff_type}', lang)},
+                })
+
+        result['log'] = build_skill_result_log(result, lang)
 
     # ── ЛЕЧЕНИЕ ────────────────────────────
     elif skill_type == 'heal':
@@ -359,19 +409,19 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             )
             dmg = max(1, int(base_attack * random.uniform(0.9, 1.1)))
             result['damage'] = dmg
-            result['log'] = t('skills.log_damage_effect', lang,
-                               name=get_skill_name(skill_id, lang),
-                               dmg=dmg, cost=mana_cost)
+            result['direct_damage_skill'] = True
+            result['log_key'] = 'skills.log_damage_effect'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': dmg,
+                'cost': mana_cost,
+            }
+            result['log'] = build_skill_result_log(result, lang)
 
         # Envenom — удвоение следующего яда
         if battle_state.get('envenom_active') and eff_type == 'poison' and result['effects']:
             result['effects'][-1]['value'] *= 2
             battle_state['envenom_active'] = False
-
-        # Hunters mark бонус к урону скилла
-        if battle_state.get('hunters_mark_turns', 0) > 0 and result['damage'] > 0:
-            bonus = int(result['damage'] * battle_state['hunters_mark_value'] / 100)
-            result['damage'] += bonus
 
     # Устанавливаем кулдаун
     if skill['cooldown'] > 0:
