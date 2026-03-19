@@ -6,7 +6,7 @@ import sys, json
 sys.path.append('/content/rpg_bot')
 import random
 
-from game.skill_engine import get_battle_skills, use_skill, apply_mob_effects, apply_player_buffs
+from game.skill_engine import get_battle_skills, use_skill
 from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -15,7 +15,7 @@ from database import get_player, get_connection
 from game.mobs import get_mob
 from game.combat import (
     init_battle, process_turn, calc_rewards,
-    calc_death_penalty, hp_bar, resolve_enemy_response
+    calc_death_penalty, hp_bar, resolve_enemy_response, apply_pre_enemy_response_ticks
 )
 from game.balance import exp_to_next_level, calc_max_hp
 from game.items_data import get_item
@@ -533,19 +533,8 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             await safe_edit(query, victory_text + mastery_text, parse_mode='HTML')
             return
 
-        # Ход моба: используем единый путь ответа врага после действия игрока
-        mob_state['effects'] = battle_state.get('mob_effects', [])
-
-        eff_dmg, eff_log = apply_mob_effects(mob_state)
-        if eff_dmg > 0:
-            battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - eff_dmg)
-            log.append(eff_log)
-
-        buff_log = apply_player_buffs(battle_state)
-        if buff_log:
-            log.append(buff_log)
-
-        battle_state['mob_effects'] = mob_state.get('effects', [])
+        # Ход моба: единый pre-turn ticking + единый ответ врага
+        log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
 
         if battle_state['mob_hp'] > 0:
             p['hp'] = battle_state['player_hp']
@@ -720,6 +709,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 reply_markup=keyboard,
                 parse_mode='HTML'
             )
+
 
     try:
         await query.answer()
