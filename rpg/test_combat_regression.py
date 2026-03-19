@@ -65,7 +65,7 @@ class CombatRegressionTests(unittest.TestCase):
 
 
 class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
-    async def test_normal_attack_kill_uses_victory_path_and_no_extra_enemy_response(self):
+    async def test_normal_attack_kill_uses_victory_path_and_handler_does_not_reenter_enemy_response(self):
         update = _DummyUpdate('battle_attack_wolf')
         battle_state = {
             'player_hp': 100,
