@@ -499,7 +499,23 @@ async def _resolve_post_attack_combat_resolution(
         )
         return True
 
-    # Сохраняем HP и ману в БД после каждого хода
+    await _handle_battle_continues_update(
+        query=query,
+        user_id=user_id,
+        player=player,
+        mob=mob,
+        battle_state=battle_state,
+    )
+    return False
+
+async def _handle_battle_continues_update(
+    query,
+    user_id: int,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+) -> None:
+    """Общий путь для продолжающегося боя: persist hp/mana + рендер."""
     conn = get_connection()
     conn.execute(
         'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
@@ -511,7 +527,6 @@ async def _resolve_post_attack_combat_resolution(
     # Бой продолжается
     text, keyboard = build_battle_message(player, mob, battle_state, battle_state['log'])
     await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
-    return False
 
 async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -687,15 +702,15 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         tick_cooldowns(user.id)
         context.user_data['battle'] = battle_state
 
-        conn = get_connection()
-        conn.execute(
-            'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
-            (battle_state['player_hp'], battle_state['player_mana'], user.id)
-        )
-        conn.commit()
-        conn.close()
-
         if battle_state['player_hp'] <= 0:
+            conn = get_connection()
+            conn.execute(
+                'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
+                (battle_state['player_hp'], battle_state['player_mana'], user.id)
+            )
+            conn.commit()
+            conn.close()
+
             await _handle_death_or_resurrection(
                 query=query,
                 context=context,
@@ -711,8 +726,13 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             )
             return
 
-        text, keyboard = build_battle_message(p, mob, battle_state, battle_state['log'])
-        await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+        await _handle_battle_continues_update(
+            query=query,
+            user_id=user.id,
+            player=p,
+            mob=mob,
+            battle_state=battle_state,
+        )
         await query.answer()
         return
 
