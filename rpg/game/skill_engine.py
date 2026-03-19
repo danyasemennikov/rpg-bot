@@ -226,6 +226,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id == 'resurrection':
             battle_state['resurrection_active'] = True
             battle_state['resurrection_hp']     = int(value)
+            battle_state['resurrection_turns']  = duration
             result['log'] = t('skills.log_resurrection', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), cost=mana_cost)

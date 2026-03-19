@@ -88,6 +88,31 @@ def apply_mob_effect_ticks(mob: dict, battle_state: dict) -> list[str]:
     return log
 
 
+def tick_post_action_timed_trigger_buffs(
+    battle_state: dict,
+    *,
+    skip_resurrection_tick: bool = False,
+) -> None:
+    """
+    Тикает timed trigger баффы после полностью завершённого действия игрока.
+    В этом PR обрабатываем только resurrection.
+    """
+    if skip_resurrection_tick:
+        return
+
+    if not battle_state.get('resurrection_active'):
+        return
+
+    if battle_state.get('resurrection_turns', 0) > 0:
+        battle_state['resurrection_turns'] -= 1
+
+    # Важно: если игрок умер в этом действии, не отключаем бафф до обработки
+    # death/resurrection window в handler.
+    if battle_state.get('resurrection_turns', 0) <= 0 and battle_state.get('player_hp', 0) > 0:
+        battle_state['resurrection_turns'] = 0
+        battle_state['resurrection_active'] = False
+
+
 def process_skill_turn(
     skill_id: str,
     player: dict,
@@ -142,6 +167,11 @@ def process_skill_turn(
     if battle_state['mob_hp'] > 0:
         player_state['hp'] = battle_state['player_hp']
         log.extend(resolve_enemy_response(mob, player_state, battle_state, lang=lang, user_id=user_id))
+
+    tick_post_action_timed_trigger_buffs(
+        battle_state,
+        skip_resurrection_tick=(skill_id == 'resurrection'),
+    )
 
     battle_state['mob_dead'] = battle_state['mob_hp'] <= 0
     battle_state['player_dead'] = battle_state['player_hp'] <= 0
@@ -362,6 +392,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'regen_amount':         0,
         'resurrection_active':  False,
         'resurrection_hp':      0,
+        'resurrection_turns':   0,
         # Новые баффы
         'invincible_turns':     0,
         'dodge_buff_turns':     0,
@@ -456,6 +487,7 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
 
     # Сохраняем прежний тайминг normal attack flow: player buffs тикают после exchange
     apply_player_buffs(battle_state)
+    tick_post_action_timed_trigger_buffs(battle_state)
 
     battle_state['mob_dead']    = mob_state['hp'] <= 0
     battle_state['player_dead'] = player['hp'] <= 0
