@@ -359,6 +359,88 @@ async def safe_edit(query, text, reply_markup=None, parse_mode='HTML'):
         if 'Message is not modified' not in str(e):
             raise
 
+async def _handle_victory_cleanup(
+    query,
+    context,
+    user_id: int,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str,
+    levelup_before_loot: bool = False,
+):
+    """Общий post-victory cleanup для обычной атаки и скиллов."""
+    rewards = calc_rewards(mob)
+    result_reward = apply_rewards(user_id, player, rewards)
+    end_battle(user_id)
+    context.user_data.pop('battle', None)
+    context.user_data.pop('battle_mob', None)
+
+    weapon_id = battle_state.get('weapon_id', 'unarmed')
+    mastery_result = add_mastery_exp(user_id, weapon_id, 10)
+    mastery_text = _build_mastery_text(mastery_result, lang)
+
+    victory_text = t('battle.victory', lang,
+                     mob_name=get_mob_name(mob['id'], lang),
+                     exp=rewards['exp'],
+                     gold=rewards['gold'])
+
+    levelup_text = ""
+    if result_reward['leveled_up']:
+        levelup_text = '\n\n' + t('battle.levelup', lang, level=result_reward['new_level'])
+
+    loot_text = ""
+    if rewards['loot']:
+        loot_names = [get_item_name(i, lang) for i in rewards['loot']]
+        loot_text = '\n' + t('battle.loot', lang, items=', '.join(loot_names))
+
+    if levelup_before_loot:
+        await safe_edit(query, victory_text + levelup_text + loot_text + mastery_text, parse_mode='HTML')
+    else:
+        await safe_edit(query, victory_text + loot_text + levelup_text + mastery_text, parse_mode='HTML')
+
+async def _handle_death_or_resurrection(
+    query,
+    context,
+    user_id: int,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str,
+    log: list,
+    death_key: str = 'battle.death',
+    clear_player_dead_flag: bool = False,
+    answer_on_resurrection: bool = False,
+) -> bool:
+    """
+    Общий путь завершения боя при смерти игрока.
+    Возвращает True, если ветка (resurrection/death) была полностью обработана.
+    """
+    if battle_state.get('resurrection_active'):
+        revive_hp = int(battle_state['player_max_hp'] * battle_state['resurrection_hp'] / 100)
+        battle_state['player_hp'] = revive_hp
+        if clear_player_dead_flag:
+            battle_state['player_dead'] = False
+        battle_state['resurrection_active'] = False
+        log.append(t('battle.buff_resurrection_proc', lang, hp=revive_hp))
+        context.user_data['battle'] = battle_state
+
+        text, keyboard = build_battle_message(player, mob, battle_state, log)
+        await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+        if answer_on_resurrection:
+            await query.answer()
+        return True
+
+    penalty = apply_death(user_id, player)
+    end_battle(user_id)
+    context.user_data.pop('battle', None)
+    context.user_data.pop('battle_mob', None)
+    await safe_edit(query,
+        t(death_key, lang, exp_loss=penalty['exp_loss'], gold_loss=penalty['gold_loss']),
+        parse_mode='HTML'
+    )
+    return True
+
 async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data  = query.data
@@ -508,29 +590,16 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         # Проверяем смерть моба после скилла
         if battle_state['mob_hp'] <= 0:
             context.user_data['battle'] = battle_state
-            rewards       = calc_rewards(mob)
-            result_reward = apply_rewards(user.id, p, rewards)
-            end_battle(user.id)
-            context.user_data.pop('battle', None)
-            context.user_data.pop('battle_mob', None)
-
-            mastery_result = add_mastery_exp(user.id, weapon_id, 10)
-            mastery_text   = _build_mastery_text(mastery_result, lang)
-
-            victory_text = t('battle.victory', lang,
-                             mob_name=get_mob_name(mob['id'], lang),
-                             exp=rewards['exp'],
-                             gold=rewards['gold'])
-
-            if result_reward['leveled_up']:
-                victory_text += '\n\n' + t('battle.levelup', lang,
-                                           level=result_reward['new_level'])
-
-            if rewards['loot']:
-                loot_names = [get_item_name(i, lang) for i in rewards['loot']]
-                victory_text += '\n' + t('battle.loot', lang, items=', '.join(loot_names))
-
-            await safe_edit(query, victory_text + mastery_text, parse_mode='HTML')
+            await _handle_victory_cleanup(
+                query=query,
+                context=context,
+                user_id=user.id,
+                player=p,
+                mob=mob,
+                battle_state=battle_state,
+                lang=lang,
+                levelup_before_loot=True,
+            )
             return
 
         # Ход моба: единый pre-turn ticking + единый ответ врага
@@ -553,25 +622,18 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         conn.close()
 
         if battle_state['player_hp'] <= 0:
-            if battle_state.get('resurrection_active'):
-                revive_hp = int(battle_state['player_max_hp'] * battle_state['resurrection_hp'] / 100)
-                battle_state['player_hp'] = revive_hp
-                battle_state['resurrection_active'] = False
-                log.append(t('battle.buff_resurrection_proc', lang, hp=revive_hp))
-                context.user_data['battle'] = battle_state
-                text, keyboard = build_battle_message(p, mob, battle_state, log)
-                await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
-                await query.answer()
-                return
-            penalty = apply_death(user.id, p)
-            end_battle(user.id)
-            context.user_data.pop('battle', None)
-            context.user_data.pop('battle_mob', None)
-            await safe_edit(query,
-                t('battle.death', lang,
-                  exp_loss=penalty['exp_loss'],
-                  gold_loss=penalty['gold_loss']),
-                parse_mode='HTML'
+            await _handle_death_or_resurrection(
+                query=query,
+                context=context,
+                user_id=user.id,
+                player=p,
+                mob=mob,
+                battle_state=battle_state,
+                lang=lang,
+                log=log,
+                death_key='battle.death',
+                clear_player_dead_flag=False,
+                answer_on_resurrection=True,
             )
             return
 
@@ -594,58 +656,32 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
         # Моб убит
         if battle_state['mob_dead']:
-            rewards       = calc_rewards(mob)
-            result_reward = apply_rewards(user.id, p, rewards)
-            end_battle(user.id)
-            context.user_data.pop('battle', None)
-            context.user_data.pop('battle_mob', None)
-
-            weapon_id      = battle_state.get('weapon_id', 'unarmed')
-            mastery_result = add_mastery_exp(user.id, weapon_id, 10)
-            mastery_text   = _build_mastery_text(mastery_result, lang)
-
-            loot_text = ""
-            if rewards['loot']:
-                loot_names = [get_item_name(i, lang) for i in rewards['loot']]
-                loot_text = '\n' + t('battle.loot', lang, items=', '.join(loot_names))
-
-            levelup_text = ""
-            if result_reward['leveled_up']:
-                levelup_text = '\n\n' + t('battle.levelup', lang,
-                                          level=result_reward['new_level'])
-
-            await safe_edit(query, 
-                t('battle.victory', lang,
-                  mob_name=get_mob_name(mob['id'], lang),
-                  exp=rewards['exp'],
-                  gold=rewards['gold'])
-                + loot_text + levelup_text + mastery_text,
-                parse_mode='HTML'
+            await _handle_victory_cleanup(
+                query=query,
+                context=context,
+                user_id=user.id,
+                player=p,
+                mob=mob,
+                battle_state=battle_state,
+                lang=lang,
+                levelup_before_loot=False,
             )
             return
 
         # Игрок убит
         if battle_state['player_dead']:
-            if battle_state.get('resurrection_active'):
-                revive_hp = int(battle_state['player_max_hp'] * battle_state['resurrection_hp'] / 100)
-                battle_state['player_hp'] = revive_hp
-                battle_state['player_dead'] = False
-                battle_state['resurrection_active'] = False
-                battle_state['log'].append(t('battle.buff_resurrection_proc', lang, hp=revive_hp))
-                context.user_data['battle'] = battle_state
-                text, keyboard = build_battle_message(p, mob, battle_state, battle_state['log'])
-                await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
-                return
-            penalty = apply_death(user.id, p)
-            end_battle(user.id)
-            context.user_data.pop('battle', None)
-            context.user_data.pop('battle_mob', None)
-
-            await safe_edit(query, 
-                t('battle.death', lang,
-                  exp_loss=penalty['exp_loss'],
-                  gold_loss=penalty['gold_loss']),
-                parse_mode='HTML'
+            await _handle_death_or_resurrection(
+                query=query,
+                context=context,
+                user_id=user.id,
+                player=p,
+                mob=mob,
+                battle_state=battle_state,
+                lang=lang,
+                log=battle_state['log'],
+                death_key='battle.death',
+                clear_player_dead_flag=True,
+                answer_on_resurrection=False,
             )
             return
 
