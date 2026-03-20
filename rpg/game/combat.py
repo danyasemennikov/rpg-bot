@@ -198,6 +198,39 @@ def apply_direct_damage_action_modifiers(
     }
 
 
+def finalize_player_direct_damage_action(
+    battle_state: dict,
+    *,
+    base_damage: int,
+    can_consume_guaranteed_crit: bool,
+) -> dict:
+    """
+    Единый финальный этап direct-damage действия игрока:
+    1) direct-damage модификаторы;
+    2) применение финального урона к HP моба;
+    3) structured-результат для вызывающей стороны.
+    """
+    mob_hp_before = battle_state.get('mob_hp', 0)
+    modifier_result = apply_direct_damage_action_modifiers(
+        battle_state,
+        base_damage,
+        can_consume_guaranteed_crit=can_consume_guaranteed_crit,
+    )
+    final_damage = modifier_result['damage']
+    mob_hp_after = max(0, mob_hp_before - final_damage)
+    battle_state['mob_hp'] = mob_hp_after
+
+    return {
+        'base_damage': base_damage,
+        'final_damage': final_damage,
+        'mob_hp_before': mob_hp_before,
+        'mob_hp_after': mob_hp_after,
+        'mob_dead': mob_hp_after <= 0,
+        'modifiers_applied': modifier_result['modifiers_applied'],
+        'guaranteed_crit_applied': modifier_result['guaranteed_crit_applied'],
+    }
+
+
 def finalize_direct_damage_skill_result(skill_result: dict, lang: str) -> None:
     """
     Финализирует structured-результат direct-damage скилла после модификаторов урона.
@@ -389,13 +422,12 @@ def process_skill_turn(
 
     direct_damage = skill_result.get('damage', 0)
     if direct_damage > 0:
-        damage_result = apply_direct_damage_action_modifiers(
+        action_result = finalize_player_direct_damage_action(
             battle_state,
-            direct_damage,
+            base_damage=direct_damage,
             can_consume_guaranteed_crit=True,
         )
-        skill_result['damage'] = damage_result['damage']
-        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - skill_result['damage'])
+        skill_result['damage'] = action_result['final_damage']
         finalize_direct_damage_skill_result(skill_result, lang)
 
     log.append(skill_result['log'])
@@ -696,17 +728,14 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
 
     if battle_state['player_goes_first']:
         result = player_attack(player, mob_state)
-        damage_result = apply_direct_damage_action_modifiers(
+        action_result = finalize_player_direct_damage_action(
             battle_state,
-            result['damage'],
+            base_damage=result['damage'],
             can_consume_guaranteed_crit=False,
         )
-        adjusted_damage = damage_result['damage']
-        bonus_damage = max(0, adjusted_damage - result['damage'])
-        if bonus_damage > 0:
-            mob_state['hp'] = max(0, mob_state['hp'] - bonus_damage)
-            result['damage'] = adjusted_damage
-            result['mob_dead'] = mob_state['hp'] <= 0
+        mob_state['hp'] = action_result['mob_hp_after']
+        result['damage'] = action_result['final_damage']
+        result['mob_dead'] = action_result['mob_dead']
 
         if result.get('is_crit') and should_force_crit:
             battle_state['guaranteed_crit_turns'] -= 1
@@ -727,17 +756,14 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
 
         if player['hp'] > 0:
             result = player_attack(player, mob_state)
-            damage_result = apply_direct_damage_action_modifiers(
+            action_result = finalize_player_direct_damage_action(
                 battle_state,
-                result['damage'],
+                base_damage=result['damage'],
                 can_consume_guaranteed_crit=False,
             )
-            adjusted_damage = damage_result['damage']
-            bonus_damage = max(0, adjusted_damage - result['damage'])
-            if bonus_damage > 0:
-                mob_state['hp'] = max(0, mob_state['hp'] - bonus_damage)
-                result['damage'] = adjusted_damage
-                result['mob_dead'] = mob_state['hp'] <= 0
+            mob_state['hp'] = action_result['mob_hp_after']
+            result['damage'] = action_result['final_damage']
+            result['mob_dead'] = action_result['mob_dead']
 
             if result.get('is_crit') and should_force_crit:
                 battle_state['guaranteed_crit_turns'] -= 1
