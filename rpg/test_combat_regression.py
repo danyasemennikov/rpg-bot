@@ -29,6 +29,153 @@ class _DummyContext:
 
 
 class CombatRegressionTests(unittest.TestCase):
+    def test_invincible_blocks_enemy_response_damage_through_combat_core(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
+        state = {'player_hp': 100, 'mob_hp': 100, 'mob_effects': [], 'invincible_turns': 1}
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 8, 'player_hp': 92}):
+            log = combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['player_hp'], 100)
+        self.assertEqual(state['invincible_turns'], 0)
+        self.assertTrue(len(log) > 0)
+    
+    def test_invincible_is_consumed_before_natural_dodge_path(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
+        state = {'player_hp': 100, 'mob_hp': 100, 'mob_effects': [], 'invincible_turns': 1}
+
+        with patch('game.combat.mob_attack') as mob_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_not_called()
+        self.assertEqual(state['invincible_turns'], 0)
+
+    def test_dodge_buff_prevents_enemy_response_damage_through_combat_core(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'dodge_buff_turns': 1,
+            'dodge_buff_value': 100,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 8, 'player_hp': 92}):
+            log = combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['player_hp'], 100)
+        self.assertEqual(state['dodge_buff_turns'], 0)
+        self.assertTrue(len(log) > 0)
+
+    def test_dodge_buff_is_consumed_before_natural_dodge_short_circuit(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'dodge_buff_turns': 1,
+            'dodge_buff_value': 0,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'dodge', 'damage': 0, 'player_hp': 100}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['dodge_buff_turns'], 0)
+
+    def test_defense_buff_mitigation_is_applied_in_centralized_enemy_damage_path(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'defense_buff_turns': 2,
+            'defense_buff_value': 50,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['player_hp'], 95)
+        self.assertEqual(state['defense_buff_turns'], 2)
+
+    def test_fire_shield_uses_centralized_post_hit_path_and_skips_on_prevented_hit(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'fire_shield_turns': 2,
+            'fire_shield_value': 6,
+            'invincible_turns': 1,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        # Первый вход: invincible блокирует, щит не тратится.
+        self.assertEqual(state['mob_hp'], 100)
+        self.assertEqual(state['fire_shield_turns'], 2)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        # Второй вход: удар прошёл и щит сработал в post-hit секции.
+        self.assertEqual(state['mob_hp'], 94)
+        self.assertEqual(state['fire_shield_turns'], 1)
+
+    def test_defensive_buffs_not_consumed_when_enemy_dies_before_enemy_response(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 3,
+            'mob_effects': [],
+            'invincible_turns': 1,
+            'dodge_buff_turns': 2,
+            'dodge_buff_value': 50,
+            'defense_buff_turns': 2,
+            'defense_buff_value': 25,
+            'fire_shield_turns': 2,
+            'fire_shield_value': 4,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}), \
+             patch('game.combat.resolve_enemy_response') as response_mock:
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(response_mock.call_count, 0)
+        self.assertEqual(result['battle_state']['invincible_turns'], 1)
+        self.assertEqual(result['battle_state']['dodge_buff_turns'], 2)
+        self.assertEqual(result['battle_state']['defense_buff_turns'], 2)
+        self.assertEqual(result['battle_state']['fire_shield_turns'], 2)
+
+    def test_disarm_behavior_remains_outside_centralized_helper(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'disarm_turns': 1,
+            'disarm_value': 50,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['player_hp'], 95)
+        self.assertEqual(state['disarm_turns'], 0)
+
     def test_post_action_resurrection_tick_decrements_in_normal_attack_flow(self):
         player = {
             'hp': 120,

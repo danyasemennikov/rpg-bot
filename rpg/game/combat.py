@@ -200,6 +200,73 @@ def finalize_direct_damage_skill_result(skill_result: dict, lang: str) -> None:
     skill_result['log'] = build_skill_result_log(skill_result, lang)
 
 
+def resolve_enemy_damage_against_player(
+    battle_state: dict,
+    *,
+    lang: str = 'ru',
+    mob_result: dict | None = None,
+) -> dict:
+    """
+    Централизует defensive/timed buffs для прямого урона моба по игроку.
+    Порядок:
+    1) invincible_turns
+    2) dodge_buff_turns
+    3) если урон проходит: defense_buff_turns mitigation
+    4) fire_shield_turns в единой post-hit точке
+    """
+    log = []
+
+    if mob_result is None:
+        if battle_state.get('invincible_turns', 0) > 0:
+            battle_state['invincible_turns'] -= 1
+            log.append(t('battle.invincible', lang))
+            return {
+                'skip_mob_attack': True,
+                'damage_landed': False,
+                'player_damage': 0,
+                'mob_reflect_damage': 0,
+                'log': log,
+            }
+
+        if battle_state.get('dodge_buff_turns', 0) > 0:
+            dodge_chance = battle_state.get('dodge_buff_value', 0) / 100
+            battle_state['dodge_buff_turns'] -= 1
+            if random.random() < dodge_chance:
+                log.append(t('battle.player_dodge', lang))
+                return {
+                    'skip_mob_attack': True,
+                    'damage_landed': False,
+                    'player_damage': 0,
+                    'mob_reflect_damage': 0,
+                    'log': log,
+                }
+
+        return {
+            'skip_mob_attack': False,
+            'damage_landed': False,
+            'player_damage': 0,
+            'mob_reflect_damage': 0,
+            'log': log,
+        }
+
+    mob_dmg = mob_result.get('damage', 0)
+    if battle_state.get('defense_buff_turns', 0) > 0:
+        mob_dmg = int(mob_dmg * (1 - battle_state['defense_buff_value'] / 100))
+
+    shield_dmg = 0
+    if battle_state.get('fire_shield_turns', 0) > 0:
+        shield_dmg = battle_state['fire_shield_value']
+        battle_state['fire_shield_turns'] -= 1
+
+    return {
+        'skip_mob_attack': False,
+        'damage_landed': True,
+        'player_damage': mob_dmg,
+        'mob_reflect_damage': shield_dmg,
+        'log': log,
+    }
+
+
 def process_skill_turn(
     skill_id: str,
     player: dict,
@@ -309,19 +376,12 @@ def resolve_enemy_response(
         battle_state['player_hp'] = player['hp']
         return log
 
-    mob_dodged = False
-    if battle_state.get('invincible_turns', 0) > 0:
-        mob_dodged = True
-        battle_state['invincible_turns'] -= 1
-        log.append(t('battle.invincible', lang))
-    elif battle_state.get('dodge_buff_turns', 0) > 0:
-        dodge_chance = battle_state.get('dodge_buff_value', 0) / 100
-        if random.random() < dodge_chance:
-            mob_dodged = True
-            log.append(t('battle.player_dodge', lang))
-        battle_state['dodge_buff_turns'] -= 1
-
-    if mob_dodged:
+    pre_damage_result = resolve_enemy_damage_against_player(
+        battle_state,
+        lang=lang,
+    )
+    log.extend(pre_damage_result['log'])
+    if pre_damage_result['skip_mob_attack']:
         battle_state['player_hp'] = player['hp']
         return log
 
@@ -331,9 +391,17 @@ def resolve_enemy_response(
         battle_state['player_hp'] = player['hp']
         return log
 
-    mob_dmg = mob_result['damage']
-    if battle_state.get('defense_buff_turns', 0) > 0:
-        mob_dmg = int(mob_dmg * (1 - battle_state['defense_buff_value'] / 100))
+    damage_result = resolve_enemy_damage_against_player(
+        battle_state,
+        lang=lang,
+        mob_result=mob_result,
+    )
+    log.extend(damage_result['log'])
+    if not damage_result['damage_landed']:
+        battle_state['player_hp'] = player['hp']
+        return log
+
+    mob_dmg = damage_result['player_damage']
     if battle_state.get('disarm_turns', 0) > 0:
         mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
         battle_state['disarm_turns'] -= 1
@@ -344,10 +412,9 @@ def resolve_enemy_response(
                  mob_name=get_mob_name(mob['id'], lang),
                  damage=mob_dmg))
 
-    if battle_state.get('fire_shield_turns', 0) > 0:
-        shield_dmg = battle_state['fire_shield_value']
+    shield_dmg = damage_result['mob_reflect_damage']
+    if shield_dmg > 0:
         battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - shield_dmg)
-        battle_state['fire_shield_turns'] -= 1
         log.append(t('battle.fire_shield_reflect', lang, damage=shield_dmg))
 
     if user_id is not None and mob_dmg > 0:
