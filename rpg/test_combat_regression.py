@@ -1168,6 +1168,96 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(finalize_mock.call_count, 1)
         self.assertEqual(result['mob_hp'], 93)
 
+    def test_normal_attack_helper_is_used_in_both_initiative_branches(self):
+        player = {
+            'hp': 120,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        mob = {'id': 'wolf', 'defense': 0}
+        first_state = {
+            'mob_hp': 100,
+            'player_hp': 120,
+            'player_goes_first': True,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'blessing_turns': 0,
+            'blessing_value': 0,
+            'turn': 1,
+        }
+        second_state = dict(first_state)
+        second_state['player_goes_first'] = False
+
+        with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''), \
+             patch('game.combat.resolve_normal_attack_action', wraps=combat.resolve_normal_attack_action) as normal_attack_helper_mock:
+            combat.process_turn(player, mob, first_state, lang='ru', user_id=101)
+            combat.process_turn(player, mob, second_state, lang='ru', user_id=101)
+
+        self.assertEqual(normal_attack_helper_mock.call_count, 2)
+
+    def test_normal_attack_helper_keeps_crit_log_enemy_timing_and_mob_death_behavior(self):
+        player = {
+            'hp': 120,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        mob = {'id': 'wolf', 'defense': 0}
+        base_state = {
+            'mob_hp': 100,
+            'player_hp': 120,
+            'player_goes_first': True,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'blessing_turns': 0,
+            'blessing_value': 0,
+            'turn': 1,
+        }
+
+        with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
+             patch('game.combat.player_attack', return_value={'damage': 10, 'is_crit': True, 'mob_dead': False}), \
+             patch('game.combat.resolve_enemy_response', return_value=['enemy response']) as response_mock, \
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
+            crit_result = combat.process_turn(player, mob, dict(base_state), lang='ru', user_id=101)
+
+        self.assertEqual(crit_result['guaranteed_crit_turns'], 0)
+        self.assertEqual(crit_result['log'][0], combat.t('battle.attack_crit', 'ru', damage=10))
+        self.assertIn('enemy response', crit_result['log'])
+        self.assertEqual(response_mock.call_count, 1)
+
+        lethal_state = dict(base_state)
+        lethal_state['guaranteed_crit_turns'] = 0
+        lethal_state['mob_hp'] = 7
+        with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
+             patch('game.combat.player_attack', return_value={'damage': 7, 'is_crit': False, 'mob_dead': True}), \
+             patch('game.combat.resolve_enemy_response') as lethal_response_mock, \
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
+            lethal_result = combat.process_turn(player, mob, lethal_state, lang='ru', user_id=101)
+
+        self.assertTrue(lethal_result['mob_dead'])
+        self.assertEqual(lethal_result['mob_hp'], 0)
+        self.assertEqual(lethal_result['log'][0], combat.t('battle.attack_hit', 'ru', damage=7))
+        self.assertEqual(lethal_response_mock.call_count, 0)
+
     def test_damage_skill_uses_shared_finalize_direct_damage_helper(self):
         player = {'hp': 100, 'mana': 80}
         mob = {'id': 'wolf', 'defense': 0}
