@@ -587,6 +587,52 @@ def player_attack(player: dict, mob_state: dict) -> dict:
         'mob_hp':   mob_state['hp'],
     }
 
+
+def resolve_normal_attack_action(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    *,
+    lang: str = 'ru',
+) -> dict:
+    """
+    Явный helper normal attack действия игрока.
+    Централизует:
+    - вызов player_attack(...),
+    - финализацию direct damage через finalize_player_direct_damage_action(...),
+    - текущее поведение guaranteed-crit для normal attack,
+    - формирование structured-результата для вызывающей стороны.
+    """
+    mob_state = {
+        'hp': battle_state.get('mob_hp', 0),
+        'defense': mob.get('defense', 0),
+    }
+    should_force_crit = battle_state.get('guaranteed_crit_turns', 0) > 0
+
+    attack_result = player_attack(player, mob_state)
+    action_result = finalize_player_direct_damage_action(
+        battle_state,
+        base_damage=attack_result['damage'],
+        can_consume_guaranteed_crit=False,
+    )
+
+    is_crit = attack_result.get('is_crit', False)
+    if is_crit and should_force_crit:
+        battle_state['guaranteed_crit_turns'] -= 1
+
+    if is_crit:
+        log_line = t('battle.attack_crit', lang, damage=action_result['final_damage'])
+    else:
+        log_line = t('battle.attack_hit', lang, damage=action_result['final_damage'])
+
+    return {
+        'damage': action_result['final_damage'],
+        'is_crit': is_crit,
+        'mob_dead': action_result['mob_dead'],
+        'mob_hp_after': action_result['mob_hp_after'],
+        'log_line': log_line,
+    }
+
 # ────────────────────────────────────────
 # ОДИН ХОД МОБА
 # ────────────────────────────────────────
@@ -710,8 +756,6 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
     log = []
     log.extend(apply_player_start_of_turn_regen(battle_state, lang))
     log.extend(apply_mob_effect_ticks(mob, battle_state))
-    mob_state = {'hp': battle_state['mob_hp'], 'defense': mob.get('defense', 0)}
-
     player = dict(player)
     player['hp'] = battle_state['player_hp']
     player['weapon_type']   = battle_state.get('weapon_type', 'melee')
@@ -723,63 +767,27 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
             if stat in player:
                 player[stat] = int(player[stat] * mult)
 
-    should_force_crit = battle_state.get('guaranteed_crit_turns', 0) > 0
-    player['guaranteed_crit'] = should_force_crit
+    player['guaranteed_crit'] = battle_state.get('guaranteed_crit_turns', 0) > 0
 
     if battle_state['player_goes_first']:
-        result = player_attack(player, mob_state)
-        action_result = finalize_player_direct_damage_action(
-            battle_state,
-            base_damage=result['damage'],
-            can_consume_guaranteed_crit=False,
-        )
-        mob_state['hp'] = action_result['mob_hp_after']
-        result['damage'] = action_result['final_damage']
-        result['mob_dead'] = action_result['mob_dead']
+        attack_result = resolve_normal_attack_action(player, mob, battle_state, lang=lang)
+        log.append(attack_result['log_line'])
 
-        if result.get('is_crit') and should_force_crit:
-            battle_state['guaranteed_crit_turns'] -= 1
-
-        if result.get('is_crit'):
-            log.append(t('battle.attack_crit', lang, damage=result['damage']))
-        else:
-            log.append(t('battle.attack_hit', lang, damage=result['damage']))
-
-        if not result['mob_dead']:
-            battle_state['mob_hp'] = mob_state['hp']
+        if not attack_result['mob_dead']:
             log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
-            mob_state['hp'] = battle_state['mob_hp']
     else:
-        battle_state['mob_hp'] = mob_state['hp']
         log.extend(resolve_enemy_response(mob, player, battle_state, lang=lang, user_id=user_id))
-        mob_state['hp'] = battle_state['mob_hp']
 
         if player['hp'] > 0:
-            result = player_attack(player, mob_state)
-            action_result = finalize_player_direct_damage_action(
-                battle_state,
-                base_damage=result['damage'],
-                can_consume_guaranteed_crit=False,
-            )
-            mob_state['hp'] = action_result['mob_hp_after']
-            result['damage'] = action_result['final_damage']
-            result['mob_dead'] = action_result['mob_dead']
-
-            if result.get('is_crit') and should_force_crit:
-                battle_state['guaranteed_crit_turns'] -= 1
-
-            if result.get('is_crit'):
-                log.append(t('battle.attack_crit', lang, damage=result['damage']))
-            else:
-                log.append(t('battle.attack_hit', lang, damage=result['damage']))
+            attack_result = resolve_normal_attack_action(player, mob, battle_state, lang=lang)
+            log.append(attack_result['log_line'])
 
     # Сохраняем прежний тайминг normal attack flow: player buffs тикают после exchange
     tick_post_action_player_buff_durations(battle_state)
     tick_post_action_timed_trigger_buffs(battle_state)
 
-    battle_state['mob_dead']    = mob_state['hp'] <= 0
+    battle_state['mob_dead']    = battle_state['mob_hp'] <= 0
     battle_state['player_dead'] = player['hp'] <= 0
-    battle_state['mob_hp']    = mob_state['hp']
     battle_state['player_hp'] = player['hp']
     battle_state['turn']     += 1
     battle_state['log']       = log
