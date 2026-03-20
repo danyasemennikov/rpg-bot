@@ -212,7 +212,8 @@ def resolve_enemy_damage_against_player(
     1) invincible_turns
     2) dodge_buff_turns
     3) если урон проходит: defense_buff_turns mitigation
-    4) fire_shield_turns в единой post-hit точке
+    4) если урон проходит: disarm_turns mitigation
+    5) fire_shield_turns в единой post-hit точке
     """
     log = []
 
@@ -252,6 +253,10 @@ def resolve_enemy_damage_against_player(
     mob_dmg = mob_result.get('damage', 0)
     if battle_state.get('defense_buff_turns', 0) > 0:
         mob_dmg = int(mob_dmg * (1 - battle_state['defense_buff_value'] / 100))
+
+    if battle_state.get('disarm_turns', 0) > 0:
+        mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
+        battle_state['disarm_turns'] -= 1
 
     shield_dmg = 0
     if battle_state.get('fire_shield_turns', 0) > 0:
@@ -402,10 +407,6 @@ def resolve_enemy_response(
         return log
 
     mob_dmg = damage_result['player_damage']
-    if battle_state.get('disarm_turns', 0) > 0:
-        mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
-        battle_state['disarm_turns'] -= 1
-
     player['hp'] = max(0, player['hp'] - mob_dmg)
     battle_state['player_hp'] = player['hp']
     log.append(t('battle.mob_attack', lang,
