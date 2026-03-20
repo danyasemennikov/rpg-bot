@@ -1168,6 +1168,56 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(finalize_mock.call_count, 1)
         self.assertEqual(result['mob_hp'], 93)
 
+
+    def test_player_attack_is_pure_and_does_not_mutate_mob_state_hp(self):
+        player = {
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+        }
+        mob_state = {'hp': 40, 'defense': 0}
+
+        with patch('game.combat.roll_crit', return_value=False),              patch('game.combat.calc_final_damage', return_value=12):
+            result = combat.player_attack(player, mob_state)
+
+        self.assertEqual(result['damage'], 12)
+        self.assertEqual(result['mob_hp'], 28)
+        # Новый контракт: helper не мутирует mob_state.
+        self.assertEqual(mob_state['hp'], 40)
+
+    def test_resolve_normal_attack_action_applies_final_mob_hp_in_finalize_layer(self):
+        player = {
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+        }
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'mob_hp': 25,
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+        }
+
+        with patch('game.combat.roll_crit', return_value=False),              patch('game.combat.calc_final_damage', return_value=8):
+            result = combat.resolve_normal_attack_action(player, mob, battle_state, lang='ru')
+
+        self.assertEqual(result['damage'], 8)
+        self.assertEqual(result['mob_hp_after'], 17)
+        self.assertEqual(battle_state['mob_hp'], 17)
+
     def test_normal_attack_helper_is_used_in_both_initiative_branches(self):
         player = {
             'hp': 120,
