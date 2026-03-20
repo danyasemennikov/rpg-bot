@@ -554,7 +554,7 @@ def resolve_enemy_response(
 def player_attack(player: dict, mob_state: dict) -> dict:
     """
     Игрок атакует моба.
-    Возвращает словарь с результатом хода.
+    Pure helper: только рассчитывает normal-attack урон и исход, без мутации mob_state.
     """
     stats = {
         'strength':  player['strength'],
@@ -565,26 +565,27 @@ def player_attack(player: dict, mob_state: dict) -> dict:
         'luck':      player['luck'],
     }
 
-    weapon_type   = player.get('weapon_type', 'melee')
-    base_damage   = player.get('weapon_damage', 10)
+    weapon_type = player.get('weapon_type', 'melee')
+    base_damage = player.get('weapon_damage', 10)
     if player.get('guaranteed_crit'):
         is_crit = True
     else:
         is_crit = roll_crit(player['luck'], player['agility'])
-    damage        = calc_final_damage(base_damage, stats, weapon_type, is_crit)
+    damage = calc_final_damage(base_damage, stats, weapon_type, is_crit)
 
     # Снижаем урон на защиту моба
-    mob_defense   = mob_state.get('defense', 0)
-    final_damage  = apply_defense(damage, mob_defense)
+    mob_defense = mob_state.get('defense', 0)
+    final_damage = apply_defense(damage, mob_defense)
 
-    mob_state['hp'] = max(0, mob_state['hp'] - final_damage)
+    mob_hp_before = mob_state.get('hp', 0)
+    mob_hp_after = max(0, mob_hp_before - final_damage)
 
     return {
-        'type':     'player_attack',
-        'damage':   final_damage,
-        'is_crit':  is_crit,
-        'mob_dead': mob_state['hp'] <= 0,
-        'mob_hp':   mob_state['hp'],
+        'type': 'player_attack',
+        'damage': final_damage,
+        'is_crit': is_crit,
+        'mob_dead': mob_hp_after <= 0,
+        'mob_hp': mob_hp_after,
     }
 
 
