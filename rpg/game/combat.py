@@ -272,6 +272,40 @@ def resolve_enemy_damage_against_player(
     }
 
 
+def resolve_enemy_response_trigger_buffs(
+    battle_state: dict,
+    *,
+    mob_result: dict,
+    lang: str = 'ru',
+) -> dict:
+    """
+    Централизует trigger-buff ответы на действие моба.
+    Сейчас: parry как явный enemy-response trigger.
+    """
+    log = []
+
+    if not battle_state.get('parry_active'):
+        return {
+            'triggered': False,
+            'skip_player_damage': False,
+            'log': log,
+        }
+
+    incoming_damage = max(0, int(mob_result.get('damage', 0)))
+    parry_ratio = battle_state.get('parry_value', 1.0)
+    parry_damage = int(incoming_damage * parry_ratio)
+
+    battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - parry_damage)
+    battle_state['parry_active'] = False
+    log.append(t('battle.parry_reflect', lang, damage=parry_damage))
+
+    return {
+        'triggered': True,
+        'skip_player_damage': True,
+        'log': log,
+    }
+
+
 def process_skill_turn(
     skill_id: str,
     player: dict,
@@ -374,10 +408,12 @@ def resolve_enemy_response(
 
     if battle_state.get('parry_active'):
         mob_result = mob_attack(mob, player)
-        parry_dmg = int(mob_result['damage'] * battle_state.get('parry_value', 1.0))
-        battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - parry_dmg)
-        battle_state['parry_active'] = False
-        log.append(t('battle.parry_reflect', lang, damage=parry_dmg))
+        trigger_result = resolve_enemy_response_trigger_buffs(
+            battle_state,
+            mob_result=mob_result,
+            lang=lang,
+        )
+        log.extend(trigger_result['log'])
         battle_state['player_hp'] = player['hp']
         return log
 

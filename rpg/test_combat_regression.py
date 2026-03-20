@@ -242,6 +242,109 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(state['fire_shield_turns'], 1)
         self.assertEqual(state['mob_hp'], 94)
 
+    def test_parry_reflects_enemy_response_damage_and_player_takes_no_damage(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 12, 'damage_max': 12}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'parry_active': True,
+            'parry_value': 1.0,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 12, 'player_hp': 88}):
+            log = combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['player_hp'], 100)
+        self.assertEqual(state['mob_hp'], 88)
+        self.assertIn('12', ''.join(log))
+
+    def test_parry_is_consumed_once_after_triggering_enemy_response(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'parry_active': True,
+            'parry_value': 1.0,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertFalse(state['parry_active'])
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['player_hp'], 90)
+        self.assertEqual(state['mob_hp'], 90)
+
+    def test_parry_is_not_consumed_when_enemy_response_never_happens(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [{'type': 'stun', 'turns': 1, 'value': 1}],
+            'parry_active': True,
+            'parry_value': 1.0,
+        }
+
+        with patch('game.combat.mob_attack') as mob_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_not_called()
+        self.assertTrue(state['parry_active'])
+        self.assertEqual(state['mob_hp'], 100)
+
+    def test_parry_ordering_remains_compatible_with_enemy_response_flow(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'parry_active': True,
+            'parry_value': 1.0,
+            'invincible_turns': 1,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}) as mob_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_called_once()
+        self.assertEqual(state['player_hp'], 100)
+        self.assertEqual(state['mob_hp'], 90)
+        # invincible остаётся нетронутым: parry отрабатывает в trigger-слое enemy response.
+        self.assertEqual(state['invincible_turns'], 1)
+
+    def test_parry_change_does_not_affect_other_defensive_mechanics(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'invincible_turns': 1,
+            'disarm_turns': 1,
+            'disarm_value': 50,
+            'fire_shield_turns': 1,
+            'fire_shield_value': 4,
+        }
+
+        with patch('game.combat.mob_attack') as mob_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_not_called()
+        self.assertEqual(state['player_hp'], 100)
+        self.assertEqual(state['mob_hp'], 100)
+        self.assertEqual(state['invincible_turns'], 0)
+        self.assertEqual(state['disarm_turns'], 1)
+        self.assertEqual(state['fire_shield_turns'], 1)
+
     def test_post_action_resurrection_tick_decrements_in_normal_attack_flow(self):
         player = {
             'hp': 120,
