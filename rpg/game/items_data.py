@@ -9,7 +9,7 @@ ITEMS = {
     'wooden_sword': {
         'item_id': 'wooden_sword', 'name': '🗡️ Деревянный меч',
         'description': 'Простой меч из дерева. Лучше чем ничего.',
-        'item_type': 'weapon', 'weapon_type': 'melee',
+        'item_type': 'weapon', 'weapon_type': 'melee', 'weapon_profile': 'sword_1h',
         'rarity': 'common',
         'damage_min': 5, 'damage_max': 8, 'defense': 0, 'weight': 3,
         'req_level': 1, 'req_strength': 0, 'req_agility': 0,
@@ -20,7 +20,7 @@ ITEMS = {
     'iron_sword': {
         'item_id': 'iron_sword', 'name': '⚔️ Железный меч',
         'description': 'Надёжный железный меч.',
-        'item_type': 'weapon', 'weapon_type': 'melee',
+        'item_type': 'weapon', 'weapon_type': 'melee', 'weapon_profile': 'sword_1h',
         'rarity': 'common',
         'damage_min': 12, 'damage_max': 18, 'defense': 0, 'weight': 4,
         'req_level': 3, 'req_strength': 5, 'req_agility': 0,
@@ -31,7 +31,7 @@ ITEMS = {
     'short_bow': {
         'item_id': 'short_bow', 'name': '🏹 Короткий лук',
         'description': 'Лёгкий лук для быстрой стрельбы.',
-        'item_type': 'weapon', 'weapon_type': 'ranged',
+        'item_type': 'weapon', 'weapon_type': 'ranged', 'weapon_profile': 'bow',
         'rarity': 'common',
         'damage_min': 8, 'damage_max': 14, 'defense': 0, 'weight': 2,
         'req_level': 1, 'req_strength': 0, 'req_agility': 3,
@@ -42,7 +42,7 @@ ITEMS = {
     'magic_staff': {
         'item_id': 'magic_staff', 'name': '🔮 Магический посох',
         'description': 'Посох начинающего мага.',
-        'item_type': 'weapon', 'weapon_type': 'magic',
+        'item_type': 'weapon', 'weapon_type': 'magic', 'weapon_profile': 'magic_staff',
         'rarity': 'uncommon',
         'damage_min': 80, 'damage_max': 100, 'defense': 0, 'weight': 3,
         'req_level': 3, 'req_strength': 0, 'req_agility': 0,
@@ -53,7 +53,7 @@ ITEMS = {
     'holy_staff': {
         'item_id': 'holy_staff', 'name': '✨ Святой посох',
         'description': 'Посох жреца. Наносит урон светом и лечит союзников.',
-        'item_type': 'weapon', 'weapon_type': 'light',
+        'item_type': 'weapon', 'weapon_type': 'light', 'weapon_profile': 'holy_staff',
         'rarity': 'uncommon',
         'damage_min': 10, 'damage_max': 16, 'defense': 0, 'weight': 3,
         'req_level': 3, 'req_strength': 0, 'req_agility': 0,
@@ -64,7 +64,7 @@ ITEMS = {
     'dagger': {
         'item_id': 'dagger', 'name': '🗡️ Кинжал',
         'description': 'Быстрый и лёгкий кинжал.',
-        'item_type': 'weapon', 'weapon_type': 'melee',
+        'item_type': 'weapon', 'weapon_type': 'melee', 'weapon_profile': 'daggers',
         'rarity': 'common',
         'damage_min': 7, 'damage_max': 11, 'defense': 0, 'weight': 1,
         'req_level': 1, 'req_strength': 0, 'req_agility': 3,
@@ -78,7 +78,7 @@ ITEMS = {
     'leather_armor': {
         'item_id': 'leather_armor', 'name': '🥋 Кожаная броня',
         'description': 'Лёгкая броня из кожи.',
-        'item_type': 'armor', 'weapon_type': None,
+        'item_type': 'armor', 'weapon_type': None, 'armor_class': 'medium',
         'rarity': 'common',
         'damage_min': 0, 'damage_max': 0, 'defense': 5, 'weight': 4,
         'req_level': 1, 'req_strength': 0, 'req_agility': 0,
@@ -90,6 +90,7 @@ ITEMS = {
         'item_id': 'iron_shield', 'name': '🛡️ Железный щит',
         'description': 'Надёжная защита.',
         'item_type': 'armor', 'weapon_type': None,
+        'offhand_profile': 'shield', 'encumbrance': 2,
         'rarity': 'common',
         'damage_min': 0, 'damage_max': 0, 'defense': 8, 'weight': 6,
         'req_level': 3, 'req_strength': 5, 'req_agility': 0,
@@ -161,5 +162,12 @@ ITEMS = {
 
 def get_item(item_id: str) -> dict:
     return ITEMS.get(item_id)
+
+
+def get_item_encumbrance(item: dict | None) -> int | None:
+    """Возвращает semantic encumbrance или fallback на вес предмета."""
+    if not item:
+        return None
+    return item.get('encumbrance', item.get('weight'))
 
 print(f'✅ game/items_data.py создан! Предметов: {len(ITEMS)}')

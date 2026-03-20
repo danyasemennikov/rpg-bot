@@ -32,6 +32,73 @@ BASE_STATS = {
     'luck':      1,     # 🍀 Удача
 }
 
+# ────────────────────────────────────────
+# COMBAT SEMANTICS (Stage 1 hooks)
+# ────────────────────────────────────────
+
+VALID_WEAPON_PROFILES = {
+    'sword_1h', 'sword_2h', 'axe_2h', 'daggers', 'bow',
+    'magic_staff', 'holy_staff', 'wand', 'holy_rod', 'unarmed',
+}
+VALID_ARMOR_CLASSES = {'light', 'medium', 'heavy'}
+VALID_OFFHAND_PROFILES = {'none', 'shield', 'focus', 'censer', 'orb', 'tome'}
+VALID_DAMAGE_SCHOOLS = {'physical', 'magic', 'holy'}
+
+LEGACY_WEAPON_PROFILE_BY_TYPE = {
+    'melee': 'sword_1h',
+    'ranged': 'bow',
+    'magic': 'magic_staff',
+    'light': 'holy_staff',
+}
+
+DEFAULT_DAMAGE_SCHOOL_BY_WEAPON_PROFILE = {
+    'bow': 'physical',
+    'magic_staff': 'magic',
+    'wand': 'magic',
+    'holy_staff': 'holy',
+    'holy_rod': 'holy',
+}
+
+
+def normalize_weapon_profile(weapon_profile: str | None, weapon_type: str = 'melee') -> str:
+    if weapon_profile in VALID_WEAPON_PROFILES:
+        return weapon_profile
+    return LEGACY_WEAPON_PROFILE_BY_TYPE.get(weapon_type, 'sword_1h')
+
+
+def normalize_armor_class(armor_class: str | None) -> str | None:
+    if armor_class in VALID_ARMOR_CLASSES:
+        return armor_class
+    return None
+
+
+def normalize_offhand_profile(offhand_profile: str | None) -> str:
+    if offhand_profile in VALID_OFFHAND_PROFILES:
+        return offhand_profile
+    return 'none'
+
+
+def normalize_damage_school(
+    damage_school: str | None,
+    *,
+    weapon_profile: str | None = None,
+    weapon_type: str = 'melee',
+) -> str:
+    if damage_school in VALID_DAMAGE_SCHOOLS:
+        return damage_school
+    profile = normalize_weapon_profile(weapon_profile, weapon_type)
+    return DEFAULT_DAMAGE_SCHOOL_BY_WEAPON_PROFILE.get(profile, 'physical')
+
+
+def normalize_encumbrance(encumbrance: int | float | None) -> int | None:
+    if encumbrance is None:
+        return None
+    try:
+        value = int(encumbrance)
+    except (TypeError, ValueError):
+        return None
+    return max(0, value)
+
 def calc_max_hp(vitality: int) -> int:
     """Максимальное HP от Живучести."""
     return BASE_STATS['hp'] + (vitality * 18)

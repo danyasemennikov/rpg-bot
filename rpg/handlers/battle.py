@@ -17,16 +17,20 @@ from game.combat import (
     init_battle, process_turn, calc_rewards,
     calc_death_penalty, hp_bar, resolve_enemy_response, process_skill_turn
 )
-from game.balance import exp_to_next_level, calc_max_hp
-from game.items_data import get_item
-from game.i18n import t, get_player_lang, get_item_name, get_skill_name, get_mob_name
+from game.balance import (
+    exp_to_next_level, calc_max_hp, normalize_weapon_profile,
+    normalize_offhand_profile, normalize_armor_class, normalize_damage_school,
+    normalize_encumbrance,
+)
+from game.items_data import get_item, get_item_encumbrance
+from game.i18n import t, get_item_name, get_skill_name, get_mob_name
 
 
 # ────────────────────────────────────────
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ────────────────────────────────────────
 
-def save_battle(telegram_id: int, battle_state: dict):
+def save_battle(telegram_id: int):
     """Сохраняем состояние боя в БД."""
     conn = get_connection()
     conn.execute(
@@ -267,50 +271,90 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
         await query.answer(t('battle.mob_not_found', lang), show_alert=True)
         return
 
-    # Подтягиваем экипированное оружие
-    eq = get_connection().execute(
-        'SELECT weapon FROM equipment WHERE telegram_id=?', (user.id,)
-    ).fetchone()
+    conn = get_connection()
+    equipment_columns = {
+        row['name']
+        for row in conn.execute('PRAGMA table_info(equipment)').fetchall()
+    }
 
-    if eq and eq['weapon']:
-        inv_row = get_connection().execute(
-            'SELECT * FROM inventory WHERE id=?', (eq['weapon'],)
-        ).fetchone()
-        if inv_row:
-            weapon_item = get_item(inv_row['item_id'])
-            if weapon_item:
-                p['weapon_type']   = weapon_item['weapon_type']
-                p['weapon_damage'] = random.randint(
-                    weapon_item['damage_min'],
-                    weapon_item['damage_max']
-                )
-                p['weapon_name'] = get_item_name(weapon_item['item_id'] if 'item_id' in weapon_item else inv_row['item_id'], lang)
-            else:
-                p['weapon_type']   = 'melee'
-                p['weapon_damage'] = 10
-                p['weapon_name']   = t('battle.unarmed', lang)
+    weapon_item = None
+    offhand_item = None
+    chest_item = None
+
+    # Поддерживаем обе модели: slot-based (telegram_id, slot, item_id)
+    # и legacy wide-table, чтобы не ломать старые окружения.
+    if {'slot', 'item_id'}.issubset(equipment_columns):
+        equipped_rows = conn.execute(
+            'SELECT slot, item_id FROM equipment WHERE telegram_id=?', (user.id,)
+        ).fetchall()
+        equipped_by_slot = {row['slot']: get_item(row['item_id']) for row in equipped_rows}
+        weapon_item = equipped_by_slot.get('weapon')
+        offhand_item = equipped_by_slot.get('offhand')
+        chest_item = equipped_by_slot.get('chest')
     else:
-        p['weapon_type']   = 'melee'
+        eq = conn.execute(
+            'SELECT weapon, offhand, chest FROM equipment WHERE telegram_id=?', (user.id,)
+        ).fetchone()
+
+        def _load_legacy_equipped_item(inv_id):
+            if not inv_id:
+                return None
+            inv_row = conn.execute('SELECT item_id FROM inventory WHERE id=?', (inv_id,)).fetchone()
+            if not inv_row:
+                return None
+            return get_item(inv_row['item_id'])
+
+        weapon_item = _load_legacy_equipped_item(eq['weapon']) if eq else None
+        offhand_item = _load_legacy_equipped_item(eq['offhand']) if eq else None
+        chest_item = _load_legacy_equipped_item(eq['chest']) if eq else None
+
+    conn.close()
+
+    # Явный special-case для unarmed, чтобы profile не падал в sword_1h.
+    if weapon_item:
+        p['weapon_type'] = weapon_item.get('weapon_type', 'melee')
+        p['weapon_profile'] = normalize_weapon_profile(
+            weapon_item.get('weapon_profile'),
+            p['weapon_type'],
+        )
+        p['weapon_damage'] = random.randint(
+            weapon_item.get('damage_min', 10),
+            weapon_item.get('damage_max', 10),
+        )
+        p['weapon_name'] = get_item_name(weapon_item.get('item_id', 'unarmed'), lang)
+        p['damage_school'] = normalize_damage_school(
+            weapon_item.get('damage_school'),
+            weapon_profile=p['weapon_profile'],
+            weapon_type=p['weapon_type'],
+        )
+    else:
+        p['weapon_type'] = 'melee'
+        p['weapon_profile'] = 'unarmed'
         p['weapon_damage'] = 10
-        p['weapon_name']   = t('battle.unarmed', lang)
+        p['weapon_name'] = t('battle.unarmed', lang)
+        p['damage_school'] = 'physical'
+
+    p['armor_class'] = normalize_armor_class((chest_item or {}).get('armor_class'))
+    p['offhand_profile'] = normalize_offhand_profile((offhand_item or {}).get('offhand_profile'))
+    p['encumbrance'] = normalize_encumbrance(
+        get_item_encumbrance(chest_item) or get_item_encumbrance(offhand_item)
+    )
 
     # Инициализируем бой
     battle_state = init_battle(p, mob, mob_first=mob_first)
     battle_state['weapon_type']   = p.get('weapon_type', 'melee')
+    battle_state['weapon_profile'] = p.get('weapon_profile', 'unarmed')
+    battle_state['armor_class'] = p.get('armor_class')
+    battle_state['offhand_profile'] = p.get('offhand_profile', 'none')
+    battle_state['damage_school'] = p.get('damage_school', 'physical')
+    battle_state['encumbrance'] = p.get('encumbrance')
     battle_state['weapon_damage'] = p.get('weapon_damage', 10)
     battle_state['weapon_name']   = p.get('weapon_name', t('battle.unarmed', lang))
 
     # Владение оружием
-    eq = get_connection().execute(
-        'SELECT weapon FROM equipment WHERE telegram_id=?', (user.id,)
-    ).fetchone()
     actual_weapon_id = 'unarmed'
-    if eq and eq['weapon']:
-        inv_row = get_connection().execute(
-            'SELECT item_id FROM inventory WHERE id=?', (eq['weapon'],)
-        ).fetchone()
-        if inv_row:
-            actual_weapon_id = inv_row['item_id']
+    if weapon_item:
+        actual_weapon_id = weapon_item['item_id']
 
     mastery = get_mastery(user.id, actual_weapon_id)
     battle_state['weapon_id']     = actual_weapon_id
@@ -342,7 +386,7 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     context.user_data['battle']     = battle_state
     context.user_data['battle_mob'] = mob
 
-    save_battle(user.id, battle_state)
+    save_battle(user.id)
 
     text, keyboard = build_battle_message(p, mob, battle_state, battle_state.get('log', []))
     await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')

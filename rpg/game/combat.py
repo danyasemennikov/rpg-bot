@@ -9,7 +9,8 @@ sys.path.append('/content/rpg_bot')
 from game.balance import (
     calc_final_damage, calc_dodge_chance, calc_crit_chance,
     calc_physical_defense, calc_magic_defense,
-    calc_crit_reduction, calc_action_priority
+    calc_crit_reduction, calc_action_priority,
+    normalize_damage_school,
 )
 from game.i18n import t, get_mob_name
 from game.skill_engine import (
@@ -38,6 +39,11 @@ def roll_dodge(agility: int) -> bool:
 def get_weapon_type(player_equipment: dict) -> str:
     """Определяет тип оружия игрока. По умолчанию melee."""
     return player_equipment.get('weapon_type', 'melee')
+
+
+def get_weapon_profile(player_equipment: dict) -> str:
+    """Определяет weapon_profile игрока. По умолчанию unarmed."""
+    return player_equipment.get('weapon_profile', 'unarmed')
 
 def calc_mob_damage(mob: dict) -> int:
     """Урон моба — рандом между min и max."""
@@ -203,6 +209,7 @@ def finalize_player_direct_damage_action(
     *,
     base_damage: int,
     can_consume_guaranteed_crit: bool,
+    damage_school: str | None = None,
 ) -> dict:
     """
     Единый финальный этап direct-damage действия игрока:
@@ -224,6 +231,11 @@ def finalize_player_direct_damage_action(
         'base_damage': base_damage,
         'damage': final_damage,
         'final_damage': final_damage,
+        'damage_school': normalize_damage_school(
+            damage_school,
+            weapon_profile=battle_state.get('weapon_profile'),
+            weapon_type=battle_state.get('weapon_type', 'melee'),
+        ),
         'mob_hp_before': mob_hp_before,
         'mob_hp_after': mob_hp_after,
         'mob_dead': mob_hp_after <= 0,
@@ -427,6 +439,7 @@ def process_skill_turn(
             battle_state,
             base_damage=direct_damage,
             can_consume_guaranteed_crit=True,
+            damage_school=skill_result.get('damage_school'),
         )
         skill_result['damage'] = action_result['final_damage']
         skill_result['direct_damage_result'] = action_result
@@ -617,6 +630,7 @@ def resolve_normal_attack_action(
         battle_state,
         base_damage=attack_result['damage'],
         can_consume_guaranteed_crit=False,
+        damage_school=battle_state.get('damage_school'),
     )
 
     is_crit = attack_result.get('is_crit', False)
@@ -746,6 +760,11 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'buffs_used':           False,
         'weapon_id':            'unarmed',
         'weapon_type':          'melee',
+        'weapon_profile':       'unarmed',
+        'armor_class':          None,
+        'offhand_profile':      'none',
+        'damage_school':        'physical',
+        'encumbrance':          None,
         'weapon_damage':        10,
         'weapon_name':          '',
         'mastery_level':        1,
@@ -763,6 +782,7 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
     player = dict(player)
     player['hp'] = battle_state['player_hp']
     player['weapon_type']   = battle_state.get('weapon_type', 'melee')
+    player['weapon_profile'] = battle_state.get('weapon_profile', 'unarmed')
     player['weapon_damage'] = battle_state.get('weapon_damage', 10)
 
     if battle_state.get('blessing_turns', 0) > 0:

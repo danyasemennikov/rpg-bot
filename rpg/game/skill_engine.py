@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from game.skills import get_skill, get_available_skills
 from game.weapon_mastery import get_skill_level, get_skill_cooldown, set_skill_cooldown
-from game.balance import calc_final_damage
+from game.balance import calc_final_damage, normalize_damage_school
 from game.i18n import t, get_skill_name
 
 def build_skill_result_log(skill_result: dict, lang: str) -> str:
@@ -116,6 +116,11 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         'log_params': {},
         'log_suffixes': [],
         'lifesteal_ratio': 0.0,
+        'damage_school': normalize_damage_school(
+            None,
+            weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+            weapon_type=battle_state.get('weapon_type', 'melee'),
+        ),
     }
 
     skill_type = skill['type']
@@ -124,6 +129,11 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     # ── УРОН ────────────────────────────────
     if skill_type == 'damage':
         result['direct_damage_skill'] = True
+        result['damage_school'] = normalize_damage_school(
+            skill.get('damage_school'),
+            weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+            weapon_type=battle_state.get('weapon_type', 'melee'),
+        )
         stats = {k: player.get(k, 1) for k in
                  ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
         weapon_type = battle_state.get('weapon_type', 'melee')
@@ -433,6 +443,11 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             dmg = max(1, int(base_attack * random.uniform(0.9, 1.1)))
             result['damage'] = dmg
             result['direct_damage_skill'] = True
+            result['damage_school'] = normalize_damage_school(
+                skill.get('damage_school'),
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                weapon_type=battle_state.get('weapon_type', 'melee'),
+            )
             result['log_key'] = 'skills.log_damage_effect'
             result['log_params'] = {
                 'name': get_skill_name(skill_id, lang),
