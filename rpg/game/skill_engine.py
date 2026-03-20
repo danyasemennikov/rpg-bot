@@ -125,6 +125,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
     skill_type = skill['type']
     value      = calc_skill_value(skill, skill_level, player)
+    weapon_type = battle_state.get('weapon_type', 'melee')
+    weapon_profile = battle_state.get('weapon_profile', 'unarmed')
+    profile_damage_school = normalize_damage_school(
+        None,
+        weapon_profile=weapon_profile,
+        weapon_type=weapon_type,
+    )
 
     # ── УРОН ────────────────────────────────
     if skill_type == 'damage':
@@ -136,9 +143,15 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         )
         stats = {k: player.get(k, 1) for k in
                  ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
-        weapon_type = battle_state.get('weapon_type', 'melee')
         weapon_dmg  = battle_state.get('weapon_damage', 10)
-        base_attack = calc_final_damage(weapon_dmg, stats, weapon_type, False)
+        base_attack = calc_final_damage(
+            weapon_dmg,
+            stats,
+            weapon_type,
+            False,
+            weapon_profile=weapon_profile,
+            damage_school=profile_damage_school,
+        )
         # value = % от базовой атаки * бонус уровня
         value = base_attack * (skill['base_value'] / 100) * (1 + skill['level_bonus'] * (skill_level - 1))
 
@@ -229,7 +242,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                          ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
                 base_attack = calc_final_damage(
                     battle_state.get('weapon_damage', 10), stats,
-                    battle_state.get('weapon_type', 'melee'), False
+                    battle_state.get('weapon_type', 'melee'),
+                    False,
+                    weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                    damage_school=profile_damage_school,
                 )
                 dot_value = max(1, int(base_attack * 0.3))
                 result['effects'].append({
@@ -327,7 +343,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                      ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
             base_attack = calc_final_damage(
                 battle_state.get('weapon_damage', 10), stats,
-                battle_state.get('weapon_type', 'melee'), False
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
             )
             shield_value = max(1, int(base_attack * skill['base_value'] / 100))
             battle_state['fire_shield_turns'] = duration
@@ -371,7 +390,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                          ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
                 base_attack = calc_final_damage(
                     battle_state.get('weapon_damage', 10), stats,
-                    battle_state.get('weapon_type', 'melee'), False
+                    battle_state.get('weapon_type', 'melee'),
+                    False,
+                    weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                    damage_school=profile_damage_school,
                 )
                 dot_value = max(1, int(base_attack * skill['base_value'] / 100))
                 result['effects'].append({
@@ -399,7 +421,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                      ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
             base_attack = calc_final_damage(
                 battle_state.get('weapon_damage', 10), stats,
-                battle_state.get('weapon_type', 'melee'), False
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
             )
             dot_value = max(1, int(base_attack * skill['base_value'] / 100))
             result['effects'] = []
@@ -438,7 +463,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                      ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
             base_attack = calc_final_damage(
                 battle_state.get('weapon_damage', 10), stats,
-                battle_state.get('weapon_type', 'melee'), False
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
             )
             dmg = max(1, int(base_attack * random.uniform(0.9, 1.1)))
             result['damage'] = dmg
