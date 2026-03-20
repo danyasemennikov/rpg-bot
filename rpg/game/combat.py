@@ -10,6 +10,7 @@ from game.balance import (
     calc_final_damage, calc_dodge_chance, calc_crit_chance,
     calc_physical_defense, calc_magic_defense,
     calc_crit_reduction, calc_action_priority,
+    calc_physical_damage_reduction,
     normalize_damage_school,
 )
 from game.i18n import t, get_mob_name
@@ -581,12 +582,21 @@ def player_attack(player: dict, mob_state: dict) -> dict:
     }
 
     weapon_type = player.get('weapon_type', 'melee')
+    weapon_profile = player.get('weapon_profile')
+    damage_school = player.get('damage_school')
     base_damage = player.get('weapon_damage', 10)
     if player.get('guaranteed_crit'):
         is_crit = True
     else:
         is_crit = roll_crit(player['luck'], player['agility'])
-    damage = calc_final_damage(base_damage, stats, weapon_type, is_crit)
+    damage = calc_final_damage(
+        base_damage,
+        stats,
+        weapon_type,
+        is_crit,
+        weapon_profile=weapon_profile,
+        damage_school=damage_school,
+    )
 
     # Снижаем урон на защиту моба
     mob_defense = mob_state.get('defense', 0)
@@ -672,16 +682,22 @@ def mob_attack(mob: dict, player: dict) -> dict:
     # Урон моба
     base_damage = calc_mob_damage(mob)
 
+    incoming_school = normalize_damage_school(
+        mob.get('damage_school'),
+        weapon_profile=mob.get('weapon_profile'),
+        weapon_type=mob.get('weapon_type', 'melee'),
+    )
+
     # Защита игрока зависит от типа урона моба
-    if mob.get('weapon_type') == 'magic':
+    if incoming_school in ('magic', 'holy'):
         defense = calc_magic_defense(player['wisdom'])
     else:
         defense = calc_physical_defense(player['vitality'])
 
-    # Снижение физ урона от ловкости
-    from game.balance import calc_physical_damage_reduction
-    agi_reduction = calc_physical_damage_reduction(player['agility'])
-    base_damage   = int(base_damage * (1 - agi_reduction / 100))
+    # Снижение входящего урона от Ловкости — только против physical
+    if incoming_school == 'physical':
+        agi_reduction = calc_physical_damage_reduction(player['agility'])
+        base_damage = int(base_damage * (1 - agi_reduction / 100))
 
     final_damage  = apply_defense(base_damage, defense)
     new_hp        = max(0, player['hp'] - final_damage)

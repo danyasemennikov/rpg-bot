@@ -124,13 +124,15 @@ def calc_carry_weight(strength: int) -> int:
 # ────────────────────────────────────────
 
 def calc_dodge_chance(agility: int) -> float:
-    """Шанс уклонения (0.0 — 1.0). Мягкий cap на 40%."""
-    raw = agility * 0.8
-    return round(min(raw, 40.0) / 100, 4)
+    """Шанс уклонения (0.0 — 1.0). С мягким спадом и cap 35%."""
+    base = min(agility, 20) * 0.45
+    if agility > 20:
+        base += (agility - 20) * 0.20
+    return round(min(base, 35.0) / 100, 4)
 
 def calc_agility_damage_bonus(agility: int) -> float:
-    """% бонус к итоговому урону от Ловкости."""
-    return round(agility * 0.5, 2)  # +0.5% за каждое очко
+    """Небольшой общий % бонус к урону от Ловкости. Cap 9%."""
+    return round(min(agility * 0.18, 9.0), 2)
 
 def calc_physical_damage_reduction(agility: int) -> float:
     """Небольшое снижение входящего физ. урона (%)."""
@@ -149,8 +151,8 @@ def calc_ranged_damage_bonus(intuition: int) -> int:
     return intuition * 3
 
 def calc_magic_damage_percent(intuition: int) -> float:
-    """% бонус к магическому урону от Интуиции."""
-    return round(intuition * 5, 2)
+    """% бонус к магическому урону от Интуиции. Cap 30%."""
+    return round(min(intuition * 0.9, 30.0), 2)
 
 def calc_intuition_melee_bonus(intuition: int) -> int:
     """Небольшой плоский бонус к ближнему урону от Интуиции."""
@@ -199,13 +201,13 @@ def calc_magic_effect_duration(base_duration: int, wisdom: int) -> int:
 # ────────────────────────────────────────
 
 def calc_crit_chance(luck: int, agility: int = 0) -> float:
-    """Шанс критического удара (0.0 — 1.0). Cap 60%."""
-    raw = (luck * 0.6) + (agility * 0.1)
-    return round(min(raw, 60.0) / 100, 4)
+    """Шанс критического удара (0.0 — 1.0). Cap 35%."""
+    raw = (luck * 0.35) + (agility * 0.05)
+    return round(min(raw, 35.0) / 100, 4)
 
 def calc_crit_reduction(luck: int) -> float:
-    """Снижение шанса получить крит от врага (%). Cap 30%."""
-    return round(min(luck * 0.3, 30.0), 2)
+    """Снижение шанса получить крит от врага (%). Cap 20%."""
+    return round(min(luck * 0.2, 20.0), 2)
 
 def calc_luck_bonus(luck: int, stat_value: int) -> float:
     """Удача даёт небольшой % бонус к любому стату."""
@@ -215,41 +217,95 @@ def calc_luck_bonus(luck: int, stat_value: int) -> float:
 # 🎯 ФИНАЛЬНЫЙ УРОН — сводная формула
 # ────────────────────────────────────────
 
+PROFILE_PRIMARY_SCALING = {
+    'sword_1h': ('strength', 2.2),
+    'sword_2h': ('strength', 2.6),
+    'axe_2h': ('strength', 2.8),
+    'daggers': ('agility', 2.3),
+    'bow': ('agility', 2.4),
+    'magic_staff': ('intuition', 2.7),
+    'wand': ('intuition', 2.3),
+    'holy_staff': ('wisdom', 2.6),
+    'holy_rod': ('wisdom', 2.4),
+    'unarmed': ('strength', 1.5),
+}
+
+PROFILE_SECONDARY_SCALING = {
+    'sword_1h': ('vitality', 0.9),
+    'sword_2h': ('agility', 0.9),
+    'axe_2h': ('vitality', 1.1),
+    'daggers': ('luck', 0.8),
+    'bow': ('intuition', 1.0),
+    'magic_staff': ('wisdom', 1.0),
+    'wand': ('agility', 0.9),
+    'holy_staff': ('intuition', 1.0),
+    'holy_rod': ('vitality', 0.9),
+    'unarmed': ('vitality', 0.5),
+}
+
+
+def calc_profile_primary_offense_bonus(attacker_stats: dict, weapon_profile: str) -> int:
+    """Основной offensive scaling от weapon_profile."""
+    stat_name, multiplier = PROFILE_PRIMARY_SCALING.get(weapon_profile, ('strength', 2.0))
+    return int(attacker_stats.get(stat_name, 0) * multiplier)
+
+
+def calc_profile_secondary_offense_bonus(attacker_stats: dict, weapon_profile: str) -> int:
+    """Вторичный offensive scaling от weapon_profile."""
+    stat_name, multiplier = PROFILE_SECONDARY_SCALING.get(weapon_profile, ('vitality', 0.6))
+    return int(attacker_stats.get(stat_name, 0) * multiplier)
+
+
+def calc_school_damage_bonus_percent(attacker_stats: dict, damage_school: str) -> float:
+    """School-aware бонус к урону в процентах."""
+    if damage_school == 'magic':
+        bonus = (attacker_stats.get('intuition', 0) * 0.55) + (attacker_stats.get('wisdom', 0) * 0.20)
+        return round(min(bonus, 28.0), 2)
+    if damage_school == 'holy':
+        bonus = (attacker_stats.get('wisdom', 0) * 0.60) + (attacker_stats.get('intuition', 0) * 0.15)
+        return round(min(bonus, 30.0), 2)
+    return 0.0
+
+
+def calc_crit_multiplier(luck: int = 0) -> float:
+    """Крит множитель. На этом проходе фиксирован и не ниже x2."""
+    return 2.0
+
 def calc_final_damage(
     base_weapon_damage: int,
     attacker_stats: dict,
     weapon_type: str,  # 'melee', 'ranged', 'magic', 'light'
-    is_crit: bool = False
+    is_crit: bool = False,
+    weapon_profile: str | None = None,
+    damage_school: str | None = None,
 ) -> int:
     """
     Считает итоговый урон с учётом всех статов.
     attacker_stats — словарь со статами атакующего.
     """
     s = attacker_stats
-    damage = base_weapon_damage
+    normalized_profile = normalize_weapon_profile(weapon_profile, weapon_type)
+    normalized_school = normalize_damage_school(
+        damage_school,
+        weapon_profile=normalized_profile,
+        weapon_type=weapon_type,
+    )
+    damage = max(1, base_weapon_damage)
 
-    if weapon_type == 'melee':
-        damage += calc_strength_bonus(s['strength'])
-        damage += calc_intuition_melee_bonus(s['intuition'])
+    primary_bonus = calc_profile_primary_offense_bonus(s, normalized_profile)
+    secondary_bonus = calc_profile_secondary_offense_bonus(s, normalized_profile)
+    damage += primary_bonus + secondary_bonus
 
-    elif weapon_type == 'ranged':
-        damage += calc_ranged_damage_bonus(s['intuition'])
-
-    elif weapon_type == 'magic':
-        bonus_pct = calc_magic_damage_percent(s['intuition'])
-        damage *= (1 + bonus_pct / 100)
-
-    elif weapon_type == 'light':
-        bonus_pct = calc_light_damage_bonus(s['wisdom'])
-        damage *= (1 + bonus_pct / 100)
+    school_bonus = calc_school_damage_bonus_percent(s, normalized_school)
+    damage *= (1 + school_bonus / 100)
 
     # Бонус от Ловкости (% ко всему)
     agi_bonus = calc_agility_damage_bonus(s['agility'])
     damage *= (1 + agi_bonus / 100)
 
-    # Крит — множитель 1.8x (не промахивается)
+    # Крит — мягко масштабируемый множитель
     if is_crit:
-        damage *= 2.5
+        damage *= calc_crit_multiplier(s.get('luck', 0))
 
     return max(1, int(damage))  # минимум 1 урона всегда
 
