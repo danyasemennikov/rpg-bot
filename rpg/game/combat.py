@@ -388,6 +388,11 @@ def resolve_enemy_response_trigger_buffs(
 
     incoming_damage = max(0, int(mob_result.get('damage', 0)))
     parry_ratio = battle_state.get('parry_value', 1.0)
+    if (
+        battle_state.get('weapon_profile') == 'sword_1h'
+        and battle_state.get('offhand_profile') == 'shield'
+    ):
+        parry_ratio *= 1.20
     parry_damage = int(incoming_damage * parry_ratio)
 
     battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - parry_damage)
@@ -568,10 +573,15 @@ def resolve_enemy_response(
     if user_id is not None and mob_dmg > 0:
         from game.weapon_mastery import get_skill_level
         counter_level = get_skill_level(user_id, 'counter')
-        if counter_level > 0:
-            counter_chance = 0.30 + 0.05 * (counter_level - 1)
+        if counter_level > 0 and battle_state.get('weapon_profile') == 'sword_1h':
+            counter_chance = 0.22 + 0.05 * (counter_level - 1)
+            counter_chance += 0.08
+            if battle_state.get('offhand_profile') == 'shield':
+                counter_chance += 0.10
             if random.random() < counter_chance:
-                counter_dmg = int(mob_dmg * (0.5 + 0.1 * counter_level))
+                counter_dmg = int(mob_dmg * (0.35 + 0.08 * counter_level))
+                if battle_state.get('offhand_profile') == 'shield':
+                    counter_dmg = int(counter_dmg * 1.10)
                 battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - counter_dmg)
                 log.append(t('battle.counter_attack', lang, damage=counter_dmg))
 
