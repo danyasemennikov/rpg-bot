@@ -29,6 +29,11 @@ class _DummyContext:
 
 
 class CombatRegressionTests(unittest.TestCase):
+    def setUp(self):
+        precheck_patcher = patch('game.combat.precheck_skill_use', return_value={'success': True, 'log': ''})
+        self._precheck_mock = precheck_patcher.start()
+        self.addCleanup(precheck_patcher.stop)
+
     def test_invincible_blocks_enemy_response_damage_through_combat_core(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
@@ -607,6 +612,245 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(result['battle_state'].get('resurrection_turns', 0), 0)
         self.assertEqual(response_mock.call_count, 0)
 
+    def test_regen_is_applied_at_start_of_normal_attack_turn(self):
+        player = {
+            'hp': 120,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'mob_hp': 100,
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'player_goes_first': True,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+            'regen_turns': 1,
+            'regen_amount': 10,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'blessing_turns': 0,
+            'blessing_value': 0,
+            'turn': 1,
+        }
+
+        def player_attack_side_effect(player_state, _mob_state):
+            self.assertEqual(player_state['hp'], 60)
+            return {'damage': 5, 'is_crit': False, 'mob_dead': False}
+
+        with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
+             patch('game.combat.player_attack', side_effect=player_attack_side_effect), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.apply_player_buffs', return_value=''):
+            result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
+
+        self.assertEqual(result['player_hp'], 60)
+        self.assertEqual(result['regen_turns'], 0)
+
+    def test_regen_duration_ticks_predictably_and_stops_after_expire(self):
+        state = {
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'regen_turns': 2,
+            'regen_amount': 10,
+        }
+
+        first_log = combat.apply_player_start_of_turn_regen(state, 'ru')
+        second_log = combat.apply_player_start_of_turn_regen(state, 'ru')
+        third_log = combat.apply_player_start_of_turn_regen(state, 'ru')
+
+        self.assertTrue(first_log)
+        self.assertTrue(second_log)
+        self.assertEqual(third_log, [])
+        self.assertEqual(state['player_hp'], 70)
+        self.assertEqual(state['regen_turns'], 0)
+
+    def test_failed_skill_attempt_does_not_apply_or_consume_regen(self):
+        player = {'hp': 100, 'mana': 0}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'player_mana': 0,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'regen_turns': 2,
+            'regen_amount': 10,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': False, 'log': 'no mana'}), \
+             patch('game.combat.use_skill') as use_skill_mock:
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertFalse(result['success'])
+        self.assertEqual(result['battle_state']['player_hp'], 50)
+        self.assertEqual(result['battle_state']['regen_turns'], 2)
+        use_skill_mock.assert_not_called()
+
+    def test_failed_skill_attempt_does_not_add_regen_log(self):
+        player = {'hp': 100, 'mana': 0}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'player_mana': 0,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'regen_turns': 2,
+            'regen_amount': 10,
+            'log': ['before'],
+            'turn': 1,
+        }
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': False, 'log': 'no mana'}), \
+             patch('game.combat.use_skill') as use_skill_mock:
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['log'], ['before'])
+        use_skill_mock.assert_not_called()
+
+    def test_successful_skill_uses_post_regen_hp_in_skill_logic(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'regen_turns': 1,
+            'regen_amount': 10,
+            'log': [],
+            'turn': 1,
+        }
+
+        def use_skill_side_effect(_skill_id, player_state, _mob_state, _state, _user_id, _lang):
+            self.assertEqual(player_state['hp'], 60)
+            return {'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}
+
+        with patch('game.combat.use_skill', side_effect=use_skill_side_effect), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('heal', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['battle_state']['player_hp'], 60)
+
+    def test_casting_regeneration_does_not_tick_new_regen_on_same_turn(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 40,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'regen_turns': 0,
+            'regen_amount': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        def cast_regen_side_effect(_skill_id, _player_state, _mob_state, state, _user_id, _lang):
+            state['regen_turns'] = 3
+            state['regen_amount'] = 12
+            return {'success': True, 'log': 'cast regen', 'damage': 0, 'heal': 0, 'effects': []}
+
+        with patch('game.combat.use_skill', side_effect=cast_regen_side_effect), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('regeneration', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['battle_state']['player_hp'], 40)
+        self.assertEqual(result['battle_state']['regen_turns'], 3)
+
+    def test_regen_start_of_turn_is_consistent_in_attack_and_skill_flows(self):
+        player_normal = {
+            'hp': 120,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        player_skill = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+
+        normal_state = {
+            'mob_hp': 100,
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'player_goes_first': True,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+            'regen_turns': 2,
+            'regen_amount': 10,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'blessing_turns': 0,
+            'blessing_value': 0,
+            'turn': 1,
+        }
+        skill_state = {
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'regen_turns': 2,
+            'regen_amount': 10,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
+             patch('game.combat.player_attack', return_value={'damage': 5, 'is_crit': False, 'mob_dead': False}), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.apply_player_buffs', return_value=''):
+            normal_result = combat.process_turn(player_normal, mob, normal_state, lang='ru', user_id=101)
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            skill_result = combat.process_skill_turn('heal', player_skill, mob, skill_state, user_id=101, lang='ru')
+
+        self.assertEqual(normal_result['player_hp'], 60)
+        self.assertEqual(normal_result['regen_turns'], 1)
+        self.assertEqual(skill_result['battle_state']['player_hp'], 60)
+        self.assertEqual(skill_result['battle_state']['regen_turns'], 1)
+
+    def test_regen_normalization_does_not_change_other_player_buff_duration_ticks(self):
+        state = {
+            'defense_buff_turns': 2,
+            'berserk_turns': 2,
+            'blessing_turns': 2,
+            'regen_turns': 2,
+            'regen_amount': 10,
+            'player_hp': 50,
+            'player_max_hp': 100,
+        }
+
+        skill_engine.apply_player_buffs(state)
+
+        self.assertEqual(state['defense_buff_turns'], 1)
+        self.assertEqual(state['berserk_turns'], 1)
+        self.assertEqual(state['blessing_turns'], 1)
+        self.assertEqual(state['regen_turns'], 2)
+        self.assertEqual(state['player_hp'], 50)
+
     def test_resurrection_with_one_turn_left_expires_after_survived_action(self):
         player = {
             'hp': 120,
@@ -1016,6 +1260,11 @@ class SkillEngineRegressionTests(unittest.TestCase):
 
 
 class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        precheck_patcher = patch('game.combat.precheck_skill_use', return_value={'success': True, 'log': ''})
+        self._precheck_mock = precheck_patcher.start()
+        self.addAsyncCleanup(lambda: precheck_patcher.stop())
+
     async def test_handler_attack_path_does_not_manually_consume_guaranteed_crit_before_process_turn(self):
         update = _DummyUpdate('battle_attack_wolf')
         battle_state = {

@@ -52,6 +52,29 @@ def calc_skill_mana_cost(skill: dict, skill_level: int) -> int:
     """Стоимость маны растёт чуть с уровнем скилла."""
     return int(skill['mana_cost'] * (1 + 0.05 * (skill_level - 1)))
 
+def precheck_skill_use(skill_id: str, player_mana: int, telegram_id: int, lang: str) -> dict:
+    """
+    Проверяет, можно ли начать skill-turn без изменения runtime-состояния.
+    """
+    skill = get_skill(skill_id)
+    skill_level = get_skill_level(telegram_id, skill_id)
+
+    if not skill:
+        return {'success': False, 'log': t('skills.not_found', lang)}
+
+    if skill_level == 0:
+        return {'success': False, 'log': t('skills.not_learned_simple', lang)}
+
+    cd = get_skill_cooldown(telegram_id, skill_id)
+    if cd > 0:
+        return {'success': False, 'log': t('skills.on_cooldown', lang, name=get_skill_name(skill_id, lang), cd=cd)}
+
+    mana_cost = calc_skill_mana_cost(skill, skill_level)
+    if player_mana < mana_cost and mana_cost > 0:
+        return {'success': False, 'log': t('skills.no_mana', lang, cost=mana_cost)}
+
+    return {'success': True, 'log': ''}
+
 def use_skill(skill_id: str, player: dict, mob_state: dict,
               battle_state: dict, telegram_id: int, lang: str) -> dict:
     """
@@ -459,17 +482,9 @@ def apply_mob_effects(mob_state: dict) -> tuple:
 
 def apply_player_buffs(battle_state: dict) -> str:
     """
-    Тикает баффы игрока, возвращает лог.
+    Тикает post-action длительности баффов игрока (без регена), возвращает лог.
     """
     log_parts = []
-
-    # Регенерация
-    if battle_state.get('regen_turns', 0) > 0:
-        heal   = battle_state['regen_amount']
-        max_hp = battle_state.get('player_max_hp', 100)
-        battle_state['player_hp']   = min(max_hp, battle_state['player_hp'] + heal)
-        battle_state['regen_turns'] -= 1
-        log_parts.append(f"♻️ Реген ❤️+{heal}")
 
     # Тикаем остальные баффы
     for key in ('defense_buff_turns', 'berserk_turns', 'blessing_turns'):
