@@ -222,6 +222,7 @@ def finalize_player_direct_damage_action(
 
     return {
         'base_damage': base_damage,
+        'damage': final_damage,
         'final_damage': final_damage,
         'mob_hp_before': mob_hp_before,
         'mob_hp_after': mob_hp_after,
@@ -428,6 +429,7 @@ def process_skill_turn(
             can_consume_guaranteed_crit=True,
         )
         skill_result['damage'] = action_result['final_damage']
+        skill_result['direct_damage_result'] = action_result
         finalize_direct_damage_skill_result(skill_result, lang)
 
     log.append(skill_result['log'])
@@ -632,6 +634,7 @@ def resolve_normal_attack_action(
         'mob_dead': action_result['mob_dead'],
         'mob_hp_after': action_result['mob_hp_after'],
         'log_line': log_line,
+        'direct_damage_result': action_result,
     }
 
 # ────────────────────────────────────────

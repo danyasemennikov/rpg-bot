@@ -1331,6 +1331,83 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(finalize_mock.call_count, 1)
         self.assertEqual(result['battle_state']['mob_hp'], 40)
 
+    def test_normal_attack_and_damage_skill_share_direct_damage_result_contract(self):
+        player = {
+            'hp': 120,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        mob = {'id': 'wolf', 'defense': 0}
+        normal_state = {
+            'mob_hp': 50,
+            'player_hp': 120,
+            'player_goes_first': True,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'blessing_turns': 0,
+            'blessing_value': 0,
+            'turn': 1,
+        }
+        skill_state = {
+            'player_hp': 120,
+            'player_max_hp': 120,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.player_attack', return_value={'damage': 10, 'is_crit': False, 'mob_dead': False}):
+            normal_result = combat.resolve_normal_attack_action(dict(player), mob, normal_state, lang='ru')
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 10, 'heal': 0, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            skill_result = combat.process_skill_turn('fireball', dict(player), mob, skill_state, user_id=101, lang='ru')
+
+        normal_contract = normal_result['direct_damage_result']
+        skill_contract = skill_result['skill_result']['direct_damage_result']
+        for key in ('base_damage', 'damage', 'final_damage', 'mob_hp_before', 'mob_hp_after', 'mob_dead', 'modifiers_applied', 'guaranteed_crit_applied'):
+            self.assertIn(key, normal_contract)
+            self.assertIn(key, skill_contract)
+
+    def test_direct_damage_contract_preserves_modifier_behavior(self):
+        state = {
+            'mob_hp': 200,
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 1,
+            'vulnerability_value': 20,
+        }
+
+        result = combat.finalize_player_direct_damage_action(
+            state,
+            base_damage=10,
+            can_consume_guaranteed_crit=True,
+        )
+
+        self.assertEqual(result['final_damage'], 36)
+        self.assertTrue(result['guaranteed_crit_applied'])
+        self.assertEqual(state['guaranteed_crit_turns'], 0)
+        self.assertEqual(state['hunters_mark_turns'], 0)
+        self.assertEqual(state['vulnerability_turns'], 0)
+
     def test_non_damage_skill_does_not_use_shared_finalize_direct_damage_helper(self):
         player = {'hp': 100, 'mana': 80}
         mob = {'id': 'wolf', 'defense': 0}
@@ -1357,6 +1434,69 @@ class CombatRegressionTests(unittest.TestCase):
 
         self.assertEqual(finalize_mock.call_count, 0)
         self.assertEqual(result['battle_state']['guaranteed_crit_turns'], 1)
+
+    def test_non_damage_skill_has_no_direct_damage_contract(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 1,
+            'vulnerability_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'Heal +15', 'damage': 0, 'heal': 15, 'effects': []}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('heal', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertNotIn('direct_damage_result', result['skill_result'])
+
+    def test_direct_damage_contract_matches_visible_skill_outcome(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 0,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_damage',
+                'log_params': {'name': 'Fireball', 'dmg': 10, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        contract = result['skill_result']['direct_damage_result']
+        self.assertEqual(contract['final_damage'], result['skill_result']['damage'])
+        self.assertEqual(contract['mob_hp_after'], result['battle_state']['mob_hp'])
 
     def test_hunters_mark_bonus_applies_to_normal_attack_and_decrements_on_use(self):
         result = combat.apply_direct_damage_action_modifiers(
