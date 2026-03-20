@@ -233,8 +233,14 @@ def build_battle_message(player, mob, battle_state, log):
 
     # Скиллы в бою
     weapon_id     = battle_state.get('weapon_id', 'unarmed')
+    weapon_profile = battle_state.get('weapon_profile', 'unarmed')
     mastery_level = battle_state.get('mastery_level', 1)
-    skills        = get_battle_skills(player['telegram_id'], weapon_id, mastery_level)
+    skills        = get_battle_skills(
+        player['telegram_id'],
+        weapon_id,
+        mastery_level,
+        weapon_profile,
+    )
 
     if skills:
         for skill in skills:

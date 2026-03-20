@@ -35,10 +35,10 @@ SKILLS = {
     'defensive_stance': {
         'id':             'defensive_stance',
         'name':           '🛡️ Защитная стойка',
-        'description':    'Снижает входящий урон на 40% на 2 хода.',
-        'weapon_id':      'base',
-        'branch':         'base',
-        'unlock_mastery': 0,
+        'description':    'Боевая стойка фронтлайна. Снижает входящий урон на 40% на 2 хода.',
+        'weapon_id':      'sword_1h',
+        'branch':         'B',
+        'unlock_mastery': 2,
         'max_level':      5,
         'mana_cost':      10,
         'cooldown':       3,
@@ -58,7 +58,7 @@ SKILLS = {
     'sword_rush': {
         'id':             'sword_rush',
         'name':           '⚡ Рывок',
-        'description':    'Стремительная атака. Накладывает уязвимость — все атаки по цели +30% урона на 2 хода.',
+        'description':    'Рывок в ближний бой. Наносит урон и накладывает уязвимость (+30% входящего урона на 2 хода).',
         'weapon_id':      'iron_sword',
         'branch':         'A',
         'unlock_mastery': 1,
@@ -68,7 +68,7 @@ SKILLS = {
         'type':           'damage',
         'scale_stat':     'strength',
         'scale_mult':     1.5,
-        'base_value':     120,
+        'base_value':     110,
         'level_bonus':    0.12,
     },
     'whirlwind': {
@@ -127,7 +127,7 @@ SKILLS = {
     'parry': {
         'id':             'parry',
         'name':           '🔄 Парирование',
-        'description':    'Следующая атака врага отражается. Наносишь ему его же урон.',
+        'description':    'Отражает следующую атаку врага. Со щитом отражение сильнее, но щит не обязателен.',
         'weapon_id':      'iron_sword',
         'branch':         'B',
         'unlock_mastery': 1,
@@ -135,8 +135,8 @@ SKILLS = {
         'mana_cost':      20,
         'cooldown':       4,
         'type':           'buff',
-        'scale_stat':     'agility',
-        'scale_mult':     0.5,
+        'scale_stat':     'vitality',
+        'scale_mult':     0.35,
         'base_value':     1.0,
         'duration':       1,
         'level_bonus':    0.1,
@@ -160,16 +160,16 @@ SKILLS = {
     'counter': {
         'id':             'counter',
         'name':           '⚔️ Контратака',
-        'description':    'Пассивно: 30% шанс нанести ответный удар при получении урона.',
+        'description':    'Пассивно: шанс ответного удара при получении урона. Лучше раскрывается в защитной сборке.',
         'weapon_id':      'iron_sword',
         'branch':         'B',
-        'unlock_mastery': 6,
+        'unlock_mastery': 4,
         'max_level':      5,
         'mana_cost':      0,
         'cooldown':       0,
         'type':           'passive',
-        'scale_stat':     'agility',
-        'scale_mult':     1.0,
+        'scale_stat':     'vitality',
+        'scale_mult':     0.8,
         'base_value':     30,
         'level_bonus':    0.05,
     },
@@ -769,15 +769,19 @@ SKILLS = {
 
 SKILL_TREES = {
     'base': {
-        'base': ['power_strike', 'defensive_stance'],
+        'base': ['power_strike'],
+    },
+    'sword_1h': {
+        'A': ['sword_rush', 'whirlwind', 'berserker', 'sword_ultimate'],
+        'B': ['parry', 'defensive_stance', 'counter', 'disarm', 'sword_ultimate_b'],
     },
     'wooden_sword': {
         'A': ['sword_rush', 'whirlwind', 'berserker', 'sword_ultimate'],
-        'B': ['parry', 'disarm', 'counter', 'sword_ultimate_b'],
+        'B': ['parry', 'defensive_stance', 'counter', 'disarm', 'sword_ultimate_b'],
     },
     'iron_sword': {
         'A': ['sword_rush', 'whirlwind', 'berserker', 'sword_ultimate'],
-        'B': ['parry', 'disarm', 'counter', 'sword_ultimate_b'],
+        'B': ['parry', 'defensive_stance', 'counter', 'disarm', 'sword_ultimate_b'],
     },
     'dagger': {
         'A': ['poison_blade', 'envenom', 'venom_storm', 'dagger_ult_a'],
@@ -800,12 +804,24 @@ SKILL_TREES = {
 def get_skill(skill_id: str) -> dict:
     return SKILLS.get(skill_id)
 
-def get_weapon_tree(weapon_id: str) -> dict:
-    return SKILL_TREES.get(weapon_id, {})
+def _resolve_tree_key(weapon_id: str, weapon_profile: str | None = None) -> str:
+    """
+    Приоритетно используем дерево по weapon_id.
+    Если его нет — пытаемся взять профильное дерево (минимальный bridge для slice).
+    """
+    if weapon_id in SKILL_TREES:
+        return weapon_id
+    if weapon_profile and weapon_profile in SKILL_TREES:
+        return weapon_profile
+    return weapon_id
 
-def get_available_skills(weapon_id: str, mastery_level: int) -> list:
+def get_weapon_tree(weapon_id: str, weapon_profile: str | None = None) -> dict:
+    tree_key = _resolve_tree_key(weapon_id, weapon_profile)
+    return SKILL_TREES.get(tree_key, {})
+
+def get_available_skills(weapon_id: str, mastery_level: int, weapon_profile: str | None = None) -> list:
     """Возвращает список доступных скиллов для данного оружия и уровня владения."""
-    tree   = get_weapon_tree(weapon_id)
+    tree   = get_weapon_tree(weapon_id, weapon_profile)
     result = []
 
     # Базовые скиллы всегда доступны

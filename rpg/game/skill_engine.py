@@ -586,11 +586,16 @@ def apply_player_buffs(battle_state: dict) -> str:
     """
     return ''
 
-def get_battle_skills(telegram_id: int, weapon_id: str, mastery_level: int) -> list:
+def get_battle_skills(
+    telegram_id: int,
+    weapon_id: str,
+    mastery_level: int,
+    weapon_profile: str | None = None,
+) -> list:
     """
     Возвращает список скиллов доступных в бою с кулдаунами и уровнями.
     """
-    available = get_available_skills(weapon_id, mastery_level)
+    available = get_available_skills(weapon_id, mastery_level, weapon_profile)
     result    = []
 
     for skill in available:
