@@ -7,7 +7,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from game.skills import get_skill, get_available_skills
 from game.weapon_mastery import get_skill_level, get_skill_cooldown, set_skill_cooldown
-from game.balance import calc_final_damage, normalize_damage_school
+from game.balance import (
+    calc_final_damage,
+    normalize_damage_school,
+    calc_armor_class_caster_bonus_percent,
+    calc_armor_class_support_bonus_percent,
+    calc_offhand_caster_bonus_percent,
+    calc_offhand_support_bonus_percent,
+)
 from game.i18n import t, get_skill_name
 
 def build_skill_result_log(skill_result: dict, lang: str) -> str:
@@ -34,7 +41,13 @@ def build_skill_result_log(skill_result: dict, lang: str) -> str:
     return text
 
 
-def calc_skill_value(skill: dict, skill_level: int, player: dict) -> float:
+def calc_skill_value(
+    skill: dict,
+    skill_level: int,
+    player: dict,
+    *,
+    battle_state: dict | None = None,
+) -> float:
     """
     Считает итоговое значение скилла с учётом уровня и статов.
     Используется для лечения, силы баффа и т.д.
@@ -46,7 +59,33 @@ def calc_skill_value(skill: dict, skill_level: int, player: dict) -> float:
     if skill['scale_stat']:
         stat_val = player.get(skill['scale_stat'], 0) * skill['scale_mult']
 
-    return (base + stat_val) * lv_bonus
+    value = (base + stat_val) * lv_bonus
+
+    if battle_state is None:
+        return value
+
+    armor_class = battle_state.get('armor_class')
+    offhand_profile = battle_state.get('offhand_profile')
+    skill_type = skill.get('type')
+    semantic_bonus = 0.0
+
+    if skill_type == 'heal':
+        semantic_bonus += calc_armor_class_support_bonus_percent(armor_class)
+        semantic_bonus += calc_offhand_support_bonus_percent(offhand_profile)
+    elif skill_type == 'buff':
+        semantic_bonus += calc_armor_class_support_bonus_percent(armor_class) * 0.5
+        semantic_bonus += calc_offhand_support_bonus_percent(offhand_profile) * 0.4
+    elif skill_type == 'damage':
+        damage_school = normalize_damage_school(
+            skill.get('damage_school'),
+            weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+            weapon_type=battle_state.get('weapon_type', 'melee'),
+        )
+        if damage_school in ('magic', 'holy'):
+            semantic_bonus += calc_armor_class_caster_bonus_percent(armor_class)
+            semantic_bonus += calc_offhand_caster_bonus_percent(offhand_profile)
+
+    return value * (1 + semantic_bonus / 100)
 
 def calc_skill_mana_cost(skill: dict, skill_level: int) -> int:
     """Стоимость маны растёт чуть с уровнем скилла."""
@@ -124,7 +163,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     }
 
     skill_type = skill['type']
-    value      = calc_skill_value(skill, skill_level, player)
+    value      = calc_skill_value(skill, skill_level, player, battle_state=battle_state)
     weapon_type = battle_state.get('weapon_type', 'melee')
     weapon_profile = battle_state.get('weapon_profile', 'unarmed')
     profile_damage_school = normalize_damage_school(
@@ -151,6 +190,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             False,
             weapon_profile=weapon_profile,
             damage_school=profile_damage_school,
+            armor_class=battle_state.get('armor_class'),
+            offhand_profile=battle_state.get('offhand_profile'),
+            encumbrance=battle_state.get('encumbrance'),
         )
         # value = % от базовой атаки * бонус уровня
         value = base_attack * (skill['base_value'] / 100) * (1 + skill['level_bonus'] * (skill_level - 1))
@@ -246,6 +288,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     False,
                     weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
                     damage_school=profile_damage_school,
+                    armor_class=battle_state.get('armor_class'),
+                    offhand_profile=battle_state.get('offhand_profile'),
+                    encumbrance=battle_state.get('encumbrance'),
                 )
                 dot_value = max(1, int(base_attack * 0.3))
                 result['effects'].append({
@@ -347,6 +392,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 False,
                 weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
                 damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
             )
             shield_value = max(1, int(base_attack * skill['base_value'] / 100))
             battle_state['fire_shield_turns'] = duration
@@ -394,6 +442,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     False,
                     weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
                     damage_school=profile_damage_school,
+                    armor_class=battle_state.get('armor_class'),
+                    offhand_profile=battle_state.get('offhand_profile'),
+                    encumbrance=battle_state.get('encumbrance'),
                 )
                 dot_value = max(1, int(base_attack * skill['base_value'] / 100))
                 result['effects'].append({
@@ -425,6 +476,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 False,
                 weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
                 damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
             )
             dot_value = max(1, int(base_attack * skill['base_value'] / 100))
             result['effects'] = []
@@ -467,6 +521,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 False,
                 weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
                 damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
             )
             dmg = max(1, int(base_attack * random.uniform(0.9, 1.1)))
             result['damage'] = dmg

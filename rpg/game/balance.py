@@ -99,6 +99,142 @@ def normalize_encumbrance(encumbrance: int | float | None) -> int | None:
         return None
     return max(0, value)
 
+
+def calc_armor_class_defense_multiplier(armor_class: str | None) -> float:
+    """Множитель defense-side value от класса брони."""
+    normalized = normalize_armor_class(armor_class)
+    if normalized == 'heavy':
+        return 1.14
+    if normalized == 'medium':
+        return 1.06
+    if normalized == 'light':
+        return 0.96
+    return 1.0
+
+
+def calc_armor_class_dodge_bonus_percent(armor_class: str | None) -> float:
+    """Бонус/штраф к уклонению в процентных пунктах."""
+    normalized = normalize_armor_class(armor_class)
+    if normalized == 'light':
+        return 2.5
+    if normalized == 'medium':
+        return 0.5
+    if normalized == 'heavy':
+        return -2.0
+    return 0.0
+
+
+def calc_armor_class_tempo_bonus(armor_class: str | None) -> int:
+    """Небольшой бонус/штраф к темпу/приоритету хода."""
+    normalized = normalize_armor_class(armor_class)
+    if normalized == 'light':
+        return 3
+    if normalized == 'medium':
+        return 1
+    if normalized == 'heavy':
+        return -2
+    return 0
+
+
+def calc_armor_class_caster_bonus_percent(armor_class: str | None) -> float:
+    """Небольшой caster/support бонус от класса брони."""
+    normalized = normalize_armor_class(armor_class)
+    if normalized == 'light':
+        return 4.0
+    if normalized == 'medium':
+        return 1.0
+    if normalized == 'heavy':
+        return -2.0
+    return 0.0
+
+
+def calc_armor_class_support_bonus_percent(armor_class: str | None) -> float:
+    """Небольшой support/heal бонус от класса брони."""
+    normalized = normalize_armor_class(armor_class)
+    if normalized == 'light':
+        return 5.0
+    if normalized == 'medium':
+        return 1.5
+    if normalized == 'heavy':
+        return -1.0
+    return 0.0
+
+
+def calc_offhand_defense_multiplier(offhand_profile: str | None) -> float:
+    """Множитель defense-side value от оффхенда."""
+    normalized = normalize_offhand_profile(offhand_profile)
+    if normalized == 'shield':
+        return 1.12
+    if normalized in ('focus', 'orb', 'tome'):
+        return 1.02
+    if normalized == 'censer':
+        return 1.04
+    return 1.0
+
+
+def calc_offhand_tempo_bonus(offhand_profile: str | None) -> int:
+    """Небольшой бонус/штраф к темпу от оффхенда."""
+    normalized = normalize_offhand_profile(offhand_profile)
+    if normalized == 'shield':
+        return -1
+    if normalized in ('focus', 'orb'):
+        return 1
+    return 0
+
+
+def calc_offhand_caster_bonus_percent(offhand_profile: str | None) -> float:
+    """Кастерский бонус от оффхенда."""
+    normalized = normalize_offhand_profile(offhand_profile)
+    if normalized == 'focus':
+        return 8.0
+    if normalized == 'orb':
+        return 7.0
+    if normalized == 'tome':
+        return 6.0
+    if normalized == 'censer':
+        return 3.0
+    if normalized == 'shield':
+        return -2.0
+    return 0.0
+
+
+def calc_offhand_support_bonus_percent(offhand_profile: str | None) -> float:
+    """Support/heal бонус от оффхенда."""
+    normalized = normalize_offhand_profile(offhand_profile)
+    if normalized == 'censer':
+        return 14.0
+    if normalized == 'focus':
+        return 3.0
+    if normalized == 'orb':
+        return 2.0
+    if normalized == 'tome':
+        return 4.0
+    return 0.0
+
+
+def calc_encumbrance_tempo_penalty(encumbrance: int | float | None) -> int:
+    """Лёгкий штраф к темпу от encumbrance."""
+    value = normalize_encumbrance(encumbrance)
+    if value is None:
+        return 0
+    return min(5, int(value * 0.5))
+
+
+def calc_encumbrance_dodge_penalty_percent(encumbrance: int | float | None) -> float:
+    """Лёгкий штраф к уклонению (процентные пункты)."""
+    value = normalize_encumbrance(encumbrance)
+    if value is None:
+        return 0.0
+    return min(3.5, round(value * 0.35, 2))
+
+
+def calc_encumbrance_damage_penalty_percent(encumbrance: int | float | None) -> float:
+    """Лёгкая модуляция offensive value от веса экипировки."""
+    value = normalize_encumbrance(encumbrance)
+    if value is None:
+        return 0.0
+    return min(6.0, round(value * 0.30, 2))
+
 def calc_max_hp(vitality: int) -> int:
     """Максимальное HP от Живучести."""
     return BASE_STATS['hp'] + (vitality * 18)
@@ -138,9 +274,20 @@ def calc_physical_damage_reduction(agility: int) -> float:
     """Небольшое снижение входящего физ. урона (%)."""
     return round(min(agility * 0.2, 10.0), 2)  # cap 10%
 
-def calc_action_priority(agility: int, luck: int) -> int:
+def calc_action_priority(
+    agility: int,
+    luck: int,
+    *,
+    armor_class: str | None = None,
+    offhand_profile: str | None = None,
+    encumbrance: int | float | None = None,
+) -> int:
     """Приоритет хода в бою. Выше = ходишь первым."""
-    return agility * 2 + luck
+    base_priority = agility * 2 + luck
+    base_priority += calc_armor_class_tempo_bonus(armor_class)
+    base_priority += calc_offhand_tempo_bonus(offhand_profile)
+    base_priority -= calc_encumbrance_tempo_penalty(encumbrance)
+    return max(0, base_priority)
 
 # ────────────────────────────────────────
 # 🔮 ИНТУИЦИЯ — дальний бой, магия
@@ -278,6 +425,9 @@ def calc_final_damage(
     is_crit: bool = False,
     weapon_profile: str | None = None,
     damage_school: str | None = None,
+    armor_class: str | None = None,
+    offhand_profile: str | None = None,
+    encumbrance: int | float | None = None,
 ) -> int:
     """
     Считает итоговый урон с учётом всех статов.
@@ -299,9 +449,18 @@ def calc_final_damage(
     school_bonus = calc_school_damage_bonus_percent(s, normalized_school)
     damage *= (1 + school_bonus / 100)
 
+    semantic_bonus = 0.0
+    if normalized_school in ('magic', 'holy'):
+        semantic_bonus += calc_armor_class_caster_bonus_percent(armor_class)
+        semantic_bonus += calc_offhand_caster_bonus_percent(offhand_profile)
+    damage *= (1 + semantic_bonus / 100)
+
     # Бонус от Ловкости (% ко всему)
     agi_bonus = calc_agility_damage_bonus(s['agility'])
     damage *= (1 + agi_bonus / 100)
+
+    encumbrance_penalty = calc_encumbrance_damage_penalty_percent(encumbrance)
+    damage *= (1 - encumbrance_penalty / 100)
 
     # Крит — мягко масштабируемый множитель
     if is_crit:
