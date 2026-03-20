@@ -16,6 +16,7 @@ from game.skill_engine import (
     apply_player_buffs,
     apply_mob_effects,
     build_skill_result_log,
+    precheck_skill_use,
     use_skill,
 )
 
@@ -91,6 +92,30 @@ def apply_mob_effect_ticks(mob: dict, battle_state: dict) -> list[str]:
 
     battle_state['mob_effects'] = mob_state.get('effects', [])
     return log
+
+
+def apply_player_start_of_turn_regen(
+    battle_state: dict,
+    lang: str = 'ru',
+) -> list[str]:
+    """
+    Явный start-of-turn тик регенерации игрока в Combat Core.
+    """
+    if battle_state.get('regen_turns', 0) <= 0:
+        return []
+
+    max_hp = battle_state.get('player_max_hp', 100)
+    current_hp = battle_state.get('player_hp', 0)
+    regen_amount = battle_state.get('regen_amount', 0)
+    healed = max(0, min(regen_amount, max_hp - current_hp))
+
+    battle_state['player_hp'] = min(max_hp, current_hp + regen_amount)
+    battle_state['regen_turns'] -= 1
+
+    if healed <= 0:
+        return []
+
+    return [t('battle.regen', lang, amount=healed)]
 
 
 def tick_post_action_timed_trigger_buffs(
@@ -319,6 +344,22 @@ def process_skill_turn(
     Сохраняет текущий порядок шагов из handler-логики:
     use_skill -> применение результата -> pre-enemy ticks -> ответ моба.
     """
+    precheck_result = precheck_skill_use(
+        skill_id,
+        battle_state.get('player_mana', 0),
+        user_id,
+        lang,
+    )
+    if not precheck_result.get('success'):
+        return {
+            'success': False,
+            'skill_result': precheck_result,
+            'battle_state': battle_state,
+        }
+
+    log = battle_state.get('log', [])
+    log.extend(apply_player_start_of_turn_regen(battle_state, lang))
+
     player_state = dict(player)
     player_state['hp'] = battle_state['player_hp']
     player_state['mana'] = battle_state['player_mana']
@@ -348,7 +389,6 @@ def process_skill_turn(
         battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - skill_result['damage'])
         finalize_direct_damage_skill_result(skill_result, lang)
 
-    log = battle_state.get('log', [])
     log.append(skill_result['log'])
 
     if skill_result['heal'] > 0:
@@ -627,6 +667,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
 
 def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', user_id: int | None = None) -> dict:
     log = []
+    log.extend(apply_player_start_of_turn_regen(battle_state, lang))
     log.extend(apply_mob_effect_ticks(mob, battle_state))
     mob_state = {'hp': battle_state['mob_hp'], 'defense': mob.get('defense', 0)}
 
