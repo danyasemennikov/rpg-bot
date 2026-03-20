@@ -482,16 +482,9 @@ def apply_mob_effects(mob_state: dict) -> tuple:
 
 def apply_player_buffs(battle_state: dict) -> str:
     """
-    Тикает post-action длительности баффов игрока (без регена), возвращает лог.
+    Compatibility shim: длительности player buffs тикаются в game/combat.py.
     """
-    log_parts = []
-
-    # Тикаем остальные баффы
-    for key in ('defense_buff_turns', 'berserk_turns', 'blessing_turns'):
-        if battle_state.get(key, 0) > 0:
-            battle_state[key] -= 1
-
-    return ', '.join(log_parts)
+    return ''
 
 def get_battle_skills(telegram_id: int, weapon_id: str, mastery_level: int) -> list:
     """
