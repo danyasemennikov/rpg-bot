@@ -13,7 +13,6 @@ from game.balance import (
 )
 from game.i18n import t, get_mob_name
 from game.skill_engine import (
-    apply_player_buffs,
     apply_mob_effects,
     build_skill_result_log,
     precheck_skill_use,
@@ -68,9 +67,9 @@ def apply_pre_enemy_response_ticks(mob: dict, battle_state: dict) -> list[str]:
         battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - eff_dmg)
         log.append(eff_log)
 
-    buff_log = apply_player_buffs(battle_state)
-    if buff_log:
-        log.append(buff_log)
+    # Важно: для skill flow сохраняем прежний тайминг —
+    # post-action баффы игрока тикают до enemy response.
+    tick_post_action_player_buff_durations(battle_state)
 
     battle_state['mob_effects'] = mob_state.get('effects', [])
     return log
@@ -141,6 +140,16 @@ def tick_post_action_timed_trigger_buffs(
     if battle_state.get('resurrection_turns', 0) <= 0 and battle_state.get('player_hp', 0) > 0:
         battle_state['resurrection_turns'] = 0
         battle_state['resurrection_active'] = False
+
+
+def tick_post_action_player_buff_durations(battle_state: dict) -> None:
+    """
+    Тикает post-action длительности оставшихся player buffs в Combat Core.
+    Регенерация и resurrection здесь не обрабатываются.
+    """
+    for key in ('defense_buff_turns', 'berserk_turns', 'blessing_turns'):
+        if battle_state.get(key, 0) > 0:
+            battle_state[key] -= 1
 
 
 def apply_direct_damage_action_modifiers(
@@ -739,7 +748,7 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
                 log.append(t('battle.attack_hit', lang, damage=result['damage']))
 
     # Сохраняем прежний тайминг normal attack flow: player buffs тикают после exchange
-    apply_player_buffs(battle_state)
+    tick_post_action_player_buff_durations(battle_state)
     tick_post_action_timed_trigger_buffs(battle_state)
 
     battle_state['mob_dead']    = mob_state['hp'] <= 0

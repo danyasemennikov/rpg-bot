@@ -167,6 +167,110 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(result['battle_state']['disarm_turns'], 2)
         self.assertEqual(result['battle_state']['fire_shield_turns'], 2)
 
+    def test_skill_flow_defense_buff_turns_one_expires_before_enemy_response(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'defense_buff_turns': 1,
+            'defense_buff_value': 50,
+            'log': [],
+            'turn': 1,
+        }
+
+        def enemy_response_side_effect(_mob, _player_state, state, **_kwargs):
+            # Старый контракт: бафф уже истёк к enemy response в skill flow.
+            self.assertEqual(state['defense_buff_turns'], 0)
+            result = combat.resolve_enemy_damage_against_player(
+                state,
+                lang='ru',
+                mob_result={'type': 'mob_attack', 'damage': 10, 'player_hp': 90},
+            )
+            state['player_hp'] = max(0, state['player_hp'] - result['player_damage'])
+            return []
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}), \
+             patch('game.combat.resolve_enemy_response', side_effect=enemy_response_side_effect):
+            result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+        # Если бы защита не истекла заранее, было бы 95.
+        self.assertEqual(result['battle_state']['player_hp'], 90)
+
+    def test_skill_flow_berserk_and_blessing_tick_before_enemy_response(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'berserk_turns': 1,
+            'blessing_turns': 1,
+            'log': [],
+            'turn': 1,
+        }
+
+        def enemy_response_side_effect(_mob, _player_state, state, **_kwargs):
+            self.assertEqual(state['berserk_turns'], 0)
+            self.assertEqual(state['blessing_turns'], 0)
+            return []
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}), \
+             patch('game.combat.resolve_enemy_response', side_effect=enemy_response_side_effect):
+            combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
+
+    def test_normal_attack_flow_defense_buff_turns_one_still_applies_to_enemy_response(self):
+        player = {
+            'hp': 100,
+            'strength': 10,
+            'agility': 0,
+            'intuition': 10,
+            'vitality': 0,
+            'wisdom': 0,
+            'luck': 10,
+        }
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'mob_hp': 100,
+            'player_hp': 100,
+            'player_goes_first': True,
+            'weapon_type': 'melee',
+            'weapon_damage': 10,
+            'defense_buff_turns': 1,
+            'defense_buff_value': 50,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'blessing_turns': 0,
+            'blessing_value': 0,
+            'turn': 1,
+        }
+
+        def enemy_response_side_effect(_mob, player_state, state, **_kwargs):
+            result = combat.resolve_enemy_damage_against_player(
+                state,
+                lang='ru',
+                mob_result={'type': 'mob_attack', 'damage': 10, 'player_hp': 90},
+            )
+            player_state['hp'] = max(0, player_state['hp'] - result['player_damage'])
+            state['player_hp'] = player_state['hp']
+            return []
+
+        with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
+             patch('game.combat.player_attack', return_value={'damage': 5, 'is_crit': False, 'mob_dead': False}), \
+             patch('game.combat.resolve_enemy_response', side_effect=enemy_response_side_effect):
+            result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
+
+        # В normal flow бафф ещё действует на enemy response, затем тикает до 0.
+        self.assertEqual(result['player_hp'], 95)
+        self.assertEqual(result['defense_buff_turns'], 0)
+
     def test_disarm_is_applied_in_centralized_enemy_damage_path(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
@@ -381,7 +485,7 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
              patch('game.combat.player_attack', return_value={'damage': 7, 'is_crit': False, 'mob_dead': False}), \
              patch('game.combat.resolve_enemy_response', return_value=[]), \
-             patch('game.combat.apply_player_buffs', return_value=''):
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
             result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
 
         self.assertTrue(result['resurrection_active'])
@@ -435,6 +539,52 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertTrue(state['resurrection_active'])
         self.assertEqual(state['resurrection_turns'], 0)
 
+    def test_defense_buff_turns_decrement_in_combat_core_post_action_timing(self):
+        state = {'defense_buff_turns': 2, 'berserk_turns': 0, 'blessing_turns': 0}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['defense_buff_turns'], 1)
+
+    def test_berserk_turns_decrement_in_combat_core_post_action_timing(self):
+        state = {'defense_buff_turns': 0, 'berserk_turns': 2, 'blessing_turns': 0}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['berserk_turns'], 1)
+
+    def test_blessing_turns_decrement_in_combat_core_post_action_timing(self):
+        state = {'defense_buff_turns': 0, 'berserk_turns': 0, 'blessing_turns': 2}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['blessing_turns'], 1)
+
+    def test_regen_behavior_remains_unchanged_after_post_action_buff_move(self):
+        state = {
+            'defense_buff_turns': 1,
+            'berserk_turns': 1,
+            'blessing_turns': 1,
+            'regen_turns': 2,
+            'regen_amount': 10,
+            'player_hp': 50,
+            'player_max_hp': 100,
+        }
+
+        combat.tick_post_action_player_buff_durations(state)
+
+        self.assertEqual(state['regen_turns'], 2)
+        self.assertEqual(state['player_hp'], 50)
+
+    def test_resurrection_behavior_remains_unchanged_after_post_action_buff_move(self):
+        state = {
+            'defense_buff_turns': 1,
+            'berserk_turns': 1,
+            'blessing_turns': 1,
+            'resurrection_active': True,
+            'resurrection_turns': 1,
+            'player_hp': 50,
+        }
+
+        combat.tick_post_action_player_buff_durations(state)
+
+        self.assertTrue(state['resurrection_active'])
+        self.assertEqual(state['resurrection_turns'], 1)
+
     def test_normal_attack_triggers_enemy_response_once_when_battle_continues(self):
         player = {
             'hp': 120,
@@ -464,7 +614,7 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
              patch('game.combat.player_attack', return_value={'damage': 7, 'is_crit': False, 'mob_dead': False}), \
              patch('game.combat.resolve_enemy_response', return_value=['enemy attack']) as response_mock, \
-             patch('game.combat.apply_player_buffs', return_value=''):
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
             result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
 
         self.assertFalse(result['mob_dead'])
@@ -500,7 +650,7 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.apply_mob_effect_ticks', side_effect=lambda *_args, **_kwargs: call_order.append('mob_ticks') or []), \
              patch('game.combat.player_attack', return_value={'damage': 7, 'is_crit': False, 'mob_dead': False}), \
              patch('game.combat.resolve_enemy_response', side_effect=lambda *_args, **_kwargs: call_order.append('enemy_response') or []), \
-             patch('game.combat.apply_player_buffs', return_value=''):
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
             combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
 
         self.assertEqual(call_order, ['mob_ticks', 'enemy_response'])
@@ -535,7 +685,7 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
              patch('game.combat.player_attack', return_value={'damage': 7, 'is_crit': False, 'mob_dead': False}), \
              patch('game.combat.resolve_enemy_response', side_effect=lambda *_args, **_kwargs: call_order.append('enemy_response') or []), \
-             patch('game.combat.apply_player_buffs', side_effect=lambda *_args, **_kwargs: call_order.append('player_buffs') or ''):
+             patch('game.combat.tick_post_action_player_buff_durations', side_effect=lambda *_args, **_kwargs: call_order.append('player_buffs') or ''):
             combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
 
         self.assertEqual(call_order, ['enemy_response', 'player_buffs'])
@@ -648,7 +798,7 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
              patch('game.combat.player_attack', side_effect=player_attack_side_effect), \
              patch('game.combat.resolve_enemy_response', return_value=[]), \
-             patch('game.combat.apply_player_buffs', return_value=''):
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
             result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
 
         self.assertEqual(result['player_hp'], 60)
@@ -819,7 +969,7 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
              patch('game.combat.player_attack', return_value={'damage': 5, 'is_crit': False, 'mob_dead': False}), \
              patch('game.combat.resolve_enemy_response', return_value=[]), \
-             patch('game.combat.apply_player_buffs', return_value=''):
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
             normal_result = combat.process_turn(player_normal, mob, normal_state, lang='ru', user_id=101)
 
         with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}), \
@@ -843,7 +993,7 @@ class CombatRegressionTests(unittest.TestCase):
             'player_max_hp': 100,
         }
 
-        skill_engine.apply_player_buffs(state)
+        combat.tick_post_action_player_buff_durations(state)
 
         self.assertEqual(state['defense_buff_turns'], 1)
         self.assertEqual(state['berserk_turns'], 1)
@@ -882,7 +1032,7 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
              patch('game.combat.player_attack', return_value={'damage': 7, 'is_crit': False, 'mob_dead': False}), \
              patch('game.combat.resolve_enemy_response', return_value=[]), \
-             patch('game.combat.apply_player_buffs', return_value=''):
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
             result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
 
         self.assertFalse(result['resurrection_active'])
@@ -948,7 +1098,7 @@ class CombatRegressionTests(unittest.TestCase):
 
         with patch('game.combat.apply_mob_effect_ticks', return_value=[]), \
              patch('game.combat.resolve_enemy_response', return_value=[]), \
-             patch('game.combat.apply_player_buffs', return_value=''):
+             patch('game.combat.tick_post_action_player_buff_durations', return_value=''):
             result = combat.process_turn(player, mob, battle_state, lang='ru', user_id=101)
 
         self.assertEqual(result['guaranteed_crit_turns'], 0)
