@@ -11,6 +11,10 @@ from game.balance import (
     calc_physical_defense, calc_magic_defense,
     calc_crit_reduction, calc_action_priority,
     calc_physical_damage_reduction,
+    calc_armor_class_defense_multiplier,
+    calc_offhand_defense_multiplier,
+    calc_armor_class_dodge_bonus_percent,
+    calc_encumbrance_dodge_penalty_percent,
     normalize_damage_school,
 )
 from game.i18n import t, get_mob_name
@@ -33,9 +37,19 @@ def roll_crit(luck: int, agility: int = 0, enemy_luck: int = 0) -> bool:
     final_chance = max(0, crit_chance - crit_reduction)
     return random.random() < final_chance
 
-def roll_dodge(agility: int) -> bool:
+def roll_dodge(
+    agility: int,
+    *,
+    armor_class: str | None = None,
+    encumbrance: int | float | None = None,
+) -> bool:
     """Проверка на уклонение."""
-    return random.random() < calc_dodge_chance(agility)
+    dodge_chance = calc_dodge_chance(agility)
+    dodge_delta = calc_armor_class_dodge_bonus_percent(armor_class)
+    dodge_delta -= calc_encumbrance_dodge_penalty_percent(encumbrance)
+    final_dodge = dodge_chance + (dodge_delta / 100)
+    final_dodge = min(0.60, max(0.0, final_dodge))
+    return random.random() < final_dodge
 
 def get_weapon_type(player_equipment: dict) -> str:
     """Определяет тип оружия игрока. По умолчанию melee."""
@@ -596,6 +610,9 @@ def player_attack(player: dict, mob_state: dict) -> dict:
         is_crit,
         weapon_profile=weapon_profile,
         damage_school=damage_school,
+        armor_class=player.get('armor_class'),
+        offhand_profile=player.get('offhand_profile'),
+        encumbrance=player.get('encumbrance'),
     )
 
     # Снижаем урон на защиту моба
@@ -671,7 +688,11 @@ def mob_attack(mob: dict, player: dict) -> dict:
     Возвращает словарь с результатом и новым HP игрока.
     """
     # Проверка уклонения
-    dodged = roll_dodge(player['agility'])
+    dodged = roll_dodge(
+        player['agility'],
+        armor_class=player.get('armor_class'),
+        encumbrance=player.get('encumbrance'),
+    )
     if dodged:
         return {
             'type':       'dodge',
@@ -693,6 +714,11 @@ def mob_attack(mob: dict, player: dict) -> dict:
         defense = calc_magic_defense(player['wisdom'])
     else:
         defense = calc_physical_defense(player['vitality'])
+    defense_multiplier = (
+        calc_armor_class_defense_multiplier(player.get('armor_class'))
+        * calc_offhand_defense_multiplier(player.get('offhand_profile'))
+    )
+    defense = int(defense * defense_multiplier)
 
     # Снижение входящего урона от Ловкости — только против physical
     if incoming_school == 'physical':
@@ -718,7 +744,13 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
     Создаёт начальное состояние боя.
     mob_first=True если моб атакует первым (провал побега).
     """
-    priority_player = calc_action_priority(player['agility'], player['luck'])
+    priority_player = calc_action_priority(
+        player['agility'],
+        player['luck'],
+        armor_class=player.get('armor_class'),
+        offhand_profile=player.get('offhand_profile'),
+        encumbrance=player.get('encumbrance'),
+    )
     priority_mob    = mob['level'] * 3  # мобы получают приоритет от уровня
 
     if mob_first:
@@ -800,6 +832,9 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
     player['weapon_type']   = battle_state.get('weapon_type', 'melee')
     player['weapon_profile'] = battle_state.get('weapon_profile', 'unarmed')
     player['weapon_damage'] = battle_state.get('weapon_damage', 10)
+    player['armor_class'] = battle_state.get('armor_class')
+    player['offhand_profile'] = battle_state.get('offhand_profile', 'none')
+    player['encumbrance'] = battle_state.get('encumbrance')
 
     if battle_state.get('blessing_turns', 0) > 0:
         mult = 1 + battle_state['blessing_value'] / 100
