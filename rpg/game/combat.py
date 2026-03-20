@@ -574,14 +574,18 @@ def resolve_enemy_response(
         from game.weapon_mastery import get_skill_level
         counter_level = get_skill_level(user_id, 'counter')
         if counter_level > 0 and battle_state.get('weapon_profile') == 'sword_1h':
-            counter_chance = 0.22 + 0.05 * (counter_level - 1)
-            counter_chance += 0.08
+            counter_chance = 0.16 + 0.04 * (counter_level - 1)
+            vulnerability_active = battle_state.get('vulnerability_turns', 0) > 0
+            vulnerability_value = battle_state.get('vulnerability_value', 0)
             if battle_state.get('offhand_profile') == 'shield':
                 counter_chance += 0.10
+            if vulnerability_active:
+                # Маленький бонус к шансу, чтобы pressure-ветка не ощущалась как чистый RNG.
+                counter_chance += 0.03
             if random.random() < counter_chance:
-                counter_dmg = int(mob_dmg * (0.35 + 0.08 * counter_level))
-                if battle_state.get('offhand_profile') == 'shield':
-                    counter_dmg = int(counter_dmg * 1.10)
+                counter_dmg = int(mob_dmg * (0.30 + 0.07 * counter_level))
+                if vulnerability_active and vulnerability_value > 0:
+                    counter_dmg = int(counter_dmg * (1 + vulnerability_value / 100))
                 battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - counter_dmg)
                 log.append(t('battle.counter_attack', lang, damage=counter_dmg))
 

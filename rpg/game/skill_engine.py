@@ -258,7 +258,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         # Sword rush — уязвимость цели
         if skill_id == 'sword_rush':
             battle_state['vulnerability_turns'] = 2
-            battle_state['vulnerability_value'] = 30
+            battle_state['vulnerability_value'] = 25 + 3 * (skill_level - 1)
             result['log_key'] = 'skills.log_sword_rush'
             result['log_params'] = {
                 'name': get_skill_name(skill_id, lang),

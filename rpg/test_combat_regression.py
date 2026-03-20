@@ -2161,6 +2161,104 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('battle', context.user_data)
         self.assertEqual(context.user_data['battle']['player_hp'], 60)
 
+    def test_sword_rush_sets_scaled_vulnerability_window(self):
+        player = {'mana': 100, 'strength': 10, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'defense': 0, 'effects': []}
+        battle_state = {
+            'player_mana': 100,
+            'player_max_hp': 100,
+            'player_hp': 100,
+            'weapon_profile': 'sword_1h',
+            'weapon_type': 'melee',
+            'weapon_damage': 12,
+            'armor_class': 'light',
+            'offhand_profile': 'none',
+            'encumbrance': 0,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=3), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('sword_rush', player, mob_state, battle_state, telegram_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertEqual(battle_state['vulnerability_turns'], 2)
+        self.assertEqual(battle_state['vulnerability_value'], 31)
+
+    def test_counter_negative_control_vulnerability_changes_same_roll_outcome(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 20, 'damage_max': 20}
+        base_state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'weapon_profile': 'sword_1h',
+            'offhand_profile': 'none',
+            'vulnerability_value': 30,
+        }
+        state_without_opening = dict(base_state, vulnerability_turns=0)
+        state_with_opening = dict(base_state, vulnerability_turns=2)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.18):
+            combat.resolve_enemy_response(mob, player, state_without_opening, lang='ru', user_id=101)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.18):
+            combat.resolve_enemy_response(mob, player, state_with_opening, lang='ru', user_id=101)
+
+        self.assertEqual(state_without_opening['mob_hp'], 100)
+        self.assertEqual(state_with_opening['mob_hp'], 91)
+
+    def test_counter_shield_reliability_changes_same_roll_threshold(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 20, 'damage_max': 20}
+        no_shield_state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'weapon_profile': 'sword_1h',
+            'offhand_profile': 'none',
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+        }
+        shield_state = dict(no_shield_state, offhand_profile='shield')
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.24):
+            combat.resolve_enemy_response(mob, player, no_shield_state, lang='ru', user_id=101)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.24):
+            combat.resolve_enemy_response(mob, player, shield_state, lang='ru', user_id=101)
+
+        self.assertEqual(no_shield_state['mob_hp'], 100)
+        self.assertEqual(shield_state['mob_hp'], 93)
+
+    def test_counter_remains_gated_for_non_sword_profile_even_with_vulnerability(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'weapon_profile': 'dagger',
+            'offhand_profile': 'none',
+            'vulnerability_turns': 2,
+            'vulnerability_value': 30,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=5), \
+             patch('game.combat.random.random', return_value=0.0):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=101)
+
+        self.assertEqual(state['mob_hp'], 100)
+
 
 if __name__ == '__main__':
     unittest.main()
