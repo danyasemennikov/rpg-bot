@@ -269,7 +269,7 @@ SKILLS = {
     'backstab': {
         'id':             'backstab',
         'name':           '🗡️ Удар в спину',
-        'description':    'Гарантированный крит если враг оглушён или отравлен.',
+        'description':    'Гарантированный крит по дезориентированной цели (оглушение, заморозка, яд или замедление).',
         'weapon_id':      'dagger',
         'branch':         'B',
         'unlock_mastery': 1,
@@ -285,7 +285,7 @@ SKILLS = {
     'smoke_bomb': {
         'id':             'smoke_bomb',
         'name':           '💨 Дымовая завеса',
-        'description':    'Шанс уклонения +50% на 2 хода.',
+        'description':    'Короткое окно мобильности: +35% уклонения на 2 хода.',
         'weapon_id':      'dagger',
         'branch':         'B',
         'unlock_mastery': 3,
@@ -295,7 +295,7 @@ SKILLS = {
         'type':           'buff',
         'scale_stat':     'agility',
         'scale_mult':     0.5,
-        'base_value':     50,
+        'base_value':     35,
         'duration':       2,
         'level_bonus':    0.08,
     },

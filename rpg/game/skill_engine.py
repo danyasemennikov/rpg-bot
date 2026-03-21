@@ -229,7 +229,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             # Backstab — крит по уязвимой цели
             if skill_id == 'backstab':
                 mob_effects = mob_state.get('effects', [])
-                has_debuff = any(e['type'] in ('stun', 'freeze', 'poison') for e in mob_effects)
+                has_debuff = any(e['type'] in ('stun', 'freeze', 'poison', 'slow') for e in mob_effects)
                 if has_debuff:
                     dmg = int(dmg * 2.0)
                     result['log_key'] = 'skills.log_backstab_crit'
