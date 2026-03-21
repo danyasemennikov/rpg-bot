@@ -1752,8 +1752,105 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertIn('108', final_log)
         self.assertNotIn('[8, 11, 11]', final_log)
 
+    def test_daggers_do_not_get_universal_damage_bonus_from_dodge_buff_window(self):
+        state = {
+            'weapon_profile': 'daggers',
+            'dodge_buff_turns': 2,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+        }
+
+        result = combat.apply_direct_damage_action_modifiers(
+            state,
+            base_damage=100,
+            can_consume_guaranteed_crit=False,
+        )
+
+        self.assertEqual(result['damage'], 100)
+        self.assertFalse(result['modifiers_applied'])
+        self.assertEqual(state['dodge_buff_turns'], 2)
+
+    def test_non_daggers_also_have_no_universal_damage_bonus_from_dodge_buff_window(self):
+        state = {
+            'weapon_profile': 'sword_1h',
+            'dodge_buff_turns': 2,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+        }
+
+        result = combat.apply_direct_damage_action_modifiers(
+            state,
+            base_damage=100,
+            can_consume_guaranteed_crit=False,
+        )
+
+        self.assertEqual(result['damage'], 100)
+        self.assertFalse(result['modifiers_applied'])
+
 
 class SkillEngineRegressionTests(unittest.TestCase):
+    def test_smoke_bomb_sets_dodge_buff_to_35_for_two_turns(self):
+        player = {'mana': 200, 'agility': 20}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        battle_state = {'player_hp': 100, 'player_max_hp': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill(
+                skill_id='smoke_bomb',
+                player=player,
+                mob_state=mob_state,
+                battle_state=battle_state,
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertTrue(result['success'])
+        self.assertEqual(battle_state['dodge_buff_value'], 35)
+        self.assertEqual(battle_state['dodge_buff_turns'], 2)
+
+    def test_backstab_gets_crit_payoff_on_slow(self):
+        player = {
+            'mana': 200,
+            'strength': 1,
+            'agility': 20,
+            'intuition': 1,
+            'vitality': 1,
+            'wisdom': 1,
+            'luck': 1,
+        }
+        mob_state = {'hp': 300, 'defense': 0, 'effects': [{'type': 'slow', 'turns': 1, 'value': 1}]}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'weapon_damage': 10,
+            'weapon_type': 'melee',
+            'weapon_profile': 'daggers',
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.calc_final_damage', return_value=100), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill(
+                skill_id='backstab',
+                player=player,
+                mob_state=mob_state,
+                battle_state=battle_state,
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['damage'], 260)
+        self.assertEqual(result['log_key'], 'skills.log_backstab_crit')
+
     def test_resurrection_skill_sets_runtime_turns_from_duration(self):
         player = {'mana': 200, 'wisdom': 25}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
