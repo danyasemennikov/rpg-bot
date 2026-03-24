@@ -17,6 +17,13 @@ from game.balance import (
 )
 from game.i18n import t, get_skill_name
 
+def _get_runtime_mob_effects(mob_state: dict, battle_state: dict) -> list[dict]:
+    """
+    Единый источник эффектов моба в рантайме:
+    приоритет у battle_state['mob_effects'].
+    """
+    return battle_state.get('mob_effects', mob_state.get('effects', []))
+
 def build_skill_result_log(skill_result: dict, lang: str) -> str:
     """
     Строит человекочитаемый лог по структурированным данным skill_result.
@@ -265,6 +272,33 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'dmg': result['damage'],
                 'cost': mana_cost,
             }
+        elif skill_id == 'punishing_cut':
+            if battle_state.get('vulnerability_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.35)
+                result['log_key'] = 'skills.log_punishing_cut'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'vanguard_surge':
+            damage_mult = 1.0
+            if battle_state.get('vulnerability_turns', 0) > 0:
+                damage_mult += 0.25
+            if battle_state.get('press_the_line_turns', 0) > 0:
+                damage_mult += 0.25
+            if damage_mult > 1.0:
+                result['damage'] = int(result['damage'] * damage_mult)
+                result['log_key'] = 'skills.log_vanguard_surge'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'driving_slash':
+            mob_effects = _get_runtime_mob_effects(mob_state, battle_state)
+            if any(e.get('type') == 'off_balance' for e in mob_effects):
+                result['damage'] = int(result['damage'] * 1.15)
 
         # Пробивание
         if skill.get('piercing'):
@@ -339,6 +373,12 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             battle_state['defense_buff_turns'] = duration
             battle_state['defense_buff_value'] = int(value)
             result['log'] = t('skills.log_defense', lang,
+                               name=get_skill_name(skill_id, lang),
+                               value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'press_the_line':
+            battle_state['press_the_line_turns'] = duration
+            battle_state['press_the_line_value'] = int(value)
+            result['log'] = t('skills.log_press_the_line', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
 
@@ -537,6 +577,52 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log_params'] = {
                 'name': get_skill_name(skill_id, lang),
                 'dmg': dmg,
+                'cost': mana_cost,
+            }
+            result['log'] = build_skill_result_log(result, lang)
+        elif skill_id == 'expose_guard':
+            duration = skill.get('duration', 2)
+            battle_state['vulnerability_turns'] = duration
+            battle_state['vulnerability_value'] = int(value)
+            result['log'] = t('skills.log_expose_guard', lang,
+                               name=get_skill_name(skill_id, lang),
+                               value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'shield_bash':
+            duration = skill.get('duration', 2)
+            battle_state['disarm_turns'] = duration
+            battle_state['disarm_value'] = int(value)
+            stats = {k: player.get(k, 1) for k in
+                     ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
+            base_attack = calc_final_damage(
+                battle_state.get('weapon_damage', 10), stats,
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
+            )
+            dmg = max(1, int(base_attack * 0.45 * random.uniform(0.9, 1.1)))
+            result['damage'] = dmg
+            result['direct_damage_skill'] = True
+            result['damage_school'] = normalize_damage_school(
+                skill.get('damage_school'),
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                weapon_type=battle_state.get('weapon_type', 'melee'),
+            )
+            result['effects'].append({
+                'type': 'off_balance',
+                'turns': duration,
+                'value': 0,
+                'skill_id': skill_id,
+            })
+            result['log_key'] = 'skills.log_shield_bash'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': dmg,
+                'value': int(value),
+                'turns': duration,
                 'cost': mana_cost,
             }
             result['log'] = build_skill_result_log(result, lang)

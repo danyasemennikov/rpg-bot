@@ -248,12 +248,12 @@ STRINGS = {
         'effect_stun':        'Aturdimiento',
         'effect_freeze':      'Congelación',
         'effect_slow':        'Ralentización',
+        'effect_off_balance': 'Desequilibrio',
         'skills.log_damage_effect': '{name} — {dmg} de daño + efecto 🔵-{cost}',
         'log_disarm': '{name} — ⚔️ daño enemigo -{value}% por 2 turnos 🔵-{cost}',
         'log_dodge_buff': '{name} — 🌀 evasión +{value}% por {turns} turnos 🔵-{cost}',
         'log_guaranteed_crit': '{name} — 🎯 crítico garantizado por {turns} ataques 🔵-{cost}',
         'log_invincible':      '{name} — 🌟 invencible por {turns} turnos 🔵-{cost}',
-        'log_fire_shield': '{name} — 🔆 escudo refleja {value} daño por {turns} turnos 🔵-{cost}',
         'battle.invincible':          '🌟 ¡Invencible! Ataque desviado.',
         
         'log_backstab_crit': '{name} — 💥 ¡CRÍTICO en objetivo vulnerable! {dmg} daño 🔵-{cost}',
@@ -262,7 +262,13 @@ STRINGS = {
         'log_blizzard': '{name} — 🌨️ precisión enemiga -{value}% por 3 turnos 🔵-{cost}',
         'log_venom_storm': '{name} — ☠️ 3 acumulaciones de veneno {dmg}/turno 🔵-{cost}',
         'log_sword_rush': '{name} — ⚡ {dmg} daño + vulnerabilidad del objetivo por 2 turnos 🔵-{cost}',
-        
+        'log_fire_shield': '{name} — 🔆 escudo refleja {value} daño por {turns} turnos 🔵-{cost}',
+        'log_press_the_line': '{name} — 📣 daño directo +{value}% por {turns} turnos 🔵-{cost}',
+        'log_expose_guard': '{name} — 🎯 guardia expuesta: daño recibido +{value}% por {turns} turnos 🔵-{cost}',
+        'log_shield_bash': '{name} — 🛡️ {dmg} daño, daño enemigo -{value}% por {turns} turnos + desequilibrio 🔵-{cost}',
+        'log_punishing_cut': '{name} — 🩸 golpe de payoff a objetivo expuesto: {dmg} daño 🔵-{cost}',
+        'log_vanguard_surge': '{name} — 🚩 remate pico de Vanguardia: {dmg} daño 🔵-{cost}',
+
     },
     'quests': {
         'title':            '📋 <b>Misiones</b>',

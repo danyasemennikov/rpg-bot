@@ -247,6 +247,7 @@ STRINGS = {
         'effect_stun':        'Stun',
         'effect_freeze':      'Freeze',
         'effect_slow':        'Slow',
+        'effect_off_balance': 'Off-balance',
         'skills.log_damage_effect': '{name} — {dmg} damage + effect 🔵-{cost}',
         'log_disarm': '{name} — ⚔️ enemy damage -{value}% for 2 turns 🔵-{cost}',
         'log_dodge_buff': '{name} — 🌀 dodge +{value}% for {turns} turns 🔵-{cost}',
@@ -261,6 +262,11 @@ STRINGS = {
         'log_venom_storm': '{name} — ☠️ 3 poison stacks {dmg}/turn 🔵-{cost}',
         'log_sword_rush': '{name} — ⚡ {dmg} damage + target vulnerability for 2 turns 🔵-{cost}',
         'log_fire_shield': '{name} — 🔆 shield reflects {value} damage for {turns} turns 🔵-{cost}',
+        'log_press_the_line': '{name} — 📣 direct damage +{value}% for {turns} turns 🔵-{cost}',
+        'log_expose_guard': '{name} — 🎯 guard exposed: incoming damage +{value}% for {turns} turns 🔵-{cost}',
+        'log_shield_bash': '{name} — 🛡️ {dmg} damage, enemy damage -{value}% for {turns} turns + off-balance 🔵-{cost}',
+        'log_punishing_cut': '{name} — 🩸 payoff strike into exposed target: {dmg} damage 🔵-{cost}',
+        'log_vanguard_surge': '{name} — 🚩 peak Vanguard finisher: {dmg} damage 🔵-{cost}',
         
     },
     'quests': {
