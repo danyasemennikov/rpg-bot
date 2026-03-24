@@ -294,6 +294,13 @@ STRINGS = {
         
         'log_backstab_crit': '{name} — 💥 КРИТ по уязвимой цели! {dmg} урона 🔵-{cost}',
         'log_envenom': '{name} — 🐍 следующий яд наносит двойной урон 🔵-{cost}',
+        'log_toxic_cut': '{name} — {dmg} урона + ☠️ яд {poison}/ход 🔵-{cost}',
+        'log_crippling_venom': '{name} — 🧪 урон врага -{value}% и замедление на {turns} хода 🔵-{cost}',
+        'log_widows_kiss_payoff': '{name} — 🕷️ payoff по надломленной цели: {dmg} урона 🔵-{cost}',
+        'log_rupture_toxins': '{name} — 💥 разрыв токсинов ({stacks} стаков): {dmg} урона 🔵-{cost}',
+        'log_feint_step': '{name} — 👣 подготовка на {turns} ход 🔵-{cost}',
+        'log_quick_slice_feint': '{name} — ⚡ усиленный срез: {dmg} урона + замедление 🔵-{cost}',
+        'log_shadow_chain_opened': '{name} — 🌑 цель открыта, серия усилена: {dmg} урона 🔵-{cost}',
         'log_hunters_mark': '{name} — 🔍 цель помечена, урон +{value}% на 3 хода 🔵-{cost}',
         'log_blizzard': '{name} — 🌨️ точность врага -{value}% на 3 хода 🔵-{cost}',
         'log_venom_storm': '{name} — ☠️ 3 стека яда по {dmg}/ход 🔵-{cost}',
