@@ -24,6 +24,32 @@ def _get_runtime_mob_effects(mob_state: dict, battle_state: dict) -> list[dict]:
     """
     return battle_state.get('mob_effects', mob_state.get('effects', []))
 
+
+def _runtime_target_has_effect(mob_state: dict, battle_state: dict, effect_types: tuple[str, ...]) -> bool:
+    mob_effects = _get_runtime_mob_effects(mob_state, battle_state)
+    return any(e.get('type') in effect_types and e.get('turns', 0) > 0 for e in mob_effects)
+
+
+def _consume_runtime_poison_effects(battle_state: dict) -> tuple[int, int]:
+    """
+    Удаляет только poison-эффекты из battle_state['mob_effects'].
+    Возвращает (кол-во стаков, суммарная сила value).
+    """
+    effects = battle_state.get('mob_effects', [])
+    kept_effects = []
+    poison_stacks = 0
+    poison_total_value = 0
+
+    for eff in effects:
+        if eff.get('type') == 'poison' and eff.get('turns', 0) > 0:
+            poison_stacks += 1
+            poison_total_value += int(eff.get('value', 0))
+            continue
+        kept_effects.append(eff)
+
+    battle_state['mob_effects'] = kept_effects
+    return poison_stacks, poison_total_value
+
 def build_skill_result_log(skill_result: dict, lang: str) -> str:
     """
     Строит человекочитаемый лог по структурированным данным skill_result.
@@ -235,9 +261,12 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
             # Backstab — крит по уязвимой цели
             if skill_id == 'backstab':
-                mob_effects = mob_state.get('effects', [])
-                has_debuff = any(e['type'] in ('stun', 'freeze', 'poison', 'slow') for e in mob_effects)
-                if has_debuff:
+                has_opening = _runtime_target_has_effect(
+                    mob_state,
+                    battle_state,
+                    ('slow', 'stun', 'freeze', 'off_balance', 'vulnerable'),
+                ) or battle_state.get('vulnerability_turns', 0) > 0
+                if has_opening:
                     dmg = int(dmg * 2.0)
                     result['log_key'] = 'skills.log_backstab_crit'
                     result['log_params'] = {
@@ -299,6 +328,97 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             mob_effects = _get_runtime_mob_effects(mob_state, battle_state)
             if any(e.get('type') == 'off_balance' for e in mob_effects):
                 result['damage'] = int(result['damage'] * 1.15)
+        elif skill_id == 'toxic_cut':
+            stats = {k: player.get(k, 1) for k in
+                     ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
+            base_attack = calc_final_damage(
+                battle_state.get('weapon_damage', 10), stats,
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
+            )
+            poison_value = max(1, int(base_attack * 0.25))
+            if battle_state.get('envenom_blades_active') or battle_state.get('envenom_active'):
+                poison_value = int(poison_value * 1.8)
+                battle_state['envenom_blades_active'] = False
+                battle_state['envenom_active'] = False
+            result['effects'].append({
+                'type': 'poison',
+                'turns': 3,
+                'value': poison_value,
+                'skill_id': skill_id,
+            })
+            result['log_key'] = 'skills.log_toxic_cut'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': result['damage'],
+                'poison': poison_value,
+                'cost': mana_cost,
+            }
+        elif skill_id == 'widows_kiss':
+            has_payoff = (
+                _runtime_target_has_effect(mob_state, battle_state, ('poison', 'weak', 'weaken', 'slow', 'stun', 'freeze', 'off_balance'))
+                or battle_state.get('disarm_turns', 0) > 0
+                or battle_state.get('vulnerability_turns', 0) > 0
+            )
+            if has_payoff:
+                result['damage'] = int(result['damage'] * 1.4)
+                result['log_key'] = 'skills.log_widows_kiss_payoff'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'quick_slice':
+            if battle_state.get('feint_step_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.2)
+                result['effects'].append({
+                    'type': 'slow',
+                    'turns': 1,
+                    'value': 0,
+                    'skill_id': skill_id,
+                })
+                battle_state['feint_step_turns'] = 0
+                result['log_key'] = 'skills.log_quick_slice_feint'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'shadow_chain':
+            has_opening = _runtime_target_has_effect(
+                mob_state,
+                battle_state,
+                ('slow', 'stun', 'freeze', 'off_balance', 'vulnerable'),
+            ) or battle_state.get('vulnerability_turns', 0) > 0
+            if has_opening:
+                extra_hit = max(1, int(result['damage'] * 0.5))
+                result['damage'] += extra_hit
+                result['log_key'] = 'skills.log_shadow_chain_opened'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'rupture_toxins':
+            poison_stacks = sum(
+                1 for e in _get_runtime_mob_effects(mob_state, battle_state)
+                if e.get('type') == 'poison' and e.get('turns', 0) > 0
+            )
+            if poison_stacks > 0:
+                result['damage'] += int(poison_stacks * 12 * (1 + 0.08 * (skill_level - 1)))
+                result['log_key'] = 'skills.log_rupture_toxins'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'stacks': poison_stacks,
+                    'cost': mana_cost,
+                }
+                _consume_runtime_poison_effects(battle_state)
 
         # Пробивание
         if skill.get('piercing'):
@@ -444,8 +564,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                value=shield_value, turns=duration, cost=mana_cost)
 
         # Envenom
-        elif skill_id == 'envenom':
+        elif skill_id in ('envenom', 'envenom_blades'):
             battle_state['envenom_active'] = True
+            battle_state['envenom_blades_active'] = True
             result['log'] = t('skills.log_envenom', lang,
                                name=get_skill_name(skill_id, lang),
                                cost=mana_cost)
@@ -458,6 +579,15 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                name=get_skill_name(skill_id, lang),
                                value=int(skill['base_value']),
                                turns=duration, cost=mana_cost)
+        elif skill_id == 'feint_step':
+            # Ставим 2, потому что в skill flow post-action ticking срабатывает
+            # в этом же ходу до ответа врага: после тика остаётся 1 окно
+            # на следующее действие игрока.
+            battle_state['feint_step_turns'] = 2
+            result['log'] = t('skills.log_feint_step', lang,
+                               name=get_skill_name(skill_id, lang),
+                               turns=1,
+                               cost=mana_cost)
 
         # Орлиный глаз / Тень смерти
         elif skill_id in ('eagle_eye', 'dagger_ult_b'):
@@ -580,6 +710,21 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'cost': mana_cost,
             }
             result['log'] = build_skill_result_log(result, lang)
+        elif skill_id == 'crippling_venom':
+            duration = skill.get('duration', 2)
+            battle_state['disarm_turns'] = duration
+            battle_state['disarm_value'] = int(value)
+            result['effects'].append({
+                'type': 'slow',
+                'turns': duration,
+                'value': 0,
+                'skill_id': skill_id,
+            })
+            result['log'] = t('skills.log_crippling_venom', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=int(value),
+                              turns=duration,
+                              cost=mana_cost)
         elif skill_id == 'expose_guard':
             duration = skill.get('duration', 2)
             battle_state['vulnerability_turns'] = duration
@@ -628,9 +773,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = build_skill_result_log(result, lang)
 
         # Envenom — удвоение следующего яда
-        if battle_state.get('envenom_active') and eff_type == 'poison' and result['effects']:
+        if (battle_state.get('envenom_active') or battle_state.get('envenom_blades_active')) and eff_type == 'poison' and result['effects']:
             result['effects'][-1]['value'] *= 2
             battle_state['envenom_active'] = False
+            battle_state['envenom_blades_active'] = False
 
     # Устанавливаем кулдаун
     if skill['cooldown'] > 0:

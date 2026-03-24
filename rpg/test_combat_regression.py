@@ -554,6 +554,17 @@ class CombatRegressionTests(unittest.TestCase):
         combat.tick_post_action_player_buff_durations(state)
         self.assertEqual(state['blessing_turns'], 1)
 
+    def test_feint_step_expires_in_combat_core_post_action_ticking_path(self):
+        state = {
+            'defense_buff_turns': 0,
+            'berserk_turns': 0,
+            'blessing_turns': 0,
+            'press_the_line_turns': 0,
+            'feint_step_turns': 1,
+        }
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['feint_step_turns'], 0)
+
     def test_regen_behavior_remains_unchanged_after_post_action_buff_move(self):
         state = {
             'defense_buff_turns': 1,
@@ -2509,6 +2520,263 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertGreater(with_runtime_effect['damage'], without_runtime_effect['damage'])
+
+    def test_dagger_tree_ui_assumptions_support_5_skills_per_branch(self):
+        from game.skills import get_weapon_tree
+        tree = get_weapon_tree('dagger')
+        self.assertEqual(
+            tree['A'],
+            ['envenom_blades', 'toxic_cut', 'crippling_venom', 'widows_kiss', 'rupture_toxins'],
+        )
+        self.assertEqual(
+            tree['B'],
+            ['smoke_bomb', 'feint_step', 'quick_slice', 'backstab', 'shadow_chain'],
+        )
+
+    def test_dagger_branch_b_unlock_progression_matches_tree_order(self):
+        from game.skills import get_skill, get_weapon_tree
+
+        branch_b = get_weapon_tree('dagger')['B']
+        unlocks = [get_skill(skill_id)['unlock_mastery'] for skill_id in branch_b]
+
+        self.assertEqual(branch_b, ['smoke_bomb', 'feint_step', 'quick_slice', 'backstab', 'shadow_chain'])
+        self.assertEqual(unlocks, [1, 3, 5, 7, 10])
+
+    def test_backstab_uses_runtime_mob_effects_from_battle_state(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {
+            'weapon_damage': 12,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'player_mana': 100,
+            'mob_effects': [],
+            'vulnerability_turns': 0,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('backstab', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            opened = skill_engine.use_skill(
+                'backstab',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'slow', 'turns': 1, 'value': 0}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(opened['damage'], plain['damage'])
+        self.assertEqual(opened['log_key'], 'skills.log_backstab_crit')
+
+    def test_backstab_does_not_trigger_opening_from_poison_alone(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {
+            'weapon_damage': 12,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'player_mana': 100,
+            'vulnerability_turns': 0,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('backstab', dict(player), dict(mob_state), dict(base_state, mob_effects=[]), telegram_id=101, lang='ru')
+            poison_only = skill_engine.use_skill(
+                'backstab',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'poison', 'turns': 2, 'value': 5}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertEqual(poison_only['damage'], plain['damage'])
+        self.assertNotEqual(poison_only.get('log_key'), 'skills.log_backstab_crit')
+
+    def test_envenom_blades_buffs_only_next_poison_application(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100, 'mob_effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            skill_engine.use_skill('envenom_blades', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+            first = skill_engine.use_skill('toxic_cut', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+            second = skill_engine.use_skill('toxic_cut', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertGreater(first['effects'][0]['value'], second['effects'][0]['value'])
+        self.assertFalse(state.get('envenom_blades_active', False))
+
+    def test_quick_slice_consumes_feint_step_and_applies_slow(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100, 'mob_effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            skill_engine.use_skill('feint_step', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+            result = skill_engine.use_skill('quick_slice', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertEqual(state.get('feint_step_turns', 0), 0)
+        self.assertTrue(any(e.get('type') == 'slow' for e in result['effects']))
+
+    def test_quick_slice_consumes_feint_step_before_combat_core_expiry_tick(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 120,
+            'mob_effects': [],
+            'feint_step_turns': 1,
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('quick_slice', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['battle_state'].get('feint_step_turns', 0), 0)
+
+    def test_feint_step_survives_its_turn_and_is_consumed_by_next_quick_slice_flow(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 120,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            setup_result = combat.process_skill_turn('feint_step', player, mob, battle_state, user_id=101, lang='ru')
+            self.assertTrue(setup_result['success'])
+            self.assertEqual(setup_result['battle_state'].get('feint_step_turns', 0), 1)
+
+            quick_result = combat.process_skill_turn('quick_slice', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(quick_result['success'])
+        self.assertEqual(quick_result['battle_state'].get('feint_step_turns', 0), 0)
+        self.assertEqual(quick_result['skill_result'].get('log_key'), 'skills.log_quick_slice_feint')
+
+    def test_feint_step_expires_if_next_action_does_not_consume_it(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 120,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            setup_result = combat.process_skill_turn('feint_step', player, mob, battle_state, user_id=101, lang='ru')
+            self.assertTrue(setup_result['success'])
+            self.assertEqual(setup_result['battle_state'].get('feint_step_turns', 0), 1)
+
+            other_action_result = combat.process_skill_turn('toxic_cut', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(other_action_result['success'])
+        self.assertEqual(other_action_result['battle_state'].get('feint_step_turns', 0), 0)
+
+    def test_widows_kiss_gets_payoff_bonus_on_poisoned_or_opened_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('widows_kiss', dict(player), dict(mob_state), dict(base_state, mob_effects=[]), telegram_id=101, lang='ru')
+            poisoned = skill_engine.use_skill(
+                'widows_kiss',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'poison', 'turns': 2, 'value': 8}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(poisoned['damage'], plain['damage'])
+        self.assertEqual(poisoned['log_key'], 'skills.log_widows_kiss_payoff')
+
+    def test_rupture_toxins_consumes_poison_effects_and_keeps_slow(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'player_mana': 100,
+            'mob_effects': [
+                {'type': 'poison', 'turns': 2, 'value': 8},
+                {'type': 'poison', 'turns': 1, 'value': 5},
+                {'type': 'slow', 'turns': 1, 'value': 0},
+            ],
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('rupture_toxins', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertGreater(result['damage'], 0)
+        self.assertTrue(all(e.get('type') != 'poison' for e in state['mob_effects']))
+        self.assertTrue(any(e.get('type') == 'slow' for e in state['mob_effects']))
+
+    def test_smoke_bomb_basic_evasive_behavior_still_works(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('smoke_bomb', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertGreater(state.get('dodge_buff_turns', 0), 0)
+        self.assertGreater(state.get('dodge_buff_value', 0), 0)
 
 
 if __name__ == '__main__':
