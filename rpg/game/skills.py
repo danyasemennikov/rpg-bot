@@ -199,7 +199,7 @@ SKILLS = {
     'poison_blade': {
         'id':             'poison_blade',
         'name':           '☠️ Ядовитый клинок',
-        'description':    'Отравляет врага. 25% урона в ход на 3 хода.',
+        'description':    'Быстрый setup-яд на цель. Хорошо открывает окно для дальнейшего давления.',
         'weapon_id':      'dagger',
         'branch':         'A',
         'unlock_mastery': 1,
@@ -216,7 +216,7 @@ SKILLS = {
     'envenom': {
         'id':             'envenom',
         'name':           '🐍 Змеиный яд',
-        'description':    'Усиливает яд. Следующее отравление наносит двойной урон.',
+        'description':    'Подготавливает усиление: следующее наложение яда бьёт заметно сильнее.',
         'weapon_id':      'dagger',
         'branch':         'A',
         'unlock_mastery': 3,
@@ -233,7 +233,7 @@ SKILLS = {
     'venom_storm': {
         'id':             'venom_storm',
         'name':           '💀 Смертельный яд',
-        'description':    'Накладывает стек из 3 ядов одновременно.',
+        'description':    'Шквал токсинов: накладывает несколько ядов и особенно хорош после setup.',
         'weapon_id':      'dagger',
         'branch':         'A',
         'unlock_mastery': 6,
@@ -250,7 +250,7 @@ SKILLS = {
     'dagger_ult_a': {
         'id':             'dagger_ult_a',
         'name':           '🕷️ Паучье гнездо',
-        'description':    'Ультимативный яд. 60% урона в ход на 5 ходов. Нельзя снять.',
+        'description':    'Долгий прессинг-яд: усиливает затяжное давление и наказывает уже отравленную цель.',
         'weapon_id':      'dagger',
         'branch':         'A',
         'unlock_mastery': 10,

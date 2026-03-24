@@ -493,6 +493,35 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                name=get_skill_name(skill_id, lang),
                                dmg=dot_value, cost=mana_cost)
 
+        # Spider Nest — payoff по уже отравленной цели с обменом burst на attrition
+        elif skill_id == 'dagger_ult_a':
+            mob_effects = battle_state.get('mob_effects', [])
+            poison_index = next(
+                (idx for idx, effect in enumerate(mob_effects) if effect.get('type') == 'poison'),
+                None,
+            )
+            if poison_index is not None:
+                consumed_poison = mob_effects.pop(poison_index)
+                burst_damage = max(1, int(consumed_poison.get('value', 0) * 0.75))
+                result['damage'] = burst_damage
+                result['direct_damage_skill'] = True
+                result['damage_school'] = normalize_damage_school(
+                    skill.get('damage_school'),
+                    weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                    weapon_type=battle_state.get('weapon_type', 'melee'),
+                )
+                result['log_key'] = 'skills.log_damage_effect'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': burst_damage,
+                    'cost': mana_cost,
+                }
+                result['log_suffixes'].append({
+                    'key': 'skills.log_effect_ok',
+                    'params': {'effect': t('skills.effect_poison', lang)},
+                })
+                result['log'] = build_skill_result_log(result, lang)
+
         # Blizzard — снижение точности через dodge_buff
         elif skill_id == 'blizzard':
             battle_state['dodge_buff_turns'] = 3
@@ -543,7 +572,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
         # Envenom — удвоение следующего яда
         if battle_state.get('envenom_active') and eff_type == 'poison' and result['effects']:
-            result['effects'][-1]['value'] *= 2
+            for effect in result['effects']:
+                if effect.get('type') == 'poison':
+                    effect['value'] *= 2
             battle_state['envenom_active'] = False
 
     # Устанавливаем кулдаун

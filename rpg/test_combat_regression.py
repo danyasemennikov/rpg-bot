@@ -2356,6 +2356,111 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(state['mob_hp'], 100)
 
+    def test_dagger_envenom_amplifies_all_venom_storm_poison_instances(self):
+        player = {
+            'mana': 100,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        battle_state = {
+            'player_mana': 100,
+            'weapon_damage': 20,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'mob_effects': [],
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.random', return_value=0.0):
+            skill_engine.use_skill('envenom', dict(player), {'effects': []}, battle_state, 101, 'ru')
+            empowered = skill_engine.use_skill('venom_storm', dict(player), {'effects': []}, battle_state, 101, 'ru')
+
+        base_state = {
+            'player_mana': 100,
+            'weapon_damage': 20,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'mob_effects': [],
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.random', return_value=0.0):
+            baseline = skill_engine.use_skill('venom_storm', dict(player), {'effects': []}, base_state, 101, 'ru')
+
+        empowered_values = [effect['value'] for effect in empowered['effects'] if effect['type'] == 'poison']
+        baseline_values = [effect['value'] for effect in baseline['effects'] if effect['type'] == 'poison']
+
+        self.assertEqual(len(empowered_values), 3)
+        self.assertEqual(len(baseline_values), 3)
+        self.assertTrue(all(value == baseline_values[0] * 2 for value in empowered_values))
+        self.assertFalse(battle_state['envenom_active'])
+
+    def test_dagger_ult_a_consumes_existing_poison_for_small_payoff_hit(self):
+        player = {
+            'mana': 100,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        battle_state = {
+            'player_mana': 100,
+            'weapon_damage': 20,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'mob_effects': [
+                {'type': 'poison', 'turns': 2, 'value': 20, 'skill_id': 'poison_blade'},
+                {'type': 'burn', 'turns': 2, 'value': 10, 'skill_id': 'fireball'},
+            ],
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.random', return_value=0.0):
+            result = skill_engine.use_skill('dagger_ult_a', dict(player), {'effects': []}, battle_state, 101, 'ru')
+
+        self.assertTrue(result['direct_damage_skill'])
+        self.assertEqual(result['damage'], 15)
+        self.assertEqual([e['type'] for e in battle_state['mob_effects']], ['burn'])
+
+    def test_dagger_ult_a_has_no_payoff_hit_without_existing_poison(self):
+        player = {
+            'mana': 100,
+            'strength': 10,
+            'agility': 10,
+            'intuition': 10,
+            'vitality': 10,
+            'wisdom': 10,
+            'luck': 10,
+        }
+        battle_state = {
+            'player_mana': 100,
+            'weapon_damage': 20,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'mob_effects': [{'type': 'burn', 'turns': 2, 'value': 10, 'skill_id': 'fireball'}],
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.random', return_value=0.0):
+            result = skill_engine.use_skill('dagger_ult_a', dict(player), {'effects': []}, battle_state, 101, 'ru')
+
+        self.assertFalse(result['direct_damage_skill'])
+        self.assertEqual(result['damage'], 0)
+        self.assertEqual([e['type'] for e in battle_state['mob_effects']], ['burn'])
+
 
 if __name__ == '__main__':
     unittest.main()
