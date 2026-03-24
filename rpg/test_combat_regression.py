@@ -2282,7 +2282,107 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(battle_state['vulnerability_turns'], 2)
         self.assertEqual(battle_state['vulnerability_value'], 31)
 
-    def test_counter_negative_control_vulnerability_changes_same_roll_outcome(self):
+    def test_shield_bash_applies_weaken_off_balance_and_does_not_stun_skip(self):
+        player = {'mana': 100, 'strength': 10, 'agility': 10, 'intuition': 1, 'vitality': 12, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        battle_state = {
+            'weapon_damage': 12,
+            'weapon_type': 'melee',
+            'weapon_profile': 'sword_1h',
+            'armor_class': None,
+            'offhand_profile': 'shield',
+            'encumbrance': None,
+            'player_mana': 100,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('shield_bash', player, mob_state, battle_state, telegram_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertGreater(result['damage'], 0)
+        self.assertEqual(battle_state['disarm_turns'], 2)
+        self.assertGreater(battle_state['disarm_value'], 0)
+        self.assertTrue(any(e['type'] == 'off_balance' for e in result['effects']))
+
+        enemy_player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        battle_state_enemy = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [{'type': 'off_balance', 'turns': 1, 'value': 0}],
+            'disarm_turns': battle_state['disarm_turns'],
+            'disarm_value': battle_state['disarm_value'],
+        }
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
+            log = combat.resolve_enemy_response(mob, enemy_player, battle_state_enemy, lang='ru', user_id=None)
+
+        self.assertTrue(any('атак' in line.lower() for line in log))
+        self.assertEqual(battle_state_enemy['player_hp'], 100 - int(10 * (1 - battle_state['disarm_value'] / 100)))
+
+    def test_expose_guard_sets_vulnerability_window(self):
+        player = {'mana': 100, 'strength': 10, 'agility': 12, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        battle_state = {'weapon_damage': 12, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('expose_guard', player, mob_state, battle_state, telegram_id=101, lang='ru')
+
+        self.assertEqual(battle_state['vulnerability_turns'], 2)
+        self.assertGreater(battle_state['vulnerability_value'], 0)
+
+    def test_press_the_line_sets_and_expires(self):
+        player = {'mana': 100, 'strength': 12, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        battle_state = {'weapon_damage': 12, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('press_the_line', player, mob_state, battle_state, telegram_id=101, lang='ru')
+
+        self.assertEqual(battle_state['press_the_line_turns'], 2)
+        self.assertGreater(battle_state['press_the_line_value'], 0)
+        combat.tick_post_action_player_buff_durations(battle_state)
+        self.assertEqual(battle_state['press_the_line_turns'], 1)
+        combat.tick_post_action_player_buff_durations(battle_state)
+        self.assertEqual(battle_state['press_the_line_turns'], 0)
+
+    def test_punishing_cut_gets_payoff_into_exposed_target(self):
+        player = {'mana': 100, 'strength': 14, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            exposed_state = dict(base_state, vulnerability_turns=2, vulnerability_value=25)
+            exposed = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), exposed_state, telegram_id=101, lang='ru')
+
+        self.assertGreater(exposed['damage'], plain['damage'])
+
+    def test_vanguard_surge_gets_stronger_in_setup_window(self):
+        player = {'mana': 100, 'strength': 15, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('vanguard_surge', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            setup_state = dict(base_state, vulnerability_turns=2, vulnerability_value=25, press_the_line_turns=1, press_the_line_value=16)
+            setup = skill_engine.use_skill('vanguard_surge', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
+
+        self.assertGreater(setup['damage'], plain['damage'])
+
+    def test_counter_defense_buff_reliability_changes_same_roll_threshold(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 20, 'damage_max': 20}
         base_state = {
@@ -2291,23 +2391,24 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             'mob_effects': [],
             'weapon_profile': 'sword_1h',
             'offhand_profile': 'none',
-            'vulnerability_value': 30,
+            'vulnerability_value': 0,
+            'defense_buff_value': 20,
         }
-        state_without_opening = dict(base_state, vulnerability_turns=0)
-        state_with_opening = dict(base_state, vulnerability_turns=2)
+        state_without_defense = dict(base_state, defense_buff_turns=0)
+        state_with_defense = dict(base_state, defense_buff_turns=2)
 
         with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
              patch('game.weapon_mastery.get_skill_level', return_value=1), \
              patch('game.combat.random.random', return_value=0.18):
-            combat.resolve_enemy_response(mob, player, state_without_opening, lang='ru', user_id=101)
+            combat.resolve_enemy_response(mob, player, state_without_defense, lang='ru', user_id=101)
 
         with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
              patch('game.weapon_mastery.get_skill_level', return_value=1), \
              patch('game.combat.random.random', return_value=0.18):
-            combat.resolve_enemy_response(mob, player, state_with_opening, lang='ru', user_id=101)
+            combat.resolve_enemy_response(mob, player, state_with_defense, lang='ru', user_id=101)
 
-        self.assertEqual(state_without_opening['mob_hp'], 100)
-        self.assertEqual(state_with_opening['mob_hp'], 91)
+        self.assertEqual(state_without_defense['mob_hp'], 100)
+        self.assertEqual(state_with_defense['mob_hp'], 95)
 
     def test_counter_shield_reliability_changes_same_roll_threshold(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
@@ -2355,6 +2456,59 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=101)
 
         self.assertEqual(state['mob_hp'], 100)
+
+    def test_sword_tree_ui_assumptions_support_5_skills_per_branch(self):
+        from game.skills import get_weapon_tree
+        tree = get_weapon_tree('iron_sword')
+        self.assertEqual(len(tree['A']), 5)
+        self.assertEqual(len(tree['B']), 5)
+
+    def test_sword_1h_guardian_metadata_matches_tree_branch_a(self):
+        from game.skills import get_skill, get_weapon_tree
+
+        tree = get_weapon_tree('iron_sword')
+        guardian_ids = tree['A']
+
+        self.assertEqual(
+            guardian_ids,
+            ['sword_rush', 'defensive_stance', 'shield_bash', 'parry', 'counter'],
+        )
+        for skill_id in guardian_ids:
+            self.assertEqual(get_skill(skill_id)['branch'], 'A')
+
+    def test_driving_slash_reads_off_balance_from_runtime_mob_effects(self):
+        player = {'mana': 100, 'strength': 14, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'sword_1h',
+            'player_mana': 100,
+            'mob_effects': [],
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            without_runtime_effect = skill_engine.use_skill(
+                'driving_slash',
+                dict(player),
+                dict(mob_state),
+                dict(base_state),
+                telegram_id=101,
+                lang='ru',
+            )
+            with_runtime_effect = skill_engine.use_skill(
+                'driving_slash',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'off_balance', 'turns': 1, 'value': 0}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(with_runtime_effect['damage'], without_runtime_effect['damage'])
 
 
 if __name__ == '__main__':

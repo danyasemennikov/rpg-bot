@@ -284,6 +284,7 @@ STRINGS = {
         'effect_stun':        'Оглушение',
         'effect_freeze':      'Заморозка',
         'effect_slow':        'Замедление',
+        'effect_off_balance': 'Сбитый баланс',
         'skills.log_damage_effect': '{name} — {dmg} урона + эффект 🔵-{cost}',
         'log_disarm': '{name} — ⚔️ урон врага -{value}% на 2 хода 🔵-{cost}',
         'log_dodge_buff': '{name} — 🌀 уклонение +{value}% на {turns} хода 🔵-{cost}',
@@ -298,6 +299,11 @@ STRINGS = {
         'log_venom_storm': '{name} — ☠️ 3 стека яда по {dmg}/ход 🔵-{cost}',
         'log_sword_rush': '{name} — ⚡ {dmg} урона + уязвимость цели на 2 хода 🔵-{cost}',
         'log_fire_shield': '{name} — 🔆 щит отражает {value} урона на {turns} хода 🔵-{cost}',
+        'log_press_the_line': '{name} — 📣 прямой урон +{value}% на {turns} хода 🔵-{cost}',
+        'log_expose_guard': '{name} — 🎯 цель вскрыта: урон по ней +{value}% на {turns} хода 🔵-{cost}',
+        'log_shield_bash': '{name} — 🛡️ {dmg} урона, урон врага -{value}% на {turns} хода + сбитый баланс 🔵-{cost}',
+        'log_punishing_cut': '{name} — 🩸 добивающий удар по вскрытой цели: {dmg} урона 🔵-{cost}',
+        'log_vanguard_surge': '{name} — 🚩 пик натиска: {dmg} урона 🔵-{cost}',
 
     },
 

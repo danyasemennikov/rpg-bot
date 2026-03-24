@@ -168,7 +168,7 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
     Тикает post-action длительности оставшихся player buffs в Combat Core.
     Регенерация и resurrection здесь не обрабатываются.
     """
-    for key in ('defense_buff_turns', 'berserk_turns', 'blessing_turns'):
+    for key in ('defense_buff_turns', 'berserk_turns', 'blessing_turns', 'press_the_line_turns'):
         if battle_state.get(key, 0) > 0:
             battle_state[key] -= 1
 
@@ -210,6 +210,11 @@ def apply_direct_damage_action_modifiers(
         bonus = int(damage * battle_state['vulnerability_value'] / 100)
         damage += bonus
         battle_state['vulnerability_turns'] -= 1
+        modifiers_applied = True
+
+    if battle_state.get('press_the_line_turns', 0) > 0:
+        bonus = int(damage * battle_state.get('press_the_line_value', 0) / 100)
+        damage += bonus
         modifiers_applied = True
 
     return {
@@ -579,9 +584,8 @@ def resolve_enemy_response(
             vulnerability_value = battle_state.get('vulnerability_value', 0)
             if battle_state.get('offhand_profile') == 'shield':
                 counter_chance += 0.10
-            if vulnerability_active:
-                # Маленький бонус к шансу, чтобы pressure-ветка не ощущалась как чистый RNG.
-                counter_chance += 0.03
+            if battle_state.get('defense_buff_turns', 0) > 0:
+                counter_chance += 0.04
             if random.random() < counter_chance:
                 counter_dmg = int(mob_dmg * (0.30 + 0.07 * counter_level))
                 if vulnerability_active and vulnerability_value > 0:
@@ -808,6 +812,8 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'hunters_mark_value':   0,
         'vulnerability_turns':  0,
         'vulnerability_value':  0,
+        'press_the_line_turns': 0,
+        'press_the_line_value': 0,
         'disarm_turns':         0,
         'disarm_value':         0,
         'fire_shield_turns':    0,
