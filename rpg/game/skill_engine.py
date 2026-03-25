@@ -419,6 +419,64 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'cost': mana_cost,
                 }
                 _consume_runtime_poison_effects(battle_state)
+        elif skill_id == 'aimed_shot':
+            if battle_state.get('hunters_mark_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.2)
+                result['log_key'] = 'skills.log_aimed_shot_marked'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'piercing_arrow':
+            if battle_state.get('hunters_mark_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.25)
+                result['log_key'] = 'skills.log_piercing_arrow_marked'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'deadeye':
+            if battle_state.get('hunters_mark_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.35)
+                result['log_key'] = 'skills.log_deadeye_marked'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'hamstring_arrow':
+            result['effects'].append({
+                'type': 'slow',
+                'turns': 2,
+                'value': 0,
+                'skill_id': skill_id,
+            })
+            result['log_key'] = 'skills.log_hamstring_arrow'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': result['damage'],
+                'cost': mana_cost,
+            }
+        elif skill_id == 'volley_step':
+            if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
+                result['damage'] = int(result['damage'] * 1.2)
+                result['log_key'] = 'skills.log_volley_step_slow'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'rain_of_barbs':
+            if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
+                result['damage'] = int(result['damage'] * 1.2)
+                result['log_key'] = 'skills.log_rain_of_barbs_slow'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
 
         # Пробивание
         if skill.get('piercing'):
@@ -572,7 +630,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                cost=mana_cost)
 
         # Дымовая завеса / Отступление
-        elif skill_id in ('smoke_bomb', 'retreat'):
+        elif skill_id in ('smoke_bomb', 'retreat', 'reposition'):
             battle_state['dodge_buff_turns'] = duration
             battle_state['dodge_buff_value'] = int(skill['base_value'])
             result['log'] = t('skills.log_dodge_buff', lang,
@@ -590,7 +648,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                cost=mana_cost)
 
         # Орлиный глаз / Тень смерти
-        elif skill_id in ('eagle_eye', 'dagger_ult_b'):
+        elif skill_id in ('eagle_eye', 'dagger_ult_b', 'steady_aim'):
             battle_state['guaranteed_crit_turns'] = duration
             result['log'] = t('skills.log_guaranteed_crit', lang,
                                name=get_skill_name(skill_id, lang),
