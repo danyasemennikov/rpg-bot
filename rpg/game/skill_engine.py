@@ -960,11 +960,16 @@ def apply_mob_effects(mob_state: dict) -> tuple:
             total_dmg += dmg
             emoji      = '☠️' if eff['type'] == 'poison' else '🔥'
             log_parts.append(f"{emoji} {dmg}")
+            eff = dict(eff)
+            eff['turns'] -= 1
+            if eff['turns'] > 0:
+                new_effects.append(eff)
+            continue
 
-        eff = dict(eff)
-        eff['turns'] -= 1
-        if eff['turns'] > 0:
-            new_effects.append(eff)
+        # Non-DoT эффекты (slow/stun/freeze и другие target-дебаффы)
+        # не тикаются в pre-enemy helper: их тайминг обрабатывается
+        # в post-enemy-response секции combat core.
+        new_effects.append(eff)
 
     mob_state['effects'] = new_effects
     return total_dmg, ', '.join(log_parts)

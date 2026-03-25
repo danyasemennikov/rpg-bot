@@ -25,6 +25,9 @@ from game.skill_engine import (
     use_skill,
 )
 
+SLOW_MISS_CHANCE = 0.35
+DOT_EFFECT_TYPES = {'poison', 'burn'}
+
 
 # ────────────────────────────────────────
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -112,6 +115,40 @@ def apply_mob_effect_ticks(mob: dict, battle_state: dict) -> list[str]:
 
     battle_state['mob_effects'] = mob_state.get('effects', [])
     return log
+
+
+def decrement_mob_non_dot_effects_after_response(battle_state: dict) -> None:
+    """
+    Post-enemy-response decrement target эффектов моба.
+    DoT (poison/burn) здесь не тикаем — они остаются в pre-enemy phase.
+    """
+    mob_effects = battle_state.get('mob_effects', [])
+    if not mob_effects:
+        return
+
+    new_effects = []
+    for eff in mob_effects:
+        turns = int(eff.get('turns', 0))
+        if turns <= 0:
+            continue
+
+        eff_type = eff.get('type')
+        if eff_type in DOT_EFFECT_TYPES:
+            new_effects.append(eff)
+            continue
+
+        updated = dict(eff)
+        updated['turns'] = turns - 1
+        if updated['turns'] > 0:
+            new_effects.append(updated)
+
+    battle_state['mob_effects'] = new_effects
+
+
+def has_active_mob_effect(battle_state: dict, *effect_types: str) -> bool:
+    mob_effects = battle_state.get('mob_effects', [])
+    target = set(effect_types)
+    return any(e.get('type') in target and int(e.get('turns', 0)) > 0 for e in mob_effects)
 
 
 def apply_player_start_of_turn_regen(
@@ -528,11 +565,11 @@ def resolve_enemy_response(
     """
     log = []
 
-    mob_effects = battle_state.get('mob_effects', [])
-    mob_stunned = any(e['type'] in ('stun', 'freeze', 'slow') for e in mob_effects)
+    mob_stunned = has_active_mob_effect(battle_state, 'stun', 'freeze')
     if mob_stunned:
         log.append(t('battle.stunned', lang, mob_name=get_mob_name(mob['id'], lang)))
         battle_state['player_hp'] = player['hp']
+        decrement_mob_non_dot_effects_after_response(battle_state)
         return log
 
     if battle_state.get('parry_active'):
@@ -544,6 +581,7 @@ def resolve_enemy_response(
         )
         log.extend(trigger_result['log'])
         battle_state['player_hp'] = player['hp']
+        decrement_mob_non_dot_effects_after_response(battle_state)
         return log
 
     pre_damage_result = resolve_enemy_damage_against_player(
@@ -553,12 +591,20 @@ def resolve_enemy_response(
     log.extend(pre_damage_result['log'])
     if pre_damage_result['skip_mob_attack']:
         battle_state['player_hp'] = player['hp']
+        decrement_mob_non_dot_effects_after_response(battle_state)
+        return log
+
+    if has_active_mob_effect(battle_state, 'slow') and random.random() < SLOW_MISS_CHANCE:
+        log.append(t('battle.mob_miss_slow', lang, mob_name=get_mob_name(mob['id'], lang)))
+        battle_state['player_hp'] = player['hp']
+        decrement_mob_non_dot_effects_after_response(battle_state)
         return log
 
     mob_result = mob_attack(mob, player)
     if mob_result.get('type') == 'dodge':
         log.append(t('battle.player_dodge', lang))
         battle_state['player_hp'] = player['hp']
+        decrement_mob_non_dot_effects_after_response(battle_state)
         return log
 
     damage_result = resolve_enemy_damage_against_player(
@@ -569,6 +615,7 @@ def resolve_enemy_response(
     log.extend(damage_result['log'])
     if not damage_result['damage_landed']:
         battle_state['player_hp'] = player['hp']
+        decrement_mob_non_dot_effects_after_response(battle_state)
         return log
 
     mob_dmg = damage_result['player_damage']
@@ -601,6 +648,7 @@ def resolve_enemy_response(
                 battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - counter_dmg)
                 log.append(t('battle.counter_attack', lang, damage=counter_dmg))
 
+    decrement_mob_non_dot_effects_after_response(battle_state)
     return log
 
 # ────────────────────────────────────────
