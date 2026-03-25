@@ -286,6 +286,7 @@ STRINGS = {
         'log_judgment_mark': '{name} — 🏷️ target judged: incoming damage +{value}% for {turns} turns 🔵-{cost}',
         'log_sanctified_burst': '{name} — ✨ sanctified burst: {dmg} damage 🔵-{cost}',
         'log_halo_of_dawn': '{name} — 🌅 halo of dawn: {dmg} damage and ❤️ +{heal} HP 🔵-{cost}',
+        'log_guardian_light': '{name} — 🌟 {dmg} damage and 🛡️ defense +{value}% for {turns} turns 🔵-{cost}',
         
     },
     'quests': {

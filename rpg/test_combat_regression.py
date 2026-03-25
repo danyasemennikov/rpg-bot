@@ -225,6 +225,158 @@ class CombatRegressionTests(unittest.TestCase):
              patch('game.combat.resolve_enemy_response', side_effect=enemy_response_side_effect):
             combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
 
+    def test_guardian_light_does_not_refresh_defense_buff_when_direct_hit_fails(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 20,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Guardian Light', 'dmg': 20, 'cost': 10},
+            'log_suffixes': [],
+            'lifesteal_ratio': 0.0,
+            'heal_from_damage_ratio': 0.0,
+            'heal_cap_missing_hp': 0,
+            'post_hit_actions': [{'type': 'refresh_defense_buff', 'turns': 2, 'value': 14, 'log_key': 'skills.log_guardian_light'}],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.finalize_player_direct_damage_action', return_value={'final_damage': 0, 'mob_hp_after': 100, 'mob_dead': False}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('guardian_light', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state'].get('defense_buff_turns', 0), 0)
+        self.assertEqual(result['battle_state'].get('defense_buff_value', 0), 0)
+
+    def test_final_verdict_does_not_consume_vulnerability_when_direct_hit_fails(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'vulnerability_turns': 2,
+            'vulnerability_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 25,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Final Verdict', 'dmg': 25, 'cost': 12},
+            'log_suffixes': [],
+            'lifesteal_ratio': 0.0,
+            'heal_from_damage_ratio': 0.0,
+            'heal_cap_missing_hp': 0,
+            'post_hit_actions': [{'type': 'consume_vulnerability'}],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.finalize_player_direct_damage_action', return_value={'final_damage': 0, 'mob_hp_after': 100, 'mob_dead': False}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('final_verdict', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['vulnerability_turns'], 2)
+        self.assertEqual(result['battle_state']['vulnerability_value'], 20)
+
+    def test_guardian_light_successful_hit_refreshes_defense_buff_post_hit(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 20,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Guardian Light', 'dmg': 20, 'cost': 10},
+            'log_suffixes': [],
+            'lifesteal_ratio': 0.0,
+            'heal_from_damage_ratio': 0.0,
+            'heal_cap_missing_hp': 0,
+            'post_hit_actions': [{'type': 'refresh_defense_buff', 'turns': 2, 'value': 14, 'log_key': 'skills.log_guardian_light'}],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.finalize_player_direct_damage_action', return_value={'final_damage': 20, 'mob_hp_after': 80, 'mob_dead': False}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('guardian_light', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['defense_buff_turns'], 2)
+        self.assertEqual(result['battle_state']['defense_buff_value'], 14)
+
+    def test_final_verdict_successful_judged_hit_consumes_vulnerability_post_hit(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'vulnerability_turns': 2,
+            'vulnerability_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 25,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Final Verdict', 'dmg': 25, 'cost': 12},
+            'log_suffixes': [],
+            'lifesteal_ratio': 0.0,
+            'heal_from_damage_ratio': 0.0,
+            'heal_cap_missing_hp': 0,
+            'post_hit_actions': [{'type': 'consume_vulnerability'}],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.finalize_player_direct_damage_action', return_value={'final_damage': 25, 'mob_hp_after': 75, 'mob_dead': False}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('final_verdict', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['vulnerability_turns'], 0)
+        self.assertEqual(result['battle_state']['vulnerability_value'], 0)
+
     def test_normal_attack_flow_defense_buff_turns_one_still_applies_to_enemy_response(self):
         player = {
             'hp': 100,
@@ -3474,6 +3626,115 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         for legacy_id in ('holy_bolt', 'consecration', 'divine_wrath'):
             self.assertIn(legacy_id, game_skills.SKILLS)
             self.assertNotIn(legacy_id, tree_skills)
+
+    def test_holy_rod_tree_is_full_5_plus_5(self):
+        tree = game_skills.SKILL_TREES['holy_rod']
+        self.assertEqual(tree['A'], ['sacred_shield', 'mend_self', 'aura_of_resolve', 'aegis_strike', 'guardian_light'])
+        self.assertEqual(tree['B'], ['judgment', 'radiant_strike', 'rod_consecration', 'punish_the_wicked', 'final_verdict'])
+
+    def test_sacred_shield_sets_defense_buff(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 12, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('sacred_shield', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('defense_buff_turns', 0), 0)
+        self.assertGreater(state.get('defense_buff_value', 0), 0)
+
+    def test_judgment_sets_vulnerability(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 12, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('judgment', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('vulnerability_turns', 0), 0)
+        self.assertGreater(state.get('vulnerability_value', 0), 0)
+
+    def test_aegis_strike_gets_bonus_with_active_protection(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('aegis_strike', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            protected = skill_engine.use_skill(
+                'aegis_strike',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, defense_buff_turns=2, defense_buff_value=20),
+                telegram_id=101,
+                lang='ru',
+            )
+        self.assertGreater(protected['damage'], plain['damage'])
+
+    def test_guardian_light_runtime_prepares_post_hit_action_with_base_log_params(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod', 'defense_buff_turns': 1, 'blessing_turns': 0}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('guardian_light', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+        self.assertEqual(result.get('log_key'), 'skills.log_damage')
+        self.assertIn('name', result.get('log_params', {}))
+        self.assertIn('dmg', result.get('log_params', {}))
+        self.assertIn('cost', result.get('log_params', {}))
+        self.assertTrue(any(a.get('type') == 'refresh_defense_buff' for a in result.get('post_hit_actions', [])))
+
+    def test_guardian_light_successful_post_hit_builds_truthful_special_log(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod', 'defense_buff_turns': 1, 'blessing_turns': 0, 'mob_hp': 100}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('guardian_light', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+
+        battle_state = dict(base_state)
+        result['direct_damage_result'] = {'final_damage': result.get('damage', 0)}
+        combat.apply_post_hit_skill_actions(result, battle_state)
+        combat.finalize_direct_damage_skill_result(result, 'ru')
+
+        self.assertEqual(result.get('log_key'), 'skills.log_guardian_light')
+        self.assertIn('name', result.get('log_params', {}))
+        self.assertIn('dmg', result.get('log_params', {}))
+        self.assertIn('cost', result.get('log_params', {}))
+        self.assertIn('value', result.get('log_params', {}))
+        self.assertIn('turns', result.get('log_params', {}))
+        self.assertTrue(result.get('log'))
+        self.assertGreater(battle_state.get('defense_buff_turns', 0), 0)
+        self.assertGreater(battle_state.get('defense_buff_value', 0), 0)
+
+    def test_judicator_payoffs_get_bonus_on_judged_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            punish_plain = skill_engine.use_skill('punish_the_wicked', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            punish_judged = skill_engine.use_skill(
+                'punish_the_wicked',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, vulnerability_turns=2, vulnerability_value=20),
+                telegram_id=101,
+                lang='ru',
+            )
+            verdict_plain = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            verdict_state = dict(base_state, vulnerability_turns=2, vulnerability_value=20)
+            verdict_judged = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), verdict_state, telegram_id=101, lang='ru')
+        self.assertGreater(punish_judged['damage'], punish_plain['damage'])
+        self.assertGreater(verdict_judged['damage'], verdict_plain['damage'])
+        self.assertEqual(verdict_state.get('vulnerability_turns', 0), 2)
+        self.assertEqual(verdict_state.get('vulnerability_value', 0), 20)
 
     def test_axe_2h_tree_is_full_5_plus_5(self):
         tree = game_skills.SKILL_TREES['axe_2h']

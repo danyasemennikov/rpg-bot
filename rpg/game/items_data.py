@@ -61,6 +61,17 @@ ITEMS = {
         'buy_price': 300, 'sell_price': 80,
         'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2}',
     },
+    'holy_rod': {
+        'item_id': 'holy_rod', 'name': '🪄 Священный жезл',
+        'description': 'Боевой жезл паладина. Сочетает святую защиту и карающий свет.',
+        'item_type': 'weapon', 'weapon_type': 'light', 'weapon_profile': 'holy_rod',
+        'rarity': 'uncommon',
+        'damage_min': 9, 'damage_max': 14, 'defense': 0, 'weight': 2,
+        'req_level': 3, 'req_strength': 0, 'req_agility': 0,
+        'req_intuition': 0, 'req_wisdom': 5,
+        'buy_price': 290, 'sell_price': 75,
+        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2}',
+    },
     'dagger': {
         'item_id': 'dagger', 'name': '🗡️ Кинжал',
         'description': 'Быстрый и лёгкий кинжал.',

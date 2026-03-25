@@ -5,6 +5,7 @@ ITEM_NAMES = {
     'short_bow': '🏹 Короткий лук',
     'magic_staff': '🔮 Магический посох',
     'holy_staff': '✨ Святой посох',
+    'holy_rod': '🪄 Священный жезл',
     'dagger': '🗡️ Кинжал',
     'leather_armor': '🥋 Кожаная броня',
     'iron_shield': '🛡️ Железный щит',
