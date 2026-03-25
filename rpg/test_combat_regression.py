@@ -3475,6 +3475,128 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(legacy_id, game_skills.SKILLS)
             self.assertNotIn(legacy_id, tree_skills)
 
+    def test_axe_2h_tree_is_full_5_plus_5(self):
+        tree = game_skills.SKILL_TREES['axe_2h']
+        self.assertEqual(len(tree['A']), 5)
+        self.assertEqual(len(tree['B']), 5)
+
+    def test_axe_2h_branch_a_order_matches_final_design(self):
+        expected = ['rage_call', 'savage_chop', 'blooded_resolve', 'frenzy_chain', 'last_roar']
+        self.assertEqual(game_skills.SKILL_TREES['axe_2h']['A'], expected)
+
+    def test_axe_2h_branch_b_order_matches_final_design(self):
+        expected = ['bleeding_cut', 'sunder_armor', 'brutal_overhead', 'reopen_wounds', 'ravage']
+        self.assertEqual(game_skills.SKILL_TREES['axe_2h']['B'], expected)
+
+    def test_rage_call_sets_berserk_runtime_and_applies_safe_self_cost(self):
+        player = {'mana': 100, 'hp': 10, 'max_hp': 100, 'strength': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h', 'player_hp': 10, 'player_max_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('rage_call', player, {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('berserk_turns', 0), 0)
+        self.assertGreater(state.get('berserk_damage', 0), 0)
+        self.assertEqual(state.get('player_hp'), 1)
+        self.assertEqual(player.get('hp'), 1)
+
+    def test_frenzy_chain_gets_berserk_payoff_and_consumes_berserk(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('frenzy_chain', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            berserk_state = dict(base_state, berserk_turns=1, berserk_damage=20)
+            payoff = skill_engine.use_skill('frenzy_chain', dict(player), dict(mob_state), berserk_state, telegram_id=101, lang='ru')
+        self.assertGreater(payoff['damage'], plain['damage'])
+        self.assertEqual(berserk_state.get('berserk_turns', 0), 0)
+        self.assertEqual(berserk_state.get('berserk_damage', 0), 0)
+
+    def test_blooded_resolve_scales_heal_up_at_low_hp(self):
+        player = {'mana': 100, 'hp': 90, 'max_hp': 100, 'vitality': 16}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        hi_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h', 'player_hp': 90, 'player_max_hp': 100}
+        low_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h', 'player_hp': 20, 'player_max_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            heal_high = skill_engine.use_skill('blooded_resolve', dict(player), dict(mob_state), hi_state, telegram_id=101, lang='ru')
+            heal_low = skill_engine.use_skill('blooded_resolve', dict(player), dict(mob_state), low_state, telegram_id=101, lang='ru')
+        self.assertGreater(heal_low['heal'], heal_high['heal'])
+
+    def test_bleeding_cut_applies_bleed(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('bleeding_cut', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertTrue(any(e.get('type') == 'bleed' and e.get('turns', 0) > 0 and e.get('value', 0) > 0 for e in result['effects']))
+
+    def test_apply_mob_effects_ticks_bleed_without_breaking_poison_and_burn(self):
+        mob_state = {
+            'hp': 100,
+            'effects': [
+                {'type': 'poison', 'turns': 2, 'value': 5},
+                {'type': 'burn', 'turns': 1, 'value': 7},
+                {'type': 'bleed', 'turns': 3, 'value': 4},
+                {'type': 'slow', 'turns': 2, 'value': 0},
+            ],
+        }
+        dmg, _ = skill_engine.apply_mob_effects(mob_state)
+        self.assertEqual(dmg, 16)
+        self.assertTrue(any(e.get('type') == 'poison' and e.get('turns') == 1 for e in mob_state['effects']))
+        self.assertFalse(any(e.get('type') == 'burn' for e in mob_state['effects']))
+        self.assertTrue(any(e.get('type') == 'bleed' and e.get('turns') == 2 for e in mob_state['effects']))
+        self.assertTrue(any(e.get('type') == 'slow' and e.get('turns') == 2 for e in mob_state['effects']))
+
+    def test_sunder_armor_sets_vulnerability_runtime(self):
+        player = {'mana': 100, 'strength': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('sunder_armor', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('vulnerability_turns', 0), 0)
+        self.assertGreater(state.get('vulnerability_value', 0), 0)
+
+    def test_reopen_wounds_is_stronger_into_bleed_and_vulnerability(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_bleed = {'hp': 100, 'defense': 0, 'effects': [{'type': 'bleed', 'turns': 2, 'value': 4}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('reopen_wounds', dict(player), mob_plain, dict(base_state), telegram_id=101, lang='ru')
+            vs_bleed = skill_engine.use_skill('reopen_wounds', dict(player), mob_bleed, dict(base_state), telegram_id=101, lang='ru')
+            vs_vulnerable = skill_engine.use_skill('reopen_wounds', dict(player), mob_plain, dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+        self.assertGreater(vs_bleed['damage'], plain['damage'])
+        self.assertGreater(vs_vulnerable['damage'], plain['damage'])
+
+    def test_ravage_behaves_as_capstone_punish_into_prepared_target(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_prepared = {'hp': 100, 'defense': 0, 'effects': [{'type': 'bleed', 'turns': 2, 'value': 4}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('ravage', dict(player), mob_plain, dict(base_state), telegram_id=101, lang='ru')
+            prepared = skill_engine.use_skill('ravage', dict(player), mob_prepared, dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+        self.assertGreater(prepared['damage'], plain['damage'])
+
+    def test_direct_damage_modifiers_apply_berserk_damage_bonus(self):
+        state = {'berserk_turns': 1, 'berserk_damage': 12}
+        out = combat.apply_direct_damage_action_modifiers(state, 20, can_consume_guaranteed_crit=False)
+        self.assertEqual(out['damage'], 32)
+
 
 if __name__ == '__main__':
     unittest.main()
