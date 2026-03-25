@@ -107,6 +107,7 @@ STRINGS = {
         'attack_hit':   '⚔️ You deal <b>{damage}</b> damage.',
         'attack_crit':  '💥 <b>CRIT!</b> You deal <b>{damage}</b> damage!',
         'mob_attack':   '🩸 {mob_name} attacks — <b>{damage}</b> damage.',
+        'mob_miss_slow': '🧊 {mob_name} is slowed and misses the attack!',
         'player_dodge': '🌀 You dodge the attack!',
         'mob_dodge':    '🌀 {mob_name} dodges!',
         'stunned':      '💫 {mob_name} is stunned and skips a turn!',

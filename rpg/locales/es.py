@@ -107,6 +107,7 @@ STRINGS = {
         'attack_hit':   '⚔️ Causas <b>{damage}</b> de daño.',
         'attack_crit':  '💥 <b>¡CRÍTICO!</b> Causas <b>{damage}</b> de daño!',
         'mob_attack':   '🩸 {mob_name} ataca — <b>{damage}</b> de daño.',
+        'mob_miss_slow': '🧊 ¡{mob_name} está ralentizado y falla el ataque!',
         'player_dodge': '🌀 ¡Esquivas el ataque!',
         'mob_dodge':    '🌀 ¡{mob_name} esquiva!',
         'stunned':      '💫 ¡{mob_name} está aturdido y pierde el turno!',

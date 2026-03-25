@@ -410,6 +410,101 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertTrue(state['parry_active'])
         self.assertEqual(state['mob_hp'], 100)
 
+    def test_slow_no_longer_forces_hard_skip_and_enemy_can_attack(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 7, 'damage_max': 7}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [{'type': 'slow', 'turns': 1, 'value': 0}],
+        }
+
+        with patch('game.combat.random.random', return_value=0.99), \
+             patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 7, 'player_hp': 93}):
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        self.assertEqual(state['player_hp'], 93)
+        self.assertEqual(state['mob_effects'], [])
+
+    def test_slowed_mob_can_miss_due_to_slow(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 7, 'damage_max': 7}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [{'type': 'slow', 'turns': 1, 'value': 0}],
+        }
+
+        with patch('game.combat.random.random', return_value=0.0), \
+             patch('game.combat.mob_attack') as mob_attack_mock:
+            log = combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_not_called()
+        self.assertEqual(state['player_hp'], 100)
+        self.assertEqual(state['mob_effects'], [])
+        self.assertTrue(any('замед' in line.lower() or 'промах' in line.lower() for line in log))
+
+    def test_ice_shackles_freeze_one_skips_exactly_one_enemy_response(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 9, 'damage_max': 9}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [{'type': 'freeze', 'turns': 1, 'value': 0}],
+        }
+
+        with patch('game.combat.mob_attack') as first_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+        first_attack_mock.assert_not_called()
+        self.assertEqual(state['mob_effects'], [])
+        self.assertEqual(state['player_hp'], 100)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 9, 'player_hp': 91}) as second_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+        second_attack_mock.assert_called_once()
+        self.assertEqual(state['player_hp'], 91)
+
+    def test_absolute_zero_freeze_rider_no_longer_fizzles_before_enemy_response(self):
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8, 'defense': 0}
+        player = {'hp': 100, 'mana': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 100,
+            'mob_effects': [{'type': 'freeze', 'turns': 1, 'value': 0}],
+            'log': [],
+            'turn': 1,
+        }
+
+        combat.apply_pre_enemy_response_ticks(mob, state)
+        self.assertEqual(state['mob_effects'][0]['type'], 'freeze')
+        self.assertEqual(state['mob_effects'][0]['turns'], 1)
+
+        with patch('game.combat.mob_attack') as mob_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+        mob_attack_mock.assert_not_called()
+        self.assertEqual(state['mob_effects'], [])
+
+    def test_poison_and_burn_pretick_behavior_stays_unchanged(self):
+        mob_state = {
+            'hp': 100,
+            'defense': 0,
+            'effects': [
+                {'type': 'poison', 'turns': 1, 'value': 4},
+                {'type': 'burn', 'turns': 1, 'value': 6},
+                {'type': 'freeze', 'turns': 1, 'value': 0},
+            ],
+        }
+
+        dmg, _ = skill_engine.apply_mob_effects(mob_state)
+
+        self.assertEqual(dmg, 10)
+        self.assertEqual(
+            mob_state['effects'],
+            [{'type': 'freeze', 'turns': 1, 'value': 0}],
+        )
+
     def test_parry_ordering_remains_compatible_with_enemy_response_flow(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}

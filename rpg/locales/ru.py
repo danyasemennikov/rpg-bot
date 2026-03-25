@@ -125,6 +125,7 @@ STRINGS = {
         'attack_hit':   '⚔️ Ты наносишь <b>{damage}</b> урона.',
         'attack_crit':  '💥 <b>КРИТ!</b> Ты наносишь <b>{damage}</b> урона!',
         'mob_attack':   '🩸 {mob_name} атакует — <b>{damage}</b> урона.',
+        'mob_miss_slow': '🧊 {mob_name} замедлен и промахивается!',
         'player_dodge': '🌀 Ты уклоняешься от атаки!',
         'mob_dodge':    '🌀 {mob_name} уклоняется!',
         'stunned':      '💫 {mob_name} оглушён и пропускает ход!',
