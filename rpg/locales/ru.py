@@ -323,6 +323,7 @@ STRINGS = {
         'log_judgment_mark': '{name} — 🏷️ цель помечена: входящий урон +{value}% на {turns} хода 🔵-{cost}',
         'log_sanctified_burst': '{name} — ✨ освящённый всплеск: {dmg} урона 🔵-{cost}',
         'log_halo_of_dawn': '{name} — 🌅 ореол рассвета: {dmg} урона и ❤️ +{heal} HP 🔵-{cost}',
+        'log_guardian_light': '{name} — 🌟 {dmg} урона и 🛡️ защита +{value}% на {turns} хода 🔵-{cost}',
 
     },
 

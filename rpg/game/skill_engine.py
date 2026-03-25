@@ -203,6 +203,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         'log_key': None,
         'log_params': {},
         'log_suffixes': [],
+        'post_hit_actions': [],
         'lifesteal_ratio': 0.0,
         'heal_from_damage_ratio': 0.0,
         'heal_cap_missing_hp': 0,
@@ -391,6 +392,40 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'heal': result['heal'],
                 'cost': mana_cost,
             }
+        elif skill_id == 'aegis_strike':
+            if battle_state.get('defense_buff_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.25)
+            if battle_state.get('blessing_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.10)
+        elif skill_id == 'guardian_light':
+            if battle_state.get('defense_buff_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.20)
+            if battle_state.get('blessing_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.10)
+            # До успешного hit оставляем честный damage-лог без обещания refresh.
+            result['log_key'] = 'skills.log_damage'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': result['damage'],
+                'cost': mana_cost,
+            }
+            defense_turns = 2
+            defense_value = 10 + 2 * (skill_level - 1)
+            result['post_hit_actions'].append({
+                'type': 'refresh_defense_buff',
+                'turns': defense_turns,
+                'value': defense_value,
+                'log_key': 'skills.log_guardian_light',
+            })
+        elif skill_id == 'punish_the_wicked':
+            if battle_state.get('vulnerability_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.40)
+        elif skill_id == 'final_verdict':
+            if battle_state.get('vulnerability_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.50)
+                result['post_hit_actions'].append({
+                    'type': 'consume_vulnerability',
+                })
         elif skill_id == 'driving_slash':
             mob_effects = _get_runtime_mob_effects(mob_state, battle_state)
             if any(e.get('type') == 'off_balance' for e in mob_effects):
@@ -798,6 +833,18 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = t('skills.log_blessing', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'sacred_shield':
+            battle_state['defense_buff_turns'] = duration
+            battle_state['defense_buff_value'] = int(value)
+            result['log'] = t('skills.log_defense', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'aura_of_resolve':
+            battle_state['blessing_turns'] = duration
+            battle_state['blessing_value'] = int(value)
+            result['log'] = t('skills.log_blessing', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'radiant_ward':
             battle_state['defense_buff_turns'] = duration
             battle_state['defense_buff_value'] = int(value)
@@ -1069,6 +1116,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'judgment_mark':
+            duration = skill.get('duration', 3)
+            battle_state['vulnerability_turns'] = duration
+            battle_state['vulnerability_value'] = int(value)
+            result['log'] = t('skills.log_judgment_mark', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'judgment':
             duration = skill.get('duration', 3)
             battle_state['vulnerability_turns'] = duration
             battle_state['vulnerability_value'] = int(value)

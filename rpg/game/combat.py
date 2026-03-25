@@ -360,6 +360,40 @@ def finalize_direct_damage_skill_result(skill_result: dict, lang: str) -> None:
     skill_result['log'] = build_skill_result_log(skill_result, lang)
 
 
+def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None:
+    """
+    Применяет узкие post-hit действия скилла только если direct hit реально прошёл.
+    """
+    if not skill_result.get('direct_damage_skill'):
+        return
+
+    action_result = skill_result.get('direct_damage_result', {})
+    if action_result.get('final_damage', 0) <= 0:
+        return
+
+    for action in skill_result.get('post_hit_actions', []):
+        action_type = action.get('type')
+
+        if action_type == 'refresh_defense_buff':
+            turns = int(action.get('turns', 0))
+            value = int(action.get('value', 0))
+            if turns > 0 and value > 0:
+                battle_state['defense_buff_turns'] = turns
+                battle_state['defense_buff_value'] = value
+                skill_result['log_key'] = action.get('log_key', skill_result.get('log_key'))
+                existing_params = skill_result.get('log_params', {})
+                skill_result.setdefault('log_params', {})
+                skill_result['log_params']['name'] = existing_params.get('name', skill_result['log_params'].get('name', ''))
+                skill_result['log_params']['cost'] = existing_params.get('cost', skill_result['log_params'].get('cost', 0))
+                skill_result['log_params']['dmg'] = skill_result.get('damage', skill_result['log_params'].get('dmg', 0))
+                skill_result['log_params']['value'] = value
+                skill_result['log_params']['turns'] = turns
+        elif action_type == 'consume_vulnerability':
+            if battle_state.get('vulnerability_turns', 0) > 0:
+                battle_state['vulnerability_turns'] = 0
+                battle_state['vulnerability_value'] = 0
+
+
 def resolve_enemy_damage_against_player(
     battle_state: dict,
     *,
@@ -528,6 +562,7 @@ def process_skill_turn(
         )
         skill_result['damage'] = action_result['final_damage']
         skill_result['direct_damage_result'] = action_result
+        apply_post_hit_skill_actions(skill_result, battle_state)
         finalize_direct_damage_skill_result(skill_result, lang)
 
     log.append(skill_result['log'])

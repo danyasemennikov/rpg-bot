@@ -287,6 +287,7 @@ STRINGS = {
         'log_judgment_mark': '{name} — 🏷️ objetivo juzgado: daño recibido +{value}% por {turns} turnos 🔵-{cost}',
         'log_sanctified_burst': '{name} — ✨ estallido santificado: {dmg} daño 🔵-{cost}',
         'log_halo_of_dawn': '{name} — 🌅 halo del alba: {dmg} daño y ❤️ +{heal} HP 🔵-{cost}',
+        'log_guardian_light': '{name} — 🌟 {dmg} de daño y 🛡️ defensa +{value}% por {turns} turnos 🔵-{cost}',
 
     },
     'quests': {
