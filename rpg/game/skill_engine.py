@@ -188,6 +188,8 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         'log_params': {},
         'log_suffixes': [],
         'lifesteal_ratio': 0.0,
+        'heal_from_damage_ratio': 0.0,
+        'heal_cap_missing_hp': 0,
         'damage_school': normalize_damage_school(
             None,
             weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
@@ -324,6 +326,31 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'dmg': result['damage'],
                     'cost': mana_cost,
                 }
+        elif skill_id == 'sanctified_burst':
+            if battle_state.get('vulnerability_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.3)
+            result['log_key'] = 'skills.log_sanctified_burst'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': result['damage'],
+                'cost': mana_cost,
+            }
+        elif skill_id == 'halo_of_dawn':
+            if battle_state.get('vulnerability_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.4)
+            result['heal_from_damage_ratio'] = 0.15
+            max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
+            current_hp = battle_state.get('player_hp', player.get('hp', 100))
+            result['heal_cap_missing_hp'] = max(0, max_hp - current_hp)
+            halo_heal = max(1, int(result['damage'] * result['heal_from_damage_ratio']))
+            result['heal'] = min(halo_heal, result['heal_cap_missing_hp'])
+            result['log_key'] = 'skills.log_halo_of_dawn'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': result['damage'],
+                'heal': result['heal'],
+                'cost': mana_cost,
+            }
         elif skill_id == 'driving_slash':
             mob_effects = _get_runtime_mob_effects(mob_state, battle_state)
             if any(e.get('type') == 'off_balance' for e in mob_effects):
@@ -583,6 +610,42 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = t('skills.log_blessing', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'radiant_ward':
+            battle_state['defense_buff_turns'] = duration
+            battle_state['defense_buff_value'] = int(value)
+            result['log'] = t('skills.log_radiant_ward', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'cleanse':
+            removable_turn_keys = (
+                'poison_turns',
+                'burn_turns',
+                'bleed_turns',
+                'slow_turns',
+                'stun_turns',
+                'freeze_turns',
+                'weaken_turns',
+                'curse_turns',
+            )
+            removed = 0
+            for key in removable_turn_keys:
+                if battle_state.get(key, 0) > 0:
+                    battle_state[key] = 0
+                    removed += 1
+
+            for value_key in ('poison_value', 'burn_value', 'bleed_value', 'weaken_value', 'curse_value'):
+                if battle_state.get(value_key, 0) > 0:
+                    battle_state[value_key] = 0
+
+            max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
+            current_hp = battle_state.get('player_hp', player.get('hp', 100))
+            cleanse_heal = max(1, int(value * 0.45))
+            result['heal'] = min(cleanse_heal, max_hp - current_hp)
+            result['log'] = t('skills.log_cleanse', lang,
+                              name=get_skill_name(skill_id, lang),
+                              removed=removed,
+                              hp=result['heal'],
+                              cost=mana_cost)
 
         # Воскрешение
         elif skill_id == 'resurrection':
@@ -790,6 +853,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = t('skills.log_expose_guard', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'judgment_mark':
+            duration = skill.get('duration', 3)
+            battle_state['vulnerability_turns'] = duration
+            battle_state['vulnerability_value'] = int(value)
+            result['log'] = t('skills.log_judgment_mark', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'shield_bash':
             duration = skill.get('duration', 2)
             battle_state['disarm_turns'] = duration

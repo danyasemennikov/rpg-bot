@@ -317,6 +317,11 @@ STRINGS = {
         'log_shield_bash': '{name} — 🛡️ {dmg} урона, урон врага -{value}% на {turns} хода + сбитый баланс 🔵-{cost}',
         'log_punishing_cut': '{name} — 🩸 добивающий удар по вскрытой цели: {dmg} урона 🔵-{cost}',
         'log_vanguard_surge': '{name} — 🚩 пик натиска: {dmg} урона 🔵-{cost}',
+        'log_cleanse': '{name} — 🕊️ снято эффектов: {removed}, ❤️ +{hp} HP 🔵-{cost}',
+        'log_radiant_ward': '{name} — 🛡️ защита +{value}% на {turns} хода 🔵-{cost}',
+        'log_judgment_mark': '{name} — 🏷️ цель помечена: входящий урон +{value}% на {turns} хода 🔵-{cost}',
+        'log_sanctified_burst': '{name} — ✨ освящённый всплеск: {dmg} урона 🔵-{cost}',
+        'log_halo_of_dawn': '{name} — 🌅 ореол рассвета: {dmg} урона и ❤️ +{heal} HP 🔵-{cost}',
 
     },
 

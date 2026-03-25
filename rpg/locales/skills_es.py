@@ -56,12 +56,17 @@ SKILL_NAMES = {
     'blizzard': {'name': '🌨️ Ventisca', 'description': 'Invoca una ventisca. Reduce la precisión enemiga un 40% durante 3 turnos.'},
     'absolute_zero': {'name': '🧊 Cero Absoluto', 'description': 'Congela completamente al enemigo durante 3 turnos. Daño masivo al descongelarse.'},
     'holy_bolt': {'name': '✨ Rayo Sagrado', 'description': 'Un rayo de luz. Especialmente efectivo contra no-muertos.'},
-    'smite': {'name': '⚡ Castigo Divino', 'description': 'Invoca un rayo de luz sagrada. Aturde durante 1 turno.'},
+    'smite': {'name': '⚡ Castigo Divino', 'description': 'Golpe sagrado directo. Botón base de daño de la rama de Luz.'},
     'consecration': {'name': '🌟 Consagración', 'description': 'Consagra el suelo. 20 de daño sagrado por turno al enemigo durante 3 turnos.'},
     'divine_wrath': {'name': '☀️ Ira Divina', 'description': 'Golpe sagrado definitivo. Daño masivo, te cura el 50% del daño infligido.'},
     'heal': {'name': '💚 Curar', 'description': 'Restaura HP. El poder de curación escala con la Sabiduría.'},
     'blessing': {'name': '🙏 Bendición', 'description': 'Aumenta todos los stats un 20% durante 3 turnos.'},
     'regeneration': {'name': '♻️ Regeneración', 'description': 'Aplica regeneración poderosa. 25 HP por turno durante 4 turnos.'},
+    'cleanse': {'name': '🕊️ Purificar', 'description': 'Elimina efectos negativos propios compatibles y restaura un poco de HP.'},
     'resurrection': {'name': '💫 Resurrección', 'description': 'Si mueres en los próximos 5 turnos, revives con 50% de HP.'},
+    'radiant_ward': {'name': '🛡️ Resguardo Radiante', 'description': 'Refuerza tu defensa durante una ventana corta.'},
+    'judgment_mark': {'name': '🏷️ Marca del Juicio', 'description': 'Marca al objetivo y aumenta el daño recibido durante unos turnos.'},
+    'sanctified_burst': {'name': '✨ Estallido Santificado', 'description': 'Golpe de payoff sagrado. Más fuerte contra objetivo juzgado.'},
+    'halo_of_dawn': {'name': '🌅 Halo del Alba', 'description': 'Capstone de Luz: golpe sagrado potente, más fuerte en objetivo juzgado y con auto-curación moderada.'},
     'parry_reflect': '🔄 ¡Parado! El enemigo recibe {damage} de daño!'
 }

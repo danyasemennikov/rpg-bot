@@ -280,6 +280,11 @@ STRINGS = {
         'log_shield_bash': '{name} — 🛡️ {dmg} damage, enemy damage -{value}% for {turns} turns + off-balance 🔵-{cost}',
         'log_punishing_cut': '{name} — 🩸 payoff strike into exposed target: {dmg} damage 🔵-{cost}',
         'log_vanguard_surge': '{name} — 🚩 peak Vanguard finisher: {dmg} damage 🔵-{cost}',
+        'log_cleanse': '{name} — 🕊️ removed effects: {removed}, ❤️ +{hp} HP 🔵-{cost}',
+        'log_radiant_ward': '{name} — 🛡️ defense +{value}% for {turns} turns 🔵-{cost}',
+        'log_judgment_mark': '{name} — 🏷️ target judged: incoming damage +{value}% for {turns} turns 🔵-{cost}',
+        'log_sanctified_burst': '{name} — ✨ sanctified burst: {dmg} damage 🔵-{cost}',
+        'log_halo_of_dawn': '{name} — 🌅 halo of dawn: {dmg} damage and ❤️ +{heal} HP 🔵-{cost}',
         
     },
     'quests': {
