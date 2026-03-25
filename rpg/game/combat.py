@@ -168,7 +168,7 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
     Тикает post-action длительности оставшихся player buffs в Combat Core.
     Регенерация и resurrection здесь не обрабатываются.
     """
-    for key in ('defense_buff_turns', 'berserk_turns', 'blessing_turns', 'press_the_line_turns', 'feint_step_turns'):
+    for key in ('defense_buff_turns', 'berserk_turns', 'blessing_turns', 'press_the_line_turns', 'feint_step_turns', 'arcane_surge_turns'):
         if battle_state.get(key, 0) > 0:
             battle_state[key] -= 1
 
@@ -822,6 +822,8 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'vulnerability_value':  0,
         'press_the_line_turns': 0,
         'press_the_line_value': 0,
+        'arcane_surge_turns':   0,
+        'arcane_surge_value':   0,
         'disarm_turns':         0,
         'disarm_value':         0,
         'fire_shield_turns':    0,
