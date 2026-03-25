@@ -50,6 +50,22 @@ def _consume_runtime_poison_effects(battle_state: dict) -> tuple[int, int]:
     battle_state['mob_effects'] = kept_effects
     return poison_stacks, poison_total_value
 
+
+def _is_target_wounded(mob_state: dict, battle_state: dict, threshold: float = 0.4) -> bool:
+    mob_hp = battle_state.get('mob_hp')
+    if mob_hp is None:
+        mob_hp = mob_state.get('hp', 0)
+
+    mob_max_hp = battle_state.get('mob_max_hp')
+    if mob_max_hp is None:
+        mob_max_hp = mob_state.get('max_hp')
+    if mob_max_hp is None:
+        mob_max_hp = mob_state.get('hp', 0)
+
+    if mob_max_hp <= 0:
+        return False
+    return (mob_hp / mob_max_hp) <= threshold
+
 def build_skill_result_log(skill_result: dict, lang: str) -> str:
     """
     Строит человекочитаемый лог по структурированным данным skill_result.
@@ -565,6 +581,39 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 result['damage'] = int(result['damage'] * 1.55)
             elif bleed_active or vulnerable_active:
                 result['damage'] = int(result['damage'] * 1.25)
+        elif skill_id == 'cleave_through':
+            focus_active = battle_state.get('executioner_focus_turns', 0) > 0
+            vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0
+            wounded_active = _is_target_wounded(mob_state, battle_state)
+            damage_mult = 1.0
+            if focus_active:
+                damage_mult += 0.20
+            if vulnerable_active:
+                damage_mult += 0.15
+            if wounded_active:
+                damage_mult += 0.15
+            if damage_mult > 1.0:
+                result['damage'] = int(result['damage'] * damage_mult)
+            if focus_active:
+                battle_state['executioner_focus_turns'] = 0
+                battle_state['executioner_focus_value'] = 0
+        elif skill_id == 'executioners_stroke':
+            wounded_active = _is_target_wounded(mob_state, battle_state)
+            vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0
+            if wounded_active and vulnerable_active:
+                result['damage'] = int(result['damage'] * 1.35)
+            elif wounded_active:
+                result['damage'] = int(result['damage'] * 1.25)
+            elif vulnerable_active:
+                result['damage'] = int(result['damage'] * 1.12)
+        elif skill_id == 'flowing_combo':
+            if battle_state.get('battle_stance_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.30)
+                battle_state['battle_stance_turns'] = 0
+                battle_state['battle_stance_value'] = 0
+        elif skill_id == 'masters_sequence':
+            if battle_state.get('battle_stance_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.35)
 
         # Пробивание
         if skill.get('piercing'):
@@ -658,6 +707,20 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             # 2 -> после post-action тика остаётся 1 полноценное окно под payoff.
             battle_state['arcane_surge_turns'] = 2
             battle_state['arcane_surge_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=1, cost=mana_cost)
+        elif skill_id == 'executioners_focus':
+            # Аналогично setup-окнам: после post-action тика остаётся 1 окно.
+            battle_state['executioner_focus_turns'] = 2
+            battle_state['executioner_focus_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=1, cost=mana_cost)
+        elif skill_id == 'battle_stance':
+            # Аналогично setup-окнам: после post-action тика остаётся 1 окно.
+            battle_state['battle_stance_turns'] = 2
+            battle_state['battle_stance_value'] = int(value)
             result['log'] = t('skills.log_buff', lang,
                               name=get_skill_name(skill_id, lang),
                               turns=1, cost=mana_cost)
@@ -782,7 +845,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                cost=mana_cost)
 
         # Дымовая завеса / Отступление
-        elif skill_id in ('smoke_bomb', 'retreat', 'reposition'):
+        elif skill_id in ('smoke_bomb', 'retreat', 'reposition', 'riposte_step'):
             battle_state['dodge_buff_turns'] = duration
             battle_state['dodge_buff_value'] = int(skill['base_value'])
             result['log'] = t('skills.log_dodge_buff', lang,
@@ -952,6 +1015,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                               name=get_skill_name(skill_id, lang),
                               value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'sunder_armor':
+            duration = skill.get('duration', 2)
+            battle_state['vulnerability_turns'] = duration
+            battle_state['vulnerability_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=duration, cost=mana_cost)
+        elif skill_id == 'armor_split':
             duration = skill.get('duration', 2)
             battle_state['vulnerability_turns'] = duration
             battle_state['vulnerability_value'] = int(value)

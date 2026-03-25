@@ -3597,6 +3597,150 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         out = combat.apply_direct_damage_action_modifiers(state, 20, can_consume_guaranteed_crit=False)
         self.assertEqual(out['damage'], 32)
 
+    def test_sword_2h_tree_is_full_5_plus_5(self):
+        tree = game_skills.SKILL_TREES['sword_2h']
+        self.assertEqual(len(tree['A']), 5)
+        self.assertEqual(len(tree['B']), 5)
+
+    def test_sword_2h_branch_a_order_matches_final_design(self):
+        expected = ['heavy_swing', 'armor_split', 'executioners_focus', 'cleave_through', 'executioners_stroke']
+        self.assertEqual(game_skills.SKILL_TREES['sword_2h']['A'], expected)
+
+    def test_sword_2h_branch_b_order_matches_final_design(self):
+        expected = ['battle_stance', 'twin_cut', 'riposte_step', 'flowing_combo', 'masters_sequence']
+        self.assertEqual(game_skills.SKILL_TREES['sword_2h']['B'], expected)
+
+    def test_armor_split_sets_vulnerability_runtime(self):
+        player = {'mana': 100, 'strength': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('armor_split', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('vulnerability_turns', 0), 0)
+        self.assertGreater(state.get('vulnerability_value', 0), 0)
+
+    def test_executioners_focus_sets_runtime_state(self):
+        player = {'mana': 100, 'strength': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('executioners_focus', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(state.get('executioner_focus_turns', 0), 2)
+        self.assertGreater(state.get('executioner_focus_value', 0), 0)
+
+    def test_cleave_through_gets_payoff_from_focus_and_consumes_it(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h', 'mob_hp': 100, 'mob_max_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('cleave_through', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            focus_state = dict(base_state, executioner_focus_turns=1, executioner_focus_value=20)
+            payoff = skill_engine.use_skill('cleave_through', dict(player), dict(mob_state), focus_state, telegram_id=101, lang='ru')
+        self.assertGreater(payoff['damage'], plain['damage'])
+        self.assertEqual(focus_state.get('executioner_focus_turns', 0), 0)
+        self.assertEqual(focus_state.get('executioner_focus_value', 0), 0)
+
+    def test_cleave_through_is_stronger_into_vulnerable_and_or_wounded_target(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'max_hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h', 'mob_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('cleave_through', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            vulnerable = skill_engine.use_skill('cleave_through', dict(player), dict(mob_state), dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+            wounded = skill_engine.use_skill('cleave_through', dict(player), dict(mob_state), dict(base_state, mob_hp=30), telegram_id=101, lang='ru')
+        self.assertGreater(vulnerable['damage'], plain['damage'])
+        self.assertGreater(wounded['damage'], plain['damage'])
+
+    def test_executioners_stroke_is_stronger_into_wounded_target(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'max_hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h', 'mob_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('executioners_stroke', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            wounded = skill_engine.use_skill('executioners_stroke', dict(player), dict(mob_state), dict(base_state, mob_hp=30), telegram_id=101, lang='ru')
+        self.assertGreater(wounded['damage'], plain['damage'])
+
+    def test_init_battle_sets_mob_max_hp_for_live_runtime_wounded_checks(self):
+        player = {
+            'hp': 80, 'max_hp': 100, 'mana': 40, 'max_mana': 40,
+            'agility': 5, 'luck': 5, 'armor_class': None, 'offhand_profile': 'none', 'encumbrance': 0,
+        }
+        mob = {'id': 'wolf', 'name': 'Wolf', 'hp': 77, 'level': 3}
+        state = combat.init_battle(player, mob, mob_first=False)
+        self.assertEqual(state.get('mob_hp'), 77)
+        self.assertEqual(state.get('mob_max_hp'), 77)
+
+    def test_battle_stance_sets_runtime_state(self):
+        player = {'mana': 100, 'agility': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('battle_stance', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(state.get('battle_stance_turns', 0), 2)
+        self.assertGreater(state.get('battle_stance_value', 0), 0)
+
+    def test_twin_cut_uses_multi_hit_path_correctly(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 18, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('twin_cut', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertIn('log_damage_multi', result.get('log_key', ''))
+        self.assertGreater(result['damage'], 0)
+
+    def test_riposte_step_sets_dodge_runtime_via_existing_dodge_buff_path(self):
+        player = {'mana': 100, 'agility': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('riposte_step', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('dodge_buff_turns', 0), 0)
+        self.assertGreater(state.get('dodge_buff_value', 0), 0)
+
+    def test_flowing_combo_gets_stance_payoff_and_consumes_stance(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 18, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('flowing_combo', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            stance_state = dict(base_state, battle_stance_turns=1, battle_stance_value=16)
+            payoff = skill_engine.use_skill('flowing_combo', dict(player), dict(mob_state), stance_state, telegram_id=101, lang='ru')
+        self.assertGreater(payoff['damage'], plain['damage'])
+        self.assertEqual(stance_state.get('battle_stance_turns', 0), 0)
+        self.assertEqual(stance_state.get('battle_stance_value', 0), 0)
+
+    def test_masters_sequence_behaves_as_capstone_combo_finisher(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 18, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('masters_sequence', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            stance = skill_engine.use_skill('masters_sequence', dict(player), dict(mob_state), dict(base_state, battle_stance_turns=1, battle_stance_value=16), telegram_id=101, lang='ru')
+        self.assertIn('log_damage_multi', plain.get('log_key', ''))
+        self.assertGreater(plain['damage'], 0)
+        self.assertGreater(stance['damage'], plain['damage'])
+
 
 if __name__ == '__main__':
     unittest.main()

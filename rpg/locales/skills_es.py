@@ -86,5 +86,16 @@ SKILL_NAMES = {
     'judgment_mark': {'name': '🏷️ Marca del Juicio', 'description': 'Marca al objetivo y aumenta el daño recibido durante unos turnos.'},
     'sanctified_burst': {'name': '✨ Estallido Santificado', 'description': 'Golpe de payoff sagrado. Más fuerte contra objetivo juzgado.'},
     'halo_of_dawn': {'name': '🌅 Halo del Alba', 'description': 'Capstone de Luz: golpe sagrado potente, más fuerte en objetivo juzgado y con auto-curación moderada.'},
+
+    'heavy_swing': {'name': '🪓 Golpe Pesado', 'description': 'Golpe pesado base con espada a dos manos.'},
+    'armor_split': {'name': '🧱 Partir Armadura', 'description': 'Debuff de preparación: abre una ventana corta de vulnerabilidad.'},
+    'executioners_focus': {'name': '🎯 Enfoque del Verdugo', 'description': 'Buff corto de preparación para potenciar la siguiente ventana de payoff.'},
+    'cleave_through': {'name': '🗡️ Cortar de Parte a Parte', 'description': 'Golpe de payoff: más fuerte contra objetivo vulnerable y/o herido, y con Enfoque activo (consume Enfoque).'},
+    'executioners_stroke': {'name': '⚔️ Golpe del Verdugo', 'description': 'Capstone Executioner: remate pesado, más fuerte contra objetivo herido.'},
+    'battle_stance': {'name': '⚔️ Postura de Combate', 'description': 'Postura ofensiva de tempo con ventana corta para seguimiento técnico.'},
+    'twin_cut': {'name': '✂️ Corte Gemelo', 'description': 'Golpe combo base de dos impactos.'},
+    'riposte_step': {'name': '👣 Paso de Riposta', 'description': 'Herramienta de timing/reposición que activa una ventana corta de evasión.'},
+    'flowing_combo': {'name': '🌊 Combo Fluido', 'description': 'Golpe de payoff: más fuerte con Postura de Combate activa y consume la postura.'},
+    'masters_sequence': {'name': '🌀 Secuencia del Maestro', 'description': 'Capstone Blademaster: remate técnico multiimpacto, más fuerte en ventana de postura.'},
     'parry_reflect': '🔄 ¡Parado! El enemigo recibe {damage} de daño!'
 }
