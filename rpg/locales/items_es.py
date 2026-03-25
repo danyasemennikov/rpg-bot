@@ -6,6 +6,7 @@ ITEM_NAMES = {
     'magic_staff': '🔮 Bastón Mágico',
     'holy_staff': '✨ Bastón Sagrado',
     'holy_rod': '🪄 Vara Sagrada',
+    'tome': '📚 Tomo del Encantador',
     'dagger': '🗡️ Daga',
     'leather_armor': '🥋 Armadura de Cuero',
     'iron_shield': '🛡️ Escudo de Hierro',

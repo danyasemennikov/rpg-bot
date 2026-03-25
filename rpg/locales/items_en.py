@@ -6,6 +6,7 @@ ITEM_NAMES = {
     'magic_staff': '🔮 Magic Staff',
     'holy_staff': '✨ Holy Staff',
     'holy_rod': '🪄 Holy Rod',
+    'tome': '📚 Enchanter Tome',
     'dagger': '🗡️ Dagger',
     'leather_armor': '🥋 Leather Armor',
     'iron_shield': '🛡️ Iron Shield',

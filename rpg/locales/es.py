@@ -288,6 +288,14 @@ STRINGS = {
         'log_sanctified_burst': '{name} — ✨ estallido santificado: {dmg} daño 🔵-{cost}',
         'log_halo_of_dawn': '{name} — 🌅 halo del alba: {dmg} daño y ❤️ +{heal} HP 🔵-{cost}',
         'log_guardian_light': '{name} — 🌟 {dmg} de daño y 🛡️ defensa +{value}% por {turns} turnos 🔵-{cost}',
+        'log_weaken': '{name} — 🕸️ daño enemigo -{value}% por {turns} turnos 🔵-{cost}',
+        'log_insight': '{name} — 🔮 maná restaurado: +{mana} 🔵-{cost}',
+        'log_dispel_script': '{name} — 📜 efectos disipados: {removed} 🔵-{cost}',
+        'log_grand_enchantment': '{name} — 🌌 grupo: maná +{mana}, defensa +{value}% por {turns} turnos 🔵-{cost}',
+        'log_borrowed_flame': '{name} — 🔥 {dmg} daño + quemadura {burn}/turno por {turns} turnos 🔵-{cost}',
+        'log_borrowed_grace': '{name} — ✨ {dmg} daño + gracia {value}% por {turns} turnos 🔵-{cost}',
+        'log_synthesis_boost': '{name} — 🧬 síntesis potenciada: {dmg} daño 🔵-{cost}',
+        'log_forbidden_thesis_boost': '{name} — ⛔ tesis potenciada: {dmg} daño (se consumirá setup) 🔵-{cost}',
 
     },
     'quests': {

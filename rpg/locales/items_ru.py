@@ -6,6 +6,7 @@ ITEM_NAMES = {
     'magic_staff': '🔮 Магический посох',
     'holy_staff': '✨ Святой посох',
     'holy_rod': '🪄 Священный жезл',
+    'tome': '📚 Том чародея',
     'dagger': '🗡️ Кинжал',
     'leather_armor': '🥋 Кожаная броня',
     'iron_shield': '🛡️ Железный щит',

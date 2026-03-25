@@ -392,6 +392,15 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
             if battle_state.get('vulnerability_turns', 0) > 0:
                 battle_state['vulnerability_turns'] = 0
                 battle_state['vulnerability_value'] = 0
+        elif action_type == 'consume_burn_and_blessing':
+            mob_effects = battle_state.get('mob_effects', [])
+            battle_state['mob_effects'] = [
+                eff for eff in mob_effects
+                if not (eff.get('type') == 'burn' and int(eff.get('turns', 0)) > 0)
+            ]
+            if battle_state.get('blessing_turns', 0) > 0:
+                battle_state['blessing_turns'] = 0
+                battle_state['blessing_value'] = 0
 
 
 def resolve_enemy_damage_against_player(
@@ -452,6 +461,9 @@ def resolve_enemy_damage_against_player(
         mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
         battle_state['disarm_turns'] -= 1
 
+    if battle_state.get('weaken_turns', 0) > 0:
+        mob_dmg = int(mob_dmg * (1 - battle_state['weaken_value'] / 100))
+
     shield_dmg = 0
     if battle_state.get('fire_shield_turns', 0) > 0:
         shield_dmg = battle_state['fire_shield_value']
@@ -464,6 +476,18 @@ def resolve_enemy_damage_against_player(
         'mob_reflect_damage': shield_dmg,
         'log': log,
     }
+
+
+def tick_weaken_duration_after_enemy_response(battle_state: dict) -> None:
+    """
+    Уменьшает длительность weaken в конце enemy-response фазы
+    независимо от того, попала ли атака моба.
+    """
+    if battle_state.get('weaken_turns', 0) > 0:
+        battle_state['weaken_turns'] -= 1
+        if battle_state['weaken_turns'] <= 0:
+            battle_state['weaken_turns'] = 0
+            battle_state['weaken_value'] = 0
 
 
 def resolve_enemy_response_trigger_buffs(
@@ -620,6 +644,7 @@ def resolve_enemy_response(
         log.append(t('battle.stunned', lang, mob_name=get_mob_name(mob['id'], lang)))
         battle_state['player_hp'] = player['hp']
         decrement_mob_non_dot_effects_after_response(battle_state)
+        tick_weaken_duration_after_enemy_response(battle_state)
         return log
 
     if battle_state.get('parry_active'):
@@ -632,6 +657,7 @@ def resolve_enemy_response(
         log.extend(trigger_result['log'])
         battle_state['player_hp'] = player['hp']
         decrement_mob_non_dot_effects_after_response(battle_state)
+        tick_weaken_duration_after_enemy_response(battle_state)
         return log
 
     pre_damage_result = resolve_enemy_damage_against_player(
@@ -642,12 +668,14 @@ def resolve_enemy_response(
     if pre_damage_result['skip_mob_attack']:
         battle_state['player_hp'] = player['hp']
         decrement_mob_non_dot_effects_after_response(battle_state)
+        tick_weaken_duration_after_enemy_response(battle_state)
         return log
 
     if has_active_mob_effect(battle_state, 'slow') and random.random() < SLOW_MISS_CHANCE:
         log.append(t('battle.mob_miss_slow', lang, mob_name=get_mob_name(mob['id'], lang)))
         battle_state['player_hp'] = player['hp']
         decrement_mob_non_dot_effects_after_response(battle_state)
+        tick_weaken_duration_after_enemy_response(battle_state)
         return log
 
     mob_result = mob_attack(mob, player)
@@ -655,6 +683,7 @@ def resolve_enemy_response(
         log.append(t('battle.player_dodge', lang))
         battle_state['player_hp'] = player['hp']
         decrement_mob_non_dot_effects_after_response(battle_state)
+        tick_weaken_duration_after_enemy_response(battle_state)
         return log
 
     damage_result = resolve_enemy_damage_against_player(
@@ -666,6 +695,7 @@ def resolve_enemy_response(
     if not damage_result['damage_landed']:
         battle_state['player_hp'] = player['hp']
         decrement_mob_non_dot_effects_after_response(battle_state)
+        tick_weaken_duration_after_enemy_response(battle_state)
         return log
 
     mob_dmg = damage_result['player_damage']
@@ -699,6 +729,7 @@ def resolve_enemy_response(
                 log.append(t('battle.counter_attack', lang, damage=counter_dmg))
 
     decrement_mob_non_dot_effects_after_response(battle_state)
+    tick_weaken_duration_after_enemy_response(battle_state)
     return log
 
 # ────────────────────────────────────────
@@ -932,6 +963,8 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'battle_stance_value':  0,
         'disarm_turns':         0,
         'disarm_value':         0,
+        'weaken_turns':         0,
+        'weaken_value':         0,
         'fire_shield_turns':    0,
         'fire_shield_value':    0,
         'envenom_active':       False,
