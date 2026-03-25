@@ -101,7 +101,8 @@
 - отличать self-target от ally-target;
 - различать живую и мёртвую цель;
 - добавлять revive-логики без полной переписи ядра.
-
+- При family-by-family rollout допустимы solo-safe версии skill'ов, чья fantasy в будущем предполагает multi-target, ally-target или group utility.
+- Но их role, skill id и базовый runtime contract нужно сохранять так, чтобы позже можно было расширить targeting для рейдов, групп PvE и group PvP без полной переписи skill-логики.
 ---
 
 ## 5. Единый turn pipeline
