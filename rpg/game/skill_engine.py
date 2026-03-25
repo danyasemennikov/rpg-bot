@@ -516,6 +516,55 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'dmg': result['damage'],
                     'cost': mana_cost,
                 }
+        elif skill_id == 'frenzy_chain':
+            if battle_state.get('berserk_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.35)
+                battle_state['berserk_turns'] = 0
+                battle_state['berserk_damage'] = 0
+        elif skill_id == 'last_roar':
+            damage_mult = 1.0
+            if battle_state.get('berserk_turns', 0) > 0:
+                damage_mult += 0.20
+            max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
+            current_hp = battle_state.get('player_hp', player.get('hp', 100))
+            if max_hp > 0 and current_hp / max_hp <= 0.40:
+                damage_mult += 0.15
+            if damage_mult > 1.0:
+                result['damage'] = int(result['damage'] * damage_mult)
+        elif skill_id == 'bleeding_cut':
+            stats = {k: player.get(k, 1) for k in
+                     ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
+            base_attack = calc_final_damage(
+                battle_state.get('weapon_damage', 10), stats,
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
+            )
+            bleed_value = max(1, int(base_attack * 0.22))
+            result['effects'].append({
+                'type': 'bleed',
+                'turns': 3,
+                'value': bleed_value,
+                'skill_id': skill_id,
+            })
+        elif skill_id == 'reopen_wounds':
+            bleed_active = _runtime_target_has_effect(mob_state, battle_state, ('bleed',))
+            vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0
+            if bleed_active and vulnerable_active:
+                result['damage'] = int(result['damage'] * 1.45)
+            elif bleed_active or vulnerable_active:
+                result['damage'] = int(result['damage'] * 1.30)
+        elif skill_id == 'ravage':
+            bleed_active = _runtime_target_has_effect(mob_state, battle_state, ('bleed',))
+            vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0
+            if bleed_active and vulnerable_active:
+                result['damage'] = int(result['damage'] * 1.55)
+            elif bleed_active or vulnerable_active:
+                result['damage'] = int(result['damage'] * 1.25)
 
         # Пробивание
         if skill.get('piercing'):
@@ -564,6 +613,11 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         heal           = int(value)
         max_hp         = battle_state.get('player_max_hp', player.get('max_hp', 100))
         current_hp     = battle_state.get('player_hp', player.get('hp', 100))
+        if skill_id == 'blooded_resolve':
+            missing_ratio = 0.0
+            if max_hp > 0:
+                missing_ratio = max(0.0, min(1.0, (max_hp - current_hp) / max_hp))
+            heal = int(heal * (1 + 0.8 * missing_ratio))
         actual_heal    = min(heal, max_hp - current_hp)
         result['heal'] = actual_heal
         result['log']  = t('skills.log_heal', lang,
@@ -615,12 +669,20 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                               turns=duration, cost=mana_cost)
 
         # Берсерк
-        elif skill_id == 'berserker':
+        elif skill_id in ('berserker', 'rage_call'):
             battle_state['berserk_turns']  = duration
             battle_state['berserk_damage'] = int(value)
             result['log'] = t('skills.log_berserker', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), cost=mana_cost)
+            if skill_id == 'rage_call':
+                max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
+                current_hp = battle_state.get('player_hp', player.get('hp', 100))
+                hp_cost = max(1, int(max_hp * 0.12))
+                safe_cost = min(hp_cost, max(0, current_hp - 1))
+                new_hp = max(1, current_hp - safe_cost)
+                player['hp'] = new_hp
+                battle_state['player_hp'] = new_hp
 
         # Регенерация
         elif skill_id == 'regeneration':
@@ -889,6 +951,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = t('skills.log_judgment_mark', lang,
                               name=get_skill_name(skill_id, lang),
                               value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'sunder_armor':
+            duration = skill.get('duration', 2)
+            battle_state['vulnerability_turns'] = duration
+            battle_state['vulnerability_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=duration, cost=mana_cost)
         elif skill_id == 'shield_bash':
             duration = skill.get('duration', 2)
             battle_state['disarm_turns'] = duration
@@ -955,10 +1024,15 @@ def apply_mob_effects(mob_state: dict) -> tuple:
         if eff['turns'] <= 0:
             continue
 
-        if eff['type'] in ('poison', 'burn'):
+        if eff['type'] in ('poison', 'burn', 'bleed'):
             dmg        = eff['value']
             total_dmg += dmg
-            emoji      = '☠️' if eff['type'] == 'poison' else '🔥'
+            if eff['type'] == 'poison':
+                emoji = '☠️'
+            elif eff['type'] == 'burn':
+                emoji = '🔥'
+            else:
+                emoji = '🩸'
             log_parts.append(f"{emoji} {dmg}")
             eff = dict(eff)
             eff['turns'] -= 1

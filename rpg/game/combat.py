@@ -26,7 +26,7 @@ from game.skill_engine import (
 )
 
 SLOW_MISS_CHANCE = 0.35
-DOT_EFFECT_TYPES = {'poison', 'burn'}
+DOT_EFFECT_TYPES = {'poison', 'burn', 'bleed'}
 
 
 # ────────────────────────────────────────
@@ -252,6 +252,10 @@ def apply_direct_damage_action_modifiers(
     if battle_state.get('press_the_line_turns', 0) > 0:
         bonus = int(damage * battle_state.get('press_the_line_value', 0) / 100)
         damage += bonus
+        modifiers_applied = True
+
+    if battle_state.get('berserk_turns', 0) > 0 and battle_state.get('berserk_damage', 0) > 0:
+        damage += int(battle_state.get('berserk_damage', 0))
         modifiers_applied = True
 
     return {
