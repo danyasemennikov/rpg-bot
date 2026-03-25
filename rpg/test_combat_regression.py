@@ -3621,6 +3621,182 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.get('stun_turns', 0), 0)
         self.assertGreater(result['heal'], 0)
 
+    def test_support_heal_can_target_ally_without_party_combat_rollout(self):
+        player = {'mana': 100, 'hp': 100, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'allies': {
+                'ally_1': {'player_hp': 40, 'player_max_hp': 100},
+            },
+            'pending_skill_target': {'kind': 'ally', 'id': 'ally_1'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('heal', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertEqual(result['target_kind'], 'ally')
+        self.assertEqual(result['target_ids'], ['ally_1'])
+        self.assertGreater(state['allies']['ally_1']['player_hp'], 40)
+        self.assertEqual(state['player_hp'], 100)
+
+    def test_ally_target_heal_is_consumed_then_next_heal_defaults_to_self(self):
+        player = {'mana': 200, 'hp': 60, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 60,
+            'player_max_hp': 100,
+            'allies': {
+                'ally_1': {'player_hp': 40, 'player_max_hp': 100},
+            },
+            'pending_skill_target': {'kind': 'ally', 'id': 'ally_1'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            first = skill_engine.use_skill('heal', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+            second = skill_engine.use_skill('heal', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertEqual(first['target_kind'], 'ally')
+        self.assertNotIn('pending_skill_target', state)
+        self.assertEqual(second['target_kind'], 'self')
+        self.assertEqual(second['target_ids'], ['self'])
+        self.assertGreater(state['player_hp'], 60)
+
+    def test_support_buff_can_target_party_as_runtime_bridge(self):
+        player = {'mana': 100, 'hp': 100, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'allies': {
+                'ally_1': {'player_hp': 90, 'player_max_hp': 100},
+            },
+            'pending_skill_target': {'kind': 'party'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('blessing', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertEqual(result['target_kind'], 'party')
+        self.assertEqual(result['target_ids'], ['self', 'ally_1'])
+        self.assertEqual(state['support_effects'][0]['skill_id'], 'blessing')
+        self.assertEqual(state['allies']['ally_1']['support_effects'][0]['skill_id'], 'blessing')
+
+    def test_cleanse_only_removes_supported_dispel_subset_for_party_targets(self):
+        player = {'mana': 100, 'hp': 70, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 70,
+            'player_max_hp': 100,
+            'allies': {
+                'ally_1': {
+                    'player_hp': 60,
+                    'player_max_hp': 100,
+                    'support_effects': [
+                        {'skill_id': 'toxin', 'dispel_tag': 'poison', 'can_dispel': True},
+                        {'skill_id': 'boss_lock', 'dispel_tag': 'boss_lock', 'can_dispel': True},
+                    ],
+                },
+            },
+            'support_effects': [
+                {'skill_id': 'burning', 'dispel_tag': 'burn', 'can_dispel': True},
+                {'skill_id': 'protected', 'dispel_tag': 'blessing', 'can_dispel': True},
+            ],
+            'pending_skill_target': {'kind': 'party'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('cleanse', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertEqual(result['target_kind'], 'party')
+        self.assertEqual(len(state['support_effects']), 1)
+        self.assertEqual(state['support_effects'][0]['skill_id'], 'protected')
+        self.assertEqual(len(state['allies']['ally_1']['support_effects']), 1)
+        self.assertEqual(state['allies']['ally_1']['support_effects'][0]['skill_id'], 'boss_lock')
+
+    def test_party_target_buff_intent_does_not_leak_into_next_cast(self):
+        player = {'mana': 200, 'hp': 100, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'allies': {
+                'ally_1': {'player_hp': 90, 'player_max_hp': 100},
+            },
+            'pending_skill_target': {'kind': 'party'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            first = skill_engine.use_skill('blessing', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+            second = skill_engine.use_skill('blessing', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertEqual(first['target_kind'], 'party')
+        self.assertNotIn('pending_skill_target', state)
+        self.assertEqual(second['target_kind'], 'self')
+        self.assertEqual(second['target_ids'], ['self'])
+
+    def test_successful_skill_flow_cleans_up_all_runtime_target_intent_fields(self):
+        player = {'mana': 100, 'hp': 90, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 90,
+            'player_max_hp': 100,
+            'allies': {
+                'ally_1': {'player_hp': 70, 'player_max_hp': 100},
+            },
+            'pending_skill_target': {'kind': 'ally', 'id': 'ally_1'},
+            'skill_target_kind': 'party',
+            'skill_target_id': 'stale_ally',
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('heal', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertNotIn('pending_skill_target', state)
+        self.assertNotIn('skill_target_kind', state)
+        self.assertNotIn('skill_target_id', state)
+
+    def test_process_skill_turn_self_heal_flow_stays_compatible(self):
+        player = {'hp': 50, 'max_hp': 100, 'mana': 80, 'wisdom': 18}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 50,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = combat.process_skill_turn('heal', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertGreater(result['battle_state']['player_hp'], 50)
+
     def test_legacy_holy_staff_ids_stay_in_skills_but_not_in_active_tree(self):
         tree_skills = set(game_skills.SKILL_TREES['holy_staff']['A'] + game_skills.SKILL_TREES['holy_staff']['B'])
         for legacy_id in ('holy_bolt', 'consecration', 'divine_wrath'):
