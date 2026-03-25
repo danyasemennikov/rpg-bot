@@ -56,12 +56,17 @@ SKILL_NAMES = {
     'blizzard': {'name': '🌨️ Blizzard', 'description': "Summons a blizzard. Reduces enemy accuracy by 40% for 3 turns."},
     'absolute_zero': {'name': '🧊 Absolute Zero', 'description': 'Completely freezes the enemy for 3 turns. Massive damage on thaw.'},
     'holy_bolt': {'name': '✨ Holy Bolt', 'description': 'A bolt of light. Especially effective against undead.'},
-    'smite': {'name': '⚡ Smite', 'description': 'Calls down a bolt of holy lightning. Stuns for 1 turn.'},
+    'smite': {'name': '⚡ Smite', 'description': 'A focused holy strike. Core damage button of the Light branch.'},
     'consecration': {'name': '🌟 Consecration', 'description': 'Consecrates the ground. 20 holy damage per turn to enemy for 3 turns.'},
     'divine_wrath': {'name': '☀️ Divine Wrath', 'description': 'Ultimate holy strike. Massive damage, heals you for 50% of damage dealt.'},
     'heal': {'name': '💚 Heal', 'description': 'Restores HP. Healing power scales with Wisdom.'},
     'blessing': {'name': '🙏 Blessing', 'description': 'Increases all stats by 20% for 3 turns.'},
     'regeneration': {'name': '♻️ Regeneration', 'description': 'Applies powerful regen. 25 HP per turn for 4 turns.'},
+    'cleanse': {'name': '🕊️ Cleanse', 'description': 'Removes supported negative self-effects and restores a small amount of HP.'},
     'resurrection': {'name': '💫 Resurrection', 'description': 'If you die in the next 5 turns, you revive with 50% HP.'},
+    'radiant_ward': {'name': '🛡️ Radiant Ward', 'description': 'Strengthens your defense for a short window.'},
+    'judgment_mark': {'name': '🏷️ Judgment Mark', 'description': 'Marks the target, increasing incoming damage for a few turns.'},
+    'sanctified_burst': {'name': '✨ Sanctified Burst', 'description': 'Holy payoff strike. Hits harder against a judged target.'},
+    'halo_of_dawn': {'name': '🌅 Halo of Dawn', 'description': 'Light capstone: heavy holy hit, stronger on judged targets, with modest self-healing.'},
     
 }

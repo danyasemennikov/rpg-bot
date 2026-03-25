@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from game import combat
 from game import skill_engine
+from game import skills as game_skills
 from handlers import battle as battle_handler
 
 
@@ -1659,6 +1660,200 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertIn('30', result['battle_state']['log'][-1])
         self.assertIn('❤️+9', result['battle_state']['log'][-1])
 
+    def test_halo_of_dawn_heal_recalculates_from_final_damage_after_finalize(self):
+        player = {'hp': 40, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 40,
+            'player_max_hp': 200,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 1,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_halo_of_dawn',
+                'log_params': {'name': 'Halo of Dawn', 'dmg': 10, 'heal': 1, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+                'heal_from_damage_ratio': 0.15,
+                'heal_cap_missing_hp': 160,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('halo_of_dawn', player, mob, battle_state, user_id=101, lang='ru')
+
+        # 10 -> crit 25 -> hunter 30, heal must be recomputed from final damage.
+        self.assertEqual(result['skill_result']['damage'], 30)
+        self.assertEqual(result['skill_result']['heal'], 4)
+        self.assertEqual(result['battle_state']['player_hp'], 44)
+
+    def test_halo_of_dawn_log_params_heal_matches_applied_heal(self):
+        player = {'hp': 40, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 40,
+            'player_max_hp': 200,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 1,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_halo_of_dawn',
+                'log_params': {'name': 'Halo of Dawn', 'dmg': 10, 'heal': 1, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+                'heal_from_damage_ratio': 0.15,
+                'heal_cap_missing_hp': 160,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('halo_of_dawn', player, mob, battle_state, user_id=101, lang='ru')
+
+        final_heal = result['skill_result']['heal']
+        self.assertEqual(result['skill_result']['log_params']['heal'], final_heal)
+        self.assertIn(f'+{final_heal}', result['battle_state']['log'][-1])
+
+    def test_halo_of_dawn_near_full_hp_heal_is_capped_after_finalize(self):
+        player = {'hp': 98, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 98,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 1,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_halo_of_dawn',
+                'log_params': {'name': 'Halo of Dawn', 'dmg': 10, 'heal': 1, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+                'heal_from_damage_ratio': 0.15,
+                'heal_cap_missing_hp': 2,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('halo_of_dawn', player, mob, battle_state, user_id=101, lang='ru')
+
+        # 10 -> crit 25 -> hunter 30, raw heal would be 4 but near-full cap is 2.
+        self.assertEqual(result['skill_result']['damage'], 30)
+        self.assertEqual(result['skill_result']['heal'], 2)
+        self.assertEqual(result['battle_state']['player_hp'], 100)
+
+    def test_halo_of_dawn_near_full_hp_log_heal_matches_capped_applied_heal(self):
+        player = {'hp': 98, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 98,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 200,
+            'mob_effects': [],
+            'guaranteed_crit_turns': 1,
+            'hunters_mark_turns': 1,
+            'hunters_mark_value': 20,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={
+                'success': True,
+                'log': '',
+                'damage': 10,
+                'heal': 1,
+                'effects': [],
+                'direct_damage_skill': True,
+                'log_key': 'skills.log_halo_of_dawn',
+                'log_params': {'name': 'Halo of Dawn', 'dmg': 10, 'heal': 1, 'cost': 5},
+                'log_suffixes': [],
+                'lifesteal_ratio': 0.0,
+                'heal_from_damage_ratio': 0.15,
+                'heal_cap_missing_hp': 2,
+            }), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('halo_of_dawn', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertEqual(result['skill_result']['log_params']['heal'], 2)
+        self.assertIn('+2', result['battle_state']['log'][-1])
+
+    def test_halo_of_dawn_judged_target_bonus_still_works_in_skill_flow(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        plain_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 300,
+            'mob_effects': [],
+            'weapon_damage': 14,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'guaranteed_crit_turns': 0,
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'vulnerability_turns': 0,
+            'vulnerability_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+        judged_state = dict(plain_state, vulnerability_turns=2, vulnerability_value=20)
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            plain = combat.process_skill_turn('halo_of_dawn', dict(player), dict(mob), dict(plain_state), user_id=101, lang='ru')
+            judged = combat.process_skill_turn('halo_of_dawn', dict(player), dict(mob), dict(judged_state), user_id=101, lang='ru')
+
+        self.assertGreater(judged['skill_result']['damage'], plain['skill_result']['damage'])
+
     def test_non_damage_skill_flow_keeps_existing_log_unchanged(self):
         player = {'hp': 100, 'mana': 80}
         mob = {'id': 'wolf', 'defense': 0}
@@ -2953,6 +3148,135 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertGreater(state.get('dodge_buff_turns', 0), 0)
         self.assertGreater(state.get('dodge_buff_value', 0), 0)
+
+    def test_holy_staff_tree_is_full_5_plus_5(self):
+        tree = game_skills.SKILL_TREES['holy_staff']
+        self.assertEqual(len(tree['A']), 5)
+        self.assertEqual(len(tree['B']), 5)
+
+    def test_holy_staff_branch_a_progression_matches_tree_order(self):
+        expected = ['heal', 'regeneration', 'cleanse', 'blessing', 'resurrection']
+        tree = game_skills.SKILL_TREES['holy_staff']['A']
+        self.assertEqual(tree, expected)
+        self.assertEqual([game_skills.SKILLS[s]['unlock_mastery'] for s in tree], [1, 3, 5, 7, 10])
+
+    def test_holy_staff_branch_b_progression_matches_tree_order(self):
+        expected = ['smite', 'radiant_ward', 'judgment_mark', 'sanctified_burst', 'halo_of_dawn']
+        tree = game_skills.SKILL_TREES['holy_staff']['B']
+        self.assertEqual(tree, expected)
+        self.assertEqual([game_skills.SKILLS[s]['unlock_mastery'] for s in tree], [1, 3, 5, 7, 10])
+
+    def test_holy_staff_heal_still_restores_hp(self):
+        player = {'mana': 100, 'hp': 50, 'max_hp': 100, 'wisdom': 18}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff', 'player_hp': 50, 'player_max_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('heal', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+        self.assertGreater(result['heal'], 0)
+
+    def test_holy_staff_regeneration_sets_runtime_state(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('regeneration', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('regen_turns', 0), 0)
+        self.assertGreater(state.get('regen_amount', 0), 0)
+
+    def test_holy_staff_blessing_sets_runtime_state(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('blessing', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('blessing_turns', 0), 0)
+        self.assertGreater(state.get('blessing_value', 0), 0)
+
+    def test_holy_staff_resurrection_sets_runtime_state(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('resurrection', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertTrue(state.get('resurrection_active', False))
+        self.assertGreater(state.get('resurrection_hp', 0), 0)
+        self.assertGreater(state.get('resurrection_turns', 0), 0)
+
+    def test_radiant_ward_sets_defense_buff_correctly(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('radiant_ward', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('defense_buff_turns', 0), 0)
+        self.assertGreater(state.get('defense_buff_value', 0), 0)
+
+    def test_judgment_mark_sets_vulnerability_correctly(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('judgment_mark', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('vulnerability_turns', 0), 0)
+        self.assertGreater(state.get('vulnerability_value', 0), 0)
+
+    def test_sanctified_burst_gets_payoff_vs_judged_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            judged = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+        self.assertGreater(judged['damage'], plain['damage'])
+
+    def test_halo_of_dawn_gets_judged_target_synergy(self):
+        player = {'mana': 100, 'hp': 70, 'max_hp': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff', 'player_hp': 70, 'player_max_hp': 100}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('halo_of_dawn', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            judged = skill_engine.use_skill('halo_of_dawn', dict(player), dict(mob_state), dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+        self.assertGreater(judged['damage'], plain['damage'])
+        self.assertGreaterEqual(judged['heal'], 0)
+
+    def test_cleanse_has_supported_truthful_behavior_without_new_state_framework(self):
+        player = {'mana': 100, 'hp': 60, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 60,
+            'player_max_hp': 100,
+            'poison_turns': 2,
+            'poison_value': 6,
+            'stun_turns': 1,
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('cleanse', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(state.get('poison_turns', 0), 0)
+        self.assertEqual(state.get('stun_turns', 0), 0)
+        self.assertGreater(result['heal'], 0)
+
+    def test_legacy_holy_staff_ids_stay_in_skills_but_not_in_active_tree(self):
+        tree_skills = set(game_skills.SKILL_TREES['holy_staff']['A'] + game_skills.SKILL_TREES['holy_staff']['B'])
+        for legacy_id in ('holy_bolt', 'consecration', 'divine_wrath'):
+            self.assertIn(legacy_id, game_skills.SKILLS)
+            self.assertNotIn(legacy_id, tree_skills)
 
 
 if __name__ == '__main__':

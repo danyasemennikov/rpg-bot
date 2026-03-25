@@ -293,6 +293,14 @@ def finalize_direct_damage_skill_result(skill_result: dict, lang: str) -> None:
     if 'total' in log_params:
         log_params['total'] = final_damage
 
+    heal_from_damage_ratio = skill_result.get('heal_from_damage_ratio', 0)
+    if heal_from_damage_ratio > 0:
+        heal_cap_missing_hp = max(0, skill_result.get('heal_cap_missing_hp', 0))
+        recomputed_heal = int(final_damage * heal_from_damage_ratio)
+        skill_result['heal'] = min(recomputed_heal, heal_cap_missing_hp)
+        if 'heal' in log_params:
+            log_params['heal'] = skill_result['heal']
+
     lifesteal_ratio = skill_result.get('lifesteal_ratio', 0)
     if lifesteal_ratio > 0:
         skill_result['heal'] = int(final_damage * lifesteal_ratio)

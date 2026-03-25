@@ -281,6 +281,11 @@ STRINGS = {
         'log_shield_bash': '{name} — 🛡️ {dmg} daño, daño enemigo -{value}% por {turns} turnos + desequilibrio 🔵-{cost}',
         'log_punishing_cut': '{name} — 🩸 golpe de payoff a objetivo expuesto: {dmg} daño 🔵-{cost}',
         'log_vanguard_surge': '{name} — 🚩 remate pico de Vanguardia: {dmg} daño 🔵-{cost}',
+        'log_cleanse': '{name} — 🕊️ efectos eliminados: {removed}, ❤️ +{hp} HP 🔵-{cost}',
+        'log_radiant_ward': '{name} — 🛡️ defensa +{value}% por {turns} turnos 🔵-{cost}',
+        'log_judgment_mark': '{name} — 🏷️ objetivo juzgado: daño recibido +{value}% por {turns} turnos 🔵-{cost}',
+        'log_sanctified_burst': '{name} — ✨ estallido santificado: {dmg} daño 🔵-{cost}',
+        'log_halo_of_dawn': '{name} — 🌅 halo del alba: {dmg} daño y ❤️ +{heal} HP 🔵-{cost}',
 
     },
     'quests': {
