@@ -355,6 +355,18 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             mob_effects = _get_runtime_mob_effects(mob_state, battle_state)
             if any(e.get('type') == 'off_balance' for e in mob_effects):
                 result['damage'] = int(result['damage'] * 1.15)
+        elif skill_id == 'arcane_lance':
+            if battle_state.get('arcane_surge_turns', 0) > 0:
+                surge_value = battle_state.get('arcane_surge_value', 0)
+                result['damage'] = int(result['damage'] * (1 + surge_value / 100))
+                battle_state['arcane_surge_turns'] = 0
+                battle_state['arcane_surge_value'] = 0
+        elif skill_id == 'shatter':
+            if _runtime_target_has_effect(mob_state, battle_state, ('slow', 'freeze')):
+                result['damage'] = int(result['damage'] * 1.35)
+        elif skill_id == 'absolute_zero':
+            if _runtime_target_has_effect(mob_state, battle_state, ('slow', 'freeze')):
+                result['damage'] = int(result['damage'] * 1.3)
         elif skill_id == 'toxic_cut':
             stats = {k: player.get(k, 1) for k in
                      ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
@@ -532,6 +544,8 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     encumbrance=battle_state.get('encumbrance'),
                 )
                 dot_value = max(1, int(base_attack * 0.3))
+                if eff_type in ('slow', 'freeze'):
+                    dot_value = 0
                 result['effects'].append({
                     'type':     eff_type,
                     'turns':    duration,
@@ -586,6 +600,19 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = t('skills.log_press_the_line', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'arcane_surge':
+            # 2 -> после post-action тика остаётся 1 полноценное окно под payoff.
+            battle_state['arcane_surge_turns'] = 2
+            battle_state['arcane_surge_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=1, cost=mana_cost)
+        elif skill_id == 'mana_shield':
+            battle_state['defense_buff_turns'] = duration
+            battle_state['defense_buff_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=duration, cost=mana_cost)
 
         # Берсерк
         elif skill_id == 'berserker':
@@ -738,6 +765,8 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     encumbrance=battle_state.get('encumbrance'),
                 )
                 dot_value = max(1, int(base_attack * skill['base_value'] / 100))
+                if eff_type in ('slow', 'freeze'):
+                    dot_value = 0
                 result['effects'].append({
                     'type':     eff_type,
                     'turns':    duration,
