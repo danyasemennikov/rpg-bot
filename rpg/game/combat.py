@@ -567,7 +567,7 @@ def process_skill_turn(
 
     log.append(skill_result['log'])
 
-    if skill_result['heal'] > 0:
+    if skill_result['heal'] > 0 and not skill_result.get('heal_applied_runtime'):
         battle_state['player_hp'] = min(
             battle_state['player_max_hp'],
             battle_state['player_hp'] + skill_result['heal']
@@ -937,6 +937,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'envenom_active':       False,
         # Прочее
         'mob_effects':          [],
+        'allies':               {},
         'damage_taken':         0,
         'potions_used':         0,
         'skills_used':          [],

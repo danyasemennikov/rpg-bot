@@ -66,6 +66,128 @@ def _is_target_wounded(mob_state: dict, battle_state: dict, threshold: float = 0
         return False
     return (mob_hp / mob_max_hp) <= threshold
 
+
+SUPPORTED_TARGET_KINDS = {'self', 'enemy', 'ally', 'party'}
+CLEANSE_SUPPORTED_TAGS = {'poison', 'burn', 'bleed', 'slow', 'stun', 'freeze', 'weaken', 'curse', 'negative'}
+
+
+def _default_target_kind_for_skill(skill: dict) -> str:
+    target_kind = skill.get('target_kind')
+    if target_kind in SUPPORTED_TARGET_KINDS:
+        return target_kind
+
+    skill_type = skill.get('type')
+    if skill_type in ('damage', 'debuff', 'control'):
+        return 'enemy'
+    if skill_type in ('heal', 'buff'):
+        return 'self'
+    return 'self'
+
+
+def _resolve_runtime_target_selection(skill: dict, battle_state: dict) -> tuple[str, str | None]:
+    runtime_target = battle_state.get('pending_skill_target', {})
+    target_kind = runtime_target.get('kind') or battle_state.get('skill_target_kind')
+    target_id = runtime_target.get('id') or battle_state.get('skill_target_id')
+
+    if target_kind not in SUPPORTED_TARGET_KINDS:
+        target_kind = _default_target_kind_for_skill(skill)
+
+    return target_kind, target_id
+
+
+def _consume_runtime_target_selection(battle_state: dict) -> None:
+    """
+    Одноразово очищает ephemeral target intent после успешного каста.
+    """
+    battle_state.pop('pending_skill_target', None)
+    battle_state.pop('skill_target_kind', None)
+    battle_state.pop('skill_target_id', None)
+
+
+def _ensure_allies_container(battle_state: dict) -> dict:
+    allies = battle_state.get('allies')
+    if not isinstance(allies, dict):
+        allies = {}
+        battle_state['allies'] = allies
+    return allies
+
+
+def _resolve_support_targets(
+    battle_state: dict,
+    *,
+    target_kind: str,
+    target_id: str | None,
+) -> tuple[list[dict], list[str], str]:
+    allies = _ensure_allies_container(battle_state)
+
+    if target_kind == 'ally' and target_id and target_id in allies:
+        return [allies[target_id]], [target_id], 'ally'
+
+    if target_kind == 'party':
+        target_states = [battle_state]
+        target_ids = ['self']
+        for ally_id, ally_state in allies.items():
+            target_states.append(ally_state)
+            target_ids.append(ally_id)
+        return target_states, target_ids, 'party'
+
+    return [battle_state], ['self'], 'self'
+
+
+def _cleanse_supported_effects(target_state: dict) -> int:
+    removed = 0
+
+    effects = target_state.get('support_effects', [])
+    if effects:
+        kept = []
+        for effect in effects:
+            dispel_tag = effect.get('dispel_tag')
+            can_dispel = effect.get('can_dispel', True)
+            if can_dispel and dispel_tag in CLEANSE_SUPPORTED_TAGS:
+                removed += 1
+                continue
+            kept.append(effect)
+        target_state['support_effects'] = kept
+
+    removable_turn_keys = (
+        'poison_turns',
+        'burn_turns',
+        'bleed_turns',
+        'slow_turns',
+        'stun_turns',
+        'freeze_turns',
+        'weaken_turns',
+        'curse_turns',
+    )
+    for key in removable_turn_keys:
+        if target_state.get(key, 0) > 0:
+            target_state[key] = 0
+            removed += 1
+
+    for value_key in ('poison_value', 'burn_value', 'bleed_value', 'weaken_value', 'curse_value'):
+        if target_state.get(value_key, 0) > 0:
+            target_state[value_key] = 0
+
+    return removed
+
+
+def _collect_mixed_school_hooks(skill: dict, battle_state: dict) -> dict:
+    active_windows = []
+    for key in ('arcane_surge_turns', 'blessing_turns', 'vulnerability_turns', 'hunters_mark_turns'):
+        if battle_state.get(key, 0) > 0:
+            active_windows.append(key)
+
+    primary_school = normalize_damage_school(
+        skill.get('damage_school'),
+        weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+        weapon_type=battle_state.get('weapon_type', 'melee'),
+    )
+
+    return {
+        'primary_school': primary_school,
+        'active_windows': active_windows,
+    }
+
 def build_skill_result_log(skill_result: dict, lang: str) -> str:
     """
     Строит человекочитаемый лог по структурированным данным skill_result.
@@ -192,6 +314,8 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     player['mana'] = player.get('mana', 0) - mana_cost
     battle_state['player_mana'] = player['mana']
 
+    target_kind, target_id = _resolve_runtime_target_selection(skill, battle_state)
+
     result = {
         'success': True,
         'damage':  0,
@@ -212,6 +336,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
             weapon_type=battle_state.get('weapon_type', 'melee'),
         ),
+        'target_kind': target_kind,
+        'target_ids': [],
+        'mixed_school_hooks': _collect_mixed_school_hooks(skill, battle_state),
+        'heal_applied_runtime': False,
     }
 
     skill_type = skill['type']
@@ -730,19 +858,34 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
     # ── ЛЕЧЕНИЕ ────────────────────────────
     elif skill_type == 'heal':
-        heal           = int(value)
-        max_hp         = battle_state.get('player_max_hp', player.get('max_hp', 100))
-        current_hp     = battle_state.get('player_hp', player.get('hp', 100))
-        if skill_id == 'blooded_resolve':
-            missing_ratio = 0.0
-            if max_hp > 0:
-                missing_ratio = max(0.0, min(1.0, (max_hp - current_hp) / max_hp))
-            heal = int(heal * (1 + 0.8 * missing_ratio))
-        actual_heal    = min(heal, max_hp - current_hp)
-        result['heal'] = actual_heal
-        result['log']  = t('skills.log_heal', lang,
-                            name=get_skill_name(skill_id, lang),
-                            hp=actual_heal, cost=mana_cost)
+        heal = int(value)
+        target_states, target_ids, applied_kind = _resolve_support_targets(
+            battle_state,
+            target_kind=target_kind,
+            target_id=target_id,
+        )
+        result['target_kind'] = applied_kind
+        result['target_ids'] = target_ids
+
+        total_heal = 0
+        for target_state in target_states:
+            max_hp = target_state.get('player_max_hp', target_state.get('max_hp', 100))
+            current_hp = target_state.get('player_hp', target_state.get('hp', 100))
+            adjusted_heal = heal
+            if skill_id == 'blooded_resolve':
+                missing_ratio = 0.0
+                if max_hp > 0:
+                    missing_ratio = max(0.0, min(1.0, (max_hp - current_hp) / max_hp))
+                adjusted_heal = int(heal * (1 + 0.8 * missing_ratio))
+            actual_heal = min(adjusted_heal, max_hp - current_hp)
+            total_heal += max(0, actual_heal)
+            target_state['player_hp'] = min(max_hp, current_hp + max(0, actual_heal))
+
+        result['heal'] = total_heal
+        result['heal_applied_runtime'] = True
+        result['log'] = t('skills.log_heal', lang,
+                          name=get_skill_name(skill_id, lang),
+                          hp=total_heal, cost=mana_cost)
 
     # ── БАФФ ───────────────────────────────
     elif skill_type == 'buff':
@@ -877,34 +1020,31 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                               name=get_skill_name(skill_id, lang),
                               turns=1, cost=mana_cost)
         elif skill_id == 'cleanse':
-            removable_turn_keys = (
-                'poison_turns',
-                'burn_turns',
-                'bleed_turns',
-                'slow_turns',
-                'stun_turns',
-                'freeze_turns',
-                'weaken_turns',
-                'curse_turns',
+            target_states, target_ids, applied_kind = _resolve_support_targets(
+                battle_state,
+                target_kind=target_kind,
+                target_id=target_id,
             )
+            result['target_kind'] = applied_kind
+            result['target_ids'] = target_ids
+
             removed = 0
-            for key in removable_turn_keys:
-                if battle_state.get(key, 0) > 0:
-                    battle_state[key] = 0
-                    removed += 1
-
-            for value_key in ('poison_value', 'burn_value', 'bleed_value', 'weaken_value', 'curse_value'):
-                if battle_state.get(value_key, 0) > 0:
-                    battle_state[value_key] = 0
-
-            max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
-            current_hp = battle_state.get('player_hp', player.get('hp', 100))
+            total_heal = 0
             cleanse_heal = max(1, int(value * 0.45))
-            result['heal'] = min(cleanse_heal, max_hp - current_hp)
+            for target_state in target_states:
+                removed += _cleanse_supported_effects(target_state)
+                max_hp = target_state.get('player_max_hp', target_state.get('max_hp', 100))
+                current_hp = target_state.get('player_hp', target_state.get('hp', 100))
+                healed = min(cleanse_heal, max_hp - current_hp)
+                target_state['player_hp'] = min(max_hp, current_hp + max(0, healed))
+                total_heal += max(0, healed)
+
+            result['heal'] = total_heal
+            result['heal_applied_runtime'] = True
             result['log'] = t('skills.log_cleanse', lang,
                               name=get_skill_name(skill_id, lang),
                               removed=removed,
-                              hp=result['heal'],
+                              hp=total_heal,
                               cost=mana_cost)
 
         # Воскрешение
@@ -976,6 +1116,25 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = t('skills.log_guaranteed_crit', lang,
                                name=get_skill_name(skill_id, lang),
                                turns=duration, cost=mana_cost)
+
+        support_buff_skills = {'blessing', 'regeneration', 'radiant_ward', 'sacred_shield', 'aura_of_resolve'}
+        if skill_id in support_buff_skills and target_kind in ('ally', 'party'):
+            target_states, target_ids, applied_kind = _resolve_support_targets(
+                battle_state,
+                target_kind=target_kind,
+                target_id=target_id,
+            )
+            result['target_kind'] = applied_kind
+            result['target_ids'] = target_ids
+            for target_state in target_states:
+                target_state.setdefault('support_effects', []).append({
+                    'skill_id': skill_id,
+                    'type': 'buff',
+                    'turns': duration,
+                    'value': int(value),
+                    'can_dispel': True,
+                    'dispel_tag': 'positive',
+                })
 
     # ── ДЕБАФФ / КОНТРОЛЬ ──────────────────
     elif skill_type in ('debuff', 'control'):
@@ -1218,6 +1377,14 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['effects'][-1]['value'] *= 2
             battle_state['envenom_active'] = False
             battle_state['envenom_blades_active'] = False
+
+    if not result['target_ids']:
+        if result['target_kind'] == 'enemy':
+            result['target_ids'] = ['enemy']
+        else:
+            result['target_ids'] = ['self']
+
+    _consume_runtime_target_selection(battle_state)
 
     # Устанавливаем кулдаун
     if skill['cooldown'] > 0:
