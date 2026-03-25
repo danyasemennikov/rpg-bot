@@ -309,6 +309,30 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
             result['damage'] = dmg
 
+        wand_arcanist_window_skills = {'arcane_bolt', 'overload', 'arcane_barrage'}
+        wand_duelist_window_skills = {'hex_bolt', 'counterpulse', 'duel_arc'}
+        if skill_id in wand_arcanist_window_skills or skill_id in wand_duelist_window_skills:
+            cross_branch_scale = 1.0 if skill_id in wand_arcanist_window_skills else 0.65
+            echo_used = False
+            channel_used = False
+
+            if battle_state.get('spell_echo_turns', 0) > 0:
+                echo_bonus = battle_state.get('spell_echo_value', 0) * cross_branch_scale
+                result['damage'] = int(result['damage'] * (1 + echo_bonus / 100))
+                echo_used = True
+
+            if battle_state.get('quick_channel_turns', 0) > 0:
+                channel_bonus = battle_state.get('quick_channel_value', 0) * cross_branch_scale
+                result['damage'] = int(result['damage'] * (1 + channel_bonus / 100))
+                channel_used = True
+
+            if echo_used:
+                battle_state['spell_echo_turns'] = 0
+                battle_state['spell_echo_value'] = 0
+            if channel_used:
+                battle_state['quick_channel_turns'] = 0
+                battle_state['quick_channel_value'] = 0
+
         # Sword rush — уязвимость цели
         if skill_id == 'sword_rush':
             battle_state['vulnerability_turns'] = 2
@@ -383,6 +407,18 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id == 'absolute_zero':
             if _runtime_target_has_effect(mob_state, battle_state, ('slow', 'freeze')):
                 result['damage'] = int(result['damage'] * 1.3)
+        elif skill_id == 'counterpulse':
+            if battle_state.get('defense_buff_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.25)
+                battle_state['defense_buff_turns'] = 0
+                battle_state['defense_buff_value'] = 0
+            if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
+                result['damage'] = int(result['damage'] * 1.20)
+        elif skill_id == 'duel_arc':
+            if battle_state.get('defense_buff_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.20)
+            if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
+                result['damage'] = int(result['damage'] * 1.25)
         elif skill_id == 'toxic_cut':
             stats = {k: player.get(k, 1) for k in
                      ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
@@ -768,6 +804,31 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = t('skills.log_radiant_ward', lang,
                               name=get_skill_name(skill_id, lang),
                               value=int(value), turns=duration, cost=mana_cost)
+        elif skill_id == 'dueling_ward':
+            battle_state['defense_buff_turns'] = duration
+            battle_state['defense_buff_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=duration, cost=mana_cost)
+        elif skill_id == 'spell_echo':
+            # Ставим 2, чтобы после post-action тика осталось 1 follow-up действие.
+            battle_state['spell_echo_turns'] = 2
+            battle_state['spell_echo_value'] = int(value)
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=1, cost=mana_cost)
+        elif skill_id == 'quick_channel':
+            # Ставим 2, чтобы после post-action тика осталось 1 follow-up действие.
+            battle_state['quick_channel_turns'] = 2
+            battle_state['quick_channel_value'] = int(value)
+            mana_pool = player.get('max_mana', battle_state.get('player_max_mana', player.get('mana', 0)))
+            mana_refund = max(1, int(mana_pool * 0.08))
+            max_mana = battle_state.get('player_max_mana', player.get('max_mana', player.get('mana', 0)))
+            player['mana'] = min(max_mana, player.get('mana', 0) + mana_refund)
+            battle_state['player_mana'] = player['mana']
+            result['log'] = t('skills.log_buff', lang,
+                              name=get_skill_name(skill_id, lang),
+                              turns=1, cost=mana_cost)
         elif skill_id == 'cleanse':
             removable_turn_keys = (
                 'poison_turns',
@@ -1064,6 +1125,36 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'dmg': dmg,
                 'value': int(value),
                 'turns': duration,
+                'cost': mana_cost,
+            }
+            result['log'] = build_skill_result_log(result, lang)
+        elif skill_id == 'mana_feint':
+            stats = {k: player.get(k, 1) for k in
+                     ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
+            base_attack = calc_final_damage(
+                battle_state.get('weapon_damage', 10), stats,
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
+            )
+            dmg = max(1, int(base_attack * (skill['base_value'] / 100) * random.uniform(0.9, 1.1)))
+            mob_defense = mob_state.get('defense', 0)
+            dmg = max(1, dmg - int(mob_defense))
+            result['damage'] = dmg
+            result['direct_damage_skill'] = True
+            result['damage_school'] = normalize_damage_school(
+                skill.get('damage_school'),
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                weapon_type=battle_state.get('weapon_type', 'melee'),
+            )
+            result['log_key'] = 'skills.log_damage_effect'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': dmg,
                 'cost': mana_cost,
             }
             result['log'] = build_skill_result_log(result, lang)
