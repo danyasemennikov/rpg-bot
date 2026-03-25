@@ -324,6 +324,14 @@ STRINGS = {
         'log_sanctified_burst': '{name} — ✨ освящённый всплеск: {dmg} урона 🔵-{cost}',
         'log_halo_of_dawn': '{name} — 🌅 ореол рассвета: {dmg} урона и ❤️ +{heal} HP 🔵-{cost}',
         'log_guardian_light': '{name} — 🌟 {dmg} урона и 🛡️ защита +{value}% на {turns} хода 🔵-{cost}',
+        'log_weaken': '{name} — 🕸️ урон врага -{value}% на {turns} хода 🔵-{cost}',
+        'log_insight': '{name} — 🔮 восстановлено маны: +{mana} 🔵-{cost}',
+        'log_dispel_script': '{name} — 📜 рассеяно эффектов: {removed} 🔵-{cost}',
+        'log_grand_enchantment': '{name} — 🌌 группа: мана +{mana}, защита +{value}% на {turns} хода 🔵-{cost}',
+        'log_borrowed_flame': '{name} — 🔥 {dmg} урона + горение {burn}/ход на {turns} хода 🔵-{cost}',
+        'log_borrowed_grace': '{name} — ✨ {dmg} урона + благодать {value}% на {turns} хода 🔵-{cost}',
+        'log_synthesis_boost': '{name} — 🧬 синтез усилен: {dmg} урона 🔵-{cost}',
+        'log_forbidden_thesis_boost': '{name} — ⛔ тезис усилен: {dmg} урона (setup будет поглощён) 🔵-{cost}',
 
     },
 

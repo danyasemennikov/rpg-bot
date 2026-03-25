@@ -171,6 +171,22 @@ def _cleanse_supported_effects(target_state: dict) -> int:
     return removed
 
 
+def _strip_supported_enemy_effects(battle_state: dict) -> int:
+    """Узкий enemy-side strip subset для tome dispel."""
+    removable_types = {'blessing', 'ward', 'barrier', 'regen'}
+    removed = 0
+    effects = battle_state.get('mob_effects', [])
+    kept = []
+    for effect in effects:
+        effect_type = effect.get('type')
+        if effect_type in removable_types and effect.get('turns', 0) > 0:
+            removed += 1
+            continue
+        kept.append(effect)
+    battle_state['mob_effects'] = kept
+    return removed
+
+
 def _collect_mixed_school_hooks(skill: dict, battle_state: dict) -> dict:
     active_windows = []
     for key in ('arcane_surge_turns', 'blessing_turns', 'vulnerability_turns', 'hunters_mark_turns'):
@@ -553,6 +569,55 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 result['damage'] = int(result['damage'] * 1.50)
                 result['post_hit_actions'].append({
                     'type': 'consume_vulnerability',
+                })
+        elif skill_id == 'hybrid_missile':
+            if _runtime_target_has_effect(mob_state, battle_state, ('burn',)):
+                result['damage'] = int(result['damage'] * 1.10)
+            if battle_state.get('blessing_turns', 0) > 0:
+                result['damage'] = int(result['damage'] * 1.08)
+        elif skill_id == 'borrowed_grace':
+            grace_turns = 2
+            grace_value = 8 + 2 * (skill_level - 1)
+            battle_state['blessing_turns'] = max(battle_state.get('blessing_turns', 0), grace_turns)
+            battle_state['blessing_value'] = max(battle_state.get('blessing_value', 0), grace_value)
+            result['log_key'] = 'skills.log_borrowed_grace'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': result['damage'],
+                'value': grace_value,
+                'turns': grace_turns,
+                'cost': mana_cost,
+            }
+        elif skill_id == 'synthesis':
+            has_burn = _runtime_target_has_effect(mob_state, battle_state, ('burn',))
+            has_grace = battle_state.get('blessing_turns', 0) > 0
+            if has_burn and has_grace:
+                result['damage'] = int(result['damage'] * 1.35)
+            elif has_burn or has_grace:
+                result['damage'] = int(result['damage'] * 1.18)
+            if has_burn or has_grace:
+                result['log_key'] = 'skills.log_synthesis_boost'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'forbidden_thesis':
+            has_burn = _runtime_target_has_effect(mob_state, battle_state, ('burn',))
+            has_grace = battle_state.get('blessing_turns', 0) > 0
+            if has_burn and has_grace:
+                result['damage'] = int(result['damage'] * 1.45)
+            elif has_burn or has_grace:
+                result['damage'] = int(result['damage'] * 1.25)
+            if has_burn or has_grace:
+                result['log_key'] = 'skills.log_forbidden_thesis_boost'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+                result['post_hit_actions'].append({
+                    'type': 'consume_burn_and_blessing',
                 })
         elif skill_id == 'driving_slash':
             mob_effects = _get_runtime_mob_effects(mob_state, battle_state)
@@ -1046,6 +1111,96 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                               removed=removed,
                               hp=total_heal,
                               cost=mana_cost)
+        elif skill_id == 'arcane_shield':
+            target_states, target_ids, applied_kind = _resolve_support_targets(
+                battle_state,
+                target_kind=target_kind,
+                target_id=target_id,
+            )
+            result['target_kind'] = applied_kind
+            result['target_ids'] = target_ids
+            shield_turns = skill.get('duration', 2)
+            shield_value = int(value)
+            for target_state in target_states:
+                target_state['defense_buff_turns'] = shield_turns
+                target_state['defense_buff_value'] = shield_value
+            result['log'] = t('skills.log_defense', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=shield_value, turns=shield_turns, cost=mana_cost)
+        elif skill_id == 'insight':
+            target_states, target_ids, applied_kind = _resolve_support_targets(
+                battle_state,
+                target_kind=target_kind,
+                target_id=target_id,
+            )
+            result['target_kind'] = applied_kind
+            result['target_ids'] = target_ids
+            mana_gain = max(4, int(value))
+            total_mana = 0
+            for target_state in target_states:
+                max_mana = target_state.get('player_max_mana', target_state.get('max_mana', 0))
+                if max_mana <= 0:
+                    continue
+                current_mana = target_state.get('player_mana', target_state.get('mana', 0))
+                restored = min(mana_gain, max_mana - current_mana)
+                if restored <= 0:
+                    continue
+                target_state['player_mana'] = current_mana + restored
+                total_mana += restored
+            player['mana'] = battle_state.get('player_mana', player.get('mana', 0))
+            result['log'] = t('skills.log_insight', lang,
+                              name=get_skill_name(skill_id, lang),
+                              mana=total_mana,
+                              cost=mana_cost)
+        elif skill_id == 'dispel_script':
+            if target_kind == 'enemy':
+                removed = _strip_supported_enemy_effects(battle_state)
+                result['target_kind'] = 'enemy'
+                result['target_ids'] = ['enemy']
+            else:
+                target_states, target_ids, applied_kind = _resolve_support_targets(
+                    battle_state,
+                    target_kind=target_kind,
+                    target_id=target_id,
+                )
+                result['target_kind'] = applied_kind
+                result['target_ids'] = target_ids
+                removed = 0
+                for target_state in target_states:
+                    removed += _cleanse_supported_effects(target_state)
+            result['log'] = t('skills.log_dispel_script', lang,
+                              name=get_skill_name(skill_id, lang),
+                              removed=removed,
+                              cost=mana_cost)
+        elif skill_id == 'grand_enchantment':
+            target_states, target_ids, applied_kind = _resolve_support_targets(
+                battle_state,
+                target_kind='party',
+                target_id=target_id,
+            )
+            result['target_kind'] = applied_kind
+            result['target_ids'] = target_ids
+            mana_gain = max(6, int(value))
+            defense_turns = skill.get('duration', 2)
+            defense_value = max(8, int(value * 0.85))
+            total_mana = 0
+            for target_state in target_states:
+                max_mana = target_state.get('player_max_mana', target_state.get('max_mana', 0))
+                if max_mana > 0:
+                    current_mana = target_state.get('player_mana', target_state.get('mana', 0))
+                    restored = min(mana_gain, max_mana - current_mana)
+                    if restored > 0:
+                        target_state['player_mana'] = current_mana + restored
+                        total_mana += restored
+                target_state['defense_buff_turns'] = defense_turns
+                target_state['defense_buff_value'] = defense_value
+            player['mana'] = battle_state.get('player_mana', player.get('mana', 0))
+            result['log'] = t('skills.log_grand_enchantment', lang,
+                              name=get_skill_name(skill_id, lang),
+                              mana=total_mana,
+                              value=defense_value,
+                              turns=defense_turns,
+                              cost=mana_cost)
 
         # Воскрешение
         elif skill_id == 'resurrection':
@@ -1117,7 +1272,10 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                name=get_skill_name(skill_id, lang),
                                turns=duration, cost=mana_cost)
 
-        support_buff_skills = {'blessing', 'regeneration', 'radiant_ward', 'sacred_shield', 'aura_of_resolve'}
+        support_buff_skills = {
+            'blessing', 'regeneration', 'radiant_ward', 'sacred_shield', 'aura_of_resolve',
+            'arcane_shield', 'grand_enchantment',
+        }
         if skill_id in support_buff_skills and target_kind in ('ally', 'party'):
             target_states, target_ids, applied_kind = _resolve_support_targets(
                 battle_state,
@@ -1337,6 +1495,55 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'name': get_skill_name(skill_id, lang),
                 'dmg': dmg,
                 'value': int(value),
+                'turns': duration,
+                'cost': mana_cost,
+            }
+            result['log'] = build_skill_result_log(result, lang)
+        elif skill_id == 'weaken':
+            duration = skill.get('duration', 2)
+            battle_state['weaken_turns'] = duration
+            battle_state['weaken_value'] = int(value)
+            result['log'] = t('skills.log_weaken', lang,
+                              name=get_skill_name(skill_id, lang),
+                              value=int(value),
+                              turns=duration,
+                              cost=mana_cost)
+        elif skill_id == 'borrowed_flame':
+            duration = 3
+            stats = {k: player.get(k, 1) for k in
+                     ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
+            base_attack = calc_final_damage(
+                battle_state.get('weapon_damage', 10), stats,
+                battle_state.get('weapon_type', 'melee'),
+                False,
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                damage_school=profile_damage_school,
+                armor_class=battle_state.get('armor_class'),
+                offhand_profile=battle_state.get('offhand_profile'),
+                encumbrance=battle_state.get('encumbrance'),
+            )
+            dmg = max(1, int(base_attack * 0.92 * random.uniform(0.9, 1.1)))
+            mob_defense = mob_state.get('defense', 0)
+            dmg = max(1, dmg - int(mob_defense))
+            burn_value = max(1, int(base_attack * skill['base_value'] / 100))
+            result['damage'] = dmg
+            result['direct_damage_skill'] = True
+            result['damage_school'] = normalize_damage_school(
+                skill.get('damage_school'),
+                weapon_profile=battle_state.get('weapon_profile', 'unarmed'),
+                weapon_type=battle_state.get('weapon_type', 'melee'),
+            )
+            result['effects'].append({
+                'type': 'burn',
+                'turns': duration,
+                'value': burn_value,
+                'skill_id': skill_id,
+            })
+            result['log_key'] = 'skills.log_borrowed_flame'
+            result['log_params'] = {
+                'name': get_skill_name(skill_id, lang),
+                'dmg': dmg,
+                'burn': burn_value,
                 'turns': duration,
                 'cost': mana_cost,
             }

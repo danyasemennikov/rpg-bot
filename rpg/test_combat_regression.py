@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from game import combat
+from game import items_data
 from game import skill_engine
 from game import skills as game_skills
 from handlers import battle as battle_handler
@@ -4420,6 +4421,207 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
                 lang='ru',
             )
         self.assertGreater(arcanist_boost['damage'] - arcanist_plain['damage'], duelist_boost['damage'] - duelist_plain['damage'])
+
+    def test_tome_tree_is_full_5_plus_5(self):
+        tree = game_skills.SKILL_TREES['tome']
+        self.assertEqual(tree['A'], ['arcane_shield', 'weaken', 'insight', 'dispel_script', 'grand_enchantment'])
+        self.assertEqual(tree['B'], ['hybrid_missile', 'borrowed_flame', 'borrowed_grace', 'synthesis', 'forbidden_thesis'])
+
+    def test_tome_item_exists_with_weapon_profile(self):
+        tome = items_data.ITEMS['tome']
+        self.assertEqual(tome['item_type'], 'weapon')
+        self.assertEqual(tome['weapon_profile'], 'tome')
+
+    def test_arcane_shield_applies_support_defense_for_ally(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 12,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'allies': {'ally_1': {'player_hp': 80, 'player_max_hp': 100}},
+            'pending_skill_target': {'kind': 'ally', 'id': 'ally_1'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('arcane_shield', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(result['target_kind'], 'ally')
+        self.assertGreater(state['allies']['ally_1'].get('defense_buff_turns', 0), 0)
+        self.assertGreater(state['allies']['ally_1'].get('defense_buff_value', 0), 0)
+
+    def test_weaken_reduces_enemy_damage_in_centralized_path(self):
+        state = {'weaken_turns': 2, 'weaken_value': 25}
+        result = combat.resolve_enemy_damage_against_player(
+            state,
+            lang='ru',
+            mob_result={'type': 'mob_attack', 'damage': 100, 'player_hp': 0},
+        )
+        self.assertEqual(result['player_damage'], 75)
+        self.assertEqual(state['weaken_turns'], 2)
+
+    def test_weaken_duration_ticks_even_when_enemy_attack_is_skipped(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'invincible_turns': 1,
+            'weaken_turns': 2,
+            'weaken_value': 20,
+        }
+        combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+        self.assertEqual(state['weaken_turns'], 1)
+
+    def test_insight_restores_mana_for_selected_targets(self):
+        player = {'mana': 70, 'wisdom': 18}
+        state = {
+            'weapon_damage': 12,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'player_mana': 70,
+            'player_max_mana': 100,
+            'allies': {'ally_1': {'player_mana': 20, 'player_max_mana': 80}},
+            'pending_skill_target': {'kind': 'ally', 'id': 'ally_1'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('insight', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(result['target_kind'], 'ally')
+        self.assertGreater(state['allies']['ally_1']['player_mana'], 20)
+
+    def test_dispel_script_removes_only_supported_subset(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 12,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'player_hp': 90,
+            'player_max_hp': 100,
+            'support_effects': [
+                {'skill_id': 'toxin', 'dispel_tag': 'poison', 'can_dispel': True},
+                {'skill_id': 'boss_lock', 'dispel_tag': 'boss_lock', 'can_dispel': True},
+            ],
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('dispel_script', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(len(state['support_effects']), 1)
+        self.assertEqual(state['support_effects'][0]['skill_id'], 'boss_lock')
+
+    def test_grand_enchantment_gives_party_value_without_party_combat_rewrite(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 12,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'player_mana': 50,
+            'player_max_mana': 100,
+            'allies': {'ally_1': {'player_mana': 20, 'player_max_mana': 80}},
+            'pending_skill_target': {'kind': 'party'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('grand_enchantment', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(result['target_kind'], 'party')
+        self.assertGreater(state['player_mana'], 50)
+        self.assertGreater(state['allies']['ally_1']['player_mana'], 20)
+        self.assertGreater(state.get('defense_buff_turns', 0), 0)
+
+    def test_borrowed_flame_applies_burn_setup(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 16, 'vitality': 1, 'wisdom': 14, 'luck': 1}
+        state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'tome'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('borrowed_flame', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(result['damage'], 0)
+        self.assertTrue(any(e['type'] == 'burn' for e in result['effects']))
+
+    def test_borrowed_flame_applies_exactly_one_burn_effect_without_double_stack(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 16, 'vitality': 1, 'wisdom': 14, 'luck': 1}
+        state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'tome'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('borrowed_flame', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        burn_effects = [e for e in result['effects'] if e.get('type') == 'burn']
+        self.assertEqual(len(burn_effects), 1)
+        self.assertEqual(burn_effects[0].get('turns'), 3)
+        self.assertGreaterEqual(burn_effects[0].get('value', 0), 1)
+        self.assertLessEqual(burn_effects[0].get('value', 0), 1000)
+
+    def test_borrowed_grace_sets_modest_holy_setup(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 16, 'luck': 1}
+        state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'tome'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('borrowed_grace', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(result['damage_school'], 'holy')
+        self.assertGreater(state.get('blessing_turns', 0), 0)
+
+    def test_synthesis_gets_payoff_from_mixed_setup(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 16, 'vitality': 1, 'wisdom': 16, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'tome'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_burn = {'hp': 100, 'defense': 0, 'effects': [{'type': 'burn', 'turns': 2, 'value': 5}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('synthesis', dict(player), dict(mob_plain), dict(base_state), telegram_id=101, lang='ru')
+            boosted = skill_engine.use_skill('synthesis', dict(player), dict(mob_burn), dict(base_state, blessing_turns=2, blessing_value=8), telegram_id=101, lang='ru')
+        self.assertGreater(boosted['damage'], plain['damage'])
+
+    def test_forbidden_thesis_consumes_mixed_windows_only_on_successful_hit(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 16, 'vitality': 1, 'wisdom': 16, 'luck': 1}
+        state = {
+            'weapon_damage': 14,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'mob_effects': [{'type': 'burn', 'turns': 2, 'value': 8}],
+            'blessing_turns': 2,
+            'blessing_value': 8,
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            skill_result = skill_engine.use_skill('forbidden_thesis', dict(player), {'hp': 100, 'defense': 0, 'effects': state['mob_effects']}, state, telegram_id=101, lang='ru')
+        skill_result['direct_damage_result'] = {'final_damage': skill_result['damage']}
+        combat.apply_post_hit_skill_actions(skill_result, state)
+        self.assertEqual(state.get('blessing_turns', 0), 0)
+        self.assertFalse(any(e.get('type') == 'burn' for e in state.get('mob_effects', [])))
+
+    def test_forbidden_thesis_no_hit_path_does_not_consume_setup_windows(self):
+        state = {
+            'mob_effects': [{'type': 'burn', 'turns': 2, 'value': 8}],
+            'blessing_turns': 2,
+            'blessing_value': 8,
+        }
+        skill_result = {
+            'direct_damage_skill': True,
+            'direct_damage_result': {'final_damage': 0},
+            'post_hit_actions': [{'type': 'consume_burn_and_blessing'}],
+        }
+        combat.apply_post_hit_skill_actions(skill_result, state)
+        self.assertEqual(state.get('blessing_turns', 0), 2)
+        self.assertTrue(any(e.get('type') == 'burn' for e in state.get('mob_effects', [])))
+
+    def test_magic_staff_holy_staff_holy_rod_regression_spot_check(self):
+        self.assertEqual(game_skills.SKILL_TREES['magic_staff']['A'][0], 'fireball')
+        self.assertEqual(game_skills.SKILL_TREES['holy_staff']['A'][0], 'heal')
+        self.assertEqual(game_skills.SKILL_TREES['holy_rod']['A'][0], 'sacred_shield')
 
 
 if __name__ == '__main__':

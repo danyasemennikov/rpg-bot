@@ -72,6 +72,17 @@ ITEMS = {
         'buy_price': 290, 'sell_price': 75,
         'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2}',
     },
+    'tome': {
+        'item_id': 'tome', 'name': '📚 Том чародея',
+        'description': 'Гримуар поддержки и смешанных школ. Даёт гибкость, а не максимальный профиль.',
+        'item_type': 'weapon', 'weapon_type': 'magic', 'weapon_profile': 'tome',
+        'rarity': 'uncommon',
+        'damage_min': 8, 'damage_max': 13, 'defense': 0, 'weight': 2,
+        'req_level': 3, 'req_strength': 0, 'req_agility': 0,
+        'req_intuition': 3, 'req_wisdom': 3,
+        'buy_price': 285, 'sell_price': 72,
+        'skills_json': '[]', 'stat_bonus_json': '{"intuition": 1, "wisdom": 1}',
+    },
     'dagger': {
         'item_id': 'dagger', 'name': '🗡️ Кинжал',
         'description': 'Быстрый и лёгкий кинжал.',
