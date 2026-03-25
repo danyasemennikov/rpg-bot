@@ -86,5 +86,16 @@ SKILL_NAMES = {
     'judgment_mark': {'name': '🏷️ Judgment Mark', 'description': 'Marks the target, increasing incoming damage for a few turns.'},
     'sanctified_burst': {'name': '✨ Sanctified Burst', 'description': 'Holy payoff strike. Hits harder against a judged target.'},
     'halo_of_dawn': {'name': '🌅 Halo of Dawn', 'description': 'Light capstone: heavy holy hit, stronger on judged targets, with modest self-healing.'},
+
+    'heavy_swing': {'name': '🪓 Heavy Swing', 'description': 'A simple heavy two-handed sword strike.'},
+    'armor_split': {'name': '🧱 Armor Split', 'description': 'Setup debuff that opens a short vulnerability window on the target.'},
+    'executioners_focus': {'name': "🎯 Executioner's Focus", 'description': 'Short setup buff that empowers the next two-handed payoff window.'},
+    'cleave_through': {'name': '🗡️ Cleave Through', 'description': 'Payoff strike: stronger into vulnerable and/or wounded targets, also stronger with Focus (consumes Focus).'},
+    'executioners_stroke': {'name': "⚔️ Executioner's Stroke", 'description': 'Executioner capstone heavy finisher with extra damage into wounded targets.'},
+    'battle_stance': {'name': '⚔️ Battle Stance', 'description': 'Short offensive tempo stance that enables a technical follow-up window.'},
+    'twin_cut': {'name': '✂️ Twin Cut', 'description': 'Core two-hit combo strike.'},
+    'riposte_step': {'name': '👣 Riposte Step', 'description': 'Timing/reposition tool that grants a short dodge-buff window.'},
+    'flowing_combo': {'name': '🌊 Flowing Combo', 'description': 'Payoff strike that is stronger during Battle Stance and consumes the stance.'},
+    'masters_sequence': {'name': "🌀 Master's Sequence", 'description': 'Blademaster capstone multi-hit finisher with stronger damage in stance window.'},
     
 }
