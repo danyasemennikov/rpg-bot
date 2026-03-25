@@ -214,6 +214,8 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
         'arcane_surge_turns',
         'executioner_focus_turns',
         'battle_stance_turns',
+        'spell_echo_turns',
+        'quick_channel_turns',
     ):
         if battle_state.get(key, 0) > 0:
             battle_state[key] -= 1
@@ -885,6 +887,10 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'press_the_line_value': 0,
         'arcane_surge_turns':   0,
         'arcane_surge_value':   0,
+        'spell_echo_turns':     0,
+        'spell_echo_value':     0,
+        'quick_channel_turns':  0,
+        'quick_channel_value':  0,
         'executioner_focus_turns': 0,
         'executioner_focus_value': 0,
         'battle_stance_turns':  0,

@@ -3741,6 +3741,249 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(plain['damage'], 0)
         self.assertGreater(stance['damage'], plain['damage'])
 
+    def test_wand_tree_is_full_5_plus_5(self):
+        tree = game_skills.SKILL_TREES['wand']
+        self.assertEqual(len(tree['A']), 5)
+        self.assertEqual(len(tree['B']), 5)
+
+    def test_wand_branch_a_order_matches_final_design(self):
+        expected = ['arcane_bolt', 'spell_echo', 'quick_channel', 'overload', 'arcane_barrage']
+        self.assertEqual(game_skills.SKILL_TREES['wand']['A'], expected)
+
+    def test_wand_branch_b_order_matches_final_design(self):
+        expected = ['dueling_ward', 'hex_bolt', 'mana_feint', 'counterpulse', 'duel_arc']
+        self.assertEqual(game_skills.SKILL_TREES['wand']['B'], expected)
+
+    def test_spell_echo_sets_runtime_state(self):
+        player = {'mana': 100, 'intuition': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('spell_echo', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(state.get('spell_echo_turns', 0), 2)
+        self.assertGreater(state.get('spell_echo_value', 0), 0)
+
+    def test_quick_channel_restores_mana_and_sets_runtime_state(self):
+        player = {'mana': 50, 'max_mana': 100, 'intuition': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand', 'player_max_mana': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('quick_channel', player, {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(player.get('mana', 0), 30)
+        self.assertEqual(state.get('quick_channel_turns', 0), 2)
+        self.assertGreater(state.get('quick_channel_value', 0), 0)
+
+    def test_overload_gets_payoff_from_setup_windows_and_consumes_them(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('overload', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
+            payoff = skill_engine.use_skill('overload', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
+        self.assertGreater(payoff['damage'], plain['damage'])
+        self.assertEqual(setup_state.get('spell_echo_turns', 0), 0)
+        self.assertEqual(setup_state.get('quick_channel_turns', 0), 0)
+
+    def test_arcane_bolt_benefits_from_setup_windows_and_consumes_them(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('arcane_bolt', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
+            boosted = skill_engine.use_skill('arcane_bolt', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
+        self.assertGreater(boosted['damage'], plain['damage'])
+        self.assertEqual(setup_state.get('spell_echo_turns', 0), 0)
+        self.assertEqual(setup_state.get('quick_channel_turns', 0), 0)
+
+    def test_arcane_barrage_uses_multi_hit_path_correctly(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('arcane_barrage', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertIn('log_damage_multi', result.get('log_key', ''))
+        self.assertGreater(result['damage'], 0)
+
+    def test_arcane_barrage_benefits_from_setup_windows_and_consumes_them(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('arcane_barrage', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
+            payoff = skill_engine.use_skill('arcane_barrage', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
+        self.assertGreater(payoff['damage'], plain['damage'])
+        self.assertEqual(setup_state.get('spell_echo_turns', 0), 0)
+        self.assertEqual(setup_state.get('quick_channel_turns', 0), 0)
+
+    def test_dueling_ward_sets_defense_runtime(self):
+        player = {'mana': 100, 'intuition': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('dueling_ward', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(state.get('defense_buff_turns', 0), 0)
+        self.assertGreater(state.get('defense_buff_value', 0), 0)
+
+    def test_mana_feint_applies_slow_correctly(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('mana_feint', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertTrue(any(e.get('type') == 'slow' and e.get('turns', 0) > 0 for e in result['effects']))
+        self.assertGreater(result.get('damage', 0), 0)
+
+    def test_hex_bolt_benefits_from_setup_windows(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('hex_bolt', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
+            boosted = skill_engine.use_skill('hex_bolt', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
+        self.assertGreater(boosted['damage'], plain['damage'])
+
+    def test_counterpulse_benefits_from_setup_windows(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('counterpulse', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
+            boosted = skill_engine.use_skill('counterpulse', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
+        self.assertGreater(boosted['damage'], plain['damage'])
+
+    def test_duel_arc_benefits_from_setup_windows(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('duel_arc', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
+            boosted = skill_engine.use_skill('duel_arc', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
+        self.assertGreater(boosted['damage'], plain['damage'])
+
+    def test_counterpulse_is_stronger_with_ward_and_vs_slowed_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_slowed = {'hp': 100, 'defense': 0, 'effects': [{'type': 'slow', 'turns': 2, 'value': 0}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('counterpulse', dict(player), dict(mob_plain), dict(base_state), telegram_id=101, lang='ru')
+            ward = skill_engine.use_skill('counterpulse', dict(player), dict(mob_plain), dict(base_state, defense_buff_turns=2, defense_buff_value=20), telegram_id=101, lang='ru')
+            slowed = skill_engine.use_skill('counterpulse', dict(player), dict(mob_slowed), dict(base_state), telegram_id=101, lang='ru')
+        self.assertGreater(ward['damage'], plain['damage'])
+        self.assertGreater(slowed['damage'], plain['damage'])
+
+    def test_duel_arc_behaves_as_capstone_punish_in_active_duel_window(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_slowed = {'hp': 100, 'defense': 0, 'effects': [{'type': 'slow', 'turns': 2, 'value': 0}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('duel_arc', dict(player), dict(mob_plain), dict(base_state), telegram_id=101, lang='ru')
+            duel_window = skill_engine.use_skill('duel_arc', dict(player), dict(mob_slowed), dict(base_state, defense_buff_turns=2, defense_buff_value=20), telegram_id=101, lang='ru')
+        self.assertGreater(duel_window['damage'], plain['damage'])
+
+    def test_dueling_ward_does_not_consume_spell_echo_or_quick_channel(self):
+        player = {'mana': 100, 'intuition': 16}
+        state = {
+            'weapon_damage': 16,
+            'weapon_type': 'magic',
+            'weapon_profile': 'wand',
+            'spell_echo_turns': 1,
+            'spell_echo_value': 20,
+            'quick_channel_turns': 1,
+            'quick_channel_value': 15,
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('dueling_ward', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(state.get('spell_echo_turns', 0), 1)
+        self.assertEqual(state.get('quick_channel_turns', 0), 1)
+
+    def test_mana_feint_does_not_consume_spell_echo_or_quick_channel(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        state = {
+            'weapon_damage': 16,
+            'weapon_type': 'magic',
+            'weapon_profile': 'wand',
+            'spell_echo_turns': 1,
+            'spell_echo_value': 20,
+            'quick_channel_turns': 1,
+            'quick_channel_value': 15,
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            skill_engine.use_skill('mana_feint', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertEqual(state.get('spell_echo_turns', 0), 1)
+        self.assertEqual(state.get('quick_channel_turns', 0), 1)
+
+    def test_arcanist_gets_stronger_setup_payoff_than_duelist_skill(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            arcanist_plain = skill_engine.use_skill('arcane_bolt', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            arcanist_boost = skill_engine.use_skill(
+                'arcane_bolt',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15),
+                telegram_id=101,
+                lang='ru',
+            )
+            duelist_plain = skill_engine.use_skill('hex_bolt', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            duelist_boost = skill_engine.use_skill(
+                'hex_bolt',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15),
+                telegram_id=101,
+                lang='ru',
+            )
+        self.assertGreater(arcanist_boost['damage'] - arcanist_plain['damage'], duelist_boost['damage'] - duelist_plain['damage'])
+
 
 if __name__ == '__main__':
     unittest.main()
