@@ -2765,6 +2765,182 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(e.get('type') != 'poison' for e in state['mob_effects']))
         self.assertTrue(any(e.get('type') == 'slow' for e in state['mob_effects']))
 
+    def test_short_bow_tree_ui_assumptions_support_5_skills_per_branch(self):
+        from game.skills import get_weapon_tree
+
+        tree = get_weapon_tree('short_bow')
+        self.assertEqual(
+            tree['A'],
+            ['hunters_mark', 'aimed_shot', 'steady_aim', 'piercing_arrow', 'deadeye'],
+        )
+        self.assertEqual(
+            tree['B'],
+            ['quick_shot', 'hamstring_arrow', 'reposition', 'volley_step', 'rain_of_barbs'],
+        )
+
+    def test_short_bow_branch_a_unlock_progression_matches_tree_order(self):
+        from game.skills import get_skill, get_weapon_tree
+
+        branch_a = get_weapon_tree('short_bow')['A']
+        unlocks = [get_skill(skill_id)['unlock_mastery'] for skill_id in branch_a]
+        self.assertEqual(unlocks, [1, 3, 5, 7, 10])
+
+    def test_short_bow_branch_b_unlock_progression_matches_tree_order(self):
+        from game.skills import get_skill, get_weapon_tree
+
+        branch_b = get_weapon_tree('short_bow')['B']
+        unlocks = [get_skill(skill_id)['unlock_mastery'] for skill_id in branch_b]
+        self.assertEqual(unlocks, [1, 3, 5, 7, 10])
+
+    def test_legacy_bow_ids_stay_in_skills_but_not_in_active_tree(self):
+        from game.skills import SKILLS, get_weapon_tree
+
+        legacy_ids = ['eagle_eye', 'bow_ult_a', 'retreat', 'arrow_rain', 'kite', 'bow_ult_b']
+        tree_ids = set(get_weapon_tree('short_bow')['A'] + get_weapon_tree('short_bow')['B'])
+
+        for skill_id in legacy_ids:
+            self.assertIn(skill_id, SKILLS)
+            self.assertNotIn(skill_id, tree_ids)
+
+    def test_aimed_shot_stronger_vs_marked_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('aimed_shot', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=0), telegram_id=101, lang='ru')
+            marked = skill_engine.use_skill('aimed_shot', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=2), telegram_id=101, lang='ru')
+
+        self.assertGreater(marked['damage'], plain['damage'])
+
+    def test_steady_aim_sets_one_guaranteed_crit_and_is_consumed(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 150,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'ranged',
+            'weapon_profile': 'short_bow',
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+            'guaranteed_crit_turns': 0,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.player_attack', return_value={'type': 'player_attack', 'damage': 15, 'is_crit': True, 'mob_dead': False, 'mob_hp': 135}), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            setup = combat.process_skill_turn('steady_aim', player, mob, battle_state, user_id=101, lang='ru')
+            self.assertTrue(setup['success'])
+            self.assertEqual(setup['battle_state'].get('guaranteed_crit_turns', 0), 1)
+
+            attack = combat.resolve_normal_attack_action(player, mob, battle_state, lang='ru')
+
+        self.assertGreaterEqual(attack['damage'], 0)
+        self.assertEqual(battle_state.get('guaranteed_crit_turns', 0), 0)
+
+    def test_piercing_arrow_gets_payoff_bonus_vs_marked_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 20, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=0), telegram_id=101, lang='ru')
+            marked = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=2), telegram_id=101, lang='ru')
+
+        self.assertGreater(marked['damage'], plain['damage'])
+
+    def test_hamstring_arrow_applies_slow(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 10, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('hamstring_arrow', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertTrue(any(e.get('type') == 'slow' for e in result['effects']))
+
+    def test_reposition_sets_dodge_buff_correctly(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 10, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('reposition', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertEqual(state.get('dodge_buff_turns', 0), 2)
+        self.assertEqual(state.get('dodge_buff_value', 0), 45)
+
+    def test_volley_step_reads_runtime_slow_correctly(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 10, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('volley_step', dict(player), dict(mob_state), dict(base_state, mob_effects=[]), telegram_id=101, lang='ru')
+            slowed = skill_engine.use_skill(
+                'volley_step',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'slow', 'turns': 2, 'value': 0}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(slowed['damage'], plain['damage'])
+
+    def test_rain_of_barbs_has_slow_synergy_without_overtaking_sniper_payoff(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 14, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            rain_plain = skill_engine.use_skill('rain_of_barbs', dict(player), dict(mob_state), dict(base_state, mob_effects=[]), telegram_id=101, lang='ru')
+            rain_slowed = skill_engine.use_skill(
+                'rain_of_barbs',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'slow', 'turns': 2, 'value': 0}]),
+                telegram_id=101,
+                lang='ru',
+            )
+            deadeye_marked = skill_engine.use_skill(
+                'deadeye',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, hunters_mark_turns=2),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(rain_slowed['damage'], rain_plain['damage'])
+        self.assertLess(rain_slowed['damage'], deadeye_marked['damage'])
+
     def test_smoke_bomb_basic_evasive_behavior_still_works(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
