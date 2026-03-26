@@ -3286,6 +3286,91 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertGreater(marked['damage'], plain['damage'])
 
+    def test_aimed_shot_applies_accuracy_bonus_override(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('aimed_shot', dict(player), dict(mob_state), dict(state), telegram_id=101, lang='ru')
+
+        self.assertEqual(result.get('accuracy_bonus'), 25)
+
+    def test_deadeye_applies_guaranteed_hit_override(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('deadeye', dict(player), dict(mob_state), dict(state), telegram_id=101, lang='ru')
+
+        self.assertTrue(result.get('guaranteed_hit'))
+
+    def test_aimed_shot_uses_phase3_accuracy_hook_in_combat_flow(self):
+        player = {'agility': 5, 'luck': 5, 'mana': 100}
+        mob = {'id': 'wolf', 'level': 2}
+        state = {'mob_hp': 100}
+        skill_result = {
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage': 20,
+            'effects': [],
+            'accuracy_bonus': 25,
+        }
+
+        with patch('game.combat.get_player_accuracy_rating', return_value=120), \
+             patch('game.combat.get_enemy_evasion_rating', return_value=90), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False}) as hit_check_mock:
+            combat.resolve_enemy_targeted_direct_damage_skill_action(
+                player,
+                mob,
+                state,
+                skill_result,
+                lang='ru',
+            )
+
+        hit_check_mock.assert_called_once_with(145, 90)
+
+    def test_deadeye_bypasses_hit_check_in_combat_flow(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 150,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'ranged',
+            'weapon_profile': 'short_bow',
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.get_player_accuracy_rating') as accuracy_mock, \
+             patch('game.combat.get_enemy_evasion_rating') as evasion_mock, \
+             patch('game.combat.resolve_hit_check') as hit_check_mock, \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('deadeye', player, mob, battle_state, user_id=101, lang='ru')
+
+        accuracy_mock.assert_not_called()
+        evasion_mock.assert_not_called()
+        hit_check_mock.assert_not_called()
+        self.assertTrue(result['success'])
+        self.assertTrue(result['skill_result']['direct_damage_result']['hit_check']['guaranteed_hit'])
+        self.assertGreater(result['skill_result']['damage'], 0)
+
     def test_steady_aim_sets_one_guaranteed_crit_and_is_consumed(self):
         player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob = {'id': 'wolf', 'defense': 0}
