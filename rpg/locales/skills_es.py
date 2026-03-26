@@ -35,7 +35,7 @@ SKILL_NAMES = {
     'widows_kiss': {'name': '🕷️ Beso de la Viuda', 'description': 'Golpe de payoff: pega más contra objetivos envenenados, debilitados o abiertos.'},
     'rupture_toxins': {'name': '💥 Ruptura de Toxinas', 'description': 'Capstone de Venom: gana daño por venenos activos y consume esas cargas.'},
     'backstab': {'name': '🗡️ Apuñalar por la Espalda', 'description': 'Golpe burst contra objetivo abierto (ralentizado, controlado, desequilibrado o vulnerable).'},
-    'smoke_bomb': {'name': '💨 Bomba de Humo', 'description': 'Ventana defensiva corta: más evasión durante 2 turnos.'},
+    'smoke_bomb': {'name': '💨 Bomba de Humo', 'description': 'Ventana defensiva corta: más evasión durante 1 turno.'},
     'feint_step': {'name': '👣 Paso de Finta', 'description': 'Buff corto de preparación para tu próximo corte de tempo (Quick Slice).'},
     'quick_slice': {'name': '⚡ Corte Rápido', 'description': 'Golpe de tempo con bajo enfriamiento; tras Paso de Finta gana daño y ralentiza.'},
     'shadow_chain': {'name': '🌑 Cadena Sombría', 'description': 'Secuencia de remate con daño extra/extendido contra objetivo abierto.'},

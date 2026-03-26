@@ -415,7 +415,7 @@ SKILLS = {
     'smoke_bomb': {
         'id':             'smoke_bomb',
         'name':           '💨 Дымовая завеса',
-        'description':    'Короткое защитное окно уклонения: помогает пережить ответный ход.',
+        'description':    'Короткое защитное окно уклонения на 1 ход: помогает пережить ответный ход.',
         'weapon_id':      'dagger',
         'branch':         'B',
         'unlock_mastery': 1,
@@ -426,7 +426,7 @@ SKILLS = {
         'scale_stat':     'agility',
         'scale_mult':     0.5,
         'base_value':     35,
-        'duration':       2,
+        'duration':       1,
         'level_bonus':    0.08,
     },
     'feint_step': {
@@ -674,7 +674,7 @@ SKILLS = {
     'reposition': {
         'id':             'reposition',
         'name':           '↩️ Репозиция',
-        'description':    'Тактический шаг назад: повышает уклонение на короткое окно.',
+        'description':    'Тактический шаг назад: даёт короткое окно уклонения на 1 ответный удар.',
         'weapon_id':      'short_bow',
         'branch':         'B',
         'unlock_mastery': 5,
@@ -685,7 +685,7 @@ SKILLS = {
         'scale_stat':     'agility',
         'scale_mult':     0.7,
         'base_value':     45,
-        'duration':       2,
+        'duration':       1,
         'level_bonus':    0.08,
     },
     'volley_step': {

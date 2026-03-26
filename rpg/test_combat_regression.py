@@ -106,6 +106,40 @@ class CombatRegressionTests(unittest.TestCase):
 
         self.assertEqual(state['dodge_buff_turns'], 0)
 
+    def test_smoke_bomb_runtime_window_skips_one_enemy_basic_attack_then_expires(self):
+        player = {'mana': 100, 'hp': 100, 'agility': 16, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'weapon_damage': 10,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'player_mana': 100,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('smoke_bomb', player, mob_state, state, telegram_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        self.assertEqual(state['dodge_buff_turns'], 1)
+
+        with patch('game.combat.random.random', return_value=0.0), \
+             patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 8, 'player_hp': 92}) as mob_attack_mock:
+            combat.resolve_enemy_response(mob, {'hp': state['player_hp'], 'agility': 0, 'vitality': 0, 'wisdom': 0}, state, lang='ru', user_id=None)
+        mob_attack_mock.assert_not_called()
+        self.assertEqual(state['player_hp'], 100)
+        self.assertEqual(state['dodge_buff_turns'], 0)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 8, 'player_hp': 92}) as second_attack_mock:
+            combat.resolve_enemy_response(mob, {'hp': state['player_hp'], 'agility': 0, 'vitality': 0, 'wisdom': 0}, state, lang='ru', user_id=None)
+        second_attack_mock.assert_called_once()
+
     def test_defense_buff_mitigation_is_applied_in_centralized_enemy_damage_path(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
@@ -716,6 +750,27 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(state['invincible_turns'], 0)
         self.assertEqual(state['disarm_turns'], 1)
         self.assertEqual(state['fire_shield_turns'], 1)
+
+    def test_dodge_window_does_not_override_parry_precedence(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'parry_active': True,
+            'parry_value': 1.0,
+            'dodge_buff_turns': 1,
+            'dodge_buff_value': 100,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}) as mob_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_called_once()
+        self.assertFalse(state['parry_active'])
+        # dodge-window не должен тратиться, если сработал parry-path раньше.
+        self.assertEqual(state['dodge_buff_turns'], 1)
 
     def test_post_action_resurrection_tick_decrements_in_normal_attack_flow(self):
         player = {
@@ -2261,7 +2316,7 @@ class CombatRegressionTests(unittest.TestCase):
 
 
 class SkillEngineRegressionTests(unittest.TestCase):
-    def test_smoke_bomb_sets_dodge_buff_to_35_for_two_turns(self):
+    def test_smoke_bomb_sets_dodge_buff_to_35_for_one_turn(self):
         player = {'mana': 200, 'agility': 20}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         battle_state = {'player_hp': 100, 'player_max_hp': 100}
@@ -2280,7 +2335,7 @@ class SkillEngineRegressionTests(unittest.TestCase):
 
         self.assertTrue(result['success'])
         self.assertEqual(battle_state['dodge_buff_value'], 35)
-        self.assertEqual(battle_state['dodge_buff_turns'], 2)
+        self.assertEqual(battle_state['dodge_buff_turns'], 1)
 
     def test_backstab_gets_crit_payoff_on_slow(self):
         player = {
@@ -3442,7 +3497,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.set_skill_cooldown'):
             skill_engine.use_skill('reposition', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
 
-        self.assertEqual(state.get('dodge_buff_turns', 0), 2)
+        self.assertEqual(state.get('dodge_buff_turns', 0), 1)
         self.assertEqual(state.get('dodge_buff_value', 0), 45)
 
     def test_volley_step_reads_runtime_slow_correctly(self):

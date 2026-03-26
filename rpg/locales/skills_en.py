@@ -35,7 +35,7 @@ SKILL_NAMES = {
     'widows_kiss': {'name': "🕷️ Widow's Kiss", 'description': 'Payoff strike that hits harder into poisoned, weakened, or opened targets.'},
     'rupture_toxins': {'name': '💥 Rupture Toxins', 'description': 'Venom capstone: gains damage from active poison and consumes poison stacks.'},
     'backstab': {'name': '🗡️ Backstab', 'description': 'Burst strike into opened targets (slow, control, off-balance, or vulnerability).'},
-    'smoke_bomb': {'name': '💨 Smoke Bomb', 'description': 'Short defensive window: increased dodge for 2 turns.'},
+    'smoke_bomb': {'name': '💨 Smoke Bomb', 'description': 'Short defensive window: increased dodge for 1 turn.'},
     'feint_step': {'name': '👣 Feint Step', 'description': 'Short setup buff that prepares your next tempo cut (Quick Slice).'},
     'quick_slice': {'name': '⚡ Quick Slice', 'description': 'Low-CD tempo strike; after Feint Step it gains bonus damage and applies slow.'},
     'shadow_chain': {'name': '🌑 Shadow Chain', 'description': 'Finishing sequence with extended/bonus damage against opened targets.'},
