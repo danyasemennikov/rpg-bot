@@ -40,7 +40,12 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Фоновый реген каждую минуту
-    app.job_queue.run_repeating(regen_tick, interval=60, first=10)
+    job_queue = app.job_queue
+    if job_queue is None:
+        raise RuntimeError(
+            'JobQueue недоступен. Установи: pip install "python-telegram-bot[job-queue]"'
+        )
+    job_queue.run_repeating(regen_tick, interval=60, first=10)
 
     # Команды
     app.add_handler(CommandHandler('start',    start_command))
