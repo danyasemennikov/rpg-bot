@@ -425,10 +425,27 @@ def resolve_enemy_targeted_direct_damage_skill_action(
     if skill_result.get('target_kind') != 'enemy':
         return {'handled': False, 'is_hit': None, 'hit_check': None}
 
-    hit_check = resolve_hit_check(
-        get_player_accuracy_rating(player, battle_state),
-        get_enemy_evasion_rating(mob, battle_state),
-    )
+    guaranteed_hit = skill_result.get('guaranteed_hit') is True
+    if guaranteed_hit:
+        hit_check = {
+            'outcome': 'guaranteed_hit',
+            'is_hit': True,
+            'hit_chance': 100,
+            'roll': 0,
+            'accuracy_rating': None,
+            'evasion_rating': None,
+            'guaranteed_hit': True,
+        }
+    else:
+        base_accuracy = get_player_accuracy_rating(player, battle_state)
+        accuracy_bonus = int(skill_result.get('accuracy_bonus', 0))
+        adjusted_accuracy = base_accuracy + accuracy_bonus
+        if skill_result.get('ignore_evasion') is True:
+            evasion_rating = 0
+        else:
+            evasion_rating = get_enemy_evasion_rating(mob, battle_state)
+        hit_check = resolve_hit_check(adjusted_accuracy, evasion_rating)
+
     if not hit_check['is_hit']:
         base_damage = skill_result.get('damage', 0)
         skill_result['damage'] = 0
@@ -454,6 +471,7 @@ def resolve_enemy_targeted_direct_damage_skill_action(
         can_consume_guaranteed_crit=True,
         damage_school=skill_result.get('damage_school'),
     )
+    action_result['hit_check'] = hit_check
     skill_result['damage'] = action_result['final_damage']
     skill_result['direct_damage_result'] = action_result
     apply_post_hit_skill_actions(skill_result, battle_state)
