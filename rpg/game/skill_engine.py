@@ -739,6 +739,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 }
                 _consume_runtime_poison_effects(battle_state)
         elif skill_id == 'aimed_shot':
+            result['accuracy_bonus'] = 25
             if battle_state.get('hunters_mark_turns', 0) > 0:
                 result['damage'] = int(result['damage'] * 1.2)
                 result['log_key'] = 'skills.log_aimed_shot_marked'
@@ -757,6 +758,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'cost': mana_cost,
                 }
         elif skill_id == 'deadeye':
+            result['guaranteed_hit'] = True
             if battle_state.get('hunters_mark_turns', 0) > 0:
                 result['damage'] = int(result['damage'] * 1.35)
                 result['log_key'] = 'skills.log_deadeye_marked'
