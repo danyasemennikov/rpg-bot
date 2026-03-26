@@ -2,6 +2,7 @@
 # balance.py — все игровые формулы в одном месте
 # Если хочешь изменить баланс — меняй только этот файл
 # ============================================================
+import random
 
 # ────────────────────────────────────────
 # ПРОГРЕССИЯ УРОВНЕЙ
@@ -31,6 +32,71 @@ BASE_STATS = {
     'wisdom':    1,     # 🧠 Мудрость
     'luck':      1,     # 🍀 Удача
 }
+
+
+def clamp_hit_chance(chance: int) -> int:
+    """Ограничивает шанс попадания в безопасном диапазоне."""
+    return max(25, min(95, int(chance)))
+
+
+def _read_rating_source_value(source, key: str, default: int = 0) -> int:
+    if source is None:
+        return default
+    try:
+        value = source.get(key, default)
+    except AttributeError:
+        try:
+            value = source[key]
+        except (KeyError, TypeError):
+            value = default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def get_player_accuracy_rating(player, battle_state) -> int:
+    agility = _read_rating_source_value(player, 'agility', 0)
+    intuition = _read_rating_source_value(player, 'intuition', 0)
+    mastery_level = _read_rating_source_value(battle_state, 'mastery_level', 0)
+    accuracy_bonus = _read_rating_source_value(battle_state, 'accuracy_bonus', 0)
+    return 100 + agility * 2 + intuition + mastery_level * 2 + accuracy_bonus
+
+
+def get_player_evasion_rating(player, battle_state) -> int:
+    agility = _read_rating_source_value(player, 'agility', 0)
+    luck = _read_rating_source_value(player, 'luck', 0)
+    evasion_bonus = _read_rating_source_value(battle_state, 'evasion_bonus', 0)
+    return 100 + agility * 2 + luck + evasion_bonus
+
+
+def get_enemy_accuracy_rating(mob, battle_state) -> int:
+    level = _read_rating_source_value(mob, 'level', 1)
+    mob_accuracy = _read_rating_source_value(mob, 'accuracy', 0)
+    bonus = _read_rating_source_value(battle_state, 'enemy_accuracy_bonus', 0)
+    return 100 + level * 2 + mob_accuracy + bonus
+
+
+def get_enemy_evasion_rating(mob, battle_state) -> int:
+    level = _read_rating_source_value(mob, 'level', 1)
+    mob_evasion = _read_rating_source_value(mob, 'evasion', 0)
+    bonus = _read_rating_source_value(battle_state, 'enemy_evasion_bonus', 0)
+    return 100 + level + mob_evasion + bonus
+
+
+def resolve_hit_check(accuracy_rating: int, evasion_rating: int, rng_roll: int | None = None) -> dict:
+    raw_hit_chance = 85 + (int(accuracy_rating) - int(evasion_rating)) // 4
+    hit_chance = clamp_hit_chance(raw_hit_chance)
+    roll = int(rng_roll) if rng_roll is not None else random.randint(1, 100)
+    is_hit = roll <= hit_chance
+    return {
+        'outcome': 'hit' if is_hit else 'miss',
+        'is_hit': is_hit,
+        'hit_chance': hit_chance,
+        'roll': roll,
+        'accuracy_rating': int(accuracy_rating),
+        'evasion_rating': int(evasion_rating),
+    }
 
 # ────────────────────────────────────────
 # COMBAT SEMANTICS (Stage 1 hooks)

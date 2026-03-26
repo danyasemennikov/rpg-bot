@@ -16,6 +16,11 @@ from game.balance import (
     calc_armor_class_dodge_bonus_percent,
     calc_encumbrance_dodge_penalty_percent,
     normalize_damage_school,
+    get_player_accuracy_rating,
+    get_player_evasion_rating,
+    get_enemy_accuracy_rating,
+    get_enemy_evasion_rating,
+    resolve_hit_check,
 )
 from game.i18n import t, get_mob_name
 from game.skill_engine import (
@@ -408,6 +413,8 @@ def resolve_enemy_damage_against_player(
     *,
     lang: str = 'ru',
     mob_result: dict | None = None,
+    mob: dict | None = None,
+    player: dict | None = None,
 ) -> dict:
     """
     Централизует defensive/timed buffs для прямого урона моба по игроку.
@@ -445,11 +452,28 @@ def resolve_enemy_damage_against_player(
                     'log': log,
                 }
 
+        if mob is not None and player is not None:
+            hit_check = resolve_hit_check(
+                get_enemy_accuracy_rating(mob, battle_state),
+                get_player_evasion_rating(player, battle_state),
+            )
+            if not hit_check['is_hit']:
+                log.append(t('battle.player_dodge', lang))
+                return {
+                    'skip_mob_attack': True,
+                    'damage_landed': False,
+                    'player_damage': 0,
+                    'mob_reflect_damage': 0,
+                    'hit_check': hit_check,
+                    'log': log,
+                }
+
         return {
             'skip_mob_attack': False,
             'damage_landed': False,
             'player_damage': 0,
             'mob_reflect_damage': 0,
+            'hit_check': None,
             'log': log,
         }
 
@@ -648,7 +672,18 @@ def resolve_enemy_response(
         return log
 
     if battle_state.get('parry_active'):
-        mob_result = mob_attack(mob, player)
+        hit_check = resolve_hit_check(
+            get_enemy_accuracy_rating(mob, battle_state),
+            get_player_evasion_rating(player, battle_state),
+        )
+        if not hit_check['is_hit']:
+            log.append(t('battle.player_dodge', lang))
+            battle_state['player_hp'] = player['hp']
+            decrement_mob_non_dot_effects_after_response(battle_state)
+            tick_weaken_duration_after_enemy_response(battle_state)
+            return log
+
+        mob_result = mob_attack(mob, player, allow_dodge=False)
         trigger_result = resolve_enemy_response_trigger_buffs(
             battle_state,
             mob_result=mob_result,
@@ -663,6 +698,8 @@ def resolve_enemy_response(
     pre_damage_result = resolve_enemy_damage_against_player(
         battle_state,
         lang=lang,
+        mob=mob,
+        player=player,
     )
     log.extend(pre_damage_result['log'])
     if pre_damage_result['skip_mob_attack']:
@@ -678,7 +715,7 @@ def resolve_enemy_response(
         tick_weaken_duration_after_enemy_response(battle_state)
         return log
 
-    mob_result = mob_attack(mob, player)
+    mob_result = mob_attack(mob, player, allow_dodge=False)
     if mob_result.get('type') == 'dodge':
         log.append(t('battle.player_dodge', lang))
         battle_state['player_hp'] = player['hp']
@@ -807,6 +844,21 @@ def resolve_normal_attack_action(
     }
     should_force_crit = battle_state.get('guaranteed_crit_turns', 0) > 0
 
+    hit_check = resolve_hit_check(
+        get_player_accuracy_rating(player, battle_state),
+        get_enemy_evasion_rating(mob, battle_state),
+    )
+    if not hit_check['is_hit']:
+        return {
+            'damage': 0,
+            'is_crit': False,
+            'mob_dead': False,
+            'mob_hp_after': battle_state.get('mob_hp', 0),
+            'log_line': t('battle.mob_dodge', lang),
+            'direct_damage_result': None,
+            'hit_check': hit_check,
+        }
+
     attack_result = player_attack(player, mob_state)
     action_result = finalize_player_direct_damage_action(
         battle_state,
@@ -831,29 +883,31 @@ def resolve_normal_attack_action(
         'mob_hp_after': action_result['mob_hp_after'],
         'log_line': log_line,
         'direct_damage_result': action_result,
+        'hit_check': hit_check,
     }
 
 # ────────────────────────────────────────
 # ОДИН ХОД МОБА
 # ────────────────────────────────────────
 
-def mob_attack(mob: dict, player: dict) -> dict:
+def mob_attack(mob: dict, player: dict, *, allow_dodge: bool = True) -> dict:
     """
     Моб атакует игрока.
     Возвращает словарь с результатом и новым HP игрока.
     """
     # Проверка уклонения
-    dodged = roll_dodge(
-        player['agility'],
-        armor_class=player.get('armor_class'),
-        encumbrance=player.get('encumbrance'),
-    )
-    if dodged:
-        return {
-            'type':       'dodge',
-            'damage':     0,
-            'player_hp':  player['hp'],
-        }
+    if allow_dodge:
+        dodged = roll_dodge(
+            player['agility'],
+            armor_class=player.get('armor_class'),
+            encumbrance=player.get('encumbrance'),
+        )
+        if dodged:
+            return {
+                'type':       'dodge',
+                'damage':     0,
+                'player_hp':  player['hp'],
+            }
 
     # Урон моба
     base_damage = calc_mob_damage(mob)
