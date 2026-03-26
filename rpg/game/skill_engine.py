@@ -57,6 +57,7 @@ def _is_opened_target(mob_state: dict, battle_state: dict) -> bool:
         'vulnerable',
         'weak',
         'weaken',
+        'weakened',
     )
     return (
         _runtime_target_has_effect(mob_state, battle_state, opened_effect_types)
@@ -68,10 +69,46 @@ def _is_opened_target(mob_state: dict, battle_state: dict) -> bool:
 
 def _is_weakened_target(mob_state: dict, battle_state: dict) -> bool:
     return (
-        _runtime_target_has_effect(mob_state, battle_state, ('weak', 'weaken'))
+        _runtime_target_has_effect(mob_state, battle_state, ('weak', 'weaken', 'weakened'))
         or battle_state.get('weaken_turns', 0) > 0
         or battle_state.get('disarm_turns', 0) > 0
     )
+
+
+def _apply_or_refresh_enemy_weakened_effect(
+    battle_state: dict,
+    *,
+    value: int,
+    turns: int,
+    skill_id: str,
+) -> None:
+    """
+    Нормализованный enemy-side weakened runtime-дебафф.
+    Не стакуем multiple weakened эффекты: сохраняем один с strongest value
+    и longest duration.
+    """
+    if turns <= 0 or value <= 0:
+        return
+
+    effects = battle_state.get('mob_effects', [])
+    strongest_value = value
+    longest_turns = turns
+    kept_effects = []
+
+    for eff in effects:
+        if eff.get('type') in ('weak', 'weaken', 'weakened') and int(eff.get('turns', 0)) > 0:
+            strongest_value = max(strongest_value, int(eff.get('value', 0)))
+            longest_turns = max(longest_turns, int(eff.get('turns', 0)))
+            continue
+        kept_effects.append(eff)
+
+    kept_effects.append({
+        'type': 'weakened',
+        'turns': longest_turns,
+        'value': strongest_value,
+        'skill_id': skill_id,
+    })
+    battle_state['mob_effects'] = kept_effects
 
 
 def _consume_runtime_poison_effects(battle_state: dict) -> tuple[int, int]:
@@ -1469,8 +1506,12 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = build_skill_result_log(result, lang)
         elif skill_id == 'crippling_venom':
             duration = skill.get('duration', 2)
-            battle_state['disarm_turns'] = duration
-            battle_state['disarm_value'] = int(value)
+            _apply_or_refresh_enemy_weakened_effect(
+                battle_state,
+                value=int(value),
+                turns=duration,
+                skill_id=skill_id,
+            )
             result['effects'].append({
                 'type': 'slow',
                 'turns': duration,
@@ -1519,8 +1560,12 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                               turns=duration, cost=mana_cost)
         elif skill_id == 'shield_bash':
             duration = skill.get('duration', 2)
-            battle_state['disarm_turns'] = duration
-            battle_state['disarm_value'] = int(value)
+            _apply_or_refresh_enemy_weakened_effect(
+                battle_state,
+                value=int(value),
+                turns=duration,
+                skill_id=skill_id,
+            )
             stats = {k: player.get(k, 1) for k in
                      ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
             base_attack = calc_final_damage(
@@ -1558,8 +1603,12 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log'] = build_skill_result_log(result, lang)
         elif skill_id == 'weaken':
             duration = skill.get('duration', 2)
-            battle_state['weaken_turns'] = duration
-            battle_state['weaken_value'] = int(value)
+            _apply_or_refresh_enemy_weakened_effect(
+                battle_state,
+                value=int(value),
+                turns=duration,
+                skill_id=skill_id,
+            )
             result['log'] = t('skills.log_weaken', lang,
                               name=get_skill_name(skill_id, lang),
                               value=int(value),
