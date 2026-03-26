@@ -30,6 +30,36 @@ def _runtime_target_has_effect(mob_state: dict, battle_state: dict, effect_types
     return any(e.get('type') in effect_types and e.get('turns', 0) > 0 for e in mob_effects)
 
 
+def _is_opened_target(mob_state: dict, battle_state: dict) -> bool:
+    """
+    Минимальный runtime-check "opened target" без нового subsystem.
+    Открытой считаем цель под контрольным/темповым дебаффом или ослаблением.
+    """
+    opened_effect_types = (
+        'slow',
+        'stun',
+        'freeze',
+        'off_balance',
+        'vulnerable',
+        'weak',
+        'weaken',
+    )
+    return (
+        _runtime_target_has_effect(mob_state, battle_state, opened_effect_types)
+        or battle_state.get('vulnerability_turns', 0) > 0
+        or battle_state.get('weaken_turns', 0) > 0
+        or battle_state.get('disarm_turns', 0) > 0
+    )
+
+
+def _is_weakened_target(mob_state: dict, battle_state: dict) -> bool:
+    return (
+        _runtime_target_has_effect(mob_state, battle_state, ('weak', 'weaken'))
+        or battle_state.get('weaken_turns', 0) > 0
+        or battle_state.get('disarm_turns', 0) > 0
+    )
+
+
 def _consume_runtime_poison_effects(battle_state: dict) -> tuple[int, int]:
     """
     Удаляет только poison-эффекты из battle_state['mob_effects'].
@@ -422,15 +452,11 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             eff_def = defense * (1 - ignore)
             dmg     = max(1, dmg - int(eff_def))
 
-            # Backstab — крит по уязвимой цели
+            # Backstab — payoff по открытой цели без hard burst.
             if skill_id == 'backstab':
-                has_opening = _runtime_target_has_effect(
-                    mob_state,
-                    battle_state,
-                    ('slow', 'stun', 'freeze', 'off_balance', 'vulnerable'),
-                ) or battle_state.get('vulnerability_turns', 0) > 0
+                has_opening = _is_opened_target(mob_state, battle_state)
                 if has_opening:
-                    dmg = int(dmg * 2.0)
+                    dmg = int(dmg * 1.5)
                     result['log_key'] = 'skills.log_backstab_crit'
                     result['log_params'] = {
                         'name': get_skill_name(skill_id, lang),
@@ -680,12 +706,12 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             }
         elif skill_id == 'widows_kiss':
             has_payoff = (
-                _runtime_target_has_effect(mob_state, battle_state, ('poison', 'weak', 'weaken', 'slow', 'stun', 'freeze', 'off_balance'))
-                or battle_state.get('disarm_turns', 0) > 0
-                or battle_state.get('vulnerability_turns', 0) > 0
+                _runtime_target_has_effect(mob_state, battle_state, ('poison',))
+                or _is_weakened_target(mob_state, battle_state)
+                or _is_opened_target(mob_state, battle_state)
             )
             if has_payoff:
-                result['damage'] = int(result['damage'] * 1.4)
+                result['damage'] = int(result['damage'] * 1.20)
                 result['log_key'] = 'skills.log_widows_kiss_payoff'
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
@@ -750,7 +776,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 }
         elif skill_id == 'piercing_arrow':
             if battle_state.get('hunters_mark_turns', 0) > 0:
-                result['damage'] = int(result['damage'] * 1.25)
+                result['damage'] = int(result['damage'] * 1.20)
                 result['log_key'] = 'skills.log_piercing_arrow_marked'
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
@@ -782,7 +808,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             }
         elif skill_id == 'volley_step':
             if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
-                result['damage'] = int(result['damage'] * 1.2)
+                result['damage'] = int(result['damage'] * 1.15)
                 result['log_key'] = 'skills.log_volley_step_slow'
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
