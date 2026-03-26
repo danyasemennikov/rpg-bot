@@ -4803,6 +4803,122 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['battle_state']['mob_hp'], 38)
         self.assertEqual(result['skill_result']['damage'], 22)
 
+    def test_direct_damage_skill_with_guaranteed_hit_bypasses_hit_check(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'defense': 0, 'level': 2}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 60,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 22,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'guaranteed_hit': True,
+            'damage_school': 'magic',
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Fireball', 'dmg': 22, 'cost': 10},
+            'log_suffixes': [],
+            'post_hit_actions': [],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.resolve_hit_check') as hit_check_mock, \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('fireball', player, mob, state, user_id=101, lang='ru')
+
+        hit_check_mock.assert_not_called()
+        self.assertEqual(result['battle_state']['mob_hp'], 38)
+        self.assertEqual(result['skill_result']['damage'], 22)
+        self.assertTrue(result['skill_result']['direct_damage_result']['hit_check']['guaranteed_hit'])
+
+    def test_direct_damage_skill_accuracy_bonus_is_added_to_accuracy_rating(self):
+        player = {'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'level': 2}
+        state = {'mob_hp': 100}
+        skill_result = {
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage': 20,
+            'effects': [],
+            'accuracy_bonus': 15,
+        }
+
+        with patch('game.combat.get_player_accuracy_rating', return_value=120), \
+             patch('game.combat.get_enemy_evasion_rating', return_value=90), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False}) as hit_check_mock:
+            combat.resolve_enemy_targeted_direct_damage_skill_action(
+                player,
+                mob,
+                state,
+                skill_result,
+                lang='ru',
+            )
+
+        hit_check_mock.assert_called_once_with(135, 90)
+
+    def test_direct_damage_skill_ignore_evasion_uses_zero_evasion_rating(self):
+        player = {'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'level': 2}
+        state = {'mob_hp': 100}
+        skill_result = {
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage': 20,
+            'effects': [],
+            'ignore_evasion': True,
+        }
+
+        with patch('game.combat.get_player_accuracy_rating', return_value=120), \
+             patch('game.combat.get_enemy_evasion_rating') as evasion_mock, \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False}) as hit_check_mock:
+            combat.resolve_enemy_targeted_direct_damage_skill_action(
+                player,
+                mob,
+                state,
+                skill_result,
+                lang='ru',
+            )
+
+        evasion_mock.assert_not_called()
+        hit_check_mock.assert_called_once_with(120, 0)
+
+    def test_skill_without_accuracy_overrides_keeps_current_behavior(self):
+        player = {'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'level': 2}
+        state = {'mob_hp': 100}
+        skill_result = {
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage': 20,
+            'effects': [],
+        }
+
+        with patch('game.combat.get_player_accuracy_rating', return_value=110) as player_accuracy_mock, \
+             patch('game.combat.get_enemy_evasion_rating', return_value=95) as enemy_evasion_mock, \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False}) as hit_check_mock:
+            combat.resolve_enemy_targeted_direct_damage_skill_action(
+                player,
+                mob,
+                state,
+                skill_result,
+                lang='ru',
+            )
+
+        player_accuracy_mock.assert_called_once_with(player, state)
+        enemy_evasion_mock.assert_called_once_with(mob, state)
+        hit_check_mock.assert_called_once_with(110, 95)
+
     def test_skill_miss_does_not_apply_post_hit_actions(self):
         player = {'hp': 100, 'mana': 80, 'agility': 5, 'luck': 5}
         mob = {'id': 'wolf', 'defense': 0, 'level': 2}
