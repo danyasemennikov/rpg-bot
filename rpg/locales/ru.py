@@ -331,7 +331,7 @@ STRINGS = {
         'log_borrowed_flame': '{name} — 🔥 {dmg} урона + горение {burn}/ход на {turns} хода 🔵-{cost}',
         'log_borrowed_grace': '{name} — ✨ {dmg} урона + благодать {value}% на {turns} хода 🔵-{cost}',
         'log_synthesis_boost': '{name} — 🧬 синтез усилен: {dmg} урона 🔵-{cost}',
-        'log_forbidden_thesis_boost': '{name} — ⛔ тезис усилен: {dmg} урона (setup будет поглощён) 🔵-{cost}',
+        'log_forbidden_thesis_boost': '{name} — ⛔ тезис усилен: {dmg} урона (setup будет поглощён при попадании) 🔵-{cost}',
 
     },
 

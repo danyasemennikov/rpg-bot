@@ -4618,6 +4618,89 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.get('blessing_turns', 0), 2)
         self.assertTrue(any(e.get('type') == 'burn' for e in state.get('mob_effects', [])))
 
+    def test_dispel_script_enemy_target_strips_only_supported_enemy_subset(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 12,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'mob_effects': [
+                {'type': 'blessing', 'turns': 2, 'value': 10},
+                {'type': 'ward', 'turns': 1, 'value': 5},
+                {'type': 'poison', 'turns': 3, 'value': 7},
+            ],
+            'pending_skill_target': {'kind': 'enemy', 'id': 'enemy_1'},
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('dispel_script', dict(player), {'hp': 100, 'defense': 0, 'effects': state['mob_effects']}, state, telegram_id=101, lang='ru')
+
+        self.assertEqual(result['target_kind'], 'enemy')
+        self.assertEqual(result['target_ids'], ['enemy'])
+        self.assertFalse(any(e.get('type') in ('blessing', 'ward') for e in state.get('mob_effects', [])))
+        self.assertTrue(any(e.get('type') == 'poison' for e in state.get('mob_effects', [])))
+
+    def test_guardian_light_no_hit_path_does_not_refresh_defense_buff(self):
+        state = {
+            'defense_buff_turns': 0,
+            'defense_buff_value': 0,
+        }
+        skill_result = {
+            'direct_damage_skill': True,
+            'direct_damage_result': {'final_damage': 0},
+            'post_hit_actions': [{'type': 'refresh_defense_buff', 'turns': 2, 'value': 12, 'log_key': 'skills.log_guardian_light'}],
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Guardian Light', 'dmg': 0, 'cost': 0},
+        }
+        combat.apply_post_hit_skill_actions(skill_result, state)
+        self.assertEqual(state.get('defense_buff_turns', 0), 0)
+        self.assertEqual(state.get('defense_buff_value', 0), 0)
+        self.assertEqual(skill_result.get('log_key'), 'skills.log_damage')
+
+    def test_failed_skill_precheck_keeps_runtime_target_intent(self):
+        state = {
+            'weapon_damage': 12,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'pending_skill_target': {'kind': 'ally', 'id': 'ally_1'},
+            'skill_target_kind': 'party',
+            'skill_target_id': 'stale_ally',
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=2), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('heal', {'mana': 100, 'wisdom': 18}, {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertFalse(result['success'])
+        self.assertIn('pending_skill_target', state)
+        self.assertIn('skill_target_kind', state)
+        self.assertIn('skill_target_id', state)
+
+    def test_mixed_school_hooks_are_structurally_present_for_tome_damage_skill(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 16, 'vitality': 1, 'wisdom': 16, 'luck': 1}
+        state = {
+            'weapon_damage': 14,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'blessing_turns': 2,
+            'blessing_value': 8,
+            'vulnerability_turns': 1,
+            'vulnerability_value': 10,
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('hybrid_missile', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        hooks = result.get('mixed_school_hooks', {})
+        self.assertIn('primary_school', hooks)
+        self.assertIn('active_windows', hooks)
+        self.assertEqual(hooks['primary_school'], 'magic')
+        self.assertIn('blessing_turns', hooks['active_windows'])
+        self.assertIn('vulnerability_turns', hooks['active_windows'])
+
     def test_magic_staff_holy_staff_holy_rod_regression_spot_check(self):
         self.assertEqual(game_skills.SKILL_TREES['magic_staff']['A'][0], 'fireball')
         self.assertEqual(game_skills.SKILL_TREES['holy_staff']['A'][0], 'heal')
