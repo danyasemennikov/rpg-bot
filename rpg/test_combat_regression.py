@@ -35,6 +35,19 @@ class CombatRegressionTests(unittest.TestCase):
         precheck_patcher = patch('game.combat.precheck_skill_use', return_value={'success': True, 'log': ''})
         self._precheck_mock = precheck_patcher.start()
         self.addCleanup(precheck_patcher.stop)
+        hit_check_patcher = patch(
+            'game.combat.resolve_hit_check',
+            return_value={
+                'outcome': 'hit',
+                'is_hit': True,
+                'hit_chance': 95,
+                'roll': 1,
+                'accuracy_rating': 100,
+                'evasion_rating': 100,
+            },
+        )
+        self._hit_check_mock = hit_check_patcher.start()
+        self.addCleanup(hit_check_patcher.stop)
 
     def test_invincible_blocks_enemy_response_damage_through_combat_core(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
@@ -676,8 +689,9 @@ class CombatRegressionTests(unittest.TestCase):
         mob_attack_mock.assert_called_once()
         self.assertEqual(state['player_hp'], 100)
         self.assertEqual(state['mob_hp'], 90)
-        # invincible остаётся нетронутым: parry отрабатывает в trigger-слое enemy response.
+        # Legacy precedence: parry-path выше invincible pre-check.
         self.assertEqual(state['invincible_turns'], 1)
+        self.assertFalse(state['parry_active'])
 
     def test_parry_change_does_not_affect_other_defensive_mechanics(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
@@ -2332,6 +2346,19 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         precheck_patcher = patch('game.combat.precheck_skill_use', return_value={'success': True, 'log': ''})
         self._precheck_mock = precheck_patcher.start()
         self.addAsyncCleanup(lambda: precheck_patcher.stop())
+        hit_check_patcher = patch(
+            'game.combat.resolve_hit_check',
+            return_value={
+                'outcome': 'hit',
+                'is_hit': True,
+                'hit_chance': 95,
+                'roll': 1,
+                'accuracy_rating': 100,
+                'evasion_rating': 100,
+            },
+        )
+        self._hit_check_mock = hit_check_patcher.start()
+        self.addAsyncCleanup(lambda: hit_check_patcher.stop())
 
     async def test_handler_attack_path_does_not_manually_consume_guaranteed_crit_before_process_turn(self):
         update = _DummyUpdate('battle_attack_wolf')
@@ -4705,6 +4732,87 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(game_skills.SKILL_TREES['magic_staff']['A'][0], 'fireball')
         self.assertEqual(game_skills.SKILL_TREES['holy_staff']['A'][0], 'heal')
         self.assertEqual(game_skills.SKILL_TREES['holy_rod']['A'][0], 'sacred_shield')
+
+    def test_player_normal_attack_can_miss_when_enemy_evasion_is_high(self):
+        player = {
+            'hp': 100,
+            'strength': 10,
+            'agility': 5,
+            'intuition': 5,
+            'vitality': 5,
+            'wisdom': 5,
+            'luck': 5,
+            'weapon_damage': 10,
+            'weapon_type': 'melee',
+            'damage_school': 'physical',
+        }
+        mob = {'id': 'forest_wolf', 'defense': 0, 'level': 2}
+        battle_state = {'mob_hp': 50, 'mastery_level': 1}
+
+        with patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False, 'hit_chance': 25, 'roll': 99, 'accuracy_rating': 100, 'evasion_rating': 200}), \
+             patch('game.combat.player_attack') as player_attack_mock:
+            result = combat.resolve_normal_attack_action(player, mob, battle_state, lang='ru')
+
+        player_attack_mock.assert_not_called()
+        self.assertEqual(result['damage'], 0)
+        self.assertFalse(result['is_crit'])
+        self.assertIn('log_line', result)
+
+    def test_player_normal_attack_hit_path_still_works(self):
+        player = {
+            'hp': 100,
+            'strength': 10,
+            'agility': 5,
+            'intuition': 5,
+            'vitality': 5,
+            'wisdom': 5,
+            'luck': 5,
+            'weapon_damage': 10,
+            'weapon_type': 'melee',
+            'damage_school': 'physical',
+        }
+        mob = {'id': 'forest_wolf', 'defense': 0, 'level': 2}
+        battle_state = {'mob_hp': 50, 'mastery_level': 1}
+
+        with patch('game.combat.resolve_hit_check', return_value={'outcome': 'hit', 'is_hit': True, 'hit_chance': 95, 'roll': 1, 'accuracy_rating': 200, 'evasion_rating': 100}), \
+             patch('game.combat.player_attack', return_value={'damage': 12, 'is_crit': False, 'mob_dead': False}):
+            result = combat.resolve_normal_attack_action(player, mob, battle_state, lang='ru')
+
+        self.assertEqual(result['damage'], 12)
+        self.assertEqual(battle_state['mob_hp'], 38)
+        self.assertFalse(result['mob_dead'])
+
+    def test_enemy_attack_can_miss_when_player_evasion_is_high(self):
+        player = {'hp': 100, 'agility': 10, 'vitality': 0, 'wisdom': 0, 'luck': 10}
+        mob = {'id': 'forest_wolf', 'level': 2, 'damage_min': 10, 'damage_max': 10, 'weapon_type': 'melee'}
+        state = {'player_hp': 100, 'mob_hp': 100, 'mob_effects': []}
+
+        with patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False, 'hit_chance': 25, 'roll': 99, 'accuracy_rating': 100, 'evasion_rating': 200}), \
+             patch('game.combat.mob_attack') as mob_attack_mock:
+            log = combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_not_called()
+        self.assertEqual(state['player_hp'], 100)
+        self.assertTrue(len(log) > 0)
+
+    def test_enemy_miss_does_not_trigger_or_consume_parry(self):
+        player = {'hp': 100, 'agility': 10, 'vitality': 0, 'wisdom': 0, 'luck': 10}
+        mob = {'id': 'forest_wolf', 'level': 2, 'damage_min': 10, 'damage_max': 10, 'weapon_type': 'melee'}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'parry_active': True,
+            'parry_value': 1.0,
+        }
+
+        with patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False, 'hit_chance': 25, 'roll': 99, 'accuracy_rating': 100, 'evasion_rating': 200}), \
+             patch('game.combat.mob_attack') as mob_attack_mock:
+            combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
+
+        mob_attack_mock.assert_not_called()
+        self.assertTrue(state['parry_active'])
+        self.assertEqual(state['mob_hp'], 100)
 
 
 if __name__ == '__main__':
