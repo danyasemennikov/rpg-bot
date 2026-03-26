@@ -156,6 +156,29 @@ def has_active_mob_effect(battle_state: dict, *effect_types: str) -> bool:
     return any(e.get('type') in target and int(e.get('turns', 0)) > 0 for e in mob_effects)
 
 
+def get_strongest_active_enemy_weakened_value(battle_state: dict) -> int:
+    """
+    Возвращает strongest active weakened-процент на мобе.
+    Runtime source of truth: battle_state['mob_effects'].
+    Legacy weaken_turns/weaken_value поддерживаем как fallback.
+    """
+    strongest_value = 0
+    for eff in battle_state.get('mob_effects', []):
+        if eff.get('type') not in ('weak', 'weaken', 'weakened'):
+            continue
+        if int(eff.get('turns', 0)) <= 0:
+            continue
+        strongest_value = max(strongest_value, int(eff.get('value', 0)))
+
+    if strongest_value > 0:
+        return strongest_value
+
+    if battle_state.get('weaken_turns', 0) > 0:
+        return max(0, int(battle_state.get('weaken_value', 0)))
+
+    return 0
+
+
 def apply_player_start_of_turn_regen(
     battle_state: dict,
     lang: str = 'ru',
@@ -556,8 +579,9 @@ def resolve_enemy_damage_against_player(
         mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
         battle_state['disarm_turns'] -= 1
 
-    if battle_state.get('weaken_turns', 0) > 0:
-        mob_dmg = int(mob_dmg * (1 - battle_state['weaken_value'] / 100))
+    weakened_value = get_strongest_active_enemy_weakened_value(battle_state)
+    if weakened_value > 0:
+        mob_dmg = int(mob_dmg * (1 - weakened_value / 100))
 
     shield_dmg = 0
     if battle_state.get('fire_shield_turns', 0) > 0:

@@ -2839,8 +2839,10 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result['success'])
         self.assertGreater(result['damage'], 0)
-        self.assertEqual(battle_state['disarm_turns'], 2)
-        self.assertGreater(battle_state['disarm_value'], 0)
+        weakened_effect = next((e for e in battle_state.get('mob_effects', []) if e.get('type') == 'weakened'), None)
+        self.assertIsNotNone(weakened_effect)
+        self.assertEqual(weakened_effect['turns'], 2)
+        self.assertGreater(weakened_effect['value'], 0)
         self.assertTrue(any(e['type'] == 'off_balance' for e in result['effects']))
 
         enemy_player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
@@ -2848,15 +2850,16 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         battle_state_enemy = {
             'player_hp': 100,
             'mob_hp': 100,
-            'mob_effects': [{'type': 'off_balance', 'turns': 1, 'value': 0}],
-            'disarm_turns': battle_state['disarm_turns'],
-            'disarm_value': battle_state['disarm_value'],
+            'mob_effects': [
+                {'type': 'off_balance', 'turns': 1, 'value': 0},
+                weakened_effect,
+            ],
         }
         with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}):
             log = combat.resolve_enemy_response(mob, enemy_player, battle_state_enemy, lang='ru', user_id=None)
 
         self.assertTrue(any('атак' in line.lower() for line in log))
-        self.assertEqual(battle_state_enemy['player_hp'], 100 - int(10 * (1 - battle_state['disarm_value'] / 100)))
+        self.assertEqual(battle_state_enemy['player_hp'], 100 - int(10 * (1 - weakened_effect['value'] / 100)))
 
     def test_expose_guard_sets_vulnerability_window(self):
         player = {'mana': 100, 'strength': 10, 'agility': 12, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -3124,6 +3127,34 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(poison_only['damage'], plain['damage'])
         self.assertNotEqual(poison_only.get('log_key'), 'skills.log_backstab_crit')
 
+    def test_backstab_opened_payoff_triggers_from_runtime_weakened_effect(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {
+            'weapon_damage': 12,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'player_mana': 100,
+            'vulnerability_turns': 0,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('backstab', dict(player), dict(mob_state), dict(base_state, mob_effects=[]), telegram_id=101, lang='ru')
+            opened_from_weakened = skill_engine.use_skill(
+                'backstab',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'weakened', 'turns': 2, 'value': 10}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(opened_from_weakened['damage'], plain['damage'])
+        self.assertEqual(opened_from_weakened['log_key'], 'skills.log_backstab_crit')
+
     def test_envenom_blades_buffs_only_next_poison_application(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
@@ -3265,7 +3296,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
                 'widows_kiss',
                 dict(player),
                 dict(mob_state),
-                dict(base_state, mob_effects=[{'type': 'weaken', 'turns': 2, 'value': 8}]),
+                dict(base_state, mob_effects=[{'type': 'weakened', 'turns': 2, 'value': 8}]),
                 telegram_id=101,
                 lang='ru',
             )
@@ -4698,29 +4729,115 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(state['allies']['ally_1'].get('defense_buff_turns', 0), 0)
         self.assertGreater(state['allies']['ally_1'].get('defense_buff_value', 0), 0)
 
-    def test_weaken_reduces_enemy_damage_in_centralized_path(self):
-        state = {'weaken_turns': 2, 'weaken_value': 25}
+    def test_weakened_reduces_enemy_damage_in_centralized_path(self):
+        state = {'mob_effects': [{'type': 'weakened', 'turns': 2, 'value': 25}]}
         result = combat.resolve_enemy_damage_against_player(
             state,
             lang='ru',
             mob_result={'type': 'mob_attack', 'damage': 100, 'player_hp': 0},
         )
         self.assertEqual(result['player_damage'], 75)
-        self.assertEqual(state['weaken_turns'], 2)
+        self.assertEqual(state['mob_effects'][0]['turns'], 2)
 
-    def test_weaken_duration_ticks_even_when_enemy_attack_is_skipped(self):
+    def test_weakened_duration_ticks_even_when_enemy_attack_is_skipped(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 8, 'damage_max': 8}
         state = {
             'player_hp': 100,
             'mob_hp': 100,
-            'mob_effects': [],
+            'mob_effects': [{'type': 'weakened', 'turns': 2, 'value': 20}],
             'invincible_turns': 1,
-            'weaken_turns': 2,
-            'weaken_value': 20,
         }
         combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
-        self.assertEqual(state['weaken_turns'], 1)
+        self.assertEqual(state['mob_effects'][0]['turns'], 1)
+
+    def test_multiple_weakened_sources_do_not_stack_and_strongest_wins(self):
+        state = {
+            'mob_effects': [
+                {'type': 'weakened', 'turns': 2, 'value': 10},
+                {'type': 'weakened', 'turns': 1, 'value': 30},
+            ],
+        }
+        result = combat.resolve_enemy_damage_against_player(
+            state,
+            lang='ru',
+            mob_result={'type': 'mob_attack', 'damage': 100, 'player_hp': 0},
+        )
+        self.assertEqual(result['player_damage'], 70)
+
+    def test_weakened_writer_merges_strongest_value_with_longest_duration(self):
+        state = {'mob_effects': []}
+
+        skill_engine._apply_or_refresh_enemy_weakened_effect(
+            state,
+            value=12,   # weaker value
+            turns=4,    # longer duration
+            skill_id='first_source',
+        )
+        skill_engine._apply_or_refresh_enemy_weakened_effect(
+            state,
+            value=30,   # stronger value
+            turns=1,    # shorter duration
+            skill_id='second_source',
+        )
+
+        weakened_effects = [
+            e for e in state.get('mob_effects', [])
+            if e.get('type') == 'weakened' and int(e.get('turns', 0)) > 0
+        ]
+        self.assertEqual(len(weakened_effects), 1)
+        self.assertEqual(weakened_effects[0]['value'], 30)
+        self.assertEqual(weakened_effects[0]['turns'], 4)
+
+    def test_weaken_skill_uses_duration_from_skill_content_data(self):
+        player = {'mana': 100, 'wisdom': 14, 'strength': 1, 'agility': 1, 'intuition': 1, 'vitality': 1, 'luck': 1}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'tome',
+            'player_mana': 100,
+            'mob_effects': [],
+        }
+        expected_duration = skill_engine.get_skill('weaken')['duration']
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('weaken', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        weakened_effect = next((e for e in state['mob_effects'] if e.get('type') == 'weakened'), None)
+        self.assertIsNotNone(weakened_effect)
+        self.assertEqual(weakened_effect['turns'], expected_duration)
+
+    def test_widows_kiss_payoff_works_with_runtime_weakened_from_crippling_venom(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            setup_result = combat.process_skill_turn('crippling_venom', dict(player), mob, state, user_id=101, lang='ru')
+            payoff_result = combat.process_skill_turn('widows_kiss', dict(player), mob, state, user_id=101, lang='ru')
+
+        self.assertTrue(setup_result['success'])
+        self.assertTrue(any(e.get('type') == 'weakened' for e in state.get('mob_effects', [])))
+        self.assertEqual(payoff_result['skill_result'].get('log_key'), 'skills.log_widows_kiss_payoff')
 
     def test_insight_restores_mana_for_selected_targets(self):
         player = {'mana': 70, 'wisdom': 18}
