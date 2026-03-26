@@ -261,6 +261,8 @@ STRINGS = {
         'log_toxic_cut': '{name} — {dmg} damage + ☠️ poison {poison}/turn 🔵-{cost}',
         'log_crippling_venom': '{name} — 🧪 enemy damage -{value}% and slow for {turns} turns 🔵-{cost}',
         'log_widows_kiss_payoff': '{name} — 🕷️ payoff into weakened target: {dmg} damage 🔵-{cost}',
+        'log_reopen_wounds_payoff': '{name} — 🩸 wounds reopened on prepared target: {dmg} damage 🔵-{cost}',
+        'log_ravage_payoff': '{name} — 💥 ravage punish on prepared target: {dmg} damage 🔵-{cost}',
         'log_rupture_toxins': '{name} — 💥 toxin rupture ({stacks} stacks): {dmg} damage 🔵-{cost}',
         'log_feint_step': '{name} — 👣 setup primed for {turns} turn 🔵-{cost}',
         'log_quick_slice_feint': '{name} — ⚡ empowered slice: {dmg} damage + slow 🔵-{cost}',

@@ -4191,17 +4191,18 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(e.get('type') == 'bleed' and e.get('turns') == 2 for e in mob_state['effects']))
         self.assertTrue(any(e.get('type') == 'slow' and e.get('turns') == 2 for e in mob_state['effects']))
 
-    def test_sunder_armor_sets_vulnerability_runtime(self):
+    def test_sunder_armor_creates_runtime_vulnerability_window(self):
         player = {'mana': 100, 'strength': 16}
         state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        expected_duration = game_skills.get_skill('sunder_armor').get('duration', 2)
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'):
             skill_engine.use_skill('sunder_armor', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
-        self.assertGreater(state.get('vulnerability_turns', 0), 0)
+        self.assertEqual(state.get('vulnerability_turns', 0), expected_duration)
         self.assertGreater(state.get('vulnerability_value', 0), 0)
 
-    def test_reopen_wounds_is_stronger_into_bleed_and_vulnerability(self):
+    def test_reopen_wounds_gets_bonus_against_bleeding_target(self):
         player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
         mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
@@ -4212,22 +4213,69 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('reopen_wounds', dict(player), mob_plain, dict(base_state), telegram_id=101, lang='ru')
             vs_bleed = skill_engine.use_skill('reopen_wounds', dict(player), mob_bleed, dict(base_state), telegram_id=101, lang='ru')
-            vs_vulnerable = skill_engine.use_skill('reopen_wounds', dict(player), mob_plain, dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
         self.assertGreater(vs_bleed['damage'], plain['damage'])
-        self.assertGreater(vs_vulnerable['damage'], plain['damage'])
+        self.assertEqual(vs_bleed.get('log_key'), 'skills.log_reopen_wounds_payoff')
 
-    def test_ravage_behaves_as_capstone_punish_into_prepared_target(self):
+    def test_reopen_wounds_gets_bonus_against_vulnerable_target(self):
         player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
         mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
-        mob_prepared = {'hp': 100, 'defense': 0, 'effects': [{'type': 'bleed', 'turns': 2, 'value': 4}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('reopen_wounds', dict(player), mob_plain, dict(base_state), telegram_id=101, lang='ru')
+            vs_vulnerable = skill_engine.use_skill('reopen_wounds', dict(player), mob_plain, dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+        self.assertGreater(vs_vulnerable['damage'], plain['damage'])
+        self.assertEqual(vs_vulnerable.get('log_key'), 'skills.log_reopen_wounds_payoff')
+
+    def test_ravage_gets_bonus_against_prepared_target_without_double_stacking(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_bleed = {'hp': 100, 'defense': 0, 'effects': [{'type': 'bleed', 'turns': 2, 'value': 4}]}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('ravage', dict(player), mob_plain, dict(base_state), telegram_id=101, lang='ru')
-            prepared = skill_engine.use_skill('ravage', dict(player), mob_prepared, dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
-        self.assertGreater(prepared['damage'], plain['damage'])
+            bleed_prepared = skill_engine.use_skill('ravage', dict(player), mob_bleed, dict(base_state), telegram_id=101, lang='ru')
+            vulnerable_prepared = skill_engine.use_skill('ravage', dict(player), mob_plain, dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+            both_prepared = skill_engine.use_skill(
+                'ravage',
+                dict(player),
+                mob_bleed,
+                dict(base_state, vulnerability_turns=2, vulnerability_value=20),
+                telegram_id=101,
+                lang='ru',
+            )
+        self.assertGreater(bleed_prepared['damage'], plain['damage'])
+        self.assertEqual(vulnerable_prepared['damage'], bleed_prepared['damage'])
+        self.assertEqual(both_prepared['damage'], bleed_prepared['damage'])
+        self.assertEqual(both_prepared.get('log_key'), 'skills.log_ravage_payoff')
+
+    def test_pack_uses_existing_runtime_fields_without_new_state_model(self):
+        player = {'mana': 100, 'strength': 16}
+        state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            skill_engine.use_skill('sunder_armor', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertIn('vulnerability_turns', state)
+        self.assertIn('vulnerability_value', state)
+        self.assertNotIn('prepared_target_turns', state)
+
+    def test_reopen_wounds_keeps_base_behavior_without_setup(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('reopen_wounds', dict(player), mob_plain, dict(base_state), telegram_id=101, lang='ru')
+        self.assertGreater(result['damage'], 0)
+        self.assertEqual(result.get('log_key'), 'skills.log_damage')
 
     def test_direct_damage_modifiers_apply_berserk_damage_bonus(self):
         state = {'berserk_turns': 1, 'berserk_damage': 12}

@@ -30,6 +30,20 @@ def _runtime_target_has_effect(mob_state: dict, battle_state: dict, effect_types
     return any(e.get('type') in effect_types and e.get('turns', 0) > 0 for e in mob_effects)
 
 
+def _target_has_runtime_effect(mob_state: dict, battle_state: dict, effect_types: tuple[str, ...]) -> bool:
+    """
+    Локальный helper-алиас с более читаемым именем для пакетов payoff-механик.
+    """
+    return _runtime_target_has_effect(mob_state, battle_state, effect_types)
+
+
+def _is_vulnerable_target(mob_state: dict, battle_state: dict) -> bool:
+    return (
+        battle_state.get('vulnerability_turns', 0) > 0
+        or _target_has_runtime_effect(mob_state, battle_state, ('vulnerable',))
+    )
+
+
 def _is_opened_target(mob_state: dict, battle_state: dict) -> bool:
     """
     Минимальный runtime-check "opened target" без нового subsystem.
@@ -860,19 +874,27 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'skill_id': skill_id,
             })
         elif skill_id == 'reopen_wounds':
-            bleed_active = _runtime_target_has_effect(mob_state, battle_state, ('bleed',))
-            vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0
-            if bleed_active and vulnerable_active:
-                result['damage'] = int(result['damage'] * 1.45)
-            elif bleed_active or vulnerable_active:
-                result['damage'] = int(result['damage'] * 1.30)
-        elif skill_id == 'ravage':
-            bleed_active = _runtime_target_has_effect(mob_state, battle_state, ('bleed',))
-            vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0
-            if bleed_active and vulnerable_active:
-                result['damage'] = int(result['damage'] * 1.55)
-            elif bleed_active or vulnerable_active:
+            bleed_active = _target_has_runtime_effect(mob_state, battle_state, ('bleed',))
+            vulnerable_active = _is_vulnerable_target(mob_state, battle_state)
+            if bleed_active or vulnerable_active:
                 result['damage'] = int(result['damage'] * 1.25)
+                result['log_key'] = 'skills.log_reopen_wounds_payoff'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+        elif skill_id == 'ravage':
+            bleed_active = _target_has_runtime_effect(mob_state, battle_state, ('bleed',))
+            vulnerable_active = _is_vulnerable_target(mob_state, battle_state)
+            if bleed_active or vulnerable_active:
+                result['damage'] = int(result['damage'] * 1.35)
+                result['log_key'] = 'skills.log_ravage_payoff'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
         elif skill_id == 'cleave_through':
             focus_active = battle_state.get('executioner_focus_turns', 0) > 0
             vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0

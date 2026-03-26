@@ -262,6 +262,8 @@ STRINGS = {
         'log_toxic_cut': '{name} — {dmg} daño + ☠️ veneno {poison}/turno 🔵-{cost}',
         'log_crippling_venom': '{name} — 🧪 daño enemigo -{value}% y ralentización por {turns} turnos 🔵-{cost}',
         'log_widows_kiss_payoff': '{name} — 🕷️ payoff sobre objetivo debilitado: {dmg} daño 🔵-{cost}',
+        'log_reopen_wounds_payoff': '{name} — 🩸 heridas reabiertas sobre objetivo preparado: {dmg} daño 🔵-{cost}',
+        'log_ravage_payoff': '{name} — 💥 castigo ravage sobre objetivo preparado: {dmg} daño 🔵-{cost}',
         'log_rupture_toxins': '{name} — 💥 ruptura de toxinas ({stacks} cargas): {dmg} daño 🔵-{cost}',
         'log_feint_step': '{name} — 👣 preparación activa por {turns} turno 🔵-{cost}',
         'log_quick_slice_feint': '{name} — ⚡ corte potenciado: {dmg} daño + ralentización 🔵-{cost}',

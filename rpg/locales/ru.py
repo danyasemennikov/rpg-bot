@@ -298,6 +298,8 @@ STRINGS = {
         'log_toxic_cut': '{name} — {dmg} урона + ☠️ яд {poison}/ход 🔵-{cost}',
         'log_crippling_venom': '{name} — 🧪 урон врага -{value}% и замедление на {turns} хода 🔵-{cost}',
         'log_widows_kiss_payoff': '{name} — 🕷️ payoff по надломленной цели: {dmg} урона 🔵-{cost}',
+        'log_reopen_wounds_payoff': '{name} — 🩸 раны вскрыты по подготовленной цели: {dmg} урона 🔵-{cost}',
+        'log_ravage_payoff': '{name} — 💥 разорение по подготовленной цели: {dmg} урона 🔵-{cost}',
         'log_rupture_toxins': '{name} — 💥 разрыв токсинов ({stacks} стаков): {dmg} урона 🔵-{cost}',
         'log_feint_step': '{name} — 👣 подготовка на {turns} ход 🔵-{cost}',
         'log_quick_slice_feint': '{name} — ⚡ усиленный срез: {dmg} урона + замедление 🔵-{cost}',
