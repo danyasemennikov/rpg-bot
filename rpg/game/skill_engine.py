@@ -1249,8 +1249,15 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                name=get_skill_name(skill_id, lang),
                                cost=mana_cost)
 
-        # Дымовая завеса / Отступление
-        elif skill_id in ('smoke_bomb', 'retreat', 'reposition', 'riposte_step'):
+        # Defensive timing v1: короткие и предсказуемые evasive windows.
+        elif skill_id in ('smoke_bomb', 'reposition'):
+            battle_state['dodge_buff_turns'] = 1
+            battle_state['dodge_buff_value'] = int(skill['base_value'])
+            result['log'] = t('skills.log_dodge_buff', lang,
+                               name=get_skill_name(skill_id, lang),
+                               value=int(skill['base_value']),
+                               turns=1, cost=mana_cost)
+        elif skill_id in ('retreat', 'riposte_step'):
             battle_state['dodge_buff_turns'] = duration
             battle_state['dodge_buff_value'] = int(skill['base_value'])
             result['log'] = t('skills.log_dodge_buff', lang,
