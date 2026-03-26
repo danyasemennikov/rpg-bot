@@ -295,7 +295,7 @@ STRINGS = {
         'log_borrowed_flame': '{name} — 🔥 {dmg} daño + quemadura {burn}/turno por {turns} turnos 🔵-{cost}',
         'log_borrowed_grace': '{name} — ✨ {dmg} daño + gracia {value}% por {turns} turnos 🔵-{cost}',
         'log_synthesis_boost': '{name} — 🧬 síntesis potenciada: {dmg} daño 🔵-{cost}',
-        'log_forbidden_thesis_boost': '{name} — ⛔ tesis potenciada: {dmg} daño (se consumirá setup) 🔵-{cost}',
+        'log_forbidden_thesis_boost': '{name} — ⛔ tesis potenciada: {dmg} daño (el setup se consume solo con impacto exitoso) 🔵-{cost}',
 
     },
     'quests': {
