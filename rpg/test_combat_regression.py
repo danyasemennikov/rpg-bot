@@ -2337,7 +2337,7 @@ class SkillEngineRegressionTests(unittest.TestCase):
         self.assertEqual(battle_state['dodge_buff_value'], 35)
         self.assertEqual(battle_state['dodge_buff_turns'], 1)
 
-    def test_backstab_gets_crit_payoff_on_slow(self):
+    def test_backstab_gets_bonus_on_slowed_opened_target(self):
         player = {
             'mana': 200,
             'strength': 1,
@@ -2371,7 +2371,7 @@ class SkillEngineRegressionTests(unittest.TestCase):
             )
 
         self.assertTrue(result['success'])
-        self.assertEqual(result['damage'], 260)
+        self.assertEqual(result['damage'], 195)
         self.assertEqual(result['log_key'], 'skills.log_backstab_crit')
 
     def test_resurrection_skill_sets_runtime_turns_from_duration(self):
@@ -3243,7 +3243,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(other_action_result['success'])
         self.assertEqual(other_action_result['battle_state'].get('feint_step_turns', 0), 0)
 
-    def test_widows_kiss_gets_payoff_bonus_on_poisoned_or_opened_target(self):
+    def test_widows_kiss_gets_payoff_bonus_on_poisoned_or_weakened_target(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100}
@@ -3261,9 +3261,41 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
                 telegram_id=101,
                 lang='ru',
             )
+            weakened = skill_engine.use_skill(
+                'widows_kiss',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'weaken', 'turns': 2, 'value': 8}]),
+                telegram_id=101,
+                lang='ru',
+            )
 
         self.assertGreater(poisoned['damage'], plain['damage'])
+        self.assertGreater(weakened['damage'], plain['damage'])
         self.assertEqual(poisoned['log_key'], 'skills.log_widows_kiss_payoff')
+        self.assertEqual(weakened['log_key'], 'skills.log_widows_kiss_payoff')
+
+    def test_widows_kiss_gets_payoff_bonus_on_opened_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('widows_kiss', dict(player), dict(mob_state), dict(base_state, mob_effects=[]), telegram_id=101, lang='ru')
+            opened = skill_engine.use_skill(
+                'widows_kiss',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'slow', 'turns': 1, 'value': 0}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(opened['damage'], plain['damage'])
+        self.assertEqual(opened['log_key'], 'skills.log_widows_kiss_payoff')
 
     def test_rupture_toxins_consumes_poison_effects_and_keeps_slow(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
