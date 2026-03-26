@@ -4728,6 +4728,233 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('blessing_turns', hooks['active_windows'])
         self.assertIn('vulnerability_turns', hooks['active_windows'])
 
+    def test_enemy_targeted_direct_damage_skill_can_miss(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'defense': 0, 'level': 2}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 60,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 22,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage_school': 'magic',
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Fireball', 'dmg': 22, 'cost': 10},
+            'log_suffixes': [],
+            'post_hit_actions': [],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False, 'hit_chance': 25, 'roll': 99, 'accuracy_rating': 100, 'evasion_rating': 200}), \
+             patch('game.combat.finalize_player_direct_damage_action') as finalize_mock, \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('fireball', player, mob, state, user_id=101, lang='ru')
+
+        finalize_mock.assert_not_called()
+        self.assertEqual(result['battle_state']['mob_hp'], 60)
+        self.assertEqual(result['skill_result']['damage'], 0)
+        self.assertIn('direct_damage_result', result['skill_result'])
+
+    def test_enemy_targeted_direct_damage_skill_hit_path_still_works(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'defense': 0, 'level': 2}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 60,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 22,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage_school': 'magic',
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Fireball', 'dmg': 22, 'cost': 10},
+            'log_suffixes': [],
+            'post_hit_actions': [],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'hit', 'is_hit': True, 'hit_chance': 95, 'roll': 1, 'accuracy_rating': 200, 'evasion_rating': 100}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('fireball', player, mob, state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['mob_hp'], 38)
+        self.assertEqual(result['skill_result']['damage'], 22)
+
+    def test_skill_miss_does_not_apply_post_hit_actions(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'defense': 0, 'level': 2}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'defense_buff_turns': 0,
+            'defense_buff_value': 0,
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 20,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage_school': 'holy',
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Guardian Light', 'dmg': 20, 'cost': 10},
+            'log_suffixes': [],
+            'post_hit_actions': [{'type': 'refresh_defense_buff', 'turns': 2, 'value': 14}],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False, 'hit_chance': 25, 'roll': 99, 'accuracy_rating': 100, 'evasion_rating': 200}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('guardian_light', player, mob, state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['defense_buff_turns'], 0)
+        self.assertEqual(result['battle_state']['defense_buff_value'], 0)
+
+    def test_skill_miss_does_not_consume_hit_gated_payoff_window(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'defense': 0, 'level': 2}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'vulnerability_turns': 2,
+            'vulnerability_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 25,
+            'heal': 0,
+            'effects': [],
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage_school': 'physical',
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Final Verdict', 'dmg': 25, 'cost': 12},
+            'log_suffixes': [],
+            'post_hit_actions': [{'type': 'consume_vulnerability'}],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False, 'hit_chance': 25, 'roll': 99, 'accuracy_rating': 100, 'evasion_rating': 200}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('final_verdict', player, mob, state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['vulnerability_turns'], 2)
+        self.assertEqual(result['battle_state']['vulnerability_value'], 20)
+
+    def test_skill_miss_does_not_apply_enemy_effects(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 5, 'luck': 5}
+        mob = {'id': 'wolf', 'defense': 0, 'level': 2}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 25,
+            'heal': 0,
+            'effects': [
+                {'type': 'burn', 'turns': 2, 'value': 4},
+                {'type': 'slow', 'turns': 1, 'value': 20},
+                {'type': 'weaken', 'turns': 2, 'value': 15},
+            ],
+            'direct_damage_skill': True,
+            'target_kind': 'enemy',
+            'damage_school': 'magic',
+            'log_key': 'skills.log_damage',
+            'log_params': {'name': 'Borrowed Flame', 'dmg': 25, 'cost': 12},
+            'log_suffixes': [],
+            'post_hit_actions': [],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'miss', 'is_hit': False, 'hit_chance': 25, 'roll': 99, 'accuracy_rating': 100, 'evasion_rating': 200}), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('borrowed_flame', player, mob, state, user_id=101, lang='ru')
+
+        self.assertEqual(result['battle_state']['mob_hp'], 100)
+        self.assertEqual(result['skill_result']['damage'], 0)
+        self.assertEqual(result['battle_state']['mob_effects'], [])
+
+    def test_non_enemy_skill_bypasses_accuracy_gate(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0, 'level': 2}
+        state = {
+            'player_hp': 70,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+        }
+        skill_result = {
+            'success': True,
+            'log': 'cast',
+            'damage': 0,
+            'heal': 20,
+            'effects': [],
+            'direct_damage_skill': False,
+            'target_kind': 'self',
+            'log_key': None,
+            'log_params': {},
+            'log_suffixes': [],
+            'post_hit_actions': [],
+        }
+
+        with patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.resolve_hit_check') as hit_check_mock, \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            result = combat.process_skill_turn('heal', player, mob, state, user_id=101, lang='ru')
+
+        hit_check_mock.assert_not_called()
+        self.assertEqual(result['battle_state']['player_hp'], 90)
+
     def test_magic_staff_holy_staff_holy_rod_regression_spot_check(self):
         self.assertEqual(game_skills.SKILL_TREES['magic_staff']['A'][0], 'fireball')
         self.assertEqual(game_skills.SKILL_TREES['holy_staff']['A'][0], 'heal')
