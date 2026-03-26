@@ -408,6 +408,59 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
                 battle_state['blessing_value'] = 0
 
 
+def resolve_enemy_targeted_direct_damage_skill_action(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    skill_result: dict,
+    *,
+    lang: str = 'ru',
+) -> dict:
+    """
+    Узкий helper для Accuracy/Evasion phase 2:
+    hit-gate только для enemy-targeted direct-damage skills.
+    """
+    if not skill_result.get('direct_damage_skill'):
+        return {'handled': False, 'is_hit': None, 'hit_check': None}
+    if skill_result.get('target_kind') != 'enemy':
+        return {'handled': False, 'is_hit': None, 'hit_check': None}
+
+    hit_check = resolve_hit_check(
+        get_player_accuracy_rating(player, battle_state),
+        get_enemy_evasion_rating(mob, battle_state),
+    )
+    if not hit_check['is_hit']:
+        base_damage = skill_result.get('damage', 0)
+        skill_result['damage'] = 0
+        skill_result['effects'] = []
+        skill_result['direct_damage_result'] = {
+            'base_damage': base_damage,
+            'damage': 0,
+            'final_damage': 0,
+            'damage_school': skill_result.get('damage_school'),
+            'mob_hp_before': battle_state.get('mob_hp', 0),
+            'mob_hp_after': battle_state.get('mob_hp', 0),
+            'mob_dead': False,
+            'modifiers_applied': False,
+            'guaranteed_crit_applied': False,
+            'hit_check': hit_check,
+        }
+        skill_result['log'] = t('battle.mob_dodge', lang)
+        return {'handled': True, 'is_hit': False, 'hit_check': hit_check}
+
+    action_result = finalize_player_direct_damage_action(
+        battle_state,
+        base_damage=skill_result.get('damage', 0),
+        can_consume_guaranteed_crit=True,
+        damage_school=skill_result.get('damage_school'),
+    )
+    skill_result['damage'] = action_result['final_damage']
+    skill_result['direct_damage_result'] = action_result
+    apply_post_hit_skill_actions(skill_result, battle_state)
+    finalize_direct_damage_skill_result(skill_result, lang)
+    return {'handled': True, 'is_hit': True, 'hit_check': hit_check}
+
+
 def resolve_enemy_damage_against_player(
     battle_state: dict,
     *,
@@ -602,16 +655,24 @@ def process_skill_turn(
 
     direct_damage = skill_result.get('damage', 0)
     if direct_damage > 0:
-        action_result = finalize_player_direct_damage_action(
+        gate_result = resolve_enemy_targeted_direct_damage_skill_action(
+            player_state,
+            mob,
             battle_state,
-            base_damage=direct_damage,
-            can_consume_guaranteed_crit=True,
-            damage_school=skill_result.get('damage_school'),
+            skill_result,
+            lang=lang,
         )
-        skill_result['damage'] = action_result['final_damage']
-        skill_result['direct_damage_result'] = action_result
-        apply_post_hit_skill_actions(skill_result, battle_state)
-        finalize_direct_damage_skill_result(skill_result, lang)
+        if not gate_result.get('handled'):
+            action_result = finalize_player_direct_damage_action(
+                battle_state,
+                base_damage=direct_damage,
+                can_consume_guaranteed_crit=True,
+                damage_school=skill_result.get('damage_school'),
+            )
+            skill_result['damage'] = action_result['final_damage']
+            skill_result['direct_damage_result'] = action_result
+            apply_post_hit_skill_actions(skill_result, battle_state)
+            finalize_direct_damage_skill_result(skill_result, lang)
 
     log.append(skill_result['log'])
 
