@@ -2158,7 +2158,7 @@ class CombatRegressionTests(unittest.TestCase):
             'log': [],
             'turn': 1,
         }
-        judged_state = dict(plain_state, vulnerability_turns=2, vulnerability_value=20)
+        judged_state = dict(plain_state, mob_effects=[{'type': 'judgment_mark', 'turns': 2, 'value': 20}])
 
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
@@ -4481,26 +4481,29 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(state.get('defense_buff_turns', 0), 0)
         self.assertGreater(state.get('defense_buff_value', 0), 0)
 
-    def test_judgment_mark_sets_vulnerability_correctly(self):
+    def test_judgment_mark_sets_runtime_mark_effect(self):
         player = {'mana': 100, 'wisdom': 18}
-        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
+        state = {'weapon_damage': 10, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff', 'mob_effects': []}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'):
             skill_engine.use_skill('judgment_mark', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
-        self.assertGreater(state.get('vulnerability_turns', 0), 0)
-        self.assertGreater(state.get('vulnerability_value', 0), 0)
+        mark_effects = [e for e in state.get('mob_effects', []) if e.get('type') == 'judgment_mark']
+        self.assertEqual(len(mark_effects), 1)
+        self.assertEqual(mark_effects[0].get('turns'), game_skills.SKILLS['judgment_mark']['duration'])
+        self.assertGreater(mark_effects[0].get('value', 0), 0)
 
     def test_sanctified_burst_gets_payoff_vs_judged_target(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
         base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff'}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
-             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+            patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
-            judged = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+            judged_state = dict(base_state, mob_effects=[{'type': 'judgment_mark', 'turns': 2, 'value': 20}])
+            judged = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), judged_state, telegram_id=101, lang='ru')
         self.assertGreater(judged['damage'], plain['damage'])
 
     def test_halo_of_dawn_gets_judged_target_synergy(self):
@@ -4508,13 +4511,33 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff', 'player_hp': 70, 'player_max_hp': 100}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
-             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+            patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('halo_of_dawn', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
-            judged = skill_engine.use_skill('halo_of_dawn', dict(player), dict(mob_state), dict(base_state, vulnerability_turns=2, vulnerability_value=20), telegram_id=101, lang='ru')
+            judged_state = dict(base_state, mob_effects=[{'type': 'judgment_mark', 'turns': 2, 'value': 20}])
+            judged = skill_engine.use_skill('halo_of_dawn', dict(player), dict(mob_state), judged_state, telegram_id=101, lang='ru')
         self.assertGreater(judged['damage'], plain['damage'])
         self.assertGreaterEqual(judged['heal'], 0)
+
+    def test_light_combo_path_is_controlled_to_single_predictable_multiplier(self):
+        player = {'mana': 100, 'hp': 70, 'max_hp': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        plain_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff', 'player_hp': 70, 'player_max_hp': 100}
+        judged_state = dict(plain_state, mob_effects=[{'type': 'judgment_mark', 'turns': 2, 'value': 20}])
+        combo_state = dict(judged_state, defense_buff_turns=2, defense_buff_value=16)
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), dict(plain_state), telegram_id=101, lang='ru')
+            judged = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), dict(judged_state), telegram_id=101, lang='ru')
+            combo = skill_engine.use_skill('sanctified_burst', dict(player), dict(mob_state), dict(combo_state), telegram_id=101, lang='ru')
+
+        self.assertGreater(judged['damage'], plain['damage'])
+        self.assertGreater(combo['damage'], judged['damage'])
+        self.assertEqual(combo.get('log_key'), 'skills.log_sanctified_burst_combo')
 
     def test_cleanse_has_supported_truthful_behavior_without_new_state_framework(self):
         player = {'mana': 100, 'hp': 60, 'max_hp': 100, 'wisdom': 18}
@@ -4535,6 +4558,62 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.get('poison_turns', 0), 0)
         self.assertEqual(state.get('stun_turns', 0), 0)
         self.assertGreater(result['heal'], 0)
+
+    def test_cleanse_max_effects_does_not_zero_value_of_non_removed_debuff(self):
+        player = {'mana': 100, 'hp': 70, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 70,
+            'player_max_hp': 100,
+            'slow_turns': 1,
+            'weaken_turns': 2,
+            'weaken_value': 15,
+        }
+        original_max = game_skills.SKILLS['cleanse'].get('cleanse_max_effects', 3)
+        game_skills.SKILLS['cleanse']['cleanse_max_effects'] = 1
+        try:
+            with patch('game.skill_engine.get_skill_level', return_value=1), \
+                 patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+                 patch('game.skill_engine.set_skill_cooldown'):
+                result = skill_engine.use_skill('cleanse', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        finally:
+            game_skills.SKILLS['cleanse']['cleanse_max_effects'] = original_max
+
+        self.assertEqual(result.get('target_kind'), 'self')
+        self.assertEqual(state.get('slow_turns', 0), 0)
+        self.assertEqual(state.get('weaken_turns', 0), 2)
+        self.assertEqual(state.get('weaken_value', 0), 15)
+        self.assertIn('снято эффектов: 1', result['log'])
+        self.assertNotIn('cleanse_max_effects_override', state)
+
+    def test_cleanse_does_not_write_service_override_field_to_state(self):
+        player = {'mana': 100, 'hp': 75, 'max_hp': 100, 'wisdom': 18}
+        state = {
+            'weapon_damage': 10,
+            'weapon_type': 'magic',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 75,
+            'player_max_hp': 100,
+            'poison_turns': 2,
+            'poison_value': 8,
+            'burn_turns': 2,
+            'burn_value': 6,
+        }
+        original_max = game_skills.SKILLS['cleanse'].get('cleanse_max_effects', 3)
+        game_skills.SKILLS['cleanse']['cleanse_max_effects'] = 1
+        try:
+            with patch('game.skill_engine.get_skill_level', return_value=1), \
+                 patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+                 patch('game.skill_engine.set_skill_cooldown'):
+                skill_engine.use_skill('cleanse', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        finally:
+            game_skills.SKILLS['cleanse']['cleanse_max_effects'] = original_max
+
+        active_turns = int(state.get('poison_turns', 0) > 0) + int(state.get('burn_turns', 0) > 0)
+        self.assertEqual(active_turns, 1)
+        self.assertNotIn('cleanse_max_effects_override', state)
 
     def test_support_heal_can_target_ally_without_party_combat_rollout(self):
         player = {'mana': 100, 'hp': 100, 'max_hp': 100, 'wisdom': 18}
@@ -4742,6 +4821,47 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             skill_engine.use_skill('judgment', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
         self.assertGreater(state.get('vulnerability_turns', 0), 0)
         self.assertGreater(state.get('vulnerability_value', 0), 0)
+
+    def test_judgment_mark_and_judgment_use_different_log_keys(self):
+        player = {'mana': 100, 'wisdom': 18}
+        holy_state = {'weapon_damage': 12, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff', 'mob_effects': []}
+        rod_state = {'weapon_damage': 12, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+
+        def t_key_only(key, _lang='ru', **_kwargs):
+            return key
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.t', side_effect=t_key_only):
+            holy_result = skill_engine.use_skill('judgment_mark', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, holy_state, telegram_id=101, lang='ru')
+            rod_result = skill_engine.use_skill('judgment', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, rod_state, telegram_id=101, lang='ru')
+
+        self.assertEqual(holy_result['log'], 'skills.log_judgment_mark_holy')
+        self.assertEqual(rod_result['log'], 'skills.log_judgment_vulnerability')
+
+    def test_judgment_log_remains_vulnerability_oriented(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 12, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('judgment', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertIn('входящий урон', result['log'])
+        self.assertIn('+', result['log'])
+
+    def test_judgment_mark_log_does_not_claim_generic_incoming_damage_bonus(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state = {'weapon_damage': 12, 'weapon_type': 'magic', 'weapon_profile': 'holy_staff', 'mob_effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('judgment_mark', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        self.assertIn('Печатью суда', result['log'])
+        self.assertNotIn('входящий урон', result['log'])
+        self.assertNotIn('+', result['log'])
 
     def test_aegis_strike_gets_bonus_with_active_protection(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
