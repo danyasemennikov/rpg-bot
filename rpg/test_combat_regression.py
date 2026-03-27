@@ -6344,6 +6344,32 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             plain = skill_engine.use_skill('synthesis', dict(player), dict(mob_plain), dict(base_state), telegram_id=101, lang='ru')
             boosted = skill_engine.use_skill('synthesis', dict(player), dict(mob_burn), dict(base_state, blessing_turns=2, blessing_value=8), telegram_id=101, lang='ru')
         self.assertGreater(boosted['damage'], plain['damage'])
+        self.assertEqual(boosted['damage'], int(plain['damage'] * 1.50))
+
+    def test_synthesis_gets_partial_payoff_from_one_side_setup(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 16, 'vitality': 1, 'wisdom': 16, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'tome'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_burn = {'hp': 100, 'defense': 0, 'effects': [{'type': 'burn', 'turns': 2, 'value': 5}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('synthesis', dict(player), dict(mob_plain), dict(base_state), telegram_id=101, lang='ru')
+            burn_only = skill_engine.use_skill('synthesis', dict(player), dict(mob_burn), dict(base_state), telegram_id=101, lang='ru')
+            grace_only = skill_engine.use_skill(
+                'synthesis',
+                dict(player),
+                dict(mob_plain),
+                dict(base_state, blessing_turns=2, blessing_value=8),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(burn_only['damage'], plain['damage'])
+        self.assertGreater(grace_only['damage'], plain['damage'])
+        self.assertEqual(burn_only['damage'], int(plain['damage'] * 1.18))
+        self.assertEqual(grace_only['damage'], int(plain['damage'] * 1.18))
 
     def test_forbidden_thesis_consumes_mixed_windows_only_on_successful_hit(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 16, 'vitality': 1, 'wisdom': 16, 'luck': 1}
