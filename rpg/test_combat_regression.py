@@ -5379,7 +5379,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.get('executioner_focus_turns', 0), 2)
         self.assertGreater(state.get('executioner_focus_value', 0), 0)
 
-    def test_cleave_through_gets_payoff_from_focus_and_consumes_it(self):
+    def test_cleave_through_gets_payoff_from_focus_and_marks_post_hit_focus_consumption(self):
         player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h', 'mob_hp': 100, 'mob_max_hp': 100}
@@ -5391,8 +5391,9 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             focus_state = dict(base_state, executioner_focus_turns=1, executioner_focus_value=20)
             payoff = skill_engine.use_skill('cleave_through', dict(player), dict(mob_state), focus_state, telegram_id=101, lang='ru')
         self.assertGreater(payoff['damage'], plain['damage'])
-        self.assertEqual(focus_state.get('executioner_focus_turns', 0), 0)
-        self.assertEqual(focus_state.get('executioner_focus_value', 0), 0)
+        self.assertEqual(focus_state.get('executioner_focus_turns', 0), 1)
+        self.assertEqual(focus_state.get('executioner_focus_value', 0), 20)
+        self.assertIn({'type': 'consume_executioner_focus'}, payoff.get('post_hit_actions', []))
 
     def test_cleave_through_is_stronger_into_vulnerable_and_or_wounded_target(self):
         player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -5419,6 +5420,22 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             plain = skill_engine.use_skill('executioners_stroke', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
             wounded = skill_engine.use_skill('executioners_stroke', dict(player), dict(mob_state), dict(base_state, mob_hp=30), telegram_id=101, lang='ru')
         self.assertGreater(wounded['damage'], plain['damage'])
+
+    def test_executioners_stroke_gets_focus_payoff_and_marks_post_hit_focus_consumption(self):
+        player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'max_hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h', 'mob_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('executioners_stroke', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            focus_state = dict(base_state, executioner_focus_turns=1, executioner_focus_value=20)
+            focused = skill_engine.use_skill('executioners_stroke', dict(player), dict(mob_state), focus_state, telegram_id=101, lang='ru')
+        self.assertGreater(focused['damage'], plain['damage'])
+        self.assertEqual(focus_state.get('executioner_focus_turns', 0), 1)
+        self.assertEqual(focus_state.get('executioner_focus_value', 0), 20)
+        self.assertIn({'type': 'consume_executioner_focus'}, focused.get('post_hit_actions', []))
 
     def test_init_battle_sets_mob_max_hp_for_live_runtime_wounded_checks(self):
         player = {
@@ -5461,7 +5478,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(state.get('dodge_buff_turns', 0), 0)
         self.assertGreater(state.get('dodge_buff_value', 0), 0)
 
-    def test_flowing_combo_gets_stance_payoff_and_consumes_stance(self):
+    def test_flowing_combo_gets_stance_payoff_and_marks_post_hit_stance_consumption(self):
         player = {'mana': 100, 'strength': 1, 'agility': 18, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'sword_2h'}
@@ -5473,8 +5490,109 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             stance_state = dict(base_state, battle_stance_turns=1, battle_stance_value=16)
             payoff = skill_engine.use_skill('flowing_combo', dict(player), dict(mob_state), stance_state, telegram_id=101, lang='ru')
         self.assertGreater(payoff['damage'], plain['damage'])
-        self.assertEqual(stance_state.get('battle_stance_turns', 0), 0)
-        self.assertEqual(stance_state.get('battle_stance_value', 0), 0)
+        self.assertEqual(stance_state.get('battle_stance_turns', 0), 1)
+        self.assertEqual(stance_state.get('battle_stance_value', 0), 16)
+        self.assertIn({'type': 'consume_battle_stance'}, payoff.get('post_hit_actions', []))
+
+    def test_process_skill_turn_consumes_executioner_focus_only_on_successful_hit(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'executioner_focus_turns': 1,
+            'executioner_focus_value': 20,
+            'log': [],
+            'turn': 1,
+        }
+        def make_skill_result():
+            return {
+                'success': True,
+                'damage': 20,
+                'heal': 0,
+                'effects': [],
+                'log': 'cast',
+                'direct_damage_skill': True,
+                'target_kind': 'enemy',
+                'log_key': 'skills.log_damage',
+                'log_params': {'name': 'Cleave Through', 'dmg': 20, 'cost': 10},
+                'log_suffixes': [],
+                'post_hit_actions': [{'type': 'consume_executioner_focus'}],
+                'lifesteal_ratio': 0.0,
+                'heal_from_damage_ratio': 0.0,
+                'heal_cap_missing_hp': 0,
+            }
+
+        miss_hit_check = {'outcome': 'dodge', 'is_hit': False, 'hit_chance': 50, 'roll': 100, 'accuracy_rating': 100, 'evasion_rating': 120}
+        with patch('game.combat.use_skill', side_effect=lambda *_args, **_kwargs: make_skill_result()), \
+             patch('game.combat.resolve_hit_check', return_value=miss_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            miss_result = combat.process_skill_turn('cleave_through', player, mob, dict(battle_state), user_id=101, lang='ru')
+        self.assertEqual(miss_result['battle_state']['executioner_focus_turns'], 1)
+        self.assertEqual(miss_result['battle_state']['executioner_focus_value'], 20)
+
+        hit_hit_check = {'outcome': 'hit', 'is_hit': True, 'hit_chance': 95, 'roll': 1, 'accuracy_rating': 100, 'evasion_rating': 100}
+        with patch('game.combat.use_skill', side_effect=lambda *_args, **_kwargs: make_skill_result()), \
+             patch('game.combat.resolve_hit_check', return_value=hit_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            hit_result = combat.process_skill_turn('cleave_through', player, mob, dict(battle_state), user_id=101, lang='ru')
+        self.assertEqual(hit_result['battle_state']['executioner_focus_turns'], 0)
+        self.assertEqual(hit_result['battle_state']['executioner_focus_value'], 0)
+
+    def test_process_skill_turn_consumes_battle_stance_only_on_successful_hit(self):
+        player = {'hp': 100, 'mana': 80}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'battle_stance_turns': 1,
+            'battle_stance_value': 18,
+            'log': [],
+            'turn': 1,
+        }
+        def make_skill_result():
+            return {
+                'success': True,
+                'damage': 20,
+                'heal': 0,
+                'effects': [],
+                'log': 'cast',
+                'direct_damage_skill': True,
+                'target_kind': 'enemy',
+                'log_key': 'skills.log_damage',
+                'log_params': {'name': 'Flowing Combo', 'dmg': 20, 'cost': 10},
+                'log_suffixes': [],
+                'post_hit_actions': [{'type': 'consume_battle_stance'}],
+                'lifesteal_ratio': 0.0,
+                'heal_from_damage_ratio': 0.0,
+                'heal_cap_missing_hp': 0,
+            }
+
+        miss_hit_check = {'outcome': 'dodge', 'is_hit': False, 'hit_chance': 50, 'roll': 100, 'accuracy_rating': 100, 'evasion_rating': 120}
+        with patch('game.combat.use_skill', side_effect=lambda *_args, **_kwargs: make_skill_result()), \
+             patch('game.combat.resolve_hit_check', return_value=miss_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            miss_result = combat.process_skill_turn('flowing_combo', player, mob, dict(battle_state), user_id=101, lang='ru')
+        self.assertEqual(miss_result['battle_state']['battle_stance_turns'], 1)
+        self.assertEqual(miss_result['battle_state']['battle_stance_value'], 18)
+
+        hit_hit_check = {'outcome': 'hit', 'is_hit': True, 'hit_chance': 95, 'roll': 1, 'accuracy_rating': 100, 'evasion_rating': 100}
+        with patch('game.combat.use_skill', side_effect=lambda *_args, **_kwargs: make_skill_result()), \
+             patch('game.combat.resolve_hit_check', return_value=hit_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            hit_result = combat.process_skill_turn('flowing_combo', player, mob, dict(battle_state), user_id=101, lang='ru')
+        self.assertEqual(hit_result['battle_state']['battle_stance_turns'], 0)
+        self.assertEqual(hit_result['battle_state']['battle_stance_value'], 0)
 
     def test_masters_sequence_behaves_as_capstone_combo_finisher(self):
         player = {'mana': 100, 'strength': 1, 'agility': 18, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
