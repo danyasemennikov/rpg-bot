@@ -11,6 +11,9 @@ from game.balance import (
     calc_physical_defense, calc_magic_defense,
     calc_crit_reduction, calc_action_priority,
     calc_physical_damage_reduction,
+    calc_defense_mitigation_percent,
+    combine_mitigation_percents,
+    apply_mitigation_percent,
     calc_armor_class_defense_multiplier,
     calc_offhand_defense_multiplier,
     calc_armor_class_dodge_bonus_percent,
@@ -1196,12 +1199,16 @@ def mob_attack(mob: dict, player: dict, *, allow_dodge: bool = True) -> dict:
     )
     defense = int(defense * defense_multiplier)
 
-    # Снижение входящего урона от Ловкости — только против physical
+    defense_mitigation = calc_defense_mitigation_percent(
+        defense,
+        school='physical' if incoming_school == 'physical' else 'magic',
+    )
+    agility_mitigation = 0.0
     if incoming_school == 'physical':
-        agi_reduction = calc_physical_damage_reduction(player['agility'])
-        base_damage = int(base_damage * (1 - agi_reduction / 100))
+        agility_mitigation = calc_physical_damage_reduction(player['agility'])
 
-    final_damage  = apply_defense(base_damage, defense)
+    total_mitigation = combine_mitigation_percents(defense_mitigation, agility_mitigation)
+    final_damage = apply_mitigation_percent(base_damage, total_mitigation)
     new_hp        = max(0, player['hp'] - final_damage)
 
     return {
