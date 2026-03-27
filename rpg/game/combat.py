@@ -273,6 +273,32 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
         if battle_state.get(key, 0) > 0:
             battle_state[key] -= 1
 
+    # Berserker cleanup: normalize naturally expired/desynced state
+    # so stale values do not survive when timers are inactive.
+    berserk_turns = battle_state.get('berserk_turns', 0)
+    penalty_turns = battle_state.get('berserk_defense_penalty_turns', 0)
+    if berserk_turns <= 0:
+        battle_state['berserk_turns'] = 0
+        battle_state['berserk_damage'] = 0
+    if penalty_turns <= 0 and (
+        'berserk_defense_penalty_turns' in battle_state
+        or 'berserk_defense_penalty' in battle_state
+    ):
+        battle_state['berserk_defense_penalty_turns'] = 0
+        battle_state['berserk_defense_penalty'] = 0
+    has_penalty_runtime = (
+        'berserk_defense_penalty_turns' in battle_state
+        or 'berserk_defense_penalty' in battle_state
+    )
+    if has_penalty_runtime and (
+        (battle_state.get('berserk_turns', 0) > 0 and battle_state.get('berserk_defense_penalty_turns', 0) <= 0)
+        or (battle_state.get('berserk_turns', 0) <= 0 and battle_state.get('berserk_defense_penalty_turns', 0) > 0)
+    ):
+        battle_state['berserk_turns'] = 0
+        battle_state['berserk_damage'] = 0
+        battle_state['berserk_defense_penalty_turns'] = 0
+        battle_state['berserk_defense_penalty'] = 0
+
 
 def apply_direct_damage_action_modifiers(
     battle_state: dict,

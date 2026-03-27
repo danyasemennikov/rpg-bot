@@ -867,6 +867,31 @@ class CombatRegressionTests(unittest.TestCase):
         combat.tick_post_action_player_buff_durations(state)
         self.assertEqual(state['berserk_turns'], 1)
 
+    def test_berserk_natural_expiry_clears_berserk_damage_value(self):
+        state = {'berserk_turns': 1, 'berserk_damage': 17}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['berserk_turns'], 0)
+        self.assertEqual(state['berserk_damage'], 0)
+
+    def test_berserk_penalty_natural_expiry_clears_penalty_value(self):
+        state = {'berserk_defense_penalty_turns': 1, 'berserk_defense_penalty': 25}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['berserk_defense_penalty_turns'], 0)
+        self.assertEqual(state['berserk_defense_penalty'], 0)
+
+    def test_berserk_desynced_state_is_normalized_to_clean_inactive_runtime(self):
+        state = {
+            'berserk_turns': 0,
+            'berserk_damage': 18,
+            'berserk_defense_penalty_turns': 2,
+            'berserk_defense_penalty': 25,
+        }
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['berserk_turns'], 0)
+        self.assertEqual(state['berserk_damage'], 0)
+        self.assertEqual(state['berserk_defense_penalty_turns'], 0)
+        self.assertEqual(state['berserk_defense_penalty'], 0)
+
     def test_blessing_turns_decrement_in_combat_core_post_action_timing(self):
         state = {'defense_buff_turns': 0, 'berserk_turns': 0, 'blessing_turns': 2}
         combat.tick_post_action_player_buff_durations(state)
