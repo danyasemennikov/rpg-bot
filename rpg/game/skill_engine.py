@@ -1448,13 +1448,16 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
         # Берсерк
         elif skill_id in ('berserker', 'rage_call'):
+            penalty_base = int(skill.get('defense_penalty', 25))
+            penalty_level_bonus = int(skill.get('defense_penalty_level_bonus', 0))
+            penalty_value = penalty_base + max(0, skill_level - 1) * penalty_level_bonus
             battle_state['berserk_turns']  = duration
             battle_state['berserk_damage'] = int(value)
             battle_state['berserk_defense_penalty_turns'] = duration
-            battle_state['berserk_defense_penalty'] = int(skill.get('defense_penalty', 25))
+            battle_state['berserk_defense_penalty'] = penalty_value
             result['log'] = t('skills.log_berserker', lang,
                                name=get_skill_name(skill_id, lang),
-                               value=int(value), cost=mana_cost)
+                               value=int(value), turns=duration, cost=mana_cost)
             if skill_id == 'rage_call':
                 max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
                 current_hp = battle_state.get('player_hp', player.get('hp', 100))

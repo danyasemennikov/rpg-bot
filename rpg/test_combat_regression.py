@@ -5106,6 +5106,21 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.get('player_hp'), 1)
         self.assertEqual(player.get('hp'), 1)
 
+    def test_rage_call_defense_penalty_scales_with_skill_level(self):
+        player = {'mana': 100, 'hp': 100, 'max_hp': 100, 'strength': 16}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h', 'player_hp': 100, 'player_max_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            level1 = dict(base_state)
+            skill_engine.use_skill('rage_call', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, level1, telegram_id=101, lang='ru')
+        with patch('game.skill_engine.get_skill_level', return_value=3), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            level3 = dict(base_state)
+            skill_engine.use_skill('rage_call', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, level3, telegram_id=101, lang='ru')
+        self.assertGreater(level3.get('berserk_defense_penalty', 0), level1.get('berserk_defense_penalty', 0))
+
     def test_frenzy_chain_gets_berserk_payoff_and_schedules_hit_gated_consumption(self):
         player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}

@@ -1031,6 +1031,7 @@ SKILLS = {
         'base_value':     14,
         'duration':       2,
         'defense_penalty': 25,
+        'defense_penalty_level_bonus': 2,
         'hp_cost_ratio':  0.12,
         'level_bonus':    0.08,
     },
@@ -1200,6 +1201,7 @@ SKILLS = {
         'base_value':     20,
         'duration':       3,
         'defense_penalty': 25,
+        'defense_penalty_level_bonus': 2,
         'level_bonus':    0.08,
     },
 
