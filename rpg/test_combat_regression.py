@@ -1731,10 +1731,10 @@ class CombatRegressionTests(unittest.TestCase):
             can_consume_guaranteed_crit=True,
         )
 
-        self.assertEqual(result['final_damage'], 36)
+        self.assertEqual(result['final_damage'], 30)
         self.assertTrue(result['guaranteed_crit_applied'])
         self.assertEqual(state['guaranteed_crit_turns'], 0)
-        self.assertEqual(state['hunters_mark_turns'], 0)
+        self.assertEqual(state['hunters_mark_turns'], 1)
         self.assertEqual(state['vulnerability_turns'], 0)
 
     def test_non_damage_skill_does_not_use_shared_finalize_direct_damage_helper(self):
@@ -1827,15 +1827,15 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(contract['final_damage'], result['skill_result']['damage'])
         self.assertEqual(contract['mob_hp_after'], result['battle_state']['mob_hp'])
 
-    def test_hunters_mark_bonus_applies_to_normal_attack_and_decrements_on_use(self):
+    def test_hunters_mark_is_not_global_direct_damage_modifier_anymore(self):
         result = combat.apply_direct_damage_action_modifiers(
             {'hunters_mark_turns': 2, 'hunters_mark_value': 50, 'vulnerability_turns': 0, 'vulnerability_value': 0, 'guaranteed_crit_turns': 0},
             20,
             can_consume_guaranteed_crit=False,
         )
-        self.assertEqual(result['damage'], 30)
+        self.assertEqual(result['damage'], 20)
 
-    def test_hunters_mark_bonus_applies_to_damage_skill_and_decrements_only_on_damage(self):
+    def test_hunters_mark_is_not_consumed_in_generic_damage_modifier_path(self):
         state = {
             'guaranteed_crit_turns': 0,
             'hunters_mark_turns': 2,
@@ -1848,10 +1848,10 @@ class CombatRegressionTests(unittest.TestCase):
         turns_after_damage = state['hunters_mark_turns']
         heal_result = combat.apply_direct_damage_action_modifiers(state, 0, can_consume_guaranteed_crit=True)
 
-        self.assertEqual(damage_result['damage'], 30)
-        self.assertEqual(turns_after_damage, 1)
+        self.assertEqual(damage_result['damage'], 20)
+        self.assertEqual(turns_after_damage, 2)
         self.assertEqual(heal_result['damage'], 0)
-        self.assertEqual(state['hunters_mark_turns'], 1)
+        self.assertEqual(state['hunters_mark_turns'], 2)
 
     def test_vulnerability_bonus_applies_to_normal_attack_and_decrements_on_use(self):
         state = {
@@ -1931,9 +1931,9 @@ class CombatRegressionTests(unittest.TestCase):
              patch('game.combat.resolve_enemy_response', return_value=[]):
             result = combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
 
-        # 10 -> crit 25 -> hunter 30 -> vulnerability 36
-        self.assertEqual(result['skill_result']['damage'], 36)
-        self.assertIn('36', result['battle_state']['log'][-1])
+        # 10 -> crit 25 -> vulnerability 30 (hunter mark no longer global here)
+        self.assertEqual(result['skill_result']['damage'], 30)
+        self.assertIn('30', result['battle_state']['log'][-1])
         self.assertNotIn('10', result['battle_state']['log'][-1])
 
     def test_lifesteal_heal_stays_consistent_with_final_modified_damage(self):
@@ -1970,12 +1970,12 @@ class CombatRegressionTests(unittest.TestCase):
              patch('game.combat.resolve_enemy_response', return_value=[]):
             result = combat.process_skill_turn('drain', player, mob, battle_state, user_id=101, lang='ru')
 
-        # 10 -> crit 25 -> hunter 30, heal scales from 3 to 9
-        self.assertEqual(result['skill_result']['damage'], 30)
-        self.assertEqual(result['skill_result']['heal'], 9)
-        self.assertEqual(result['battle_state']['player_hp'], 49)
-        self.assertIn('30', result['battle_state']['log'][-1])
-        self.assertIn('❤️+9', result['battle_state']['log'][-1])
+        # 10 -> crit 25, heal scales from 3 to 7
+        self.assertEqual(result['skill_result']['damage'], 25)
+        self.assertEqual(result['skill_result']['heal'], 7)
+        self.assertEqual(result['battle_state']['player_hp'], 47)
+        self.assertIn('25', result['battle_state']['log'][-1])
+        self.assertIn('❤️+7', result['battle_state']['log'][-1])
 
     def test_halo_of_dawn_heal_recalculates_from_final_damage_after_finalize(self):
         player = {'hp': 40, 'mana': 80}
@@ -2014,9 +2014,9 @@ class CombatRegressionTests(unittest.TestCase):
             result = combat.process_skill_turn('halo_of_dawn', player, mob, battle_state, user_id=101, lang='ru')
 
         # 10 -> crit 25 -> hunter 30, heal must be recomputed from final damage.
-        self.assertEqual(result['skill_result']['damage'], 30)
-        self.assertEqual(result['skill_result']['heal'], 4)
-        self.assertEqual(result['battle_state']['player_hp'], 44)
+        self.assertEqual(result['skill_result']['damage'], 25)
+        self.assertEqual(result['skill_result']['heal'], 3)
+        self.assertEqual(result['battle_state']['player_hp'], 43)
 
     def test_halo_of_dawn_log_params_heal_matches_applied_heal(self):
         player = {'hp': 40, 'mana': 80}
@@ -2095,7 +2095,7 @@ class CombatRegressionTests(unittest.TestCase):
             result = combat.process_skill_turn('halo_of_dawn', player, mob, battle_state, user_id=101, lang='ru')
 
         # 10 -> crit 25 -> hunter 30, raw heal would be 4 but near-full cap is 2.
-        self.assertEqual(result['skill_result']['damage'], 30)
+        self.assertEqual(result['skill_result']['damage'], 25)
         self.assertEqual(result['skill_result']['heal'], 2)
         self.assertEqual(result['battle_state']['player_hp'], 100)
 
@@ -2231,8 +2231,8 @@ class CombatRegressionTests(unittest.TestCase):
             result = combat.process_skill_turn('disarm', player, mob, battle_state, user_id=101, lang='ru')
 
         # 10 -> crit 25 -> hunter 30
-        self.assertEqual(result['skill_result']['damage'], 30)
-        self.assertIn('30', result['battle_state']['log'][-1])
+        self.assertEqual(result['skill_result']['damage'], 25)
+        self.assertIn('25', result['battle_state']['log'][-1])
         self.assertNotIn('10', result['battle_state']['log'][-1])
 
     def test_multi_hit_skill_with_modifiers_uses_consistent_final_log(self):
@@ -2270,9 +2270,9 @@ class CombatRegressionTests(unittest.TestCase):
             result = combat.process_skill_turn('flurry', player, mob, battle_state, user_id=101, lang='ru')
 
         # 30 -> crit 75 -> hunter 90 -> vulnerability 108
-        self.assertEqual(result['skill_result']['damage'], 108)
+        self.assertEqual(result['skill_result']['damage'], 90)
         final_log = result['battle_state']['log'][-1]
-        self.assertIn('108', final_log)
+        self.assertIn('90', final_log)
         self.assertNotIn('[8, 11, 11]', final_log)
 
     def test_daggers_do_not_get_universal_damage_bonus_from_dodge_buff_window(self):
@@ -3951,14 +3951,21 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
     def test_aimed_shot_stronger_vs_marked_target(self):
         player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
-        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100, 'mob_effects': []}
 
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
-            plain = skill_engine.use_skill('aimed_shot', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=0), telegram_id=101, lang='ru')
-            marked = skill_engine.use_skill('aimed_shot', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=2), telegram_id=101, lang='ru')
+            plain = skill_engine.use_skill('aimed_shot', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            marked = skill_engine.use_skill(
+                'aimed_shot',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'hunters_mark', 'turns': 2, 'value': 20}]),
+                telegram_id=101,
+                lang='ru',
+            )
 
         self.assertGreater(marked['damage'], plain['damage'])
 
@@ -4063,37 +4070,57 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             'weapon_profile': 'short_bow',
             'hunters_mark_turns': 0,
             'hunters_mark_value': 0,
-            'guaranteed_crit_turns': 0,
+            'steady_aim_turns': 0,
         }
 
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0), \
-             patch('game.combat.player_attack', return_value={'type': 'player_attack', 'damage': 15, 'is_crit': True, 'mob_dead': False, 'mob_hp': 135}), \
+             patch('game.combat.resolve_hit_check', return_value={'outcome': 'hit', 'is_hit': True, 'hit_chance': 90, 'roll': 10}), \
              patch('game.combat.resolve_enemy_response', return_value=[]):
             setup = combat.process_skill_turn('steady_aim', player, mob, battle_state, user_id=101, lang='ru')
             self.assertTrue(setup['success'])
-            self.assertEqual(setup['battle_state'].get('guaranteed_crit_turns', 0), 1)
+            self.assertEqual(setup['battle_state'].get('steady_aim_turns', 0), 1)
+            attack = combat.process_skill_turn('aimed_shot', player, mob, battle_state, user_id=101, lang='ru')
 
-            attack = combat.resolve_normal_attack_action(player, mob, battle_state, lang='ru')
-
-        self.assertGreaterEqual(attack['damage'], 0)
-        self.assertEqual(battle_state.get('guaranteed_crit_turns', 0), 0)
+        self.assertGreaterEqual(attack['skill_result']['damage'], 0)
+        self.assertEqual(battle_state.get('steady_aim_turns', 0), 0)
 
     def test_piercing_arrow_gets_payoff_bonus_vs_marked_target(self):
         player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 20, 'effects': []}
-        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100, 'mob_effects': []}
 
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
-            plain = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=0), telegram_id=101, lang='ru')
-            marked = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(base_state, hunters_mark_turns=2), telegram_id=101, lang='ru')
+            plain = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            marked = skill_engine.use_skill(
+                'piercing_arrow',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'hunters_mark', 'turns': 2, 'value': 20}]),
+                telegram_id=101,
+                lang='ru',
+            )
 
         self.assertGreater(marked['damage'], plain['damage'])
+
+    def test_piercing_arrow_armored_only_path_uses_non_marked_log_key(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 20, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100, 'mob_effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(state), telegram_id=101, lang='ru')
+
+        self.assertEqual(result.get('log_key'), 'skills.log_piercing_arrow_armored')
+        self.assertNotIn('marked', result.get('log_key', ''))
 
     def test_hamstring_arrow_applies_slow(self):
         player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 10, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -4106,7 +4133,9 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.random.uniform', return_value=1.0):
             result = skill_engine.use_skill('hamstring_arrow', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
 
-        self.assertTrue(any(e.get('type') == 'slow' for e in result['effects']))
+        slow_effect = next((e for e in result['effects'] if e.get('type') == 'slow'), None)
+        self.assertIsNotNone(slow_effect)
+        self.assertEqual(slow_effect.get('turns'), game_skills.get_skill('hamstring_arrow').get('slow_duration'))
 
     def test_reposition_sets_dodge_buff_correctly(self):
         player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 10, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -4164,13 +4193,110 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
                 'deadeye',
                 dict(player),
                 dict(mob_state),
-                dict(base_state, hunters_mark_turns=2),
+                dict(base_state, mob_effects=[{'type': 'hunters_mark', 'turns': 2, 'value': 20}]),
                 telegram_id=101,
                 lang='ru',
             )
 
         self.assertGreater(rain_slowed['damage'], rain_plain['damage'])
         self.assertLess(rain_slowed['damage'], deadeye_marked['damage'])
+
+    def test_hunters_mark_sets_runtime_target_state_with_data_duration(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100, 'mob_effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('hunters_mark', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        mark_effect = next((e for e in state['mob_effects'] if e.get('type') == 'hunters_mark'), None)
+        self.assertIsNotNone(mark_effect)
+        self.assertEqual(mark_effect.get('turns'), game_skills.get_skill('hunters_mark').get('duration'))
+
+    def test_hunters_mark_legacy_mirrors_follow_merged_runtime_state(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 10, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {
+            'weapon_damage': 14,
+            'weapon_type': 'ranged',
+            'weapon_profile': 'short_bow',
+            'player_mana': 100,
+            'mob_effects': [{'type': 'hunters_mark', 'turns': 5, 'value': 99, 'skill_id': 'hunters_mark'}],
+            'hunters_mark_turns': 0,
+            'hunters_mark_value': 0,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = skill_engine.use_skill('hunters_mark', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertTrue(result['success'])
+        merged_mark = next((e for e in state['mob_effects'] if e.get('type') == 'hunters_mark'), None)
+        self.assertIsNotNone(merged_mark)
+        self.assertEqual(merged_mark.get('turns'), 5)
+        self.assertEqual(merged_mark.get('value'), 99)
+        self.assertEqual(state['hunters_mark_turns'], merged_mark.get('turns'))
+        self.assertEqual(state['hunters_mark_value'], merged_mark.get('value'))
+
+    def test_deadeye_marked_focus_is_strongest_sniper_payoff(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 14, 'intuition': 14, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 20, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'ranged', 'weapon_profile': 'short_bow', 'player_mana': 100, 'mob_effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            rain_slowed = skill_engine.use_skill(
+                'rain_of_barbs',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'slow', 'turns': 2, 'value': 0}]),
+                telegram_id=101,
+                lang='ru',
+            )
+            deadeye_marked_focus = skill_engine.use_skill(
+                'deadeye',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, steady_aim_turns=1, mob_effects=[{'type': 'hunters_mark', 'turns': 2, 'value': 20}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(deadeye_marked_focus['damage'], rain_slowed['damage'])
+
+    def test_piercing_arrow_marked_and_armored_uses_controlled_combined_multiplier(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 10, 'intuition': 16, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 20, 'effects': []}
+        state = {
+            'weapon_damage': 14,
+            'weapon_type': 'ranged',
+            'weapon_profile': 'short_bow',
+            'player_mana': 100,
+            'mob_effects': [{'type': 'hunters_mark', 'turns': 2, 'value': 20}],
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(state), telegram_id=101, lang='ru')
+
+        base_skill = game_skills.get_skill('piercing_arrow')
+        base_state = dict(state, mob_effects=[])
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('piercing_arrow', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+
+        max_expected = int(plain['damage'] * (base_skill['marked_armored_mult'] / base_skill['armored_mult']))
+        self.assertIn(result['damage'], (max_expected, max_expected + 1))
 
     def test_smoke_bomb_basic_evasive_behavior_still_works(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
