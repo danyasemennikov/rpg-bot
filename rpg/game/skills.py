@@ -1030,6 +1030,8 @@ SKILLS = {
         'scale_mult':     0.55,
         'base_value':     14,
         'duration':       2,
+        'defense_penalty': 25,
+        'hp_cost_ratio':  0.12,
         'level_bonus':    0.08,
     },
     'savage_chop': {
@@ -1197,6 +1199,7 @@ SKILLS = {
         'scale_mult':     0.6,
         'base_value':     20,
         'duration':       3,
+        'defense_penalty': 25,
         'level_bonus':    0.08,
     },
 

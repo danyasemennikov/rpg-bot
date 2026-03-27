@@ -268,6 +268,7 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
         'battle_stance_turns',
         'spell_echo_turns',
         'quick_channel_turns',
+        'berserk_defense_penalty_turns',
     ):
         if battle_state.get(key, 0) > 0:
             battle_state[key] -= 1
@@ -463,6 +464,11 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
             if battle_state.get('arcane_surge_turns', 0) > 0:
                 battle_state['arcane_surge_turns'] = 0
                 battle_state['arcane_surge_value'] = 0
+        elif action_type == 'consume_berserk_setup':
+            battle_state['berserk_turns'] = 0
+            battle_state['berserk_damage'] = 0
+            battle_state['berserk_defense_penalty_turns'] = 0
+            battle_state['berserk_defense_penalty'] = 0
 
 
 def resolve_enemy_targeted_direct_damage_skill_action(
@@ -612,6 +618,10 @@ def resolve_enemy_damage_against_player(
     if battle_state.get('disarm_turns', 0) > 0:
         mob_dmg = int(mob_dmg * (1 - battle_state['disarm_value'] / 100))
         battle_state['disarm_turns'] -= 1
+
+    if battle_state.get('berserk_defense_penalty_turns', 0) > 0:
+        penalty = max(0, int(battle_state.get('berserk_defense_penalty', 0)))
+        mob_dmg = int(mob_dmg * (1 + penalty / 100))
 
     weakened_value = get_strongest_active_enemy_weakened_value(battle_state)
     if weakened_value > 0:
@@ -1138,6 +1148,8 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'defense_buff_value':   0,
         'berserk_turns':        0,
         'berserk_damage':       0,
+        'berserk_defense_penalty_turns': 0,
+        'berserk_defense_penalty': 0,
         'blessing_turns':       0,
         'blessing_value':       0,
         'regen_turns':          0,

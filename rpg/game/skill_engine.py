@@ -1222,8 +1222,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id == 'frenzy_chain':
             if battle_state.get('berserk_turns', 0) > 0:
                 result['damage'] = int(result['damage'] * 1.35)
-                battle_state['berserk_turns'] = 0
-                battle_state['berserk_damage'] = 0
+                result['post_hit_actions'].append({'type': 'consume_berserk_setup'})
         elif skill_id == 'last_roar':
             damage_mult = 1.0
             if battle_state.get('berserk_turns', 0) > 0:
@@ -1451,13 +1450,16 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id in ('berserker', 'rage_call'):
             battle_state['berserk_turns']  = duration
             battle_state['berserk_damage'] = int(value)
+            battle_state['berserk_defense_penalty_turns'] = duration
+            battle_state['berserk_defense_penalty'] = int(skill.get('defense_penalty', 25))
             result['log'] = t('skills.log_berserker', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), cost=mana_cost)
             if skill_id == 'rage_call':
                 max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
                 current_hp = battle_state.get('player_hp', player.get('hp', 100))
-                hp_cost = max(1, int(max_hp * 0.12))
+                hp_cost_ratio = float(skill.get('hp_cost_ratio', 0.12))
+                hp_cost = max(1, int(max_hp * hp_cost_ratio))
                 safe_cost = min(hp_cost, max(0, current_hp - 1))
                 new_hp = max(1, current_hp - safe_cost)
                 player['hp'] = new_hp
