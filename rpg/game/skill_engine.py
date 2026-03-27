@@ -82,6 +82,56 @@ def _is_weakened_target(mob_state: dict, battle_state: dict) -> bool:
     )
 
 
+def _get_runtime_effect_data(
+    mob_state: dict,
+    battle_state: dict,
+    effect_type: str,
+) -> dict | None:
+    for eff in _get_runtime_mob_effects(mob_state, battle_state):
+        if eff.get('type') == effect_type and int(eff.get('turns', 0)) > 0:
+            return eff
+    return None
+
+
+def _is_marked_target(mob_state: dict, battle_state: dict) -> bool:
+    return _get_runtime_effect_data(mob_state, battle_state, 'hunters_mark') is not None
+
+
+def _is_slowed_target(mob_state: dict, battle_state: dict) -> bool:
+    return _runtime_target_has_effect(mob_state, battle_state, ('slow',))
+
+
+def _apply_or_refresh_hunters_mark_effect(
+    battle_state: dict,
+    *,
+    turns: int,
+    value: int,
+) -> tuple[int, int]:
+    if turns <= 0:
+        return 0, max(0, value)
+
+    effects = battle_state.get('mob_effects', [])
+    strongest_value = max(0, value)
+    longest_turns = turns
+    kept_effects = []
+
+    for eff in effects:
+        if eff.get('type') == 'hunters_mark' and int(eff.get('turns', 0)) > 0:
+            strongest_value = max(strongest_value, int(eff.get('value', 0)))
+            longest_turns = max(longest_turns, int(eff.get('turns', 0)))
+            continue
+        kept_effects.append(eff)
+
+    kept_effects.append({
+        'type': 'hunters_mark',
+        'turns': longest_turns,
+        'value': strongest_value,
+        'skill_id': 'hunters_mark',
+    })
+    battle_state['mob_effects'] = kept_effects
+    return longest_turns, strongest_value
+
+
 def _apply_or_refresh_enemy_weakened_effect(
     battle_state: dict,
     *,
@@ -887,19 +937,64 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'cost': mana_cost,
                 }
         elif skill_id == 'aimed_shot':
-            result['accuracy_bonus'] = 25
-            if battle_state.get('hunters_mark_turns', 0) > 0:
-                result['damage'] = int(result['damage'] * 1.2)
+            result['accuracy_bonus'] = int(skill.get('accuracy_bonus', 25))
+            marked_target = _is_marked_target(mob_state, battle_state)
+            steady_ready = battle_state.get('steady_aim_turns', 0) > 0
+
+            if steady_ready:
+                result['accuracy_bonus'] += int(skill.get('steady_accuracy_bonus', 0))
+                result['post_hit_actions'].append({'type': 'consume_steady_aim'})
+
+            damage_mult = 1.0
+            if marked_target and steady_ready:
+                damage_mult = skill.get('marked_steady_mult', 1.30)
+                result['log_key'] = 'skills.log_aimed_shot_marked_focus'
+            elif marked_target:
+                damage_mult = skill.get('marked_mult', 1.20)
                 result['log_key'] = 'skills.log_aimed_shot_marked'
+            elif steady_ready:
+                damage_mult = skill.get('steady_mult', 1.10)
+                result['log_key'] = 'skills.log_aimed_shot_focus'
+
+            if damage_mult > 1.0:
+                result['damage'] = int(result['damage'] * damage_mult)
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
                     'dmg': result['damage'],
                     'cost': mana_cost,
                 }
         elif skill_id == 'piercing_arrow':
-            if battle_state.get('hunters_mark_turns', 0) > 0:
-                result['damage'] = int(result['damage'] * 1.20)
+            marked_target = _is_marked_target(mob_state, battle_state)
+            armored_target = int(mob_state.get('defense', 0)) >= int(skill.get('armor_defense_threshold', 15))
+            steady_ready = battle_state.get('steady_aim_turns', 0) > 0
+
+            if steady_ready:
+                result['accuracy_bonus'] = int(skill.get('steady_accuracy_bonus', 0))
+                result['post_hit_actions'].append({'type': 'consume_steady_aim'})
+
+            damage_mult = 1.0
+            if marked_target and armored_target:
+                damage_mult = skill.get('marked_armored_mult', 1.30)
+                result['log_key'] = 'skills.log_piercing_arrow_marked_armored'
+            elif marked_target:
+                damage_mult = skill.get('marked_mult', 1.22)
                 result['log_key'] = 'skills.log_piercing_arrow_marked'
+            elif armored_target:
+                damage_mult = skill.get('armored_mult', 1.15)
+                result['log_key'] = 'skills.log_piercing_arrow_armored'
+
+            if steady_ready:
+                if marked_target or armored_target:
+                    damage_mult = max(damage_mult, skill.get('steady_payoff_mult', 1.35))
+                    if marked_target:
+                        result['log_key'] = 'skills.log_piercing_arrow_marked_focus'
+                    else:
+                        result['log_key'] = 'skills.log_piercing_arrow_armored_focus'
+                else:
+                    damage_mult = max(damage_mult, skill.get('steady_mult', 1.08))
+
+            if damage_mult > 1.0:
+                result['damage'] = int(result['damage'] * damage_mult)
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
                     'dmg': result['damage'],
@@ -907,18 +1002,35 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 }
         elif skill_id == 'deadeye':
             result['guaranteed_hit'] = True
-            if battle_state.get('hunters_mark_turns', 0) > 0:
-                result['damage'] = int(result['damage'] * 1.35)
+            marked_target = _is_marked_target(mob_state, battle_state)
+            steady_ready = battle_state.get('steady_aim_turns', 0) > 0
+
+            if steady_ready:
+                result['post_hit_actions'].append({'type': 'consume_steady_aim'})
+
+            damage_mult = 1.0
+            if marked_target and steady_ready:
+                damage_mult = skill.get('marked_steady_mult', 1.55)
+                result['log_key'] = 'skills.log_deadeye_marked_focus'
+            elif marked_target:
+                damage_mult = skill.get('marked_mult', 1.38)
                 result['log_key'] = 'skills.log_deadeye_marked'
+            elif steady_ready:
+                damage_mult = skill.get('steady_mult', 1.18)
+                result['log_key'] = 'skills.log_deadeye_focus'
+
+            if damage_mult > 1.0:
+                result['damage'] = int(result['damage'] * damage_mult)
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
                     'dmg': result['damage'],
                     'cost': mana_cost,
                 }
         elif skill_id == 'hamstring_arrow':
+            slow_turns = int(skill.get('slow_duration', 2))
             result['effects'].append({
                 'type': 'slow',
-                'turns': 2,
+                'turns': slow_turns,
                 'value': 0,
                 'skill_id': skill_id,
             })
@@ -926,20 +1038,32 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             result['log_params'] = {
                 'name': get_skill_name(skill_id, lang),
                 'dmg': result['damage'],
+                'turns': slow_turns,
                 'cost': mana_cost,
             }
         elif skill_id == 'volley_step':
-            if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
-                result['damage'] = int(result['damage'] * 1.15)
+            slowed_target = _is_slowed_target(mob_state, battle_state)
+            evasive_window_active = battle_state.get('dodge_buff_turns', 0) > 0
+            damage_mult = 1.0
+            if slowed_target and evasive_window_active:
+                damage_mult = skill.get('slowed_evasive_mult', 1.24)
+                result['log_key'] = 'skills.log_volley_step_slow_evasive'
+            elif slowed_target:
+                damage_mult = skill.get('slowed_mult', 1.15)
                 result['log_key'] = 'skills.log_volley_step_slow'
+            elif evasive_window_active:
+                damage_mult = skill.get('evasive_mult', 1.08)
+
+            if damage_mult > 1.0:
+                result['damage'] = int(result['damage'] * damage_mult)
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
                     'dmg': result['damage'],
                     'cost': mana_cost,
                 }
         elif skill_id == 'rain_of_barbs':
-            if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
-                result['damage'] = int(result['damage'] * 1.2)
+            if _is_slowed_target(mob_state, battle_state):
+                result['damage'] = int(result['damage'] * skill.get('slowed_mult', 1.2))
                 result['log_key'] = 'skills.log_rain_of_barbs_slow'
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
@@ -1438,11 +1562,21 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                cost=mana_cost)
 
         # Орлиный глаз / Тень смерти
-        elif skill_id in ('eagle_eye', 'dagger_ult_b', 'steady_aim'):
+        elif skill_id in ('eagle_eye', 'dagger_ult_b'):
             battle_state['guaranteed_crit_turns'] = duration
             result['log'] = t('skills.log_guaranteed_crit', lang,
                                name=get_skill_name(skill_id, lang),
                                turns=duration, cost=mana_cost)
+        elif skill_id == 'steady_aim':
+            setup_turns = int(skill.get('setup_duration', 2))
+            battle_state['steady_aim_turns'] = setup_turns
+            result['log'] = t(
+                'skills.log_steady_aim',
+                lang,
+                name=get_skill_name(skill_id, lang),
+                turns=max(1, setup_turns - 1),
+                cost=mana_cost,
+            )
 
         support_buff_skills = {
             'blessing', 'regeneration', 'radiant_ward', 'sacred_shield', 'aura_of_resolve',
@@ -1545,11 +1679,19 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
         # Hunter's Mark — метка охотника
         elif skill_id == 'hunters_mark':
-            battle_state['hunters_mark_turns'] = 3
-            battle_state['hunters_mark_value'] = int(value)
+            duration = int(skill.get('duration', 3))
+            mark_value = int(value)
+            merged_turns, merged_value = _apply_or_refresh_hunters_mark_effect(
+                battle_state,
+                turns=duration,
+                value=mark_value,
+            )
+            # Legacy mirrors keep backward compatibility with existing combat state readers.
+            battle_state['hunters_mark_turns'] = merged_turns
+            battle_state['hunters_mark_value'] = merged_value
             result['log'] = t('skills.log_hunters_mark', lang,
                                name=get_skill_name(skill_id, lang),
-                               value=int(value), cost=mana_cost)
+                               value=merged_value, turns=merged_turns, cost=mana_cost)
 
         # Disarm — обезоруживание + урон
         elif skill_id == 'disarm':

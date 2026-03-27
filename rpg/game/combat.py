@@ -260,6 +260,7 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
         'defense_buff_turns',
         'berserk_turns',
         'blessing_turns',
+        'steady_aim_turns',
         'press_the_line_turns',
         'feint_step_turns',
         'arcane_surge_turns',
@@ -298,12 +299,6 @@ def apply_direct_damage_action_modifiers(
         battle_state['guaranteed_crit_turns'] -= 1
         modifiers_applied = True
         guaranteed_crit_applied = True
-
-    if battle_state.get('hunters_mark_turns', 0) > 0:
-        bonus = int(damage * battle_state['hunters_mark_value'] / 100)
-        damage += bonus
-        battle_state['hunters_mark_turns'] -= 1
-        modifiers_applied = True
 
     if battle_state.get('vulnerability_turns', 0) > 0:
         bonus = int(damage * battle_state['vulnerability_value'] / 100)
@@ -461,6 +456,9 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
                 eff for eff in mob_effects
                 if not (eff.get('type') == 'poison' and int(eff.get('turns', 0)) > 0)
             ]
+        elif action_type == 'consume_steady_aim':
+            if battle_state.get('steady_aim_turns', 0) > 0:
+                battle_state['steady_aim_turns'] = 0
 
 
 def resolve_enemy_targeted_direct_damage_skill_action(
@@ -1148,6 +1146,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'dodge_buff_turns':     0,
         'dodge_buff_value':     0,
         'guaranteed_crit_turns':0,
+        'steady_aim_turns':     0,
         'hunters_mark_turns':   0,
         'hunters_mark_value':   0,
         'vulnerability_turns':  0,
