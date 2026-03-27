@@ -899,10 +899,15 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             has_burn = _runtime_target_has_effect(mob_state, battle_state, ('burn',))
             has_grace = battle_state.get('blessing_turns', 0) > 0
             if has_burn and has_grace:
-                result['damage'] = int(result['damage'] * 1.35)
+                result['damage'] = int(result['damage'] * 1.50)
+                result['log_key'] = 'skills.log_synthesis_boost'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
             elif has_burn or has_grace:
                 result['damage'] = int(result['damage'] * 1.18)
-            if has_burn or has_grace:
                 result['log_key'] = 'skills.log_synthesis_boost'
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
