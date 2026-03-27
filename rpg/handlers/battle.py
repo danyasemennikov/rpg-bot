@@ -23,6 +23,7 @@ from game.balance import (
     normalize_encumbrance,
 )
 from game.items_data import get_item, get_item_encumbrance
+from game.itemization import get_item_archetype_metadata
 from game.i18n import t, get_item_name, get_skill_name, get_mob_name
 
 
@@ -340,8 +341,10 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
         p['weapon_name'] = t('battle.unarmed', lang)
         p['damage_school'] = 'physical'
 
-    p['armor_class'] = normalize_armor_class((chest_item or {}).get('armor_class'))
-    p['offhand_profile'] = normalize_offhand_profile((offhand_item or {}).get('offhand_profile'))
+    chest_meta = get_item_archetype_metadata(chest_item)
+    offhand_meta = get_item_archetype_metadata(offhand_item)
+    p['armor_class'] = normalize_armor_class(chest_meta.get('armor_class'))
+    p['offhand_profile'] = normalize_offhand_profile(offhand_meta.get('offhand_profile'))
     p['encumbrance'] = normalize_encumbrance(
         get_item_encumbrance(chest_item) or get_item_encumbrance(offhand_item)
     )

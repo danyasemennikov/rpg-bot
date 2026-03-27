@@ -2,6 +2,8 @@
 # items_data.py — все предметы игры
 # ============================================================
 
+
+from game.itemization import get_item_archetype_metadata
 ITEMS = {
 
     # ── ОРУЖИЕ ──────────────────────────────────────────────
@@ -184,6 +186,11 @@ ITEMS = {
 
 def get_item(item_id: str) -> dict:
     return ITEMS.get(item_id)
+
+
+def get_item_metadata(item_id: str) -> dict:
+    """Normalized archetype metadata for equipment-related systems."""
+    return get_item_archetype_metadata(get_item(item_id))
 
 
 def get_item_encumbrance(item: dict | None) -> int | None:
