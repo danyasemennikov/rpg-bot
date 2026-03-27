@@ -356,6 +356,16 @@ STRINGS = {
         'log_borrowed_grace': '{name} — ✨ {dmg} урона + благодать {value}% на {turns} хода 🔵-{cost}',
         'log_synthesis_boost': '{name} — 🧬 синтез усилен: {dmg} урона 🔵-{cost}',
         'log_forbidden_thesis_boost': '{name} — ⛔ тезис усилен: {dmg} урона (setup будет поглощён при попадании) 🔵-{cost}',
+        'log_arcane_lance_surge': '{name} — 💠 arcane surge payoff: {dmg} урона 🔵-{cost}',
+        'log_cataclysm_surge': '{name} — 🌋 катаклизм в surge-окно: {dmg} урона 🔵-{cost}',
+        'log_cataclysm_burn': '{name} — 🌋 катаклизм по горящей цели: {dmg} урона 🔵-{cost}',
+        'log_cataclysm_surge_burn': '{name} — 🌋 катаклизм (surge + горение): {dmg} урона 🔵-{cost}',
+        'log_shatter_slow': '{name} — 💥 осколочный удар по замедленной цели: {dmg} урона 🔵-{cost}',
+        'log_shatter_freeze': '{name} — 💥 осколочный удар по замороженной цели: {dmg} урона 🔵-{cost}',
+        'log_shatter_controlled': '{name} — 💥 осколочный удар по полностью контролируемой цели: {dmg} урона 🔵-{cost}',
+        'log_absolute_zero_slow': '{name} — 🧊 абсолютный ноль по замедленной цели: {dmg} урона 🔵-{cost}',
+        'log_absolute_zero_freeze': '{name} — 🧊 абсолютный ноль по замороженной цели: {dmg} урона 🔵-{cost}',
+        'log_absolute_zero_controlled': '{name} — 🧊 абсолютный ноль по контролируемой цели: {dmg} урона 🔵-{cost}',
 
     },
 

@@ -1225,7 +1225,7 @@ SKILLS = {
     'arcane_surge': {
         'id':             'arcane_surge',
         'name':           '✨ Тайный всплеск',
-        'description':    'Короткий setup-бафф: подготавливает и усиливает следующий Тайный выстрел (Arcane Lance).',
+        'description':    'Короткое setup-окно ветки Разрушения: усиливает следующий крупный destructive-каст (в первую очередь Тайное копьё, а также Катаклизм).',
         'weapon_id':      'magic_staff',
         'branch':         'A',
         'unlock_mastery': 3,
@@ -1237,6 +1237,7 @@ SKILLS = {
         'scale_mult':     0.7,
         'base_value':     28,
         'duration':       2,
+        'setup_runtime_turns': 2,
         'level_bonus':    0.08,
     },
     'flame_wave': {
@@ -1271,11 +1272,13 @@ SKILLS = {
         'scale_mult':     2.6,
         'base_value':     170,
         'level_bonus':    0.12,
+        'surge_payoff_scale': 1.0,
+        'surge_payoff_cap_percent': 55,
     },
     'cataclysm': {
         'id':             'cataclysm',
         'name':           '🌋 Катаклизм',
-        'description':    'Капстоун разрушения: тяжёлый огненный удар с шансом поджечь цель.',
+        'description':    'Капстоун Разрушения: тяжёлый огненный каст, сильнее в окно Тайного всплеска и/или по горящей цели.',
         'weapon_id':      'magic_staff',
         'branch':         'A',
         'unlock_mastery': 10,
@@ -1288,6 +1291,9 @@ SKILLS = {
         'base_value':     225,
         'level_bonus':    0.13,
         'effect':         ('burn', 0.45, 2),
+        'surge_payoff_mult': 1.22,
+        'burn_payoff_mult': 1.18,
+        'surge_burn_payoff_mult': 1.32,
     },
     'burning_ground': {
         'id':             'burning_ground',
@@ -1408,6 +1414,9 @@ SKILLS = {
         'base_value':     205,
         'level_bonus':    0.12,
         'effect':         ('freeze', 0.45, 1),
+        'slow_payoff_mult': 1.18,
+        'freeze_payoff_mult': 1.25,
+        'controlled_payoff_mult': 1.30,
     },
     'frost_bolt': {
         'id':             'frost_bolt',
@@ -1475,6 +1484,9 @@ SKILLS = {
         'scale_mult':     2.5,
         'base_value':     160,
         'level_bonus':    0.12,
+        'slow_payoff_mult': 1.25,
+        'freeze_payoff_mult': 1.35,
+        'controlled_payoff_mult': 1.45,
     },
 
     # ════════════════════════════════════════

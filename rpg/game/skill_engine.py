@@ -101,6 +101,31 @@ def _is_slowed_target(mob_state: dict, battle_state: dict) -> bool:
     return _runtime_target_has_effect(mob_state, battle_state, ('slow',))
 
 
+def _is_frozen_target(mob_state: dict, battle_state: dict) -> bool:
+    return _runtime_target_has_effect(mob_state, battle_state, ('freeze',))
+
+
+def _has_active_arcane_surge_setup(battle_state: dict) -> bool:
+    return battle_state.get('arcane_surge_turns', 0) > 0 and battle_state.get('arcane_surge_value', 0) > 0
+
+
+def _consume_arcane_surge_setup(battle_state: dict) -> None:
+    battle_state['arcane_surge_turns'] = 0
+    battle_state['arcane_surge_value'] = 0
+
+
+def _get_magic_staff_control_payoff_key(mob_state: dict, battle_state: dict) -> str | None:
+    slowed = _is_slowed_target(mob_state, battle_state)
+    frozen = _is_frozen_target(mob_state, battle_state)
+    if slowed and frozen:
+        return 'controlled'
+    if frozen:
+        return 'freeze'
+    if slowed:
+        return 'slow'
+    return None
+
+
 def _is_judged_target(mob_state: dict, battle_state: dict) -> bool:
     return _runtime_target_has_effect(mob_state, battle_state, ('judgment_mark',))
 
@@ -870,17 +895,73 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             if any(e.get('type') == 'off_balance' for e in mob_effects):
                 result['damage'] = int(result['damage'] * 1.15)
         elif skill_id == 'arcane_lance':
-            if battle_state.get('arcane_surge_turns', 0) > 0:
-                surge_value = battle_state.get('arcane_surge_value', 0)
-                result['damage'] = int(result['damage'] * (1 + surge_value / 100))
-                battle_state['arcane_surge_turns'] = 0
-                battle_state['arcane_surge_value'] = 0
+            if _has_active_arcane_surge_setup(battle_state):
+                surge_bonus_percent = min(
+                    int(skill.get('surge_payoff_cap_percent', 55)),
+                    int(battle_state.get('arcane_surge_value', 0) * skill.get('surge_payoff_scale', 1.0)),
+                )
+                result['damage'] = int(result['damage'] * (1 + surge_bonus_percent / 100))
+                result['log_key'] = 'skills.log_arcane_lance_surge'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+                result['post_hit_actions'].append({'type': 'consume_arcane_surge_setup'})
+        elif skill_id == 'cataclysm':
+            surge_active = _has_active_arcane_surge_setup(battle_state)
+            burning_target = _runtime_target_has_effect(mob_state, battle_state, ('burn',))
+            if surge_active and burning_target:
+                result['damage'] = int(result['damage'] * skill.get('surge_burn_payoff_mult', 1.32))
+                result['log_key'] = 'skills.log_cataclysm_surge_burn'
+            elif surge_active:
+                result['damage'] = int(result['damage'] * skill.get('surge_payoff_mult', 1.22))
+                result['log_key'] = 'skills.log_cataclysm_surge'
+            elif burning_target:
+                result['damage'] = int(result['damage'] * skill.get('burn_payoff_mult', 1.18))
+                result['log_key'] = 'skills.log_cataclysm_burn'
+            if surge_active:
+                result['post_hit_actions'].append({'type': 'consume_arcane_surge_setup'})
+            if result['log_key'] != 'skills.log_damage':
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
         elif skill_id == 'shatter':
-            if _runtime_target_has_effect(mob_state, battle_state, ('slow', 'freeze')):
-                result['damage'] = int(result['damage'] * 1.35)
+            payoff_key = _get_magic_staff_control_payoff_key(mob_state, battle_state)
+            if payoff_key == 'controlled':
+                result['damage'] = int(result['damage'] * skill.get('controlled_payoff_mult', 1.45))
+                result['log_key'] = 'skills.log_shatter_controlled'
+            elif payoff_key == 'freeze':
+                result['damage'] = int(result['damage'] * skill.get('freeze_payoff_mult', 1.35))
+                result['log_key'] = 'skills.log_shatter_freeze'
+            elif payoff_key == 'slow':
+                result['damage'] = int(result['damage'] * skill.get('slow_payoff_mult', 1.25))
+                result['log_key'] = 'skills.log_shatter_slow'
+            if payoff_key:
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
         elif skill_id == 'absolute_zero':
-            if _runtime_target_has_effect(mob_state, battle_state, ('slow', 'freeze')):
-                result['damage'] = int(result['damage'] * 1.3)
+            payoff_key = _get_magic_staff_control_payoff_key(mob_state, battle_state)
+            if payoff_key == 'controlled':
+                result['damage'] = int(result['damage'] * skill.get('controlled_payoff_mult', 1.30))
+                result['log_key'] = 'skills.log_absolute_zero_controlled'
+            elif payoff_key == 'freeze':
+                result['damage'] = int(result['damage'] * skill.get('freeze_payoff_mult', 1.25))
+                result['log_key'] = 'skills.log_absolute_zero_freeze'
+            elif payoff_key == 'slow':
+                result['damage'] = int(result['damage'] * skill.get('slow_payoff_mult', 1.18))
+                result['log_key'] = 'skills.log_absolute_zero_slow'
+            if payoff_key:
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
         elif skill_id == 'counterpulse':
             if battle_state.get('defense_buff_turns', 0) > 0:
                 result['damage'] = int(result['damage'] * 1.25)
@@ -1340,7 +1421,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'arcane_surge':
             # 2 -> после post-action тика остаётся 1 полноценное окно под payoff.
-            battle_state['arcane_surge_turns'] = 2
+            battle_state['arcane_surge_turns'] = int(skill.get('setup_runtime_turns', 2))
             battle_state['arcane_surge_value'] = int(value)
             result['log'] = t('skills.log_buff', lang,
                               name=get_skill_name(skill_id, lang),
