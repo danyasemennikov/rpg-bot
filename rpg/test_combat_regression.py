@@ -5642,7 +5642,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.get('quick_channel_turns', 0), 2)
         self.assertGreater(state.get('quick_channel_value', 0), 0)
 
-    def test_overload_gets_payoff_from_setup_windows_and_consumes_them(self):
+    def test_overload_gets_payoff_from_setup_windows(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
@@ -5654,10 +5654,10 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
             payoff = skill_engine.use_skill('overload', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
         self.assertGreater(payoff['damage'], plain['damage'])
-        self.assertEqual(setup_state.get('spell_echo_turns', 0), 0)
-        self.assertEqual(setup_state.get('quick_channel_turns', 0), 0)
+        self.assertEqual(setup_state.get('spell_echo_turns', 0), 1)
+        self.assertEqual(setup_state.get('quick_channel_turns', 0), 1)
 
-    def test_arcane_bolt_benefits_from_setup_windows_and_consumes_them(self):
+    def test_arcane_bolt_benefits_from_setup_windows(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
@@ -5669,8 +5669,8 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
             boosted = skill_engine.use_skill('arcane_bolt', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
         self.assertGreater(boosted['damage'], plain['damage'])
-        self.assertEqual(setup_state.get('spell_echo_turns', 0), 0)
-        self.assertEqual(setup_state.get('quick_channel_turns', 0), 0)
+        self.assertEqual(setup_state.get('spell_echo_turns', 0), 1)
+        self.assertEqual(setup_state.get('quick_channel_turns', 0), 1)
 
     def test_arcane_barrage_uses_multi_hit_path_correctly(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -5683,7 +5683,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('log_damage_multi', result.get('log_key', ''))
         self.assertGreater(result['damage'], 0)
 
-    def test_arcane_barrage_benefits_from_setup_windows_and_consumes_them(self):
+    def test_arcane_barrage_benefits_from_setup_windows(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
@@ -5695,8 +5695,119 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             setup_state = dict(base_state, spell_echo_turns=1, spell_echo_value=20, quick_channel_turns=1, quick_channel_value=15)
             payoff = skill_engine.use_skill('arcane_barrage', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
         self.assertGreater(payoff['damage'], plain['damage'])
-        self.assertEqual(setup_state.get('spell_echo_turns', 0), 0)
-        self.assertEqual(setup_state.get('quick_channel_turns', 0), 0)
+        self.assertEqual(setup_state.get('spell_echo_turns', 0), 1)
+        self.assertEqual(setup_state.get('quick_channel_turns', 0), 1)
+
+    def test_wand_setup_windows_are_consumed_only_on_hit(self):
+        player = {
+            'mana': 100,
+            'hp': 100,
+            'max_hp': 100,
+            'strength': 1,
+            'agility': 1,
+            'intuition': 18,
+            'vitality': 1,
+            'wisdom': 1,
+            'luck': 1,
+        }
+        mob = {'id': 'forest_wolf', 'name': 'wolf', 'defense': 0, 'damage': (5, 8)}
+        base_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 16,
+            'weapon_type': 'magic',
+            'weapon_profile': 'wand',
+            'spell_echo_turns': 1,
+            'spell_echo_value': 20,
+            'quick_channel_turns': 1,
+            'quick_channel_value': 15,
+        }
+
+        miss_hit_check = {'outcome': 'dodge', 'is_hit': False, 'hit_chance': 50, 'roll': 100, 'accuracy_rating': 100, 'evasion_rating': 120}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.combat.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_hit_check', return_value=miss_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            miss_result = combat.process_skill_turn('arcane_bolt', player, mob, dict(base_state), user_id=101, lang='ru')
+        self.assertEqual(miss_result['battle_state'].get('spell_echo_turns', 0), 1)
+        self.assertEqual(miss_result['battle_state'].get('quick_channel_turns', 0), 1)
+
+        hit_hit_check = {'outcome': 'hit', 'is_hit': True, 'hit_chance': 95, 'roll': 1, 'accuracy_rating': 100, 'evasion_rating': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.combat.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_hit_check', return_value=hit_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            hit_result = combat.process_skill_turn('arcane_bolt', player, mob, dict(base_state), user_id=101, lang='ru')
+        self.assertEqual(hit_result['battle_state'].get('spell_echo_turns', 0), 0)
+        self.assertEqual(hit_result['battle_state'].get('quick_channel_turns', 0), 0)
+
+    def test_counterpulse_consumes_dueling_ward_only_on_hit(self):
+        player = {
+            'mana': 100,
+            'hp': 100,
+            'max_hp': 100,
+            'strength': 1,
+            'agility': 1,
+            'intuition': 18,
+            'vitality': 1,
+            'wisdom': 1,
+            'luck': 1,
+        }
+        mob = {'id': 'forest_wolf', 'name': 'wolf', 'defense': 0, 'damage': (5, 8)}
+        base_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 16,
+            'weapon_type': 'magic',
+            'weapon_profile': 'wand',
+            'defense_buff_turns': 2,
+            'defense_buff_value': 20,
+            'defense_buff_source': 'dueling_ward',
+        }
+
+        miss_hit_check = {'outcome': 'dodge', 'is_hit': False, 'hit_chance': 50, 'roll': 100, 'accuracy_rating': 100, 'evasion_rating': 120}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.combat.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_hit_check', return_value=miss_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            miss_result = combat.process_skill_turn('counterpulse', player, mob, dict(base_state), user_id=101, lang='ru')
+        self.assertEqual(miss_result['battle_state'].get('defense_buff_turns', 0), 2)
+        self.assertEqual(miss_result['battle_state'].get('defense_buff_value', 0), 20)
+        self.assertEqual(miss_result['battle_state'].get('defense_buff_source'), 'dueling_ward')
+
+        hit_hit_check = {'outcome': 'hit', 'is_hit': True, 'hit_chance': 95, 'roll': 1, 'accuracy_rating': 100, 'evasion_rating': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.combat.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_hit_check', return_value=hit_hit_check), \
+             patch('game.combat.apply_pre_enemy_response_ticks', return_value=[]), \
+             patch('game.combat.resolve_enemy_response', return_value=[]):
+            hit_result = combat.process_skill_turn('counterpulse', player, mob, dict(base_state), user_id=101, lang='ru')
+        self.assertEqual(hit_result['battle_state'].get('defense_buff_turns', 0), 0)
+        self.assertEqual(hit_result['battle_state'].get('defense_buff_value', 0), 0)
+        self.assertIsNone(hit_result['battle_state'].get('defense_buff_source'))
 
     def test_dueling_ward_sets_defense_runtime(self):
         player = {'mana': 100, 'intuition': 16}
@@ -5707,6 +5818,17 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             skill_engine.use_skill('dueling_ward', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
         self.assertGreater(state.get('defense_buff_turns', 0), 0)
         self.assertGreater(state.get('defense_buff_value', 0), 0)
+        self.assertEqual(state.get('defense_buff_source'), 'dueling_ward')
+
+    def test_dueling_ward_window_expires_in_post_action_ticks(self):
+        state = {'defense_buff_turns': 2, 'defense_buff_value': 20, 'defense_buff_source': 'dueling_ward'}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state.get('defense_buff_turns', 0), 1)
+        self.assertEqual(state.get('defense_buff_value', 0), 20)
+        self.assertEqual(state.get('defense_buff_source'), 'dueling_ward')
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state.get('defense_buff_turns', 0), 0)
+        self.assertIsNone(state.get('defense_buff_source'))
 
     def test_mana_feint_applies_slow_correctly(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -5758,7 +5880,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             boosted = skill_engine.use_skill('duel_arc', dict(player), dict(mob_state), setup_state, telegram_id=101, lang='ru')
         self.assertGreater(boosted['damage'], plain['damage'])
 
-    def test_counterpulse_is_stronger_with_ward_and_vs_slowed_target(self):
+    def test_counterpulse_ward_payoff_requires_dueling_ward_source(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 18, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         base_state = {'weapon_damage': 16, 'weapon_type': 'magic', 'weapon_profile': 'wand'}
         mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
@@ -5768,9 +5890,25 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('counterpulse', dict(player), dict(mob_plain), dict(base_state), telegram_id=101, lang='ru')
-            ward = skill_engine.use_skill('counterpulse', dict(player), dict(mob_plain), dict(base_state, defense_buff_turns=2, defense_buff_value=20), telegram_id=101, lang='ru')
+            generic_defense = skill_engine.use_skill(
+                'counterpulse',
+                dict(player),
+                dict(mob_plain),
+                dict(base_state, defense_buff_turns=2, defense_buff_value=20, defense_buff_source='mana_shield'),
+                telegram_id=101,
+                lang='ru',
+            )
+            dueling_ward = skill_engine.use_skill(
+                'counterpulse',
+                dict(player),
+                dict(mob_plain),
+                dict(base_state, defense_buff_turns=2, defense_buff_value=20, defense_buff_source='dueling_ward'),
+                telegram_id=101,
+                lang='ru',
+            )
             slowed = skill_engine.use_skill('counterpulse', dict(player), dict(mob_slowed), dict(base_state), telegram_id=101, lang='ru')
-        self.assertGreater(ward['damage'], plain['damage'])
+        self.assertEqual(generic_defense['damage'], plain['damage'])
+        self.assertGreater(dueling_ward['damage'], plain['damage'])
         self.assertGreater(slowed['damage'], plain['damage'])
 
     def test_duel_arc_behaves_as_capstone_punish_in_active_duel_window(self):

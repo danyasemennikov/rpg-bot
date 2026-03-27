@@ -709,12 +709,11 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 result['damage'] = int(result['damage'] * (1 + channel_bonus / 100))
                 channel_used = True
 
+            # Важно: setup-окна consume-ятся только post-hit через Combat Core.
             if echo_used:
-                battle_state['spell_echo_turns'] = 0
-                battle_state['spell_echo_value'] = 0
+                result['post_hit_actions'].append({'type': 'consume_spell_echo_setup'})
             if channel_used:
-                battle_state['quick_channel_turns'] = 0
-                battle_state['quick_channel_value'] = 0
+                result['post_hit_actions'].append({'type': 'consume_quick_channel_setup'})
 
         # Sword rush — уязвимость цели
         if skill_id == 'sword_rush':
@@ -831,6 +830,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'turns': defense_turns,
                 'value': defense_value,
                 'log_key': 'skills.log_guardian_light',
+                'source': skill_id,
             })
         elif skill_id == 'punish_the_wicked':
             if battle_state.get('vulnerability_turns', 0) > 0:
@@ -963,10 +963,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'cost': mana_cost,
                 }
         elif skill_id == 'counterpulse':
-            if battle_state.get('defense_buff_turns', 0) > 0:
+            dueling_ward_active = (
+                battle_state.get('defense_buff_turns', 0) > 0
+                and battle_state.get('defense_buff_source') == 'dueling_ward'
+            )
+            if dueling_ward_active:
                 result['damage'] = int(result['damage'] * 1.25)
-                battle_state['defense_buff_turns'] = 0
-                battle_state['defense_buff_value'] = 0
+                result['post_hit_actions'].append({'type': 'consume_dueling_ward_setup'})
             if _runtime_target_has_effect(mob_state, battle_state, ('slow',)):
                 result['damage'] = int(result['damage'] * 1.20)
         elif skill_id == 'duel_arc':
@@ -1411,6 +1414,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id == 'defensive_stance':
             battle_state['defense_buff_turns'] = duration
             battle_state['defense_buff_value'] = int(value)
+            battle_state['defense_buff_source'] = skill_id
             result['log'] = t('skills.log_defense', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
@@ -1444,6 +1448,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id == 'mana_shield':
             battle_state['defense_buff_turns'] = duration
             battle_state['defense_buff_value'] = int(value)
+            battle_state['defense_buff_source'] = skill_id
             result['log'] = t('skills.log_buff', lang,
                               name=get_skill_name(skill_id, lang),
                               turns=duration, cost=mana_cost)
@@ -1488,6 +1493,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id == 'sacred_shield':
             battle_state['defense_buff_turns'] = duration
             battle_state['defense_buff_value'] = int(value)
+            battle_state['defense_buff_source'] = skill_id
             result['log'] = t('skills.log_defense', lang,
                               name=get_skill_name(skill_id, lang),
                               value=int(value), turns=duration, cost=mana_cost)
@@ -1500,12 +1506,14 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         elif skill_id == 'radiant_ward':
             battle_state['defense_buff_turns'] = duration
             battle_state['defense_buff_value'] = int(value)
+            battle_state['defense_buff_source'] = skill_id
             result['log'] = t('skills.log_radiant_ward', lang,
                               name=get_skill_name(skill_id, lang),
                               value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'dueling_ward':
             battle_state['defense_buff_turns'] = duration
             battle_state['defense_buff_value'] = int(value)
+            battle_state['defense_buff_source'] = skill_id
             result['log'] = t('skills.log_buff', lang,
                               name=get_skill_name(skill_id, lang),
                               turns=duration, cost=mana_cost)

@@ -299,6 +299,9 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
         battle_state['berserk_defense_penalty_turns'] = 0
         battle_state['berserk_defense_penalty'] = 0
 
+    if battle_state.get('defense_buff_turns', 0) <= 0:
+        battle_state['defense_buff_source'] = None
+
 
 def apply_direct_damage_action_modifiers(
     battle_state: dict,
@@ -453,6 +456,7 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
             if turns > 0 and value > 0:
                 battle_state['defense_buff_turns'] = turns
                 battle_state['defense_buff_value'] = value
+                battle_state['defense_buff_source'] = action.get('source')
                 skill_result['log_key'] = action.get('log_key', skill_result.get('log_key'))
                 existing_params = skill_result.get('log_params', {})
                 skill_result.setdefault('log_params', {})
@@ -490,6 +494,19 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
             if battle_state.get('arcane_surge_turns', 0) > 0:
                 battle_state['arcane_surge_turns'] = 0
                 battle_state['arcane_surge_value'] = 0
+        elif action_type == 'consume_spell_echo_setup':
+            if battle_state.get('spell_echo_turns', 0) > 0:
+                battle_state['spell_echo_turns'] = 0
+                battle_state['spell_echo_value'] = 0
+        elif action_type == 'consume_quick_channel_setup':
+            if battle_state.get('quick_channel_turns', 0) > 0:
+                battle_state['quick_channel_turns'] = 0
+                battle_state['quick_channel_value'] = 0
+        elif action_type == 'consume_dueling_ward_setup':
+            if battle_state.get('defense_buff_turns', 0) > 0:
+                battle_state['defense_buff_turns'] = 0
+                battle_state['defense_buff_value'] = 0
+                battle_state['defense_buff_source'] = None
         elif action_type == 'consume_executioner_focus':
             if battle_state.get('executioner_focus_turns', 0) > 0:
                 battle_state['executioner_focus_turns'] = 0
@@ -1180,6 +1197,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'parry_value':          0.0,
         'defense_buff_turns':   0,
         'defense_buff_value':   0,
+        'defense_buff_source':  None,
         'berserk_turns':        0,
         'berserk_damage':       0,
         'berserk_defense_penalty_turns': 0,
