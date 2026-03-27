@@ -4337,10 +4337,24 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'):
             skill_engine.use_skill('arcane_surge', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
-        self.assertGreater(state.get('arcane_surge_turns', 0), 0)
+        self.assertEqual(state.get('arcane_surge_turns', 0), game_skills.SKILLS['arcane_surge']['setup_runtime_turns'])
         self.assertGreater(state.get('arcane_surge_value', 0), 0)
 
-    def test_arcane_lance_gets_surge_payoff_and_consumes_surge(self):
+    def test_fireball_keeps_stable_base_and_predictable_burn_from_skill_data(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'magic_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.skill_engine.random.random', return_value=0.0):
+            result = skill_engine.use_skill('fireball', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertGreater(result['damage'], 0)
+        burn_effects = [e for e in result['effects'] if e.get('type') == 'burn']
+        self.assertTrue(len(burn_effects) > 0)
+        self.assertTrue(all(e.get('turns', 0) == game_skills.SKILLS['fireball']['effect'][2] for e in burn_effects))
+
+    def test_arcane_lance_gets_surge_payoff_without_early_consume_in_engine(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'magic_staff'}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
@@ -4351,7 +4365,50 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             surged_state = dict(base_state, arcane_surge_turns=1, arcane_surge_value=30)
             surged = skill_engine.use_skill('arcane_lance', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, surged_state, telegram_id=101, lang='ru')
         self.assertGreater(surged['damage'], plain['damage'])
-        self.assertEqual(surged_state.get('arcane_surge_turns', 0), 0)
+        self.assertEqual(surged_state.get('arcane_surge_turns', 0), 1)
+        self.assertTrue(any(a.get('type') == 'consume_arcane_surge_setup' for a in surged.get('post_hit_actions', [])))
+
+    def test_arcane_surge_consumes_only_after_successful_payoff_hit(self):
+        player = {'mana': 100, 'hp': 100, 'max_hp': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'name': 'Wolf', 'hp': 300, 'damage': 1, 'defense': 0, 'effects': []}
+        base_state = {
+            'mob_id': 'wolf',
+            'mob_hp': 300,
+            'mob_max_hp': 300,
+            'mob_effects': [],
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'log': [],
+            'weapon_damage': 14,
+            'weapon_type': 'magic',
+            'weapon_profile': 'magic_staff',
+            'arcane_surge_turns': 2,
+            'arcane_surge_value': 35,
+        }
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': True, 'log': ''}), \
+             patch('game.combat.resolve_hit_check', return_value={'is_hit': False, 'outcome': 'miss'}), \
+             patch('game.combat.mob_attack', return_value={'type': 'hit', 'damage': 0}), \
+             patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            missed_state = dict(base_state)
+            combat.process_skill_turn('arcane_lance', dict(player), dict(mob), missed_state, user_id=101, lang='ru')
+        self.assertEqual(missed_state.get('arcane_surge_turns', 0), 1)
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': True, 'log': ''}), \
+             patch('game.combat.resolve_hit_check', return_value={'is_hit': True, 'outcome': 'hit'}), \
+             patch('game.combat.mob_attack', return_value={'type': 'hit', 'damage': 0}), \
+             patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            hit_state = dict(base_state)
+            combat.process_skill_turn('arcane_lance', dict(player), dict(mob), hit_state, user_id=101, lang='ru')
+        self.assertEqual(hit_state.get('arcane_surge_turns', 0), 0)
 
     def test_frost_bolt_applies_slow_setup(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -4362,7 +4419,9 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.random.uniform', return_value=1.0), \
              patch('game.skill_engine.random.random', return_value=0.0):
             result = skill_engine.use_skill('frost_bolt', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
-        self.assertTrue(any(e.get('type') == 'slow' and e.get('turns', 0) > 0 for e in result['effects']))
+        slow_effects = [e for e in result['effects'] if e.get('type') == 'slow']
+        self.assertTrue(len(slow_effects) > 0)
+        self.assertTrue(all(e.get('turns', 0) == game_skills.SKILLS['frost_bolt']['effect'][2] for e in slow_effects))
 
     def test_ice_shackles_applies_freeze_with_zero_control_value(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -4387,18 +4446,24 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(state.get('defense_buff_turns', 0), 0)
         self.assertGreater(state.get('defense_buff_value', 0), 0)
 
-    def test_shatter_is_stronger_into_slowed_or_frozen_target(self):
+    def test_shatter_uses_controlled_payoff_path_without_chaos_stacking(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'magic_staff'}
         mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
         mob_slowed = {'hp': 100, 'defense': 0, 'effects': [{'type': 'slow', 'turns': 2, 'value': 0}]}
+        mob_frozen = {'hp': 100, 'defense': 0, 'effects': [{'type': 'freeze', 'turns': 1, 'value': 0}]}
+        mob_controlled = {'hp': 100, 'defense': 0, 'effects': [{'type': 'slow', 'turns': 2, 'value': 0}, {'type': 'freeze', 'turns': 1, 'value': 0}]}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('shatter', dict(player), mob_plain, dict(base_state), telegram_id=101, lang='ru')
-            payoff = skill_engine.use_skill('shatter', dict(player), mob_slowed, dict(base_state), telegram_id=101, lang='ru')
-        self.assertGreater(payoff['damage'], plain['damage'])
+            slow_payoff = skill_engine.use_skill('shatter', dict(player), mob_slowed, dict(base_state), telegram_id=101, lang='ru')
+            freeze_payoff = skill_engine.use_skill('shatter', dict(player), mob_frozen, dict(base_state), telegram_id=101, lang='ru')
+            controlled_payoff = skill_engine.use_skill('shatter', dict(player), mob_controlled, dict(base_state), telegram_id=101, lang='ru')
+        self.assertGreater(slow_payoff['damage'], plain['damage'])
+        self.assertGreater(freeze_payoff['damage'], slow_payoff['damage'])
+        self.assertGreater(controlled_payoff['damage'], freeze_payoff['damage'])
 
     def test_absolute_zero_no_longer_applies_long_freeze_lock(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -4412,6 +4477,73 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         freeze_turns = [e.get('turns', 0) for e in result['effects'] if e.get('type') == 'freeze']
         self.assertTrue(result['damage'] > 0)
         self.assertTrue(all(turns <= 1 for turns in freeze_turns))
+
+    def test_cataclysm_gets_controlled_bonus_on_surge_and_burning_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'magic_staff'}
+        mob_plain = {'hp': 100, 'defense': 0, 'effects': []}
+        mob_burning = {'hp': 100, 'defense': 0, 'effects': [{'type': 'burn', 'turns': 2, 'value': 9}]}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('cataclysm', dict(player), dict(mob_plain), dict(base_state), telegram_id=101, lang='ru')
+            burning = skill_engine.use_skill('cataclysm', dict(player), dict(mob_burning), dict(base_state), telegram_id=101, lang='ru')
+            surged_burning = skill_engine.use_skill(
+                'cataclysm',
+                dict(player),
+                dict(mob_burning),
+                dict(base_state, arcane_surge_turns=1, arcane_surge_value=30),
+                telegram_id=101,
+                lang='ru',
+            )
+        self.assertGreater(burning['damage'], plain['damage'])
+        self.assertGreater(surged_burning['damage'], burning['damage'])
+        self.assertTrue(any(a.get('type') == 'consume_arcane_surge_setup' for a in surged_burning.get('post_hit_actions', [])))
+
+    def test_flame_wave_stays_stable_two_hit_pressure_spell(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'magic_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('flame_wave', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+        self.assertTrue(result['damage'] > 0)
+        self.assertEqual(result.get('log_key'), 'skills.log_damage_multi')
+
+    def test_destruction_commit_peak_stays_above_control_commit_peak(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 20, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'magic', 'weapon_profile': 'magic_staff'}
+        mob_burn_control = {'hp': 100, 'defense': 0, 'effects': [{'type': 'burn', 'turns': 2, 'value': 9}, {'type': 'slow', 'turns': 2, 'value': 0}, {'type': 'freeze', 'turns': 1, 'value': 0}]}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            destruction_peak = skill_engine.use_skill(
+                'cataclysm',
+                dict(player),
+                dict(mob_burn_control),
+                dict(base_state, arcane_surge_turns=1, arcane_surge_value=30),
+                telegram_id=101,
+                lang='ru',
+            )
+            control_peak = skill_engine.use_skill('absolute_zero', dict(player), dict(mob_burn_control), dict(base_state), telegram_id=101, lang='ru')
+        self.assertGreater(destruction_peak['damage'], control_peak['damage'])
+
+    def test_control_branch_has_defensive_tempo_tool_while_destruction_does_not(self):
+        player = {'mana': 100, 'intuition': 18}
+        base_state = {'weapon_damage': 12, 'weapon_type': 'magic', 'weapon_profile': 'magic_staff'}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            mana_shield_state = dict(base_state)
+            arcane_surge_state = dict(base_state)
+            skill_engine.use_skill('mana_shield', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, mana_shield_state, telegram_id=101, lang='ru')
+            skill_engine.use_skill('arcane_surge', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, arcane_surge_state, telegram_id=101, lang='ru')
+        self.assertGreater(mana_shield_state.get('defense_buff_turns', 0), 0)
+        self.assertEqual(arcane_surge_state.get('defense_buff_turns', 0), 0)
 
     def test_holy_staff_tree_is_full_5_plus_5(self):
         tree = game_skills.SKILL_TREES['holy_staff']

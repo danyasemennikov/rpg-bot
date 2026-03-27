@@ -320,6 +320,16 @@ STRINGS = {
         'log_borrowed_grace': '{name} — ✨ {dmg} daño + gracia {value}% por {turns} turnos 🔵-{cost}',
         'log_synthesis_boost': '{name} — 🧬 síntesis potenciada: {dmg} daño 🔵-{cost}',
         'log_forbidden_thesis_boost': '{name} — ⛔ tesis potenciada: {dmg} daño (el setup se consume solo con impacto exitoso) 🔵-{cost}',
+        'log_arcane_lance_surge': '{name} — 💠 payoff con Oleada Arcana: {dmg} daño 🔵-{cost}',
+        'log_cataclysm_surge': '{name} — 🌋 cataclismo en ventana de oleada: {dmg} daño 🔵-{cost}',
+        'log_cataclysm_burn': '{name} — 🌋 cataclismo contra objetivo en llamas: {dmg} daño 🔵-{cost}',
+        'log_cataclysm_surge_burn': '{name} — 🌋 cataclismo (oleada + quemadura): {dmg} daño 🔵-{cost}',
+        'log_shatter_slow': '{name} — 💥 quebrar sobre objetivo ralentizado: {dmg} daño 🔵-{cost}',
+        'log_shatter_freeze': '{name} — 💥 quebrar sobre objetivo congelado: {dmg} daño 🔵-{cost}',
+        'log_shatter_controlled': '{name} — 💥 quebrar sobre objetivo totalmente controlado: {dmg} daño 🔵-{cost}',
+        'log_absolute_zero_slow': '{name} — 🧊 cero absoluto sobre objetivo ralentizado: {dmg} daño 🔵-{cost}',
+        'log_absolute_zero_freeze': '{name} — 🧊 cero absoluto sobre objetivo congelado: {dmg} daño 🔵-{cost}',
+        'log_absolute_zero_controlled': '{name} — 🧊 cero absoluto sobre objetivo controlado: {dmg} daño 🔵-{cost}',
 
     },
     'quests': {

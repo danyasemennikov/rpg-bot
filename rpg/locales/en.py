@@ -319,6 +319,16 @@ STRINGS = {
         'log_borrowed_grace': '{name} — ✨ {dmg} damage + grace {value}% for {turns} turns 🔵-{cost}',
         'log_synthesis_boost': '{name} — 🧬 synthesis boosted: {dmg} damage 🔵-{cost}',
         'log_forbidden_thesis_boost': '{name} — ⛔ thesis boosted: {dmg} damage (setup is consumed on successful hit) 🔵-{cost}',
+        'log_arcane_lance_surge': '{name} — 💠 arcane surge payoff: {dmg} damage 🔵-{cost}',
+        'log_cataclysm_surge': '{name} — 🌋 cataclysm in surge window: {dmg} damage 🔵-{cost}',
+        'log_cataclysm_burn': '{name} — 🌋 cataclysm into burning target: {dmg} damage 🔵-{cost}',
+        'log_cataclysm_surge_burn': '{name} — 🌋 cataclysm (surge + burn): {dmg} damage 🔵-{cost}',
+        'log_shatter_slow': '{name} — 💥 shatter into slowed target: {dmg} damage 🔵-{cost}',
+        'log_shatter_freeze': '{name} — 💥 shatter into frozen target: {dmg} damage 🔵-{cost}',
+        'log_shatter_controlled': '{name} — 💥 shatter into fully controlled target: {dmg} damage 🔵-{cost}',
+        'log_absolute_zero_slow': '{name} — 🧊 absolute zero into slowed target: {dmg} damage 🔵-{cost}',
+        'log_absolute_zero_freeze': '{name} — 🧊 absolute zero into frozen target: {dmg} damage 🔵-{cost}',
+        'log_absolute_zero_controlled': '{name} — 🧊 absolute zero into controlled target: {dmg} damage 🔵-{cost}',
         
     },
     'quests': {

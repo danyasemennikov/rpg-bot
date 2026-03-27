@@ -459,6 +459,10 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
         elif action_type == 'consume_steady_aim':
             if battle_state.get('steady_aim_turns', 0) > 0:
                 battle_state['steady_aim_turns'] = 0
+        elif action_type == 'consume_arcane_surge_setup':
+            if battle_state.get('arcane_surge_turns', 0) > 0:
+                battle_state['arcane_surge_turns'] = 0
+                battle_state['arcane_surge_value'] = 0
 
 
 def resolve_enemy_targeted_direct_damage_skill_action(
