@@ -1289,9 +1289,9 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             if damage_mult > 1.0:
                 result['damage'] = int(result['damage'] * damage_mult)
             if focus_active:
-                battle_state['executioner_focus_turns'] = 0
-                battle_state['executioner_focus_value'] = 0
+                result['post_hit_actions'].append({'type': 'consume_executioner_focus'})
         elif skill_id == 'executioners_stroke':
+            focus_active = battle_state.get('executioner_focus_turns', 0) > 0
             wounded_active = _is_target_wounded(mob_state, battle_state)
             vulnerable_active = battle_state.get('vulnerability_turns', 0) > 0
             if wounded_active and vulnerable_active:
@@ -1300,11 +1300,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 result['damage'] = int(result['damage'] * 1.25)
             elif vulnerable_active:
                 result['damage'] = int(result['damage'] * 1.12)
+            if focus_active:
+                result['damage'] = int(result['damage'] * 1.18)
+                result['post_hit_actions'].append({'type': 'consume_executioner_focus'})
         elif skill_id == 'flowing_combo':
             if battle_state.get('battle_stance_turns', 0) > 0:
                 result['damage'] = int(result['damage'] * 1.30)
-                battle_state['battle_stance_turns'] = 0
-                battle_state['battle_stance_value'] = 0
+                result['post_hit_actions'].append({'type': 'consume_battle_stance'})
         elif skill_id == 'masters_sequence':
             if battle_state.get('battle_stance_turns', 0) > 0:
                 result['damage'] = int(result['damage'] * 1.35)

@@ -490,6 +490,14 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
             if battle_state.get('arcane_surge_turns', 0) > 0:
                 battle_state['arcane_surge_turns'] = 0
                 battle_state['arcane_surge_value'] = 0
+        elif action_type == 'consume_executioner_focus':
+            if battle_state.get('executioner_focus_turns', 0) > 0:
+                battle_state['executioner_focus_turns'] = 0
+                battle_state['executioner_focus_value'] = 0
+        elif action_type == 'consume_battle_stance':
+            if battle_state.get('battle_stance_turns', 0) > 0:
+                battle_state['battle_stance_turns'] = 0
+                battle_state['battle_stance_value'] = 0
         elif action_type == 'consume_berserk_setup':
             battle_state['berserk_turns'] = 0
             battle_state['berserk_damage'] = 0
