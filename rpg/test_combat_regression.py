@@ -2891,20 +2891,124 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         combat.tick_post_action_player_buff_durations(battle_state)
         self.assertEqual(battle_state['press_the_line_turns'], 0)
 
-    def test_punishing_cut_gets_payoff_into_exposed_target(self):
+    def test_punishing_cut_has_stable_base_result_without_setup(self):
         player = {'mana': 100, 'strength': 14, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        punishing_cut = game_skills.get_skill('punishing_cut')
+        skill_level = 1
 
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
-            exposed_state = dict(base_state, vulnerability_turns=2, vulnerability_value=25)
-            exposed = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), exposed_state, telegram_id=101, lang='ru')
 
-        self.assertGreater(exposed['damage'], plain['damage'])
+        stats = {k: player.get(k, 1) for k in ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')}
+        base_attack = skill_engine.calc_final_damage(
+            base_state['weapon_damage'],
+            stats,
+            base_state['weapon_type'],
+            False,
+            weapon_profile=base_state['weapon_profile'],
+            damage_school='physical',
+            armor_class=base_state.get('armor_class'),
+            offhand_profile=base_state.get('offhand_profile'),
+            encumbrance=base_state.get('encumbrance'),
+        )
+        expected_plain_damage = int(base_attack * (punishing_cut['base_value'] / 100) * (1 + punishing_cut['level_bonus'] * (skill_level - 1)))
+
+        self.assertTrue(plain['success'])
+        self.assertEqual(plain['damage'], expected_plain_damage)
+        self.assertEqual(plain['log_key'], 'skills.log_damage')
+
+    def test_punishing_cut_gets_payoff_into_vulnerability_window(self):
+        player = {'mana': 100, 'strength': 14, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        punishing_cut = game_skills.get_skill('punishing_cut')
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            vulnerable_state = dict(base_state, vulnerability_turns=2, vulnerability_value=25)
+            vulnerable = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), vulnerable_state, telegram_id=101, lang='ru')
+
+        expected_vulnerable_damage = int(plain['damage'] * punishing_cut['payoff_vulnerable_mult'])
+        self.assertEqual(vulnerable['damage'], expected_vulnerable_damage)
+        self.assertEqual(vulnerable['log_key'], 'skills.log_punishing_cut')
+
+    def test_punishing_cut_gets_tempo_payoff_with_press_the_line(self):
+        player = {'mana': 100, 'strength': 14, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        punishing_cut = game_skills.get_skill('punishing_cut')
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            tempo_state = dict(base_state, press_the_line_turns=1, press_the_line_value=16)
+            tempo = skill_engine.use_skill('punishing_cut', dict(player), dict(mob_state), tempo_state, telegram_id=101, lang='ru')
+
+        expected_tempo_damage = int(plain['damage'] * punishing_cut['payoff_press_line_mult'])
+        self.assertEqual(tempo['damage'], expected_tempo_damage)
+        self.assertEqual(tempo['log_key'], 'skills.log_punishing_cut_tempo')
+
+    def test_punishing_cut_combined_window_uses_single_predictable_payoff_path(self):
+        player = {'mana': 100, 'strength': 14, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'sword_1h', 'player_mana': 100}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        punishing_cut = game_skills.get_skill('punishing_cut')
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill(
+                'punishing_cut',
+                dict(player),
+                dict(mob_state),
+                dict(base_state),
+                telegram_id=101,
+                lang='ru',
+            )
+            vulnerable = skill_engine.use_skill(
+                'punishing_cut',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, vulnerability_turns=2, vulnerability_value=25),
+                telegram_id=101,
+                lang='ru',
+            )
+            tempo = skill_engine.use_skill(
+                'punishing_cut',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, press_the_line_turns=1, press_the_line_value=16),
+                telegram_id=101,
+                lang='ru',
+            )
+            combined = skill_engine.use_skill(
+                'punishing_cut',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, vulnerability_turns=2, vulnerability_value=25, press_the_line_turns=1, press_the_line_value=16),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        expected_vulnerable_damage = int(plain['damage'] * punishing_cut['payoff_vulnerable_mult'])
+        expected_tempo_damage = int(plain['damage'] * punishing_cut['payoff_press_line_mult'])
+        expected_combined_damage = int(plain['damage'] * punishing_cut['payoff_combined_mult'])
+
+        self.assertEqual(combined['log_key'], 'skills.log_punishing_cut_combined')
+        self.assertEqual(vulnerable['damage'], expected_vulnerable_damage)
+        self.assertEqual(tempo['damage'], expected_tempo_damage)
+        self.assertEqual(combined['damage'], expected_combined_damage)
 
     def test_vanguard_surge_gets_stronger_in_setup_window(self):
         player = {'mana': 100, 'strength': 15, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}

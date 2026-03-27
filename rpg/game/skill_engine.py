@@ -566,9 +566,28 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'cost': mana_cost,
             }
         elif skill_id == 'punishing_cut':
-            if battle_state.get('vulnerability_turns', 0) > 0:
-                result['damage'] = int(result['damage'] * 1.35)
+            vulnerable_active = _is_vulnerable_target(mob_state, battle_state)
+            press_line_active = battle_state.get('press_the_line_turns', 0) > 0
+
+            if vulnerable_active and press_line_active:
+                result['damage'] = int(result['damage'] * skill.get('payoff_combined_mult', 1.45))
+                result['log_key'] = 'skills.log_punishing_cut_combined'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+            elif vulnerable_active:
+                result['damage'] = int(result['damage'] * skill.get('payoff_vulnerable_mult', 1.35))
                 result['log_key'] = 'skills.log_punishing_cut'
+                result['log_params'] = {
+                    'name': get_skill_name(skill_id, lang),
+                    'dmg': result['damage'],
+                    'cost': mana_cost,
+                }
+            elif press_line_active:
+                result['damage'] = int(result['damage'] * skill.get('payoff_press_line_mult', 1.20))
+                result['log_key'] = 'skills.log_punishing_cut_tempo'
                 result['log_params'] = {
                     'name': get_skill_name(skill_id, lang),
                     'dmg': result['damage'],

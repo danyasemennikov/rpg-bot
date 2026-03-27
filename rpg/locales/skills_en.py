@@ -6,7 +6,7 @@ SKILL_NAMES = {
     'driving_slash': {'name': '⚔️ Driving Slash', 'description': 'Offensive opener for Vanguard pressure.'},
     'expose_guard': {'name': '🎯 Expose Guard', 'description': 'Creates an opening: the target takes increased incoming damage for a short window.'},
     'press_the_line': {'name': '📣 Press the Line', 'description': 'Short self-buff that boosts your direct damage for a brief tempo window.'},
-    'punishing_cut': {'name': '🩸 Punishing Cut', 'description': 'Payoff strike that hits harder into an exposed target.'},
+    'punishing_cut': {'name': '🩸 Punishing Cut', 'description': 'Payoff strike: stronger into exposed targets and also gains tempo payoff from Press the Line.'},
     'vanguard_surge': {'name': '🚩 Vanguard Surge', 'description': 'Vanguard capstone finisher with best payoff in expose/tempo setup.'},
     'whirlwind': {'name': '🌀 Whirlwind', 'description': 'Spinning attack. Deals damage and has a chance to stun.'},
     'berserker': {'name': '😤 Berserker', 'description': 'Increases damage by 50% but reduces defense by 30% for 3 turns.'},

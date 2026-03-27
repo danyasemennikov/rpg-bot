@@ -6,7 +6,7 @@ SKILL_NAMES = {
     'driving_slash': {'name': '⚔️ Corte de Empuje', 'description': 'Apertura ofensiva para iniciar la presión de Vanguard.'},
     'expose_guard': {'name': '🎯 Exponer Guardia', 'description': 'Abre una brecha: el objetivo recibe más daño durante una ventana corta.'},
     'press_the_line': {'name': '📣 Presionar la Línea', 'description': 'Auto-buff breve que aumenta tu daño directo durante una ventana de tempo.'},
-    'punishing_cut': {'name': '🩸 Corte Punitivo', 'description': 'Golpe de payoff: pega más fuerte contra objetivo expuesto.'},
+    'punishing_cut': {'name': '🩸 Corte Punitivo', 'description': 'Golpe de payoff: más fuerte contra objetivo expuesto y también en ventana de tempo de Presionar la Línea.'},
     'vanguard_surge': {'name': '🚩 Impulso de Vanguardia', 'description': 'Capstone de Vanguard: mejor remate en ventana de exposición y tempo.'},
     'whirlwind': {'name': '🌀 Torbellino', 'description': 'Ataque giratorio. Inflige daño y puede aturdir.'},
     'berserker': {'name': '😤 Berserker', 'description': 'Aumenta el daño un 50% pero reduce la defensa un 30% durante 3 turnos.'},

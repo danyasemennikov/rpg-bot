@@ -283,6 +283,8 @@ STRINGS = {
         'log_expose_guard': '{name} — 🎯 guardia expuesta: daño recibido +{value}% por {turns} turnos 🔵-{cost}',
         'log_shield_bash': '{name} — 🛡️ {dmg} daño, daño enemigo -{value}% por {turns} turnos + desequilibrio 🔵-{cost}',
         'log_punishing_cut': '{name} — 🩸 golpe de payoff a objetivo expuesto: {dmg} daño 🔵-{cost}',
+        'log_punishing_cut_tempo': '{name} — 🩸 corte de tempo con Presionar la Línea: {dmg} daño 🔵-{cost}',
+        'log_punishing_cut_combined': '{name} — 🩸 payoff combinado sobre objetivo expuesto con ventana de tempo: {dmg} daño 🔵-{cost}',
         'log_vanguard_surge': '{name} — 🚩 remate pico de Vanguardia: {dmg} daño 🔵-{cost}',
         'log_cleanse': '{name} — 🕊️ efectos eliminados: {removed}, ❤️ +{hp} HP 🔵-{cost}',
         'log_radiant_ward': '{name} — 🛡️ defensa +{value}% por {turns} turnos 🔵-{cost}',

@@ -143,7 +143,7 @@ SKILLS = {
     'punishing_cut': {
         'id':             'punishing_cut',
         'name':           '🩸 Карательный разрез',
-        'description':    'Сильнее бьёт по уже вскрытой цели.',
+        'description':    'Базово наносит урон. Получает payoff по уязвимой цели или в темп-окно Press the Line.',
         'weapon_id':      'iron_sword',
         'branch':         'B',
         'unlock_mastery': 7,
@@ -155,6 +155,9 @@ SKILLS = {
         'scale_mult':     1.7,
         'base_value':     150,
         'level_bonus':    0.12,
+        'payoff_vulnerable_mult': 1.35,
+        'payoff_press_line_mult': 1.20,
+        'payoff_combined_mult':   1.45,
     },
     'vanguard_surge': {
         'id':             'vanguard_surge',

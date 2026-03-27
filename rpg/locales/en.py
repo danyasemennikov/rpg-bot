@@ -282,6 +282,8 @@ STRINGS = {
         'log_expose_guard': '{name} — 🎯 guard exposed: incoming damage +{value}% for {turns} turns 🔵-{cost}',
         'log_shield_bash': '{name} — 🛡️ {dmg} damage, enemy damage -{value}% for {turns} turns + off-balance 🔵-{cost}',
         'log_punishing_cut': '{name} — 🩸 payoff strike into exposed target: {dmg} damage 🔵-{cost}',
+        'log_punishing_cut_tempo': '{name} — 🩸 tempo strike with Press the Line: {dmg} damage 🔵-{cost}',
+        'log_punishing_cut_combined': '{name} — 🩸 combined payoff into exposed target with tempo window: {dmg} damage 🔵-{cost}',
         'log_vanguard_surge': '{name} — 🚩 peak Vanguard finisher: {dmg} damage 🔵-{cost}',
         'log_cleanse': '{name} — 🕊️ removed effects: {removed}, ❤️ +{hp} HP 🔵-{cost}',
         'log_radiant_ward': '{name} — 🛡️ defense +{value}% for {turns} turns 🔵-{cost}',
