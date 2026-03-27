@@ -237,7 +237,7 @@ STRINGS = {
         'log_buff':           '{name} — activated for {turns} turns 🔵-{cost}',
         'log_regen':          '{name} — ❤️+{amount}/turn for {turns} turns 🔵-{cost}',
         'log_defense':        '{name} — 🛡️ -{value}% damage for {turns} turns 🔵-{cost}',
-        'log_berserker':      '{name} — ⚔️+{value}% damage, 🛡️-30% defense for 3 turns 🔵-{cost}',
+        'log_berserker':      '{name} — ⚔️+{value}% damage, 🛡️ rage risk window for {turns} turns 🔵-{cost}',
         'log_blessing':       '{name} — ✨ all stats +{value}% for {turns} turns 🔵-{cost}',
         'log_resurrection':   '{name} — 💫 revive with {value}% HP if you die 🔵-{cost}',
         'log_parry':          '{name} — next enemy attack will be reflected 🔵-{cost}',

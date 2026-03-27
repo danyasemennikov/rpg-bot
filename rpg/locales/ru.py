@@ -274,7 +274,7 @@ STRINGS = {
         'log_buff':           '{name} — активирован на {turns} хода 🔵-{cost}',
         'log_regen':          '{name} — ❤️+{amount}/ход на {turns} хода 🔵-{cost}',
         'log_defense':        '{name} — 🛡️ -{value}% урона на {turns} хода 🔵-{cost}',
-        'log_berserker':      '{name} — ⚔️+{value}% урона, 🛡️-30% защиты на 3 хода 🔵-{cost}',
+        'log_berserker':      '{name} — ⚔️+{value}% урона, 🛡️ риск ярости на {turns} хода 🔵-{cost}',
         'log_blessing':       '{name} — ✨ все статы +{value}% на {turns} хода 🔵-{cost}',
         'log_resurrection':   '{name} — 💫 воскреснешь с {value}% HP если погибнешь 🔵-{cost}',
         'log_parry':          '{name} — следующая атака врага отразится 🔵-{cost}',

@@ -867,6 +867,31 @@ class CombatRegressionTests(unittest.TestCase):
         combat.tick_post_action_player_buff_durations(state)
         self.assertEqual(state['berserk_turns'], 1)
 
+    def test_berserk_natural_expiry_clears_berserk_damage_value(self):
+        state = {'berserk_turns': 1, 'berserk_damage': 17}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['berserk_turns'], 0)
+        self.assertEqual(state['berserk_damage'], 0)
+
+    def test_berserk_penalty_natural_expiry_clears_penalty_value(self):
+        state = {'berserk_defense_penalty_turns': 1, 'berserk_defense_penalty': 25}
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['berserk_defense_penalty_turns'], 0)
+        self.assertEqual(state['berserk_defense_penalty'], 0)
+
+    def test_berserk_desynced_state_is_normalized_to_clean_inactive_runtime(self):
+        state = {
+            'berserk_turns': 0,
+            'berserk_damage': 18,
+            'berserk_defense_penalty_turns': 2,
+            'berserk_defense_penalty': 25,
+        }
+        combat.tick_post_action_player_buff_durations(state)
+        self.assertEqual(state['berserk_turns'], 0)
+        self.assertEqual(state['berserk_damage'], 0)
+        self.assertEqual(state['berserk_defense_penalty_turns'], 0)
+        self.assertEqual(state['berserk_defense_penalty'], 0)
+
     def test_blessing_turns_decrement_in_combat_core_post_action_timing(self):
         state = {'defense_buff_turns': 0, 'berserk_turns': 0, 'blessing_turns': 2}
         combat.tick_post_action_player_buff_durations(state)
@@ -5101,10 +5126,27 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             skill_engine.use_skill('rage_call', player, {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
         self.assertGreater(state.get('berserk_turns', 0), 0)
         self.assertGreater(state.get('berserk_damage', 0), 0)
+        self.assertGreater(state.get('berserk_defense_penalty_turns', 0), 0)
+        self.assertGreater(state.get('berserk_defense_penalty', 0), 0)
         self.assertEqual(state.get('player_hp'), 1)
         self.assertEqual(player.get('hp'), 1)
 
-    def test_frenzy_chain_gets_berserk_payoff_and_consumes_berserk(self):
+    def test_rage_call_defense_penalty_scales_with_skill_level(self):
+        player = {'mana': 100, 'hp': 100, 'max_hp': 100, 'strength': 16}
+        base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h', 'player_hp': 100, 'player_max_hp': 100}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            level1 = dict(base_state)
+            skill_engine.use_skill('rage_call', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, level1, telegram_id=101, lang='ru')
+        with patch('game.skill_engine.get_skill_level', return_value=3), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            level3 = dict(base_state)
+            skill_engine.use_skill('rage_call', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, level3, telegram_id=101, lang='ru')
+        self.assertGreater(level3.get('berserk_defense_penalty', 0), level1.get('berserk_defense_penalty', 0))
+
+    def test_frenzy_chain_gets_berserk_payoff_and_schedules_hit_gated_consumption(self):
         player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         base_state = {'weapon_damage': 16, 'weapon_type': 'melee', 'weapon_profile': 'axe_2h'}
@@ -5113,11 +5155,57 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             plain = skill_engine.use_skill('frenzy_chain', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
-            berserk_state = dict(base_state, berserk_turns=1, berserk_damage=20)
+            berserk_state = dict(base_state, berserk_turns=1, berserk_damage=20, berserk_defense_penalty_turns=1, berserk_defense_penalty=25)
             payoff = skill_engine.use_skill('frenzy_chain', dict(player), dict(mob_state), berserk_state, telegram_id=101, lang='ru')
         self.assertGreater(payoff['damage'], plain['damage'])
-        self.assertEqual(berserk_state.get('berserk_turns', 0), 0)
-        self.assertEqual(berserk_state.get('berserk_damage', 0), 0)
+        self.assertEqual(berserk_state.get('berserk_turns', 0), 1)
+        self.assertEqual(berserk_state.get('berserk_damage', 0), 20)
+        self.assertIn({'type': 'consume_berserk_setup'}, payoff.get('post_hit_actions', []))
+
+    def test_frenzy_chain_consumes_berserk_only_after_successful_hit(self):
+        player = {
+            'mana': 100, 'strength': 18, 'agility': 8, 'intuition': 1,
+            'vitality': 1, 'wisdom': 1, 'luck': 1,
+        }
+        mob = {'id': 'wolf', 'hp': 100, 'max_hp': 100, 'defense': 0, 'effects': [], 'agility': 10, 'luck': 10}
+        state = {
+            'weapon_damage': 16,
+            'weapon_type': 'melee',
+            'weapon_profile': 'axe_2h',
+            'mob_hp': 100,
+            'mob_effects': [],
+            'berserk_turns': 1,
+            'berserk_damage': 20,
+            'berserk_defense_penalty_turns': 1,
+            'berserk_defense_penalty': 25,
+        }
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            skill_result = skill_engine.use_skill('frenzy_chain', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        with patch('game.combat.resolve_hit_check', return_value={'is_hit': False, 'outcome': 'miss', 'hit_chance': 35, 'roll': 99, 'accuracy_rating': 20, 'evasion_rating': 30}):
+            resolve_miss = combat.resolve_enemy_targeted_direct_damage_skill_action(dict(player), dict(mob), state, skill_result, lang='ru')
+        self.assertTrue(resolve_miss['handled'])
+        self.assertFalse(resolve_miss['is_hit'])
+        self.assertEqual(state.get('berserk_turns'), 1)
+        self.assertEqual(state.get('berserk_damage'), 20)
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            skill_result_hit = skill_engine.use_skill('frenzy_chain', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
+
+        with patch('game.combat.resolve_hit_check', return_value={'is_hit': True, 'outcome': 'hit', 'hit_chance': 65, 'roll': 10, 'accuracy_rating': 40, 'evasion_rating': 30}):
+            resolve_hit = combat.resolve_enemy_targeted_direct_damage_skill_action(dict(player), dict(mob), state, skill_result_hit, lang='ru')
+        self.assertTrue(resolve_hit['handled'])
+        self.assertTrue(resolve_hit['is_hit'])
+        self.assertEqual(state.get('berserk_turns'), 0)
+        self.assertEqual(state.get('berserk_damage'), 0)
+        self.assertEqual(state.get('berserk_defense_penalty_turns'), 0)
+        self.assertEqual(state.get('berserk_defense_penalty'), 0)
 
     def test_blooded_resolve_scales_heal_up_at_low_hp(self):
         player = {'mana': 100, 'hp': 90, 'max_hp': 100, 'vitality': 16}
@@ -5248,6 +5336,15 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         state = {'berserk_turns': 1, 'berserk_damage': 12}
         out = combat.apply_direct_damage_action_modifiers(state, 20, can_consume_guaranteed_crit=False)
         self.assertEqual(out['damage'], 32)
+
+    def test_enemy_damage_is_penalized_up_during_berserk_commit_window(self):
+        state = {'berserk_defense_penalty_turns': 1, 'berserk_defense_penalty': 25}
+        out = combat.resolve_enemy_damage_against_player(
+            state,
+            lang='ru',
+            mob_result={'damage': 40, 'type': 'mob_attack'},
+        )
+        self.assertEqual(out['player_damage'], 50)
 
     def test_sword_2h_tree_is_full_5_plus_5(self):
         tree = game_skills.SKILL_TREES['sword_2h']
