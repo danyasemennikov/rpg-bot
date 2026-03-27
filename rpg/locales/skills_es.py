@@ -38,7 +38,7 @@ SKILL_NAMES = {
     'smoke_bomb': {'name': '💨 Bomba de Humo', 'description': 'Ventana defensiva corta: más evasión durante 1 turno.'},
     'feint_step': {'name': '👣 Paso de Finta', 'description': 'Buff corto de preparación para tu próximo corte de tempo (Quick Slice).'},
     'quick_slice': {'name': '⚡ Corte Rápido', 'description': 'Golpe de tempo con bajo enfriamiento; tras Paso de Finta gana daño y ralentiza.'},
-    'shadow_chain': {'name': '🌑 Cadena Sombría', 'description': 'Secuencia de remate con daño extra/extendido contra objetivo abierto.'},
+    'shadow_chain': {'name': '🌑 Cadena Sombría', 'description': 'Secuencia de remate: más fuerte contra objetivo abierto y con bono menor en ventana evasiva.'},
     'death_dance': {'name': '💃 Danza de la Muerte', 'description': 'Ataca 3 veces por turno. Cada golpe es más débil pero puede ser crítico.'},
     'dagger_ult_b': {'name': '👻 Sombra de la Muerte', 'description': 'Se teleporta detrás del enemigo. Los próximos 3 ataques son críticos garantizados.'},
     'aimed_shot': {'name': '🎯 Disparo Certero', 'description': 'Disparo preciso a un objetivo. Hace más daño al objetivo marcado.'},

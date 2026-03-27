@@ -3402,6 +3402,46 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(opened_from_weakened['log_key'], 'skills.log_backstab_crit')
 
     def test_envenom_blades_buffs_only_next_poison_application(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'mob_hp': 120,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+        }
+        hit_check = {
+            'outcome': 'hit',
+            'is_hit': True,
+            'hit_chance': 100,
+            'roll': 1,
+            'accuracy_rating': 999,
+            'evasion_rating': 0,
+            'guaranteed_hit': False,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.resolve_hit_check', side_effect=[hit_check, hit_check]):
+            setup = combat.process_skill_turn('envenom_blades', player, mob, battle_state, user_id=101, lang='ru')
+            first = combat.process_skill_turn('toxic_cut', player, mob, battle_state, user_id=101, lang='ru')
+            second = combat.process_skill_turn('toxic_cut', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(setup['success'])
+        self.assertGreater(first['skill_result']['effects'][0]['turns'], second['skill_result']['effects'][0]['turns'])
+        self.assertFalse(second['battle_state'].get('envenom_blades_active', False))
+
+    def test_envenom_blades_is_not_consumed_by_non_poison_skill(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100, 'mob_effects': []}
@@ -3411,11 +3451,156 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
             skill_engine.use_skill('envenom_blades', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
-            first = skill_engine.use_skill('toxic_cut', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
-            second = skill_engine.use_skill('toxic_cut', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+            skill_engine.use_skill('backstab', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+            toxic_cut_result = skill_engine.use_skill('toxic_cut', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
 
-        self.assertGreater(first['effects'][0]['value'], second['effects'][0]['value'])
-        self.assertFalse(state.get('envenom_blades_active', False))
+        self.assertGreater(toxic_cut_result['effects'][0]['turns'], 3)
+        self.assertTrue(state.get('envenom_blades_active', False))
+
+    def test_envenom_blades_not_consumed_when_toxic_cut_misses_hit_gate(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'mob_hp': 120,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+        }
+
+        miss_check = {
+            'outcome': 'dodge',
+            'is_hit': False,
+            'hit_chance': 0,
+            'roll': 99,
+            'accuracy_rating': 0,
+            'evasion_rating': 999,
+            'guaranteed_hit': False,
+        }
+        hit_check = {
+            'outcome': 'hit',
+            'is_hit': True,
+            'hit_chance': 100,
+            'roll': 1,
+            'accuracy_rating': 999,
+            'evasion_rating': 0,
+            'guaranteed_hit': False,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.resolve_hit_check', side_effect=[miss_check, hit_check]):
+            setup_result = combat.process_skill_turn('envenom_blades', player, mob, battle_state, user_id=101, lang='ru')
+            miss_result = combat.process_skill_turn('toxic_cut', player, mob, battle_state, user_id=101, lang='ru')
+
+            self.assertTrue(setup_result['success'])
+            self.assertTrue(miss_result['success'])
+            self.assertTrue(miss_result['skill_result']['direct_damage_result']['hit_check']['is_hit'] is False)
+            self.assertTrue(miss_result['battle_state'].get('envenom_blades_active', False))
+
+            hit_result = combat.process_skill_turn('toxic_cut', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(hit_result['success'])
+        self.assertTrue(hit_result['skill_result']['direct_damage_result']['hit_check']['is_hit'])
+        self.assertGreater(hit_result['skill_result']['effects'][0]['turns'], 3)
+        self.assertFalse(hit_result['battle_state'].get('envenom_blades_active', False))
+
+    def test_generic_poison_effect_hit_gated_path_consumes_envenom_only_after_hit(self):
+        from game.skills import get_skill as base_get_skill
+
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'mob_hp': 140,
+            'mob_effects': [],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+        }
+
+        miss_check = {
+            'outcome': 'dodge',
+            'is_hit': False,
+            'hit_chance': 0,
+            'roll': 99,
+            'accuracy_rating': 0,
+            'evasion_rating': 999,
+            'guaranteed_hit': False,
+        }
+        hit_check = {
+            'outcome': 'hit',
+            'is_hit': True,
+            'hit_chance': 100,
+            'roll': 1,
+            'accuracy_rating': 999,
+            'evasion_rating': 0,
+            'guaranteed_hit': False,
+        }
+
+        def patched_get_skill(skill_id):
+            skill = base_get_skill(skill_id)
+            if skill_id == 'poison_blade' and skill:
+                modified = dict(skill)
+                modified['type'] = 'damage'
+                modified['base_value'] = 105
+                modified['level_bonus'] = 0.10
+                return modified
+            return skill
+
+        with patch('game.skill_engine.get_skill', side_effect=patched_get_skill), \
+             patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.skill_engine.random.random', return_value=0.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.resolve_hit_check', side_effect=[miss_check, hit_check, hit_check]):
+            combat.process_skill_turn('envenom_blades', player, mob, battle_state, user_id=101, lang='ru')
+            miss_result = combat.process_skill_turn('poison_blade', player, mob, battle_state, user_id=101, lang='ru')
+
+            self.assertTrue(miss_result['success'])
+            self.assertFalse(miss_result['skill_result']['direct_damage_result']['hit_check']['is_hit'])
+            self.assertTrue(miss_result['battle_state'].get('envenom_blades_active', False))
+
+            boosted_hit = combat.process_skill_turn('poison_blade', player, mob, battle_state, user_id=101, lang='ru')
+            base_hit = combat.process_skill_turn('poison_blade', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(boosted_hit['success'])
+        self.assertTrue(base_hit['success'])
+        self.assertFalse(boosted_hit['battle_state'].get('envenom_blades_active', False))
+        self.assertEqual(
+            boosted_hit['skill_result']['effects'][0]['value'],
+            base_hit['skill_result']['effects'][0]['value'] * 2,
+        )
+
+    def test_quick_slice_has_stable_base_result_without_setup(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100, 'mob_effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            result = skill_engine.use_skill('quick_slice', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+
+        self.assertGreater(result['damage'], 0)
+        self.assertFalse(any(e.get('type') == 'slow' for e in result['effects']))
 
     def test_quick_slice_consumes_feint_step_and_applies_slow(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -3575,17 +3760,65 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(opened['log_key'], 'skills.log_widows_kiss_payoff')
 
     def test_rupture_toxins_consumes_poison_effects_and_keeps_slow(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'mob_hp': 120,
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+            'mob_effects': [
+                {'type': 'poison', 'turns': 2, 'value': 8},
+                {'type': 'poison', 'turns': 1, 'value': 5},
+                {'type': 'slow', 'turns': 1, 'value': 0},
+            ],
+        }
+        hit_check = {
+            'outcome': 'hit',
+            'is_hit': True,
+            'hit_chance': 100,
+            'roll': 1,
+            'accuracy_rating': 999,
+            'evasion_rating': 0,
+            'guaranteed_hit': False,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.resolve_hit_check', return_value=hit_check):
+            result = combat.process_skill_turn('rupture_toxins', player, mob, state, user_id=101, lang='ru')
+
+        self.assertGreater(result['skill_result']['damage'], 0)
+        self.assertTrue(all(e.get('type') != 'poison' for e in state['mob_effects']))
+        self.assertTrue(any(e.get('type') == 'slow' for e in state['mob_effects']))
+
+    def test_rupture_toxins_scales_with_total_poison_strength(self):
         player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
-        state = {
+        weak_poison_state = {
             'weapon_damage': 14,
             'weapon_type': 'melee',
             'weapon_profile': 'dagger',
             'player_mana': 100,
             'mob_effects': [
-                {'type': 'poison', 'turns': 2, 'value': 8},
-                {'type': 'poison', 'turns': 1, 'value': 5},
-                {'type': 'slow', 'turns': 1, 'value': 0},
+                {'type': 'poison', 'turns': 2, 'value': 3},
+                {'type': 'poison', 'turns': 2, 'value': 3},
+            ],
+        }
+        strong_poison_state = {
+            **weak_poison_state,
+            'mob_effects': [
+                {'type': 'poison', 'turns': 2, 'value': 10},
+                {'type': 'poison', 'turns': 2, 'value': 10},
             ],
         }
 
@@ -3593,11 +3826,90 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'), \
              patch('game.skill_engine.random.uniform', return_value=1.0):
-            result = skill_engine.use_skill('rupture_toxins', dict(player), dict(mob_state), state, telegram_id=101, lang='ru')
+            weak = skill_engine.use_skill('rupture_toxins', dict(player), dict(mob_state), weak_poison_state, telegram_id=101, lang='ru')
+            strong = skill_engine.use_skill('rupture_toxins', dict(player), dict(mob_state), strong_poison_state, telegram_id=101, lang='ru')
 
-        self.assertGreater(result['damage'], 0)
-        self.assertTrue(all(e.get('type') != 'poison' for e in state['mob_effects']))
-        self.assertTrue(any(e.get('type') == 'slow' for e in state['mob_effects']))
+        self.assertGreater(strong['damage'], weak['damage'])
+
+    def test_rupture_toxins_not_consumed_on_miss_and_consumed_on_next_hit(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 100,
+            'player_max_mana': 100,
+            'mob_hp': 140,
+            'mob_effects': [
+                {'type': 'poison', 'turns': 2, 'value': 7},
+                {'type': 'poison', 'turns': 2, 'value': 6},
+                {'type': 'slow', 'turns': 1, 'value': 0},
+            ],
+            'log': [],
+            'turn': 1,
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'dagger',
+        }
+        miss_check = {
+            'outcome': 'dodge',
+            'is_hit': False,
+            'hit_chance': 0,
+            'roll': 99,
+            'accuracy_rating': 0,
+            'evasion_rating': 999,
+            'guaranteed_hit': False,
+        }
+        hit_check = {
+            'outcome': 'hit',
+            'is_hit': True,
+            'hit_chance': 100,
+            'roll': 1,
+            'accuracy_rating': 999,
+            'evasion_rating': 0,
+            'guaranteed_hit': False,
+        }
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_enemy_response', return_value=[]), \
+             patch('game.combat.resolve_hit_check', side_effect=[miss_check, hit_check]):
+            miss_result = combat.process_skill_turn('rupture_toxins', player, mob, battle_state, user_id=101, lang='ru')
+            self.assertTrue(miss_result['success'])
+            self.assertFalse(miss_result['skill_result']['direct_damage_result']['hit_check']['is_hit'])
+            self.assertTrue(any(e.get('type') == 'poison' for e in miss_result['battle_state']['mob_effects']))
+
+            hit_result = combat.process_skill_turn('rupture_toxins', player, mob, battle_state, user_id=101, lang='ru')
+
+        self.assertTrue(hit_result['success'])
+        self.assertTrue(hit_result['skill_result']['direct_damage_result']['hit_check']['is_hit'])
+        self.assertEqual(hit_result['skill_result'].get('log_key'), 'skills.log_rupture_toxins')
+        self.assertTrue(all(e.get('type') != 'poison' for e in hit_result['battle_state']['mob_effects']))
+        self.assertTrue(any(e.get('type') == 'slow' for e in hit_result['battle_state']['mob_effects']))
+
+    def test_shadow_chain_finisher_stronger_on_opened_target(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 16, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'melee', 'weapon_profile': 'dagger', 'player_mana': 100}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            plain = skill_engine.use_skill('shadow_chain', dict(player), dict(mob_state), dict(base_state, mob_effects=[]), telegram_id=101, lang='ru')
+            opened = skill_engine.use_skill(
+                'shadow_chain',
+                dict(player),
+                dict(mob_state),
+                dict(base_state, mob_effects=[{'type': 'slow', 'turns': 1, 'value': 0}]),
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertGreater(opened['damage'], plain['damage'])
+        self.assertEqual(opened['log_key'], 'skills.log_shadow_chain_opened')
 
     def test_short_bow_tree_ui_assumptions_support_5_skills_per_branch(self):
         from game.skills import get_weapon_tree
