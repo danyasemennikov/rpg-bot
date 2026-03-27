@@ -319,6 +319,8 @@ STRINGS = {
         'log_expose_guard': '{name} — 🎯 цель вскрыта: урон по ней +{value}% на {turns} хода 🔵-{cost}',
         'log_shield_bash': '{name} — 🛡️ {dmg} урона, урон врага -{value}% на {turns} хода + сбитый баланс 🔵-{cost}',
         'log_punishing_cut': '{name} — 🩸 добивающий удар по вскрытой цели: {dmg} урона 🔵-{cost}',
+        'log_punishing_cut_tempo': '{name} — 🩸 темповый разрез (Press the Line): {dmg} урона 🔵-{cost}',
+        'log_punishing_cut_combined': '{name} — 🩸 карательный разрез в окно вскрытия и темпа: {dmg} урона 🔵-{cost}',
         'log_vanguard_surge': '{name} — 🚩 пик натиска: {dmg} урона 🔵-{cost}',
         'log_cleanse': '{name} — 🕊️ снято эффектов: {removed}, ❤️ +{hp} HP 🔵-{cost}',
         'log_radiant_ward': '{name} — 🛡️ защита +{value}% на {turns} хода 🔵-{cost}',
