@@ -562,26 +562,14 @@ def resolve_enemy_targeted_direct_damage_skill_action(
     if skill_result.get('target_kind') != 'enemy':
         return {'handled': False, 'is_hit': None, 'hit_check': None}
 
-    guaranteed_hit = skill_result.get('guaranteed_hit') is True
-    if guaranteed_hit:
-        hit_check = {
-            'outcome': 'guaranteed_hit',
-            'is_hit': True,
-            'hit_chance': 100,
-            'roll': 0,
-            'accuracy_rating': None,
-            'evasion_rating': None,
-            'guaranteed_hit': True,
-        }
-    else:
-        base_accuracy = get_player_accuracy_rating(player, battle_state)
-        accuracy_bonus = int(skill_result.get('accuracy_bonus', 0))
-        adjusted_accuracy = base_accuracy + accuracy_bonus
-        if skill_result.get('ignore_evasion') is True:
-            evasion_rating = 0
-        else:
-            evasion_rating = get_enemy_evasion_rating(mob, battle_state)
-        hit_check = resolve_hit_check(adjusted_accuracy, evasion_rating)
+    hit_check = resolve_player_offensive_hit_check(
+        player,
+        mob,
+        battle_state,
+        guaranteed_hit=(skill_result.get('guaranteed_hit') is True),
+        accuracy_bonus=int(skill_result.get('accuracy_bonus', 0)),
+        ignore_evasion=(skill_result.get('ignore_evasion') is True),
+    )
 
     if not hit_check['is_hit']:
         base_damage = skill_result.get('damage', 0)
@@ -614,6 +602,54 @@ def resolve_enemy_targeted_direct_damage_skill_action(
     apply_post_hit_skill_actions(skill_result, battle_state)
     finalize_direct_damage_skill_result(skill_result, lang)
     return {'handled': True, 'is_hit': True, 'hit_check': hit_check}
+
+
+def build_guaranteed_hit_check() -> dict:
+    """Стандартизованный hit_check для guaranteed-hit действий."""
+    return {
+        'outcome': 'guaranteed_hit',
+        'is_hit': True,
+        'hit_chance': 100,
+        'roll': 0,
+        'accuracy_rating': None,
+        'evasion_rating': None,
+        'guaranteed_hit': True,
+    }
+
+
+def resolve_player_offensive_hit_check(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    *,
+    guaranteed_hit: bool = False,
+    accuracy_bonus: int = 0,
+    ignore_evasion: bool = False,
+) -> dict:
+    """
+    Единый Accuracy/Evasion resolver для player -> enemy offensive actions.
+    """
+    if guaranteed_hit:
+        return build_guaranteed_hit_check()
+
+    base_accuracy = get_player_accuracy_rating(player, battle_state)
+    adjusted_accuracy = base_accuracy + int(accuracy_bonus)
+    evasion_rating = 0 if ignore_evasion else get_enemy_evasion_rating(mob, battle_state)
+    return resolve_hit_check(adjusted_accuracy, evasion_rating)
+
+
+def resolve_enemy_offensive_hit_check(
+    mob: dict,
+    player: dict,
+    battle_state: dict,
+) -> dict:
+    """
+    Единый Accuracy/Evasion resolver для enemy -> player attacks.
+    """
+    return resolve_hit_check(
+        get_enemy_accuracy_rating(mob, battle_state),
+        get_player_evasion_rating(player, battle_state),
+    )
 
 
 def resolve_enemy_damage_against_player(
@@ -661,10 +697,7 @@ def resolve_enemy_damage_against_player(
                 }
 
         if mob is not None and player is not None:
-            hit_check = resolve_hit_check(
-                get_enemy_accuracy_rating(mob, battle_state),
-                get_player_evasion_rating(player, battle_state),
-            )
+            hit_check = resolve_enemy_offensive_hit_check(mob, player, battle_state)
             if not hit_check['is_hit']:
                 log.append(t('battle.player_dodge', lang))
                 return {
@@ -893,12 +926,14 @@ def resolve_enemy_response(
         return log
 
     if battle_state.get('parry_active'):
-        hit_check = resolve_hit_check(
-            get_enemy_accuracy_rating(mob, battle_state),
-            get_player_evasion_rating(player, battle_state),
+        pre_damage_result = resolve_enemy_damage_against_player(
+            battle_state,
+            lang=lang,
+            mob=mob,
+            player=player,
         )
-        if not hit_check['is_hit']:
-            log.append(t('battle.player_dodge', lang))
+        log.extend(pre_damage_result['log'])
+        if pre_damage_result['skip_mob_attack']:
             battle_state['player_hp'] = player['hp']
             decrement_mob_non_dot_effects_after_response(battle_state)
             tick_weaken_duration_after_enemy_response(battle_state)
@@ -1079,10 +1114,7 @@ def resolve_normal_attack_action(
     }
     should_force_crit = battle_state.get('guaranteed_crit_turns', 0) > 0
 
-    hit_check = resolve_hit_check(
-        get_player_accuracy_rating(player, battle_state),
-        get_enemy_evasion_rating(mob, battle_state),
-    )
+    hit_check = resolve_player_offensive_hit_check(player, mob, battle_state)
     if not hit_check['is_hit']:
         return {
             'damage': 0,

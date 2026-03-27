@@ -705,7 +705,7 @@ class CombatRegressionTests(unittest.TestCase):
             [{'type': 'freeze', 'turns': 1, 'value': 0}],
         )
 
-    def test_parry_ordering_remains_compatible_with_enemy_response_flow(self):
+    def test_parry_uses_shared_enemy_precheck_before_trigger_resolution(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
         state = {
@@ -720,12 +720,12 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}) as mob_attack_mock:
             combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
 
-        mob_attack_mock.assert_called_once()
+        mob_attack_mock.assert_not_called()
         self.assertEqual(state['player_hp'], 100)
-        self.assertEqual(state['mob_hp'], 90)
-        # Legacy precedence: parry-path выше invincible pre-check.
-        self.assertEqual(state['invincible_turns'], 1)
-        self.assertFalse(state['parry_active'])
+        self.assertEqual(state['mob_hp'], 100)
+        self.assertEqual(state['invincible_turns'], 0)
+        # Parry не должен тратиться, если общий precheck пропустил атаку.
+        self.assertTrue(state['parry_active'])
 
     def test_parry_change_does_not_affect_other_defensive_mechanics(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
@@ -751,7 +751,7 @@ class CombatRegressionTests(unittest.TestCase):
         self.assertEqual(state['disarm_turns'], 1)
         self.assertEqual(state['fire_shield_turns'], 1)
 
-    def test_dodge_window_does_not_override_parry_precedence(self):
+    def test_parry_path_respects_dodge_window_from_shared_precheck(self):
         player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
         mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 10, 'damage_max': 10}
         state = {
@@ -767,10 +767,9 @@ class CombatRegressionTests(unittest.TestCase):
         with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 10, 'player_hp': 90}) as mob_attack_mock:
             combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=None)
 
-        mob_attack_mock.assert_called_once()
-        self.assertFalse(state['parry_active'])
-        # dodge-window не должен тратиться, если сработал parry-path раньше.
-        self.assertEqual(state['dodge_buff_turns'], 1)
+        mob_attack_mock.assert_not_called()
+        self.assertTrue(state['parry_active'])
+        self.assertEqual(state['dodge_buff_turns'], 0)
 
     def test_post_action_resurrection_tick_decrements_in_normal_attack_flow(self):
         player = {
