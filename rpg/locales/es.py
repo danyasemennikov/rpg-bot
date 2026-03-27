@@ -147,6 +147,9 @@ STRINGS = {
         'regen':         '♻️ La regeneración restaura {amount} HP.',
         'parry_reflect': '🔄 ¡Parado! El enemigo recibe {damage} de daño!',
         'counter_attack': '⚔️ ¡Contraataque! {damage} daño de vuelta',
+        'counter_attack_defense': '⚔️ ¡Contraataque con defensa activa! {damage} daño de vuelta',
+        'counter_attack_opened': '⚔️ ¡Contraataque sobre objetivo abierto! {damage} daño de vuelta',
+        'counter_attack_opened_defense': '⚔️ ¡Contraataque en intercambio defensivo sobre objetivo abierto! {damage} daño de vuelta',
         'invincible': '🌟 ¡Invencible! Ataque desviado.',
         'fire_shield_reflect': '🔆 Escudo de fuego — ¡{damage} daño reflejado!',
         

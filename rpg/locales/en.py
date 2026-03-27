@@ -148,6 +148,9 @@ STRINGS = {
         'regen':         '♻️ Regen restores {amount} HP.',
         'parry_reflect': '🔄 Parried! Mob takes {damage} damage!',
         'counter_attack': '⚔️ Counter! {damage} damage back',
+        'counter_attack_defense': '⚔️ Counter from defensive setup! {damage} damage back',
+        'counter_attack_opened': '⚔️ Counter on opened target! {damage} damage back',
+        'counter_attack_opened_defense': '⚔️ Counter in defensive exchange on opened target! {damage} damage back',
         'invincible': '🌟 Invincible! Attack deflected.',
     },
     'inventory': {

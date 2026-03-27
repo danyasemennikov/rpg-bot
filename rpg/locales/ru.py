@@ -168,6 +168,9 @@ STRINGS = {
         'buff_disarm':          '🤺 Обезоружен: {turns} хода',
         'buff_fire_shield':     '🔆 Огненный щит {value} урона: {turns} хода',
         'counter_attack': '⚔️ Контратака! {damage} урона в ответ',
+        'counter_attack_defense': '⚔️ Контратака в защитной стойке! {damage} урона в ответ',
+        'counter_attack_opened': '⚔️ Контратака по открытой цели! {damage} урона в ответ',
+        'counter_attack_opened_defense': '⚔️ Контратака в защитном размене по открытой цели! {damage} урона в ответ',
         'invincible': '🌟 Неуязвимость! Удар отражён.',
         'fire_shield_reflect': '🔆 Огненный щит — {damage} урона отражено!',
             

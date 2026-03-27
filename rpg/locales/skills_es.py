@@ -23,7 +23,7 @@ SKILL_NAMES = {
     'sword_ultimate': {'name': '💫 Hoja Legendaria', 'description': 'Golpe devastador. Ignora el 50% de la defensa enemiga.'},
     'parry': {'name': '🔄 Parada', 'description': 'Refleja el próximo ataque enemigo. Con escudo refleja más, pero no es obligatorio.'},
     'disarm': {'name': '🤺 Desarmar', 'description': 'Reduce el daño enemigo un 40% durante 2 turnos.'},
-    'counter': {'name': '⚔️ Contraataque', 'description': 'Pasivo: probabilidad de responder al recibir daño, con más impacto contra objetivos ya expuestos.'},
+    'counter': {'name': '⚔️ Contraataque', 'description': 'Pasivo: probabilidad de responder al recibir daño. Golpea más fuerte contra objetivos abiertos y es más fiable/fuerte en intercambios defensivos.'},
     'sword_ultimate_b': {'name': '🌟 Invencible', 'description': 'Te vuelves invulnerable durante 3 turnos. Recibes 0 de daño.'},
     'poison_blade': {'name': '☠️ Hoja Venenosa', 'description': 'Envenena al enemigo. 15 de daño por turno durante 3 turnos.'},
     'envenom': {'name': '🐍 Emponzoñar', 'description': 'Potencia el veneno. El próximo envenenamiento hace el doble de daño.'},

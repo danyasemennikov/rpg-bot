@@ -3100,6 +3100,148 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(state['mob_hp'], 100)
 
+    def test_counter_base_behavior_is_stable_without_setup(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 20, 'damage_max': 20}
+        state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'weapon_profile': 'sword_1h',
+            'offhand_profile': 'none',
+            'defense_buff_turns': 0,
+            'vulnerability_turns': 0,
+            'weaken_turns': 0,
+            'disarm_turns': 0,
+        }
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.0):
+            log = combat.resolve_enemy_response(mob, player, state, lang='ru', user_id=101)
+
+        self.assertEqual(state['mob_hp'], 93)
+        self.assertTrue(any('Контратака!' in line for line in log))
+
+    def test_counter_gets_payoff_on_opened_target_from_runtime_effect(self):
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 20, 'damage_max': 20}
+        base_state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'weapon_profile': 'sword_1h',
+            'offhand_profile': 'none',
+            'defense_buff_turns': 0,
+            'vulnerability_turns': 0,
+            'weaken_turns': 0,
+            'disarm_turns': 0,
+        }
+        plain_state = dict(base_state, mob_effects=[])
+        opened_state = dict(base_state, mob_effects=[{'type': 'off_balance', 'turns': 1, 'value': 0}])
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.0):
+            plain_log = combat.resolve_enemy_response(mob, player, plain_state, lang='ru', user_id=101)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.0):
+            opened_log = combat.resolve_enemy_response(mob, player, opened_state, lang='ru', user_id=101)
+
+        plain_damage = 100 - plain_state['mob_hp']
+        opened_damage = 100 - opened_state['mob_hp']
+        self.assertGreater(opened_damage, plain_damage)
+        self.assertTrue(any('открытой цели' in line for line in opened_log))
+        self.assertTrue(any('Контратака!' in line for line in plain_log))
+
+    def test_shield_bash_runtime_opened_state_is_read_by_counter_path(self):
+        player = {'hp': 100, 'mana': 100, 'strength': 10, 'agility': 1, 'intuition': 1, 'vitality': 12, 'wisdom': 1, 'luck': 1}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 20, 'damage_max': 20, 'defense': 0}
+        battle_state = {
+            'player_hp': 100,
+            'player_mana': 100,
+            'mob_hp': 100,
+            'mob_effects': [],
+            'weapon_damage': 14,
+            'weapon_type': 'melee',
+            'weapon_profile': 'sword_1h',
+            'offhand_profile': 'none',
+            'defense_buff_turns': 0,
+            'vulnerability_turns': 0,
+            'weaken_turns': 0,
+            'disarm_turns': 0,
+        }
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            shield_bash_result = skill_engine.use_skill(
+                'shield_bash',
+                dict(player),
+                dict(mob_state),
+                battle_state,
+                telegram_id=101,
+                lang='ru',
+            )
+
+        self.assertTrue(any(e.get('type') == 'off_balance' for e in shield_bash_result.get('effects', [])))
+        battle_state['mob_effects'].extend(shield_bash_result.get('effects', []))
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.0):
+            log = combat.resolve_enemy_response(mob, player, battle_state, lang='ru', user_id=101)
+
+        self.assertTrue(any('открытой цели' in line for line in log))
+
+    def test_counter_combined_path_uses_single_combined_multiplier_not_double_stack(self):
+        from game.skills import get_skill
+
+        player = {'hp': 100, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'weapon_type': 'melee', 'damage_min': 20, 'damage_max': 20}
+        base_state = {
+            'player_hp': 100,
+            'mob_hp': 100,
+            'weapon_profile': 'sword_1h',
+            'offhand_profile': 'none',
+            'defense_buff_value': 20,
+            'vulnerability_turns': 0,
+            'weaken_turns': 0,
+            'disarm_turns': 0,
+        }
+        opened_state = dict(base_state, defense_buff_turns=0, mob_effects=[{'type': 'off_balance', 'turns': 1, 'value': 0}])
+        combined_state = dict(base_state, defense_buff_turns=2, mob_effects=[{'type': 'off_balance', 'turns': 1, 'value': 0}])
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.0):
+            combat.resolve_enemy_response(mob, player, opened_state, lang='ru', user_id=101)
+
+        with patch('game.combat.mob_attack', return_value={'type': 'mob_attack', 'damage': 20, 'player_hp': 80}), \
+             patch('game.weapon_mastery.get_skill_level', return_value=1), \
+             patch('game.combat.random.random', return_value=0.0):
+            combined_log = combat.resolve_enemy_response(mob, player, combined_state, lang='ru', user_id=101)
+
+        counter_skill = get_skill('counter')
+        mitigated_damage = int(20 * (1 - base_state['defense_buff_value'] / 100))
+        base_counter_damage = int(mitigated_damage * (0.30 + 0.07 * 1))
+        expected_combined = int(base_counter_damage * counter_skill['payoff_opened_defense_mult'])
+
+        combined_damage = 100 - combined_state['mob_hp']
+        opened_damage = 100 - opened_state['mob_hp']
+        hypothetical_double_stack = int(
+            int(20 * (0.30 + 0.07 * 1) * counter_skill['payoff_opened_mult'])
+            * counter_skill['payoff_defense_setup_mult']
+        )
+
+        self.assertEqual(combined_damage, expected_combined)
+        self.assertLess(combined_damage, hypothetical_double_stack)
+        self.assertNotEqual(combined_damage, opened_damage)
+        self.assertTrue(any('защитном размене' in line for line in combined_log))
+
     def test_sword_tree_ui_assumptions_support_5_skills_per_branch(self):
         from game.skills import get_weapon_tree
         tree = get_weapon_tree('iron_sword')

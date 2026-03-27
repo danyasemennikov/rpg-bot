@@ -23,6 +23,7 @@ from game.balance import (
     resolve_hit_check,
 )
 from game.i18n import t, get_mob_name
+from game.skills import get_skill
 from game.skill_engine import (
     apply_mob_effects,
     build_skill_result_log,
@@ -154,6 +155,28 @@ def has_active_mob_effect(battle_state: dict, *effect_types: str) -> bool:
     mob_effects = battle_state.get('mob_effects', [])
     target = set(effect_types)
     return any(e.get('type') in target and int(e.get('turns', 0)) > 0 for e in mob_effects)
+
+
+def is_counter_opened_target(battle_state: dict) -> bool:
+    """
+    Runtime-проверка opened target для Guardian counter payoff.
+    Без нового subsystem: читаем существующие runtime эффекты/флаги.
+    """
+    if has_active_mob_effect(
+        battle_state,
+        'off_balance',
+        'vulnerable',
+        'weak',
+        'weaken',
+        'weakened',
+    ):
+        return True
+
+    return (
+        battle_state.get('vulnerability_turns', 0) > 0
+        or battle_state.get('weaken_turns', 0) > 0
+        or battle_state.get('disarm_turns', 0) > 0
+    )
 
 
 def get_strongest_active_enemy_weakened_value(battle_state: dict) -> int:
@@ -854,19 +877,33 @@ def resolve_enemy_response(
         from game.weapon_mastery import get_skill_level
         counter_level = get_skill_level(user_id, 'counter')
         if counter_level > 0 and battle_state.get('weapon_profile') == 'sword_1h':
+            counter_skill = get_skill('counter') or {}
             counter_chance = 0.16 + 0.04 * (counter_level - 1)
-            vulnerability_active = battle_state.get('vulnerability_turns', 0) > 0
-            vulnerability_value = battle_state.get('vulnerability_value', 0)
+            opened_target = is_counter_opened_target(battle_state)
+            defense_setup_active = battle_state.get('defense_buff_turns', 0) > 0
+
             if battle_state.get('offhand_profile') == 'shield':
                 counter_chance += 0.10
-            if battle_state.get('defense_buff_turns', 0) > 0:
+            if defense_setup_active:
                 counter_chance += 0.04
+
             if random.random() < counter_chance:
                 counter_dmg = int(mob_dmg * (0.30 + 0.07 * counter_level))
-                if vulnerability_active and vulnerability_value > 0:
-                    counter_dmg = int(counter_dmg * (1 + vulnerability_value / 100))
+
+                if opened_target and defense_setup_active:
+                    counter_dmg = int(counter_dmg * counter_skill.get('payoff_opened_defense_mult', 1.40))
+                    counter_log_key = 'battle.counter_attack_opened_defense'
+                elif opened_target:
+                    counter_dmg = int(counter_dmg * counter_skill.get('payoff_opened_mult', 1.30))
+                    counter_log_key = 'battle.counter_attack_opened'
+                elif defense_setup_active:
+                    counter_dmg = int(counter_dmg * counter_skill.get('payoff_defense_setup_mult', 1.10))
+                    counter_log_key = 'battle.counter_attack_defense'
+                else:
+                    counter_log_key = 'battle.counter_attack'
+
                 battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - counter_dmg)
-                log.append(t('battle.counter_attack', lang, damage=counter_dmg))
+                log.append(t(counter_log_key, lang, damage=counter_dmg))
 
     decrement_mob_non_dot_effects_after_response(battle_state)
     tick_weaken_duration_after_enemy_response(battle_state)

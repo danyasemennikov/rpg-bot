@@ -211,7 +211,7 @@ SKILLS = {
     'counter': {
         'id':             'counter',
         'name':           '⚔️ Контратака',
-        'description':    'Пассивно: при получении урона есть шанс на ответный удар, особенно надёжный в защитном размене.',
+        'description':    'Пассивно: при получении урона есть шанс на ответный удар. По открытой цели бьёт сильнее, а в защитном размене срабатывает надёжнее и бьёт плотнее.',
         'weapon_id':      'iron_sword',
         'branch':         'A',
         'unlock_mastery': 4,
@@ -223,6 +223,9 @@ SKILLS = {
         'scale_mult':     0.8,
         'base_value':     30,
         'level_bonus':    0.05,
+        'payoff_opened_mult': 1.30,
+        'payoff_defense_setup_mult': 1.10,
+        'payoff_opened_defense_mult': 1.40,
     },
     'sword_ultimate_b': {
         'id':             'sword_ultimate_b',

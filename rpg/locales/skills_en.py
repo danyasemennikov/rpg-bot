@@ -23,7 +23,7 @@ SKILL_NAMES = {
     'sword_ultimate': {'name': '💫 Legendary Blade', 'description': 'Devastating strike. Ignores 50% of enemy defense.'},
     'parry': {'name': '🔄 Parry', 'description': "Reflects the next enemy attack. Shields improve reflection, but are not required."},
     'disarm': {'name': '🤺 Disarm', 'description': "Reduces enemy damage by 40% for 2 turns."},
-    'counter': {'name': '⚔️ Counter', 'description': 'Passive: chance to strike back when taking damage, with stronger payoff against opened targets.'},
+    'counter': {'name': '⚔️ Counter', 'description': 'Passive: chance to strike back when taking damage. Hits harder into opened targets, and is more reliable/stronger in defensive exchanges.'},
     'sword_ultimate_b': {'name': '🌟 Invincible', 'description': 'Become invulnerable for 3 turns. Take 0 damage.'},
     'poison_blade': {'name': '☠️ Poison Blade', 'description': 'Poisons the enemy. 15 damage per turn for 3 turns.'},
     'envenom': {'name': '🐍 Envenom', 'description': 'Enhances poison. Next poison effect deals double damage.'},
