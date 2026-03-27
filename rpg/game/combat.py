@@ -149,6 +149,13 @@ def decrement_mob_non_dot_effects_after_response(battle_state: dict) -> None:
             new_effects.append(updated)
 
     battle_state['mob_effects'] = new_effects
+    if (
+        battle_state.get('vulnerability_source') == 'judgment'
+        and not has_active_mob_effect(battle_state, 'judgment')
+    ):
+        battle_state['vulnerability_turns'] = 0
+        battle_state['vulnerability_value'] = 0
+        battle_state['vulnerability_source'] = None
 
 
 def has_active_mob_effect(battle_state: dict, *effect_types: str) -> bool:
@@ -334,6 +341,10 @@ def apply_direct_damage_action_modifiers(
         bonus = int(damage * battle_state['vulnerability_value'] / 100)
         damage += bonus
         battle_state['vulnerability_turns'] -= 1
+        if battle_state['vulnerability_turns'] <= 0:
+            battle_state['vulnerability_turns'] = 0
+            battle_state['vulnerability_value'] = 0
+            battle_state['vulnerability_source'] = None
         modifiers_applied = True
 
     if battle_state.get('press_the_line_turns', 0) > 0:
@@ -469,6 +480,18 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
             if battle_state.get('vulnerability_turns', 0) > 0:
                 battle_state['vulnerability_turns'] = 0
                 battle_state['vulnerability_value'] = 0
+                battle_state['vulnerability_source'] = None
+        elif action_type == 'consume_judgment_window':
+            if battle_state.get('vulnerability_source') == 'judgment':
+                battle_state['vulnerability_turns'] = 0
+                battle_state['vulnerability_value'] = 0
+                battle_state['vulnerability_source'] = None
+            mob_effects = battle_state.get('mob_effects', [])
+            if mob_effects:
+                battle_state['mob_effects'] = [
+                    eff for eff in mob_effects
+                    if eff.get('type') != 'judgment'
+                ]
         elif action_type == 'consume_burn_and_blessing':
             mob_effects = battle_state.get('mob_effects', [])
             battle_state['mob_effects'] = [
@@ -1219,6 +1242,7 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'hunters_mark_value':   0,
         'vulnerability_turns':  0,
         'vulnerability_value':  0,
+        'vulnerability_source': None,
         'press_the_line_turns': 0,
         'press_the_line_value': 0,
         'arcane_surge_turns':   0,

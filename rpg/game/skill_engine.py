@@ -127,7 +127,42 @@ def _get_magic_staff_control_payoff_key(mob_state: dict, battle_state: dict) -> 
 
 
 def _is_judged_target(mob_state: dict, battle_state: dict) -> bool:
+    return _runtime_target_has_effect(mob_state, battle_state, ('judgment',))
+
+
+def _is_holy_staff_marked_target(mob_state: dict, battle_state: dict) -> bool:
     return _runtime_target_has_effect(mob_state, battle_state, ('judgment_mark',))
+
+
+def _apply_or_refresh_judgment_vulnerability_effect(
+    battle_state: dict,
+    *,
+    turns: int,
+    value: int,
+) -> tuple[int, int]:
+    if turns <= 0:
+        return 0, max(0, value)
+
+    effects = battle_state.get('mob_effects', [])
+    strongest_value = max(0, value)
+    longest_turns = turns
+    kept_effects = []
+
+    for eff in effects:
+        if eff.get('type') == 'judgment' and int(eff.get('turns', 0)) > 0:
+            strongest_value = max(strongest_value, int(eff.get('value', 0)))
+            longest_turns = max(longest_turns, int(eff.get('turns', 0)))
+            continue
+        kept_effects.append(eff)
+
+    kept_effects.append({
+        'type': 'judgment',
+        'turns': longest_turns,
+        'value': strongest_value,
+        'skill_id': 'judgment',
+    })
+    battle_state['mob_effects'] = kept_effects
+    return longest_turns, strongest_value
 
 
 def _apply_or_refresh_judgment_mark_effect(
@@ -719,6 +754,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         if skill_id == 'sword_rush':
             battle_state['vulnerability_turns'] = 2
             battle_state['vulnerability_value'] = 25 + 3 * (skill_level - 1)
+            battle_state['vulnerability_source'] = 'sword_rush'
             result['log_key'] = 'skills.log_sword_rush'
             result['log_params'] = {
                 'name': get_skill_name(skill_id, lang),
@@ -768,7 +804,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'cost': mana_cost,
                 }
         elif skill_id == 'sanctified_burst':
-            judged_active = _is_judged_target(mob_state, battle_state)
+            judged_active = _is_holy_staff_marked_target(mob_state, battle_state)
             ward_active = battle_state.get('defense_buff_turns', 0) > 0
             if judged_active and ward_active:
                 result['damage'] = int(result['damage'] * skill.get('judged_ward_payoff_mult', 1.38))
@@ -784,7 +820,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'cost': mana_cost,
             }
         elif skill_id == 'halo_of_dawn':
-            judged_active = _is_judged_target(mob_state, battle_state)
+            judged_active = _is_holy_staff_marked_target(mob_state, battle_state)
             ward_active = battle_state.get('defense_buff_turns', 0) > 0
             if judged_active and ward_active:
                 result['damage'] = int(result['damage'] * skill.get('judged_ward_payoff_mult', 1.45))
@@ -833,13 +869,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                 'source': skill_id,
             })
         elif skill_id == 'punish_the_wicked':
-            if battle_state.get('vulnerability_turns', 0) > 0:
+            if _is_judged_target(mob_state, battle_state):
                 result['damage'] = int(result['damage'] * 1.40)
         elif skill_id == 'final_verdict':
-            if battle_state.get('vulnerability_turns', 0) > 0:
+            if _is_judged_target(mob_state, battle_state):
                 result['damage'] = int(result['damage'] * 1.50)
                 result['post_hit_actions'].append({
-                    'type': 'consume_vulnerability',
+                    'type': 'consume_judgment_window',
                 })
         elif skill_id == 'hybrid_missile':
             if _runtime_target_has_effect(mob_state, battle_state, ('burn',)):
@@ -1915,6 +1951,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             duration = skill.get('duration', 2)
             battle_state['vulnerability_turns'] = duration
             battle_state['vulnerability_value'] = int(value)
+            battle_state['vulnerability_source'] = 'expose_guard'
             result['log'] = t('skills.log_expose_guard', lang,
                                name=get_skill_name(skill_id, lang),
                                value=int(value), turns=duration, cost=mana_cost)
@@ -1930,15 +1967,22 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                               value=mark_value, turns=mark_turns, cost=mana_cost)
         elif skill_id == 'judgment':
             duration = skill.get('duration', 3)
-            battle_state['vulnerability_turns'] = duration
-            battle_state['vulnerability_value'] = int(value)
+            judged_turns, judged_value = _apply_or_refresh_judgment_vulnerability_effect(
+                battle_state,
+                turns=duration,
+                value=int(value),
+            )
+            battle_state['vulnerability_turns'] = judged_turns
+            battle_state['vulnerability_value'] = judged_value
+            battle_state['vulnerability_source'] = 'judgment'
             result['log'] = t('skills.log_judgment_vulnerability', lang,
                               name=get_skill_name(skill_id, lang),
-                              value=int(value), turns=duration, cost=mana_cost)
+                              value=judged_value, turns=judged_turns, cost=mana_cost)
         elif skill_id == 'sunder_armor':
             duration = skill.get('duration', 2)
             battle_state['vulnerability_turns'] = duration
             battle_state['vulnerability_value'] = int(value)
+            battle_state['vulnerability_source'] = 'sunder_armor'
             result['log'] = t('skills.log_buff', lang,
                               name=get_skill_name(skill_id, lang),
                               turns=duration, cost=mana_cost)
@@ -1946,6 +1990,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             duration = skill.get('duration', 2)
             battle_state['vulnerability_turns'] = duration
             battle_state['vulnerability_value'] = int(value)
+            battle_state['vulnerability_source'] = 'armor_split'
             result['log'] = t('skills.log_buff', lang,
                               name=get_skill_name(skill_id, lang),
                               turns=duration, cost=mana_cost)
