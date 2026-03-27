@@ -2842,6 +2842,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['success'])
         self.assertEqual(battle_state['vulnerability_turns'], 2)
         self.assertEqual(battle_state['vulnerability_value'], 31)
+        self.assertEqual(battle_state.get('vulnerability_source'), 'sword_rush')
 
     def test_shield_bash_applies_weaken_off_balance_and_does_not_stun_skip(self):
         player = {'mana': 100, 'strength': 10, 'agility': 10, 'intuition': 1, 'vitality': 12, 'wisdom': 1, 'luck': 1}
@@ -2898,6 +2899,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(battle_state['vulnerability_turns'], 2)
         self.assertGreater(battle_state['vulnerability_value'], 0)
+        self.assertEqual(battle_state.get('vulnerability_source'), 'expose_guard')
 
     def test_press_the_line_sets_and_expires(self):
         player = {'mana': 100, 'strength': 12, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -4971,13 +4973,18 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
     def test_judgment_sets_vulnerability(self):
         player = {'mana': 100, 'wisdom': 18}
-        state = {'weapon_damage': 12, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+        state = {'weapon_damage': 12, 'weapon_type': 'light', 'weapon_profile': 'holy_rod', 'mob_effects': []}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
              patch('game.skill_engine.set_skill_cooldown'):
             skill_engine.use_skill('judgment', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
         self.assertGreater(state.get('vulnerability_turns', 0), 0)
         self.assertGreater(state.get('vulnerability_value', 0), 0)
+        self.assertEqual(state.get('vulnerability_source'), 'judgment')
+        judged_effects = [e for e in state.get('mob_effects', []) if e.get('type') == 'judgment']
+        self.assertEqual(len(judged_effects), 1)
+        self.assertGreater(judged_effects[0].get('turns', 0), 0)
+        self.assertGreater(judged_effects[0].get('value', 0), 0)
 
     def test_judgment_mark_and_judgment_use_different_log_keys(self):
         player = {'mana': 100, 'wisdom': 18}
@@ -5081,7 +5088,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
 
     def test_judicator_payoffs_get_bonus_on_judged_target(self):
         player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
-        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod'}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod', 'mob_effects': []}
         mob_state = {'hp': 100, 'defense': 0, 'effects': []}
         with patch('game.skill_engine.get_skill_level', return_value=1), \
              patch('game.skill_engine.get_skill_cooldown', return_value=0), \
@@ -5092,17 +5099,117 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
                 'punish_the_wicked',
                 dict(player),
                 dict(mob_state),
-                dict(base_state, vulnerability_turns=2, vulnerability_value=20),
+                dict(base_state, mob_effects=[{'type': 'judgment', 'turns': 2, 'value': 20}]),
                 telegram_id=101,
                 lang='ru',
             )
             verdict_plain = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
-            verdict_state = dict(base_state, vulnerability_turns=2, vulnerability_value=20)
+            verdict_state = dict(base_state, mob_effects=[{'type': 'judgment', 'turns': 2, 'value': 20}])
             verdict_judged = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), verdict_state, telegram_id=101, lang='ru')
         self.assertGreater(punish_judged['damage'], punish_plain['damage'])
         self.assertGreater(verdict_judged['damage'], verdict_plain['damage'])
-        self.assertEqual(verdict_state.get('vulnerability_turns', 0), 2)
-        self.assertEqual(verdict_state.get('vulnerability_value', 0), 20)
+        self.assertTrue(any(a.get('type') == 'consume_judgment_window' for a in verdict_judged.get('post_hit_actions', [])))
+
+    def test_judicator_payoffs_do_not_trigger_from_plain_vulnerability(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod', 'mob_effects': []}
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        vuln_state = dict(base_state, vulnerability_turns=2, vulnerability_value=20, vulnerability_source='expose_guard')
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            punish_plain = skill_engine.use_skill('punish_the_wicked', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            punish_vuln = skill_engine.use_skill('punish_the_wicked', dict(player), dict(mob_state), dict(vuln_state), telegram_id=101, lang='ru')
+            verdict_plain = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            verdict_vuln = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), dict(vuln_state), telegram_id=101, lang='ru')
+        self.assertEqual(punish_vuln['damage'], punish_plain['damage'])
+        self.assertEqual(verdict_vuln['damage'], verdict_plain['damage'])
+
+    def test_judicator_payoffs_do_not_trigger_from_holy_staff_judgment_mark(self):
+        player = {'mana': 100, 'strength': 1, 'agility': 1, 'intuition': 12, 'vitality': 1, 'wisdom': 18, 'luck': 1}
+        base_state = {'weapon_damage': 14, 'weapon_type': 'light', 'weapon_profile': 'holy_rod', 'mob_effects': []}
+        marked_state = dict(base_state, mob_effects=[{'type': 'judgment_mark', 'turns': 2, 'value': 20}])
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+        with patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.set_skill_cooldown'), \
+             patch('game.skill_engine.random.uniform', return_value=1.0):
+            punish_plain = skill_engine.use_skill('punish_the_wicked', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            punish_marked = skill_engine.use_skill('punish_the_wicked', dict(player), dict(mob_state), dict(marked_state), telegram_id=101, lang='ru')
+            verdict_plain = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), dict(base_state), telegram_id=101, lang='ru')
+            verdict_marked = skill_engine.use_skill('final_verdict', dict(player), dict(mob_state), dict(marked_state), telegram_id=101, lang='ru')
+        self.assertEqual(punish_marked['damage'], punish_plain['damage'])
+        self.assertEqual(verdict_marked['damage'], verdict_plain['damage'])
+
+    def test_final_verdict_post_hit_consumes_judgment_effect_window(self):
+        state = {
+            'mob_effects': [{'type': 'judgment', 'turns': 2, 'value': 20}],
+            'vulnerability_turns': 2,
+            'vulnerability_value': 20,
+            'vulnerability_source': 'judgment',
+        }
+        skill_result = {
+            'direct_damage_skill': True,
+            'direct_damage_result': {'final_damage': 30},
+            'post_hit_actions': [{'type': 'consume_judgment_window'}],
+        }
+        combat.apply_post_hit_skill_actions(skill_result, state)
+        self.assertEqual(state.get('vulnerability_turns', 0), 0)
+        self.assertEqual(state.get('vulnerability_value', 0), 0)
+        self.assertIsNone(state.get('vulnerability_source'))
+        self.assertFalse(any(e.get('type') == 'judgment' for e in state.get('mob_effects', [])))
+
+    def test_consume_judgment_window_keeps_non_judgment_vulnerability(self):
+        state = {
+            'mob_effects': [{'type': 'judgment', 'turns': 2, 'value': 20}],
+            'vulnerability_turns': 2,
+            'vulnerability_value': 15,
+            'vulnerability_source': 'sunder_armor',
+        }
+        skill_result = {
+            'direct_damage_skill': True,
+            'direct_damage_result': {'final_damage': 30},
+            'post_hit_actions': [{'type': 'consume_judgment_window'}],
+        }
+        combat.apply_post_hit_skill_actions(skill_result, state)
+        self.assertEqual(state.get('vulnerability_turns', 0), 2)
+        self.assertEqual(state.get('vulnerability_value', 0), 15)
+        self.assertEqual(state.get('vulnerability_source'), 'sunder_armor')
+        self.assertFalse(any(e.get('type') == 'judgment' for e in state.get('mob_effects', [])))
+
+    def test_mob_judgment_effect_expires_via_enemy_response_cleanup(self):
+        state = {
+            'mob_effects': [
+                {'type': 'judgment', 'turns': 1, 'value': 20},
+                {'type': 'burn', 'turns': 2, 'value': 5},
+            ],
+            'vulnerability_turns': 2,
+            'vulnerability_value': 20,
+            'vulnerability_source': 'judgment',
+        }
+        combat.decrement_mob_non_dot_effects_after_response(state)
+        self.assertEqual(state.get('vulnerability_turns', 0), 0)
+        self.assertEqual(state.get('vulnerability_value', 0), 0)
+        self.assertIsNone(state.get('vulnerability_source'))
+        self.assertFalse(any(e.get('type') == 'judgment' for e in state.get('mob_effects', [])))
+        self.assertTrue(any(e.get('type') == 'burn' for e in state.get('mob_effects', [])))
+
+    def test_vulnerability_source_clears_when_vulnerability_expires_naturally(self):
+        state = {
+            'vulnerability_turns': 1,
+            'vulnerability_value': 20,
+            'vulnerability_source': 'sunder_armor',
+        }
+        result = combat.apply_direct_damage_action_modifiers(
+            state,
+            base_damage=100,
+            can_consume_guaranteed_crit=False,
+        )
+        self.assertGreater(result['damage'], 100)
+        self.assertEqual(state.get('vulnerability_turns', 0), 0)
+        self.assertEqual(state.get('vulnerability_value', 0), 0)
+        self.assertIsNone(state.get('vulnerability_source'))
 
     def test_axe_2h_tree_is_full_5_plus_5(self):
         tree = game_skills.SKILL_TREES['axe_2h']
@@ -5256,6 +5363,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             skill_engine.use_skill('sunder_armor', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
         self.assertEqual(state.get('vulnerability_turns', 0), expected_duration)
         self.assertGreater(state.get('vulnerability_value', 0), 0)
+        self.assertEqual(state.get('vulnerability_source'), 'sunder_armor')
 
     def test_reopen_wounds_gets_bonus_against_bleeding_target(self):
         player = {'mana': 100, 'strength': 18, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1}
@@ -5368,6 +5476,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
             skill_engine.use_skill('armor_split', dict(player), {'hp': 100, 'defense': 0, 'effects': []}, state, telegram_id=101, lang='ru')
         self.assertGreater(state.get('vulnerability_turns', 0), 0)
         self.assertGreater(state.get('vulnerability_value', 0), 0)
+        self.assertEqual(state.get('vulnerability_source'), 'armor_split')
 
     def test_executioners_focus_sets_runtime_state(self):
         player = {'mana': 100, 'strength': 16}
