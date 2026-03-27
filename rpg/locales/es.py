@@ -262,6 +262,7 @@ STRINGS = {
         
         'log_backstab_crit': '{name} — 💥 ¡CRÍTICO en objetivo vulnerable! {dmg} daño 🔵-{cost}',
         'log_envenom': '{name} — 🐍 el próximo veneno hace daño doble 🔵-{cost}',
+        'log_envenom_blades': '{name} — 🐍 tu próximo veneno aplicado con éxito será más fuerte 🔵-{cost}',
         'log_toxic_cut': '{name} — {dmg} daño + ☠️ veneno {poison}/turno 🔵-{cost}',
         'log_crippling_venom': '{name} — 🧪 daño enemigo -{value}% y ralentización por {turns} turnos 🔵-{cost}',
         'log_widows_kiss_payoff': '{name} — 🕷️ payoff sobre objetivo debilitado: {dmg} daño 🔵-{cost}',
@@ -271,6 +272,7 @@ STRINGS = {
         'log_feint_step': '{name} — 👣 preparación activa por {turns} turno 🔵-{cost}',
         'log_quick_slice_feint': '{name} — ⚡ corte potenciado: {dmg} daño + ralentización 🔵-{cost}',
         'log_shadow_chain_opened': '{name} — 🌑 objetivo abierto, cadena extendida: {dmg} daño 🔵-{cost}',
+        'log_shadow_chain_evasive': '{name} — 🌫️ cadena en ventana evasiva: {dmg} daño 🔵-{cost}',
         'log_hunters_mark': '{name} — 🔍 objetivo marcado, daño +{value}% por 3 turnos 🔵-{cost}',
         'log_aimed_shot_marked': '{name} — 🎯 disparo preciso al objetivo marcado: {dmg} daño 🔵-{cost}',
         'log_piercing_arrow_marked': '{name} — 🏹 flecha perforante al objetivo marcado: {dmg} daño 🔵-{cost}',

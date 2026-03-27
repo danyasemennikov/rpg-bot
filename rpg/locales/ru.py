@@ -298,6 +298,7 @@ STRINGS = {
         
         'log_backstab_crit': '{name} — 💥 КРИТ по уязвимой цели! {dmg} урона 🔵-{cost}',
         'log_envenom': '{name} — 🐍 следующий яд наносит двойной урон 🔵-{cost}',
+        'log_envenom_blades': '{name} — 🐍 следующий успешно наложенный яд станет сильнее 🔵-{cost}',
         'log_toxic_cut': '{name} — {dmg} урона + ☠️ яд {poison}/ход 🔵-{cost}',
         'log_crippling_venom': '{name} — 🧪 урон врага -{value}% и замедление на {turns} хода 🔵-{cost}',
         'log_widows_kiss_payoff': '{name} — 🕷️ payoff по надломленной цели: {dmg} урона 🔵-{cost}',
@@ -307,6 +308,7 @@ STRINGS = {
         'log_feint_step': '{name} — 👣 подготовка на {turns} ход 🔵-{cost}',
         'log_quick_slice_feint': '{name} — ⚡ усиленный срез: {dmg} урона + замедление 🔵-{cost}',
         'log_shadow_chain_opened': '{name} — 🌑 цель открыта, серия усилена: {dmg} урона 🔵-{cost}',
+        'log_shadow_chain_evasive': '{name} — 🌫️ серия через evasive-окно: {dmg} урона 🔵-{cost}',
         'log_hunters_mark': '{name} — 🔍 цель помечена, урон +{value}% на 3 хода 🔵-{cost}',
         'log_aimed_shot_marked': '{name} — 🎯 точный выстрел по метке: {dmg} урона 🔵-{cost}',
         'log_piercing_arrow_marked': '{name} — 🏹 пробивающий выстрел по метке: {dmg} урона 🔵-{cost}',

@@ -452,6 +452,15 @@ def apply_post_hit_skill_actions(skill_result: dict, battle_state: dict) -> None
             if battle_state.get('blessing_turns', 0) > 0:
                 battle_state['blessing_turns'] = 0
                 battle_state['blessing_value'] = 0
+        elif action_type == 'consume_envenom_setup':
+            battle_state['envenom_blades_active'] = False
+            battle_state['envenom_active'] = False
+        elif action_type == 'consume_poison_effects':
+            mob_effects = battle_state.get('mob_effects', [])
+            battle_state['mob_effects'] = [
+                eff for eff in mob_effects
+                if not (eff.get('type') == 'poison' and int(eff.get('turns', 0)) > 0)
+            ]
 
 
 def resolve_enemy_targeted_direct_damage_skill_action(

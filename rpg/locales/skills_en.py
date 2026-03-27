@@ -38,7 +38,7 @@ SKILL_NAMES = {
     'smoke_bomb': {'name': '💨 Smoke Bomb', 'description': 'Short defensive window: increased dodge for 1 turn.'},
     'feint_step': {'name': '👣 Feint Step', 'description': 'Short setup buff that prepares your next tempo cut (Quick Slice).'},
     'quick_slice': {'name': '⚡ Quick Slice', 'description': 'Low-CD tempo strike; after Feint Step it gains bonus damage and applies slow.'},
-    'shadow_chain': {'name': '🌑 Shadow Chain', 'description': 'Finishing sequence with extended/bonus damage against opened targets.'},
+    'shadow_chain': {'name': '🌑 Shadow Chain', 'description': 'Finishing sequence: strongest against opened targets, with a smaller bonus in an evasive window.'},
     'death_dance': {'name': '💃 Death Dance', 'description': 'Attacks 3 times per turn. Each hit is weaker but can crit.'},
     'dagger_ult_b': {'name': '👻 Shadow of Death', 'description': 'Teleports behind the enemy. Next 3 attacks are guaranteed crits.'},
     'aimed_shot': {'name': '🎯 Aimed Shot', 'description': 'Precise single-target shot. Deals extra damage to marked targets.'},

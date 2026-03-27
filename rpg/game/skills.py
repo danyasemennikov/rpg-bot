@@ -334,6 +334,8 @@ SKILLS = {
         'base_value':     1.0,
         'duration':       2,
         'level_bonus':    0.1,
+        'poison_bonus_mult': 1.8,
+        'poison_bonus_turns': 1,
     },
     'toxic_cut': {
         'id':             'toxic_cut',
@@ -350,6 +352,8 @@ SKILLS = {
         'scale_mult':     1.4,
         'base_value':     115,
         'level_bonus':    0.1,
+        'poison_base_ratio': 0.25,
+        'poison_duration': 3,
     },
     'crippling_venom': {
         'id':             'crippling_venom',
@@ -383,6 +387,10 @@ SKILLS = {
         'scale_mult':     1.7,
         'base_value':     145,
         'level_bonus':    0.12,
+        'payoff_poisoned_mult': 1.20,
+        'payoff_weakened_mult': 1.20,
+        'payoff_opened_mult': 1.20,
+        'payoff_combined_mult': 1.26,
     },
     'rupture_toxins': {
         'id':             'rupture_toxins',
@@ -399,6 +407,8 @@ SKILLS = {
         'scale_mult':     2.0,
         'base_value':     170,
         'level_bonus':    0.14,
+        'rupture_bonus_per_stack': 12,
+        'rupture_bonus_from_poison_value_ratio': 0.30,
     },
 
     # Ветка B — Уклонение и крит
@@ -451,6 +461,7 @@ SKILLS = {
         'base_value':     1.0,
         'duration':       1,
         'level_bonus':    0.08,
+        'setup_runtime_turns': 2,
     },
     'quick_slice': {
         'id':             'quick_slice',
@@ -467,6 +478,8 @@ SKILLS = {
         'scale_mult':     1.3,
         'base_value':     105,
         'level_bonus':    0.1,
+        'feint_payoff_mult': 1.20,
+        'feint_slow_turns': 1,
     },
     'death_dance': {
         'id':             'death_dance',
@@ -505,7 +518,7 @@ SKILLS = {
     'shadow_chain': {
         'id':             'shadow_chain',
         'name':           '🌑 Цепь теней',
-        'description':    'Финиширующая серия: 2 удара базово, 3-й удар по открытой цели.',
+        'description':    'Финиширующая серия: сильнее по открытой цели и немного усиливается в evasive-окно.',
         'weapon_id':      'dagger',
         'branch':         'B',
         'unlock_mastery': 10,
@@ -518,6 +531,9 @@ SKILLS = {
         'base_value':     90,
         'level_bonus':    0.12,
         'hits':           2,
+        'opened_damage_mult': 1.50,
+        'evasive_window_damage_mult': 1.12,
+        'opened_evasive_damage_mult': 1.60,
     },
 
     # ════════════════════════════════════════

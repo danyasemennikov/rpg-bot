@@ -261,6 +261,7 @@ STRINGS = {
         
         'log_backstab_crit': '{name} — 💥 CRIT on vulnerable target! {dmg} damage 🔵-{cost}',
         'log_envenom': '{name} — 🐍 next poison deals double damage 🔵-{cost}',
+        'log_envenom_blades': '{name} — 🐍 your next successfully applied poison is stronger 🔵-{cost}',
         'log_toxic_cut': '{name} — {dmg} damage + ☠️ poison {poison}/turn 🔵-{cost}',
         'log_crippling_venom': '{name} — 🧪 enemy damage -{value}% and slow for {turns} turns 🔵-{cost}',
         'log_widows_kiss_payoff': '{name} — 🕷️ payoff into weakened target: {dmg} damage 🔵-{cost}',
@@ -270,6 +271,7 @@ STRINGS = {
         'log_feint_step': '{name} — 👣 setup primed for {turns} turn 🔵-{cost}',
         'log_quick_slice_feint': '{name} — ⚡ empowered slice: {dmg} damage + slow 🔵-{cost}',
         'log_shadow_chain_opened': '{name} — 🌑 opened target, chain extended: {dmg} damage 🔵-{cost}',
+        'log_shadow_chain_evasive': '{name} — 🌫️ evasive-window chain: {dmg} damage 🔵-{cost}',
         'log_hunters_mark': '{name} — 🔍 target marked, damage +{value}% for 3 turns 🔵-{cost}',
         'log_aimed_shot_marked': '{name} — 🎯 precise shot on marked target: {dmg} damage 🔵-{cost}',
         'log_piercing_arrow_marked': '{name} — 🏹 piercing shot on marked target: {dmg} damage 🔵-{cost}',
