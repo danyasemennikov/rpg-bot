@@ -101,6 +101,41 @@ def _is_slowed_target(mob_state: dict, battle_state: dict) -> bool:
     return _runtime_target_has_effect(mob_state, battle_state, ('slow',))
 
 
+def _is_judged_target(mob_state: dict, battle_state: dict) -> bool:
+    return _runtime_target_has_effect(mob_state, battle_state, ('judgment_mark',))
+
+
+def _apply_or_refresh_judgment_mark_effect(
+    battle_state: dict,
+    *,
+    turns: int,
+    value: int,
+) -> tuple[int, int]:
+    if turns <= 0:
+        return 0, max(0, value)
+
+    effects = battle_state.get('mob_effects', [])
+    strongest_value = max(0, value)
+    longest_turns = turns
+    kept_effects = []
+
+    for eff in effects:
+        if eff.get('type') == 'judgment_mark' and int(eff.get('turns', 0)) > 0:
+            strongest_value = max(strongest_value, int(eff.get('value', 0)))
+            longest_turns = max(longest_turns, int(eff.get('turns', 0)))
+            continue
+        kept_effects.append(eff)
+
+    kept_effects.append({
+        'type': 'judgment_mark',
+        'turns': longest_turns,
+        'value': strongest_value,
+        'skill_id': 'judgment_mark',
+    })
+    battle_state['mob_effects'] = kept_effects
+    return longest_turns, strongest_value
+
+
 def _apply_or_refresh_hunters_mark_effect(
     battle_state: dict,
     *,
@@ -297,8 +332,10 @@ def _resolve_support_targets(
     return [battle_state], ['self'], 'self'
 
 
-def _cleanse_supported_effects(target_state: dict) -> int:
+def _cleanse_supported_effects(target_state: dict, *, max_removals: int = 999) -> int:
+    max_removals = max(0, int(max_removals))
     removed = 0
+    removed_value_tags: set[str] = set()
 
     effects = target_state.get('support_effects', [])
     if effects:
@@ -306,7 +343,7 @@ def _cleanse_supported_effects(target_state: dict) -> int:
         for effect in effects:
             dispel_tag = effect.get('dispel_tag')
             can_dispel = effect.get('can_dispel', True)
-            if can_dispel and dispel_tag in CLEANSE_SUPPORTED_TAGS:
+            if can_dispel and dispel_tag in CLEANSE_SUPPORTED_TAGS and removed < max_removals:
                 removed += 1
                 continue
             kept.append(effect)
@@ -323,12 +360,29 @@ def _cleanse_supported_effects(target_state: dict) -> int:
         'curse_turns',
     )
     for key in removable_turn_keys:
-        if target_state.get(key, 0) > 0:
+        if target_state.get(key, 0) > 0 and removed < max_removals:
             target_state[key] = 0
             removed += 1
+            if key == 'poison_turns':
+                removed_value_tags.add('poison')
+            elif key == 'burn_turns':
+                removed_value_tags.add('burn')
+            elif key == 'bleed_turns':
+                removed_value_tags.add('bleed')
+            elif key == 'weaken_turns':
+                removed_value_tags.add('weaken')
+            elif key == 'curse_turns':
+                removed_value_tags.add('curse')
 
-    for value_key in ('poison_value', 'burn_value', 'bleed_value', 'weaken_value', 'curse_value'):
-        if target_state.get(value_key, 0) > 0:
+    value_key_to_tag = {
+        'poison_value': 'poison',
+        'burn_value': 'burn',
+        'bleed_value': 'bleed',
+        'weaken_value': 'weaken',
+        'curse_value': 'curse',
+    }
+    for value_key, tag in value_key_to_tag.items():
+        if tag in removed_value_tags and target_state.get(value_key, 0) > 0:
             target_state[value_key] = 0
 
     return removed
@@ -690,24 +744,38 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                     'cost': mana_cost,
                 }
         elif skill_id == 'sanctified_burst':
-            if battle_state.get('vulnerability_turns', 0) > 0:
-                result['damage'] = int(result['damage'] * 1.3)
-            result['log_key'] = 'skills.log_sanctified_burst'
+            judged_active = _is_judged_target(mob_state, battle_state)
+            ward_active = battle_state.get('defense_buff_turns', 0) > 0
+            if judged_active and ward_active:
+                result['damage'] = int(result['damage'] * skill.get('judged_ward_payoff_mult', 1.38))
+                result['log_key'] = 'skills.log_sanctified_burst_combo'
+            elif judged_active:
+                result['damage'] = int(result['damage'] * skill.get('judged_payoff_mult', 1.30))
+                result['log_key'] = 'skills.log_sanctified_burst_judged'
+            else:
+                result['log_key'] = 'skills.log_sanctified_burst'
             result['log_params'] = {
                 'name': get_skill_name(skill_id, lang),
                 'dmg': result['damage'],
                 'cost': mana_cost,
             }
         elif skill_id == 'halo_of_dawn':
-            if battle_state.get('vulnerability_turns', 0) > 0:
-                result['damage'] = int(result['damage'] * 1.4)
-            result['heal_from_damage_ratio'] = 0.15
+            judged_active = _is_judged_target(mob_state, battle_state)
+            ward_active = battle_state.get('defense_buff_turns', 0) > 0
+            if judged_active and ward_active:
+                result['damage'] = int(result['damage'] * skill.get('judged_ward_payoff_mult', 1.45))
+                result['log_key'] = 'skills.log_halo_of_dawn_combo'
+            elif judged_active:
+                result['damage'] = int(result['damage'] * skill.get('judged_payoff_mult', 1.35))
+                result['log_key'] = 'skills.log_halo_of_dawn_judged'
+            else:
+                result['log_key'] = 'skills.log_halo_of_dawn'
+            result['heal_from_damage_ratio'] = skill.get('heal_from_damage_ratio', 0.12)
             max_hp = battle_state.get('player_max_hp', player.get('max_hp', 100))
             current_hp = battle_state.get('player_hp', player.get('hp', 100))
             result['heal_cap_missing_hp'] = max(0, max_hp - current_hp)
             halo_heal = max(1, int(result['damage'] * result['heal_from_damage_ratio']))
             result['heal'] = min(halo_heal, result['heal_cap_missing_hp'])
-            result['log_key'] = 'skills.log_halo_of_dawn'
             result['log_params'] = {
                 'name': get_skill_name(skill_id, lang),
                 'dmg': result['damage'],
@@ -1383,9 +1451,13 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
             removed = 0
             total_heal = 0
-            cleanse_heal = max(1, int(value * 0.45))
+            cleanse_heal = max(1, int(value * skill.get('cleanse_heal_ratio', 0.4)))
+            cleanse_max_effects = max(1, int(skill.get('cleanse_max_effects', 3)))
             for target_state in target_states:
-                removed += _cleanse_supported_effects(target_state)
+                removed += _cleanse_supported_effects(
+                    target_state,
+                    max_removals=cleanse_max_effects,
+                )
                 max_hp = target_state.get('player_max_hp', target_state.get('max_hp', 100))
                 current_hp = target_state.get('player_hp', target_state.get('hp', 100))
                 healed = min(cleanse_heal, max_hp - current_hp)
@@ -1752,16 +1824,19 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
                                value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'judgment_mark':
             duration = skill.get('duration', 3)
-            battle_state['vulnerability_turns'] = duration
-            battle_state['vulnerability_value'] = int(value)
-            result['log'] = t('skills.log_judgment_mark', lang,
+            mark_turns, mark_value = _apply_or_refresh_judgment_mark_effect(
+                battle_state,
+                turns=duration,
+                value=int(value),
+            )
+            result['log'] = t('skills.log_judgment_mark_holy', lang,
                               name=get_skill_name(skill_id, lang),
-                              value=int(value), turns=duration, cost=mana_cost)
+                              value=mark_value, turns=mark_turns, cost=mana_cost)
         elif skill_id == 'judgment':
             duration = skill.get('duration', 3)
             battle_state['vulnerability_turns'] = duration
             battle_state['vulnerability_value'] = int(value)
-            result['log'] = t('skills.log_judgment_mark', lang,
+            result['log'] = t('skills.log_judgment_vulnerability', lang,
                               name=get_skill_name(skill_id, lang),
                               value=int(value), turns=duration, cost=mana_cost)
         elif skill_id == 'sunder_armor':
