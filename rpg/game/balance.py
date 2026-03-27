@@ -33,10 +33,29 @@ BASE_STATS = {
     'luck':      1,     # 🍀 Удача
 }
 
+HIT_CHANCE_MIN = 25
+HIT_CHANCE_MAX = 95
+
+CRIT_CHANCE_CAP_PERCENT = 35.0
+CRIT_REDUCTION_CAP_PERCENT = 20.0
+CRIT_DAMAGE_MULTIPLIER = 2.0
+
+DODGE_HARD_CAP_PERCENT = 35.0
+PHYSICAL_AGILITY_MITIGATION_CAP_PERCENT = 12.0
+
+DEFENSE_MITIGATION_HARD_CAP_PERCENT = 55.0
+COMBINED_MITIGATION_HARD_CAP_PERCENT = 75.0
+PHYSICAL_DEFENSE_SCALING = 120.0
+MAGIC_DEFENSE_SCALING = 120.0
+
+MAGIC_SCHOOL_BONUS_CAP_PERCENT = 30.0
+HOLY_SCHOOL_BONUS_CAP_PERCENT = 32.0
+HEALING_SCHOOL_BONUS_CAP_PERCENT = 35.0
+
 
 def clamp_hit_chance(chance: int) -> int:
     """Ограничивает шанс попадания в безопасном диапазоне."""
-    return max(25, min(95, int(chance)))
+    return max(HIT_CHANCE_MIN, min(HIT_CHANCE_MAX, int(chance)))
 
 
 def _read_rating_source_value(source, key: str, default: int = 0) -> int:
@@ -85,7 +104,7 @@ def get_enemy_evasion_rating(mob, battle_state) -> int:
 
 
 def resolve_hit_check(accuracy_rating: int, evasion_rating: int, rng_roll: int | None = None) -> dict:
-    raw_hit_chance = 85 + (int(accuracy_rating) - int(evasion_rating)) // 4
+    raw_hit_chance = calc_hit_chance_from_ratings(accuracy_rating, evasion_rating)
     hit_chance = clamp_hit_chance(raw_hit_chance)
     roll = int(rng_roll) if rng_roll is not None else random.randint(1, 100)
     is_hit = roll <= hit_chance
@@ -98,13 +117,18 @@ def resolve_hit_check(accuracy_rating: int, evasion_rating: int, rng_roll: int |
         'evasion_rating': int(evasion_rating),
     }
 
+
+def calc_hit_chance_from_ratings(accuracy_rating: int, evasion_rating: int) -> int:
+    """Базовый контракт Accuracy vs Evasion до clamp."""
+    return 85 + (int(accuracy_rating) - int(evasion_rating)) // 4
+
 # ────────────────────────────────────────
 # COMBAT SEMANTICS (Stage 1 hooks)
 # ────────────────────────────────────────
 
 VALID_WEAPON_PROFILES = {
     'sword_1h', 'sword_2h', 'axe_2h', 'daggers', 'bow',
-    'magic_staff', 'holy_staff', 'wand', 'holy_rod', 'unarmed',
+    'magic_staff', 'holy_staff', 'wand', 'holy_rod', 'tome', 'unarmed',
 }
 VALID_ARMOR_CLASSES = {'light', 'medium', 'heavy'}
 VALID_OFFHAND_PROFILES = {'none', 'shield', 'focus', 'censer', 'orb', 'tome'}
@@ -123,6 +147,7 @@ DEFAULT_DAMAGE_SCHOOL_BY_WEAPON_PROFILE = {
     'wand': 'magic',
     'holy_staff': 'holy',
     'holy_rod': 'holy',
+    'tome': 'magic',
 }
 
 
@@ -330,7 +355,7 @@ def calc_dodge_chance(agility: int) -> float:
     base = min(agility, 20) * 0.45
     if agility > 20:
         base += (agility - 20) * 0.20
-    return round(min(base, 35.0) / 100, 4)
+    return round(min(base, DODGE_HARD_CAP_PERCENT) / 100, 4)
 
 def calc_agility_damage_bonus(agility: int) -> float:
     """Небольшой общий % бонус к урону от Ловкости. Cap 9%."""
@@ -338,7 +363,7 @@ def calc_agility_damage_bonus(agility: int) -> float:
 
 def calc_physical_damage_reduction(agility: int) -> float:
     """Небольшое снижение входящего физ. урона (%)."""
-    return round(min(agility * 0.2, 10.0), 2)  # cap 10%
+    return round(min(agility * 0.24, PHYSICAL_AGILITY_MITIGATION_CAP_PERCENT), 2)
 
 def calc_action_priority(
     agility: int,
@@ -376,8 +401,8 @@ def calc_intuition_melee_bonus(intuition: int) -> int:
 # ────────────────────────────────────────
 
 def calc_physical_defense(vitality: int) -> int:
-    """Физическая защита — снижает входящий физ. урон."""
-    return vitality * 2
+    """Физическая defense rating — основной слой против physical."""
+    return int(vitality * 2.2)
 
 def calc_physical_effect_duration(base_duration: int, vitality: int) -> int:
     """Снижает длительность физ. эффектов (оглушение, слепота, кровотечение).
@@ -391,16 +416,16 @@ def calc_physical_effect_duration(base_duration: int, vitality: int) -> int:
 # ────────────────────────────────────────
 
 def calc_magic_defense(wisdom: int) -> int:
-    """Магическая защита — снижает входящий маг. урон."""
-    return wisdom * 2
+    """Магическая defense rating — основной слой против magic/holy."""
+    return int(wisdom * 2.2)
 
 def calc_healing_bonus(wisdom: int) -> float:
     """% бонус к силе лечения."""
-    return round(wisdom * 0.8, 2)
+    return round(min((wisdom * 0.70) + (wisdom * 0.08), HEALING_SCHOOL_BONUS_CAP_PERCENT), 2)
 
 def calc_light_damage_bonus(wisdom: int) -> float:
     """% бонус к урону светом."""
-    return round(wisdom * 1.0, 2)
+    return round(min((wisdom * 0.70) + (wisdom * 0.10), HOLY_SCHOOL_BONUS_CAP_PERCENT), 2)
 
 def calc_magic_effect_duration(base_duration: int, wisdom: int) -> int:
     """Снижает длительность маг. эффектов (заморозка, страх, проклятие).
@@ -416,43 +441,75 @@ def calc_magic_effect_duration(base_duration: int, wisdom: int) -> int:
 def calc_crit_chance(luck: int, agility: int = 0) -> float:
     """Шанс критического удара (0.0 — 1.0). Cap 35%."""
     raw = (luck * 0.35) + (agility * 0.05)
-    return round(min(raw, 35.0) / 100, 4)
+    return round(min(raw, CRIT_CHANCE_CAP_PERCENT) / 100, 4)
 
 def calc_crit_reduction(luck: int) -> float:
     """Снижение шанса получить крит от врага (%). Cap 20%."""
-    return round(min(luck * 0.2, 20.0), 2)
+    return round(min(luck * 0.2, CRIT_REDUCTION_CAP_PERCENT), 2)
 
 def calc_luck_bonus(luck: int, stat_value: int) -> float:
     """Удача даёт небольшой % бонус к любому стату."""
     return round(stat_value * (luck * 0.002), 2)  # 0.2% за очко Удачи
+
+
+def calc_defense_mitigation_percent(defense_rating: int, *, school: str = 'physical') -> float:
+    """
+    Нормализованный mitigation от defense rating с мягким убыванием.
+    Используется для снижения входящего урона до hard-cap.
+    """
+    defense_rating = max(0, int(defense_rating))
+    scaling = PHYSICAL_DEFENSE_SCALING if school == 'physical' else MAGIC_DEFENSE_SCALING
+    if defense_rating <= 0:
+        return 0.0
+    raw_percent = (defense_rating / (defense_rating + scaling)) * 100
+    return round(min(raw_percent, DEFENSE_MITIGATION_HARD_CAP_PERCENT), 2)
+
+
+def combine_mitigation_percents(*layers: float, hard_cap: float = COMBINED_MITIGATION_HARD_CAP_PERCENT) -> float:
+    """Комбинирует mitigation-слои мультипликативно и даёт единый capped результат."""
+    remaining_multiplier = 1.0
+    for layer in layers:
+        normalized_layer = max(0.0, min(float(layer), 100.0))
+        remaining_multiplier *= (1 - normalized_layer / 100)
+    combined = (1 - remaining_multiplier) * 100
+    return round(min(combined, hard_cap), 2)
+
+
+def apply_mitigation_percent(incoming_damage: int, mitigation_percent: float) -> int:
+    """Применяет единый mitigation-процент к входящему урону."""
+    damage = max(1, int(incoming_damage))
+    mitig = max(0.0, min(float(mitigation_percent), 100.0))
+    return max(1, int(damage * (1 - mitig / 100)))
 
 # ────────────────────────────────────────
 # 🎯 ФИНАЛЬНЫЙ УРОН — сводная формула
 # ────────────────────────────────────────
 
 PROFILE_PRIMARY_SCALING = {
-    'sword_1h': ('strength', 2.2),
+    'sword_1h': ('strength', 2.3),
     'sword_2h': ('strength', 2.6),
-    'axe_2h': ('strength', 2.8),
-    'daggers': ('agility', 2.3),
-    'bow': ('agility', 2.4),
-    'magic_staff': ('intuition', 2.7),
-    'wand': ('intuition', 2.3),
-    'holy_staff': ('wisdom', 2.6),
-    'holy_rod': ('wisdom', 2.4),
+    'axe_2h': ('strength', 2.7),
+    'daggers': ('agility', 2.2),
+    'bow': ('agility', 2.3),
+    'magic_staff': ('intuition', 2.75),
+    'wand': ('intuition', 2.35),
+    'holy_staff': ('wisdom', 2.55),
+    'holy_rod': ('wisdom', 2.2),
+    'tome': ('wisdom', 2.05),
     'unarmed': ('strength', 1.5),
 }
 
 PROFILE_SECONDARY_SCALING = {
     'sword_1h': ('vitality', 0.9),
-    'sword_2h': ('agility', 0.9),
-    'axe_2h': ('vitality', 1.1),
-    'daggers': ('luck', 0.8),
-    'bow': ('intuition', 1.0),
+    'sword_2h': ('agility', 0.8),
+    'axe_2h': ('vitality', 1.0),
+    'daggers': ('luck', 0.85),
+    'bow': ('intuition', 1.1),
     'magic_staff': ('wisdom', 1.0),
-    'wand': ('agility', 0.9),
+    'wand': ('agility', 0.85),
     'holy_staff': ('intuition', 1.0),
-    'holy_rod': ('vitality', 0.9),
+    'holy_rod': ('vitality', 0.95),
+    'tome': ('intuition', 1.0),
     'unarmed': ('vitality', 0.5),
 }
 
@@ -473,16 +530,16 @@ def calc_school_damage_bonus_percent(attacker_stats: dict, damage_school: str) -
     """School-aware бонус к урону в процентах."""
     if damage_school == 'magic':
         bonus = (attacker_stats.get('intuition', 0) * 0.55) + (attacker_stats.get('wisdom', 0) * 0.20)
-        return round(min(bonus, 28.0), 2)
+        return round(min(bonus, MAGIC_SCHOOL_BONUS_CAP_PERCENT), 2)
     if damage_school == 'holy':
         bonus = (attacker_stats.get('wisdom', 0) * 0.60) + (attacker_stats.get('intuition', 0) * 0.15)
-        return round(min(bonus, 30.0), 2)
+        return round(min(bonus, HOLY_SCHOOL_BONUS_CAP_PERCENT), 2)
     return 0.0
 
 
 def calc_crit_multiplier(luck: int = 0) -> float:
-    """Крит множитель. На этом проходе фиксирован и не ниже x2."""
-    return 2.0
+    """Крит множитель. Для нормализации оставляем фиксированным (x2)."""
+    return CRIT_DAMAGE_MULTIPLIER
 
 def calc_final_damage(
     base_weapon_damage: int,
@@ -533,5 +590,3 @@ def calc_final_damage(
         damage *= calc_crit_multiplier(s.get('luck', 0))
 
     return max(1, int(damage))  # минимум 1 урона всегда
-
-print('✅ balance.py создан!')
