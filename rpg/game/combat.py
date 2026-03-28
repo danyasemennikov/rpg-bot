@@ -611,7 +611,11 @@ def resolve_enemy_targeted_direct_damage_skill_action(
             'guaranteed_crit_applied': False,
             'hit_check': hit_check,
         }
-        skill_result['log'] = t('battle.mob_dodge', lang)
+        skill_result['log'] = t(
+            'battle.mob_dodge',
+            lang,
+            mob_name=get_mob_name(mob['mob_id'], lang),
+        )
         return {'handled': True, 'is_hit': False, 'hit_check': hit_check}
 
     action_result = finalize_player_direct_damage_action(
@@ -1158,7 +1162,11 @@ def resolve_normal_attack_action(
             'is_crit': False,
             'mob_dead': False,
             'mob_hp_after': battle_state.get('mob_hp', 0),
-            'log_line': t('battle.mob_dodge', lang),
+            'log_line': t(
+                'battle.mob_dodge',
+                lang,
+                mob_name=get_mob_name(mob['mob_id'], lang),
+            ),
             'direct_damage_result': None,
             'hit_check': hit_check,
         }
