@@ -22,6 +22,14 @@ VALID_RARITIES = (
     'unique',
 )
 
+ORDINARY_GENERATED_RARITIES = (
+    'common',
+    'uncommon',
+    'rare',
+    'epic',
+    'legendary',
+)
+
 # How many secondary stats an item can roll by rarity.
 RARITY_SECONDARY_COUNT_RULES = {
     'common': 0,
@@ -306,6 +314,52 @@ def roll_secondary_stats_for_item(
 
     random_source = rng if rng is not None else random
     return random_source.sample(pool, k=target_count)
+
+
+GENERATED_SECONDARY_STAT_ALLOWED = {
+    'strength',
+    'agility',
+    'intuition',
+    'vitality',
+    'wisdom',
+    'luck',
+    'max_hp',
+    'max_mana',
+    'physical_defense',
+    'magic_defense',
+    'accuracy',
+    'evasion',
+    'block_chance',
+    'magic_power',
+    'healing_power',
+}
+
+
+RARITY_ROLL_CHANCES = (
+    ('common', 0.55),
+    ('uncommon', 0.27),
+    ('rare', 0.12),
+    ('epic', 0.05),
+    ('legendary', 0.01),
+)
+
+
+def roll_generated_rarity(rng: random.Random | None = None) -> str:
+    """Roll rarity for ordinary generated gear (no unique in this pass)."""
+    random_source = rng if rng is not None else random
+    roll = random_source.random()
+    cumulative = 0.0
+    for rarity, chance in RARITY_ROLL_CHANCES:
+        cumulative += chance
+        if roll <= cumulative:
+            return rarity
+    return 'common'
+
+
+def get_generated_secondary_pool_for_item(item: dict | None) -> tuple[str, ...]:
+    """Return only runtime-supported, player-visible generated secondary stats."""
+    base_pool = get_secondary_pool_for_item(item)
+    return tuple(stat for stat in base_pool if stat in GENERATED_SECONDARY_STAT_ALLOWED)
 
 
 def pool_contains_forbidden_combo(pool: Iterable[str], forbidden_stats: set[str]) -> bool:

@@ -233,6 +233,9 @@ STRINGS = {
         'rarity_rare':      '🔵',
         'rarity_epic':      '🟣',
         'rarity_legendary': '🟡',
+        'instance_tier':    'Tier {tier}',
+        'instance_tier_short': 'T{tier}',
+        'instance_secondaries': '🎲 Secundarios: {val}',
         'stat_labels': {
             'strength': '💪 Fuerza',
             'agility': '🤸 Agilidad',

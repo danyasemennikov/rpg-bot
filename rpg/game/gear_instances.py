@@ -1,7 +1,13 @@
 import json
+import random
 from typing import Any
 
 from database import get_connection
+from game.itemization import (
+    get_generated_secondary_pool_for_item,
+    get_secondary_count_budget_for_rarity,
+    roll_generated_rarity,
+)
 from game.items_data import get_item, get_item_metadata
 
 LEGACY_EQUIPMENT_SLOT_KEYS = (
@@ -19,6 +25,28 @@ LEGACY_EQUIPMENT_SLOT_KEYS = (
 
 
 GEAR_ITEM_TYPES = {'weapon', 'armor', 'accessory'}
+ORDINARY_GENERATED_RARITIES = {'common', 'uncommon', 'rare', 'epic', 'legendary'}
+
+TIER_BAND_STEP = 5
+MAX_GENERATED_TIER = 50
+
+SECONDARY_ROLL_BASE_RANGES = {
+    'strength': (1, 2),
+    'agility': (1, 2),
+    'intuition': (1, 2),
+    'vitality': (1, 2),
+    'wisdom': (1, 2),
+    'luck': (1, 2),
+    'max_hp': (8, 16),
+    'max_mana': (8, 16),
+    'physical_defense': (1, 3),
+    'magic_defense': (1, 3),
+    'accuracy': (1, 3),
+    'evasion': (1, 3),
+    'block_chance': (1, 2),
+    'magic_power': (2, 5),
+    'healing_power': (2, 5),
+}
 
 
 def is_gear_item(item: dict | None) -> bool:
@@ -27,6 +55,13 @@ def is_gear_item(item: dict | None) -> bool:
 
 def is_gear_item_id(item_id: str) -> bool:
     return is_gear_item(get_item(item_id))
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _resolve_instance_slot_identity(item_id: str) -> str | None:
@@ -112,24 +147,6 @@ def get_equipped_gear_instances(telegram_id: int) -> dict[str, dict[str, Any]]:
     return equipped
 
 
-def get_gear_instance_with_base_data(instance_row: dict[str, Any]) -> dict[str, Any]:
-    base_item = get_item(instance_row['base_item_id']) or {}
-    merged = dict(base_item)
-    merged.update({
-        'instance_id': instance_row['id'],
-        'item_id': instance_row['base_item_id'],
-        'enhance_level': instance_row.get('enhance_level', 0),
-        'instance_rarity': instance_row.get('rarity', base_item.get('rarity', 'common')),
-        'item_tier': instance_row.get('item_tier', 1),
-        'slot_identity': instance_row.get('slot_identity') or get_item_metadata(instance_row['base_item_id']).get('slot_identity'),
-        'durability': instance_row.get('durability'),
-        'max_durability': instance_row.get('max_durability'),
-        'equipped_slot': instance_row.get('equipped_slot'),
-        'secondary_rolls': _parse_secondary_rolls(instance_row.get('secondary_rolls_json')),
-    })
-    return merged
-
-
 def _parse_secondary_rolls(raw_value: Any) -> list[Any]:
     if isinstance(raw_value, list):
         return raw_value
@@ -140,6 +157,153 @@ def _parse_secondary_rolls(raw_value: Any) -> list[Any]:
         except (TypeError, ValueError, json.JSONDecodeError):
             return []
     return []
+
+
+def _normalize_secondary_rolls(raw_value: Any) -> list[dict[str, int | str]]:
+    raw_rolls = _parse_secondary_rolls(raw_value)
+    normalized: list[dict[str, int | str]] = []
+    for entry in raw_rolls:
+        if isinstance(entry, str):
+            normalized.append({'stat': entry, 'value': 0})
+            continue
+        if not isinstance(entry, dict):
+            continue
+        stat_key = entry.get('stat') or entry.get('stat_key')
+        if not isinstance(stat_key, str):
+            continue
+        normalized.append({'stat': stat_key, 'value': _safe_int(entry.get('value', 0))})
+    return normalized
+
+
+def _parse_stat_bonus_json(raw_bonus: Any) -> dict[str, int]:
+    if isinstance(raw_bonus, dict):
+        parsed = raw_bonus
+    else:
+        try:
+            parsed = json.loads(raw_bonus or '{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+
+    if not isinstance(parsed, dict):
+        return {}
+
+    out: dict[str, int] = {}
+    for key, value in parsed.items():
+        out[str(key)] = _safe_int(value, 0)
+    return out
+
+
+def _tier_scale_multiplier(item_tier: int) -> float:
+    normalized_tier = max(1, _safe_int(item_tier, 1))
+    return 1.0 + max(0, normalized_tier - 1) * 0.08
+
+
+def _secondary_strength_multiplier(item_tier: int) -> float:
+    normalized_tier = max(1, _safe_int(item_tier, 1))
+    return 1.0 + max(0, normalized_tier - 1) * 0.12
+
+
+def _scale_stat_dict(base_stats: dict[str, int], item_tier: int) -> dict[str, int]:
+    multiplier = _tier_scale_multiplier(item_tier)
+    scaled: dict[str, int] = {}
+    for stat_key, stat_value in base_stats.items():
+        scaled[stat_key] = int(round(_safe_int(stat_value, 0) * multiplier))
+    return scaled
+
+
+def resolve_item_tier_band(level: int) -> int:
+    """Maps source level to deterministic tier bands: 1 / 5 / 10 / 15 / ..."""
+    normalized_level = max(1, _safe_int(level, 1))
+    if normalized_level < TIER_BAND_STEP:
+        return 1
+    tier = (normalized_level // TIER_BAND_STEP) * TIER_BAND_STEP
+    return min(MAX_GENERATED_TIER, max(1, tier))
+
+
+def determine_shop_item_tier(item: dict, *, player_level: int, level_min: int | None = None) -> int:
+    base_level = max(_safe_int(item.get('req_level', 1), 1), _safe_int(level_min, 1), _safe_int(player_level, 1))
+    return resolve_item_tier_band(base_level)
+
+
+def determine_mob_drop_item_tier(*, mob_level: int) -> int:
+    return resolve_item_tier_band(mob_level)
+
+
+def _roll_secondary_stat_value(stat_key: str, item_tier: int, rng: random.Random | None = None) -> int:
+    min_roll, max_roll = SECONDARY_ROLL_BASE_RANGES.get(stat_key, (1, 1))
+    random_source = rng if rng is not None else random
+    rolled_base = random_source.randint(min_roll, max_roll)
+    return max(1, int(round(rolled_base * _secondary_strength_multiplier(item_tier))))
+
+
+def generate_secondary_rolls_for_item(
+    item: dict,
+    *,
+    rarity: str,
+    item_tier: int,
+    rng: random.Random | None = None,
+) -> list[dict[str, int | str]]:
+    pool = list(get_generated_secondary_pool_for_item(item))
+    if not pool:
+        return []
+
+    random_source = rng if rng is not None else random
+    secondary_count = min(get_secondary_count_budget_for_rarity(rarity), len(pool))
+    if secondary_count <= 0:
+        return []
+
+    selected_stats = random_source.sample(pool, k=secondary_count)
+    return [
+        {'stat': stat_key, 'value': _roll_secondary_stat_value(stat_key, item_tier, rng=random_source)}
+        for stat_key in selected_stats
+    ]
+
+
+def resolve_gear_instance_item_data(instance_row: dict[str, Any]) -> dict[str, Any]:
+    """Returns a resolved runtime view from base template + instance generation layers."""
+    base_item = get_item(instance_row['base_item_id']) or {}
+    base_bonus = _parse_stat_bonus_json(base_item.get('stat_bonus_json', '{}'))
+
+    item_tier = max(1, _safe_int(instance_row.get('item_tier', 1), 1))
+    instance_rarity = instance_row.get('rarity')
+    if instance_rarity not in ORDINARY_GENERATED_RARITIES:
+        instance_rarity = base_item.get('rarity', 'common')
+    if instance_rarity not in ORDINARY_GENERATED_RARITIES:
+        instance_rarity = 'common'
+
+    scaled_bonus = _scale_stat_dict(base_bonus, item_tier)
+    secondary_rolls = _normalize_secondary_rolls(instance_row.get('secondary_rolls_json'))
+    for roll in secondary_rolls:
+        stat_key = str(roll['stat'])
+        roll_value = _safe_int(roll['value'], 0)
+        scaled_bonus[stat_key] = scaled_bonus.get(stat_key, 0) + roll_value
+
+    damage_min = max(0, int(round(_safe_int(base_item.get('damage_min', 0)) * _tier_scale_multiplier(item_tier))))
+    damage_max = max(damage_min, int(round(_safe_int(base_item.get('damage_max', 0)) * _tier_scale_multiplier(item_tier))))
+    defense = max(0, int(round(_safe_int(base_item.get('defense', 0)) * _tier_scale_multiplier(item_tier))))
+
+    merged = dict(base_item)
+    merged.update({
+        'instance_id': instance_row['id'],
+        'item_id': instance_row['base_item_id'],
+        'enhance_level': _safe_int(instance_row.get('enhance_level', 0)),
+        'instance_rarity': instance_rarity,
+        'item_tier': item_tier,
+        'slot_identity': instance_row.get('slot_identity') or get_item_metadata(instance_row['base_item_id']).get('slot_identity'),
+        'durability': instance_row.get('durability'),
+        'max_durability': instance_row.get('max_durability'),
+        'equipped_slot': instance_row.get('equipped_slot'),
+        'secondary_rolls': secondary_rolls,
+        'resolved_stat_bonus': scaled_bonus,
+        'damage_min': damage_min,
+        'damage_max': damage_max,
+        'defense': defense,
+    })
+    return merged
+
+
+def get_gear_instance_with_base_data(instance_row: dict[str, Any]) -> dict[str, Any]:
+    return resolve_gear_instance_item_data(instance_row)
 
 
 def resolve_equipped_item_ids_with_fallback(telegram_id: int) -> dict[str, str]:
@@ -231,14 +395,55 @@ def unequip_slot_across_models(telegram_id: int, slot: str):
     clear_slot_ownership_across_models(telegram_id, slot)
 
 
-def grant_item_to_player(telegram_id: int, item_id: str, quantity: int = 1) -> dict[str, int]:
+def _create_generated_gear_instance(
+    telegram_id: int,
+    item_id: str,
+    *,
+    source: str = 'generic',
+    source_level: int | None = None,
+    rng: random.Random | None = None,
+) -> int:
+    item = get_item(item_id) or {}
+    if source == 'shop':
+        item_tier = determine_shop_item_tier(item, player_level=_safe_int(source_level, item.get('req_level', 1)))
+    elif source == 'mob_drop':
+        item_tier = determine_mob_drop_item_tier(mob_level=_safe_int(source_level, item.get('req_level', 1)))
+    else:
+        item_tier = resolve_item_tier_band(max(_safe_int(item.get('req_level', 1)), _safe_int(source_level, 1)))
+
+    rarity = roll_generated_rarity(rng=rng)
+    secondary_rolls = generate_secondary_rolls_for_item(item, rarity=rarity, item_tier=item_tier, rng=rng)
+    return create_gear_instance(
+        telegram_id,
+        item_id,
+        item_tier=item_tier,
+        rarity=rarity,
+        secondary_rolls_json=json.dumps(secondary_rolls, ensure_ascii=False),
+    )
+
+
+def grant_item_to_player(
+    telegram_id: int,
+    item_id: str,
+    quantity: int = 1,
+    *,
+    source: str = 'generic',
+    source_level: int | None = None,
+    rng: random.Random | None = None,
+) -> dict[str, int]:
     if quantity <= 0:
         return {'gear_instances_created': 0, 'stackable_added': 0}
 
     if is_gear_item_id(item_id):
         created = 0
         for _ in range(quantity):
-            create_gear_instance(telegram_id, item_id)
+            _create_generated_gear_instance(
+                telegram_id,
+                item_id,
+                source=source,
+                source_level=source_level,
+                rng=rng,
+            )
             created += 1
         return {'gear_instances_created': created, 'stackable_added': 0}
 

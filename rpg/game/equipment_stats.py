@@ -3,7 +3,11 @@ from typing import Any
 
 from database import get_connection
 from game.balance import calc_magic_defense, calc_max_hp, calc_max_mana, calc_physical_defense
-from game.gear_instances import resolve_equipped_item_ids_with_fallback
+from game.gear_instances import (
+    get_equipped_gear_instances,
+    resolve_equipped_item_ids_with_fallback,
+    resolve_gear_instance_item_data,
+)
 from game.items_data import get_item
 
 EQUIPMENT_SLOT_KEYS = (
@@ -67,13 +71,38 @@ def get_equipped_item_ids(telegram_id: int) -> dict[str, str]:
 
 
 def aggregate_equipped_stat_bonuses(telegram_id: int) -> dict[str, int]:
-    equipped_item_ids = get_equipped_item_ids(telegram_id)
     total: dict[str, int] = {}
 
-    for item_id in equipped_item_ids.values():
-        item = get_item(item_id)
-        for stat_key, stat_value in _parse_item_stat_bonus(item).items():
-            total[stat_key] = total.get(stat_key, 0) + stat_value
+    equipped_instances = get_equipped_gear_instances(telegram_id)
+    occupied_slots = set(equipped_instances.keys())
+    for instance_row in equipped_instances.values():
+        resolved = resolve_gear_instance_item_data(instance_row)
+        for stat_key, stat_value in resolved.get('resolved_stat_bonus', {}).items():
+            total[stat_key] = total.get(stat_key, 0) + _safe_int(stat_value, 0)
+
+    conn = get_connection()
+    try:
+        legacy = conn.execute('SELECT * FROM equipment WHERE telegram_id=?', (telegram_id,)).fetchone()
+        if not legacy:
+            return total
+
+        for slot in EQUIPMENT_SLOT_KEYS:
+            if slot in occupied_slots:
+                continue
+            inv_id = legacy[slot]
+            if inv_id is None:
+                continue
+            inv_row = conn.execute(
+                'SELECT item_id FROM inventory WHERE telegram_id=? AND id=?',
+                (telegram_id, inv_id),
+            ).fetchone()
+            if not inv_row:
+                continue
+            item = get_item(inv_row['item_id'])
+            for stat_key, stat_value in _parse_item_stat_bonus(item).items():
+                total[stat_key] = total.get(stat_key, 0) + stat_value
+    finally:
+        conn.close()
 
     return total
 

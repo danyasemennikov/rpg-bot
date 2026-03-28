@@ -11,8 +11,10 @@ from game.itemization import (
     get_base_archetype_stats_for_item,
     get_item_archetype_metadata,
     get_secondary_count_budget_for_rarity,
+    get_generated_secondary_pool_for_item,
     get_secondary_pool_for_item,
     pool_contains_forbidden_combo,
+    roll_generated_rarity,
     roll_secondary_stats_for_item,
 )
 
@@ -264,6 +266,19 @@ class ItemizationScaffoldingTests(unittest.TestCase):
         self.assertEqual(len(roll_a), 2)
         self.assertEqual(roll_a, roll_b)
         self.assertTrue(set(roll_a).issubset(set(SECONDARY_STAT_POOLS['armor_medium'])))
+
+    def test_generated_rarity_roll_returns_only_allowed_ordinary_set(self):
+        import random
+
+        rng = random.Random(123)
+        rolled = {roll_generated_rarity(rng=rng) for _ in range(100)}
+        self.assertTrue(rolled.issubset({'common', 'uncommon', 'rare', 'epic', 'legendary'}))
+        self.assertNotIn('unique', rolled)
+
+    def test_generated_secondary_pool_is_runtime_supported_subset(self):
+        item = {'item_type': 'armor', 'slot_identity': 'chest', 'armor_class': 'light'}
+        generated_pool = set(get_generated_secondary_pool_for_item(item))
+        self.assertTrue(generated_pool.issubset(self.RUNTIME_SUPPORTED_CURATED_BONUS_KEYS))
 
 
 if __name__ == '__main__':

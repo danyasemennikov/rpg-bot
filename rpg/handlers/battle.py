@@ -26,7 +26,11 @@ from game.items_data import get_item, get_item_encumbrance
 from game.itemization import get_item_archetype_metadata
 from game.i18n import t, get_item_name, get_skill_name, get_mob_name
 from game.equipment_stats import get_equipped_item_ids, get_player_effective_stats
-from game.gear_instances import grant_item_to_player
+from game.gear_instances import (
+    get_equipped_gear_instances,
+    grant_item_to_player,
+    resolve_gear_instance_item_data,
+)
 
 
 # ────────────────────────────────────────
@@ -56,6 +60,25 @@ def end_battle(telegram_id: int):
 def add_to_inventory(telegram_id: int, item_id: str, quantity: int = 1):
     """Добавляет предмет в инвентарь."""
     grant_item_to_player(telegram_id, item_id, quantity=quantity)
+
+
+def get_equipped_combat_items(telegram_id: int) -> dict[str, dict]:
+    """
+    Runtime read-model for equipped items:
+    - start from instance-first+legacy fallback ids
+    - overwrite instance slots with resolved instance data (tier-scaled where relevant)
+    """
+    equipped_item_ids = get_equipped_item_ids(telegram_id)
+    equipped_items: dict[str, dict] = {}
+    for slot, item_id in equipped_item_ids.items():
+        item = get_item(item_id)
+        if item:
+            equipped_items[slot] = item
+
+    for slot, instance_row in get_equipped_gear_instances(telegram_id).items():
+        equipped_items[slot] = resolve_gear_instance_item_data(instance_row)
+
+    return equipped_items
 
 def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     new_exp  = player['exp'] + rewards['exp']
@@ -89,8 +112,15 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     conn2.commit()
     conn2.close()
 
+    mob_level = rewards.get('mob_level', 1)
     for item_id in rewards['loot']:
-        add_to_inventory(telegram_id, item_id)
+        grant_item_to_player(
+            telegram_id,
+            item_id,
+            quantity=1,
+            source='mob_drop',
+            source_level=mob_level,
+        )
 
     return {
         'leveled_up': leveled_up,
@@ -259,10 +289,10 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
         await query.answer(t('battle.mob_not_found', lang), show_alert=True)
         return
 
-    equipped_item_ids = get_equipped_item_ids(user.id)
-    weapon_item = get_item(equipped_item_ids['weapon']) if 'weapon' in equipped_item_ids else None
-    offhand_item = get_item(equipped_item_ids['offhand']) if 'offhand' in equipped_item_ids else None
-    chest_item = get_item(equipped_item_ids['chest']) if 'chest' in equipped_item_ids else None
+    equipped_items = get_equipped_combat_items(user.id)
+    weapon_item = equipped_items.get('weapon')
+    offhand_item = equipped_items.get('offhand')
+    chest_item = equipped_items.get('chest')
 
     effective_stats = get_player_effective_stats(user.id, p)
     p['strength'] = effective_stats['strength']
