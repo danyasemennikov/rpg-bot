@@ -12,7 +12,10 @@ from game.equipment_stats import (
     build_effective_player_stats,
     clamp_player_resources_to_effective_caps,
 )
+from game.gear_instances import create_gear_instance, resolve_gear_instance_item_data, set_gear_instance_equipped_slot
 from game.skill_engine import use_skill
+from handlers.battle import get_equipped_combat_items
+from handlers.inventory import build_item_detail
 
 
 class EquipmentRuntimeIntegrationTests(unittest.TestCase):
@@ -284,6 +287,59 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
         effective = build_effective_player_stats(clamped_player, aggregate_equipped_stat_bonuses(1001))
         self.assertLessEqual(clamped_player['hp'], effective['max_hp'])
         self.assertLessEqual(clamped_player['mana'], effective['max_mana'])
+
+    def test_tiered_weapon_instance_affects_runtime_weapon_damage_path(self):
+        conn = get_connection()
+        conn.execute('UPDATE equipment SET weapon=NULL WHERE telegram_id=?', (1001,))
+        conn.commit()
+        conn.close()
+
+        instance_id = create_gear_instance(
+            1001,
+            'iron_sword',
+            item_tier=10,
+            rarity='rare',
+            secondary_rolls_json='[]',
+        )
+        set_gear_instance_equipped_slot(1001, instance_id, 'weapon')
+
+        combat_items = get_equipped_combat_items(1001)
+        weapon = combat_items['weapon']
+        base_weapon_max = 18  # iron_sword template max damage
+        self.assertGreater(weapon['damage_max'], base_weapon_max)
+
+        conn = get_connection()
+        row = dict(conn.execute('SELECT * FROM gear_instances WHERE id=?', (instance_id,)).fetchone())
+        conn.close()
+        resolved = resolve_gear_instance_item_data(row)
+        self.assertEqual(weapon['damage_min'], resolved['damage_min'])
+        self.assertEqual(weapon['damage_max'], resolved['damage_max'])
+
+    def test_legacy_weapon_fallback_keeps_base_damage_values(self):
+        combat_items = get_equipped_combat_items(1001)
+        self.assertNotIn('weapon', combat_items)
+
+        conn = get_connection()
+        conn.execute('UPDATE equipment SET weapon=? WHERE telegram_id=?', (5, 1001))
+        conn.commit()
+        conn.close()
+
+        combat_items = get_equipped_combat_items(1001)
+        weapon = combat_items['weapon']
+        self.assertEqual(weapon['damage_min'], 12)
+        self.assertEqual(weapon['damage_max'], 18)
+
+    def test_inventory_detail_does_not_overstate_unwired_scaled_defense(self):
+        instance_id = create_gear_instance(
+            1001,
+            'tracker_jacket',
+            item_tier=10,
+            rarity='rare',
+            secondary_rolls_json='[]',
+        )
+        text, _kb = build_item_detail(1001, f'g{instance_id}', 'armor', 'en')
+        self.assertIn('Defense: <b>7</b>', text)
+        self.assertNotIn('Defense: <b>13</b>', text)
 
 
 if __name__ == '__main__':

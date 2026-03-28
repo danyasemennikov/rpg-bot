@@ -1457,6 +1457,7 @@ def calc_rewards(mob: dict) -> dict:
         'exp':  exp,
         'gold': gold,
         'loot': loot,
+        'mob_level': mob.get('level', 1),
     }
 
 # ────────────────────────────────────────

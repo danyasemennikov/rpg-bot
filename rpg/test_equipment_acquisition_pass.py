@@ -87,7 +87,7 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
 
         conn = get_connection()
         gear_row = conn.execute(
-            'SELECT base_item_id, equipped_slot FROM gear_instances WHERE telegram_id=? AND base_item_id=?',
+            'SELECT base_item_id, equipped_slot, item_tier, rarity FROM gear_instances WHERE telegram_id=? AND base_item_id=?',
             (9001, 'apprentice_focus_orb'),
         ).fetchone()
         inv_row = conn.execute(
@@ -100,6 +100,8 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         self.assertIsNotNone(gear_row)
         self.assertIsNone(inv_row)
         self.assertEqual(player_row['gold'], 320)
+        self.assertEqual(gear_row['item_tier'], 1)
+        self.assertIn(gear_row['rarity'], {'common', 'uncommon', 'rare', 'epic', 'legendary'})
 
     def test_shop_purchase_enforces_level_gating(self):
         result = try_buy_curated_shop_item(9001, 'village', 4, 'band_of_precision')
@@ -113,6 +115,7 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             rewards = calc_rewards(wolf)
 
         self.assertEqual(rewards['gold'], 3)
+        self.assertEqual(rewards['mob_level'], wolf['level'])
         self.assertIn('wolf_pelt', rewards['loot'])
         self.assertNotIn('wolf_fang', rewards['loot'])
 

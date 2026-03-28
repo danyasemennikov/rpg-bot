@@ -1,4 +1,5 @@
 import os
+import random
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -9,12 +10,17 @@ from database import get_connection, init_db
 from game.equipment_stats import get_equipped_item_ids
 from game.gear_instances import (
     create_gear_instance,
+    determine_mob_drop_item_tier,
+    determine_shop_item_tier,
+    generate_secondary_rolls_for_item,
     grant_item_to_player,
+    resolve_gear_instance_item_data,
+    resolve_item_tier_band,
     resolve_equipped_item_ids_with_fallback,
     set_gear_instance_equipped_slot,
 )
 from game.i18n import t
-from handlers.inventory import build_inventory_list, get_equipped
+from handlers.inventory import build_inventory_list, build_item_detail, get_equipped
 from handlers.inventory import handle_inventory_buttons
 from handlers.profile import _build_equipment_summary
 
@@ -190,6 +196,82 @@ class GearInstanceTransitionTests(unittest.TestCase):
         }
         self.assertIn('inv_item_g1_armor', labels)
         self.assertIn(equipped_tag, labels['inv_item_g1_armor'])
+
+    def test_generated_gear_instance_has_tier_rarity_and_runtime_secondary_rolls(self):
+        rng = random.Random(7)
+        grant_item_to_player(2001, 'wooden_sword', source='mob_drop', source_level=12, rng=rng)
+
+        conn = get_connection()
+        row = dict(conn.execute(
+            'SELECT * FROM gear_instances WHERE telegram_id=? AND base_item_id=? ORDER BY id DESC LIMIT 1',
+            (2001, 'wooden_sword'),
+        ).fetchone())
+        conn.close()
+
+        self.assertEqual(row['item_tier'], 10)
+        self.assertIn(row['rarity'], {'common', 'uncommon', 'rare', 'epic', 'legendary'})
+        resolved = resolve_gear_instance_item_data(row)
+        for roll in resolved['secondary_rolls']:
+            self.assertIn(
+                roll['stat'],
+                {
+                    'strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck',
+                    'max_hp', 'max_mana', 'physical_defense', 'magic_defense',
+                    'accuracy', 'evasion', 'block_chance', 'magic_power', 'healing_power',
+                },
+            )
+
+    def test_secondary_count_matches_rarity_budget(self):
+        item = {'item_type': 'accessory', 'slot_identity': 'ring'}
+        self.assertEqual(len(generate_secondary_rolls_for_item(item, rarity='common', item_tier=1, rng=random.Random(1))), 0)
+        self.assertEqual(len(generate_secondary_rolls_for_item(item, rarity='uncommon', item_tier=1, rng=random.Random(1))), 1)
+        self.assertEqual(len(generate_secondary_rolls_for_item(item, rarity='rare', item_tier=1, rng=random.Random(1))), 2)
+        self.assertEqual(len(generate_secondary_rolls_for_item(item, rarity='epic', item_tier=1, rng=random.Random(1))), 3)
+        self.assertEqual(len(generate_secondary_rolls_for_item(item, rarity='legendary', item_tier=1, rng=random.Random(1))), 4)
+
+    def test_tier_assignment_helpers_are_deterministic(self):
+        self.assertEqual(resolve_item_tier_band(1), 1)
+        self.assertEqual(resolve_item_tier_band(4), 1)
+        self.assertEqual(resolve_item_tier_band(5), 5)
+        self.assertEqual(determine_mob_drop_item_tier(mob_level=14), 10)
+        self.assertEqual(determine_shop_item_tier({'req_level': 3}, player_level=8, level_min=4), 5)
+
+    def test_tier_scales_base_stats_and_secondary_strength(self):
+        low = create_gear_instance(
+            2001,
+            'wooden_sword',
+            item_tier=1,
+            rarity='rare',
+            secondary_rolls_json='[{\"stat\":\"strength\",\"value\":1}]',
+        )
+        high = create_gear_instance(
+            2001,
+            'wooden_sword',
+            item_tier=10,
+            rarity='rare',
+            secondary_rolls_json='[{\"stat\":\"strength\",\"value\":3}]',
+        )
+        conn = get_connection()
+        low_row = dict(conn.execute('SELECT * FROM gear_instances WHERE id=?', (low,)).fetchone())
+        high_row = dict(conn.execute('SELECT * FROM gear_instances WHERE id=?', (high,)).fetchone())
+        conn.close()
+        low_resolved = resolve_gear_instance_item_data(low_row)
+        high_resolved = resolve_gear_instance_item_data(high_row)
+        self.assertGreaterEqual(high_resolved['damage_max'], low_resolved['damage_max'])
+        self.assertGreaterEqual(high_resolved['resolved_stat_bonus']['strength'], low_resolved['resolved_stat_bonus']['strength'])
+
+    def test_inventory_detail_surfaces_instance_generation_identity(self):
+        instance_id = create_gear_instance(
+            2001,
+            'wooden_sword',
+            item_tier=5,
+            rarity='rare',
+            secondary_rolls_json='[{\"stat\":\"accuracy\",\"value\":2}]',
+        )
+        text, _kb = build_item_detail(2001, f'g{instance_id}', 'weapon', 'en')
+        self.assertIn('Tier 5', text)
+        self.assertIn('Secondaries', text)
+        self.assertIn('Accuracy +2', text)
 
 
 if __name__ == '__main__':

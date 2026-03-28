@@ -85,7 +85,13 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
     conn.commit()
     conn.close()
 
-    grant_item_to_player(telegram_id, item_id, quantity=1)
+    grant_item_to_player(
+        telegram_id,
+        item_id,
+        quantity=1,
+        source='shop',
+        source_level=max(player_level, level_min),
+    )
     return {'ok': True, 'price': price}
 
 

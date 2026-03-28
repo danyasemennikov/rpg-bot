@@ -16,6 +16,7 @@ from game.gear_instances import (
     get_equipped_gear_instances,
     equip_gear_instance_in_slot,
     equip_legacy_inventory_in_slot,
+    resolve_gear_instance_item_data,
     unequip_slot_across_models,
 )
 
@@ -149,6 +150,15 @@ def get_gear_inventory_entries(telegram_id: int, item_type: str | None = None) -
             'instance': row,
         })
     return out
+
+
+def _get_entry_rarity_and_tier(inv_row: dict, item: dict) -> tuple[str, int]:
+    if inv_row.get('entry_type') == 'gear_instance':
+        resolved = resolve_gear_instance_item_data(inv_row.get('instance', {}))
+        rarity = resolved.get('instance_rarity', item.get('rarity', 'common'))
+        tier = int(resolved.get('item_tier', 1))
+        return rarity, tier
+    return item.get('rarity', 'common'), 1
 
 
 def make_entry_token(entry_type: str, entry_id: int) -> str:
@@ -310,13 +320,15 @@ def build_inventory_list(telegram_id: int, active_tab: str, lang: str = 'ru') ->
             if not item:
                 continue
 
-            rarity  = t(f"inventory.{RARITY_KEYS.get(item['rarity'], 'rarity_common')}", lang)
+            entry_rarity, entry_tier = _get_entry_rarity_and_tier(inv_row, item)
+            rarity  = t(f"inventory.{RARITY_KEYS.get(entry_rarity, 'rarity_common')}", lang)
             enhance = f" +{inv_row['enhance_level']}" if inv_row['enhance_level'] > 0 else ""
             qty     = f" x{inv_row['quantity']}" if inv_row['quantity'] > 1 else ""
             token = make_entry_token(inv_row.get('entry_type', 'legacy_inventory'), inv_row['id'])
             eq_mark = t('inventory.equipped', lang) if token in eq.values() else ""
+            tier_tag = f" {t('inventory.instance_tier_short', lang, tier=entry_tier)}" if inv_row.get('entry_type') == 'gear_instance' else ''
 
-            label = f"{rarity} {get_item_name(inv_row['item_id'], lang)}{enhance}{qty}{eq_mark}"
+            label = f"{rarity} {get_item_name(inv_row['item_id'], lang)}{tier_tag}{enhance}{qty}{eq_mark}"
             keyboard.append([InlineKeyboardButton(
                 label,
                 callback_data=f"inv_item_{token}_{active_tab}"
@@ -337,17 +349,29 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
     equipped     = bool(equipped_slot)
     metadata     = get_item_metadata(inv_row['item_id'])
 
-    rarity_emoji = t(f"inventory.{RARITY_KEYS.get(item['rarity'], 'rarity_common')}", lang)
-    rarity_name  = RARITY_NAME.get(lang, RARITY_NAME['ru']).get(item['rarity'], '')
+    resolved_instance = None
+    rarity_key = item['rarity']
+    tier_value = 1
+    if inv_row.get('entry_type') == 'gear_instance':
+        resolved_instance = resolve_gear_instance_item_data(inv_row.get('instance', {}))
+        rarity_key = resolved_instance.get('instance_rarity', rarity_key)
+        tier_value = int(resolved_instance.get('item_tier', 1))
+
+    rarity_emoji = t(f"inventory.{RARITY_KEYS.get(rarity_key, 'rarity_common')}", lang)
+    rarity_name  = RARITY_NAME.get(lang, RARITY_NAME['ru']).get(rarity_key, '')
     enhance      = f" <b>+{inv_row['enhance_level']}</b>" if inv_row['enhance_level'] > 0 else ""
     item_name    = get_item_name(inv_row['item_id'], lang)
 
     text = f"{rarity_emoji} <b>{item_name}{enhance}</b>\n{rarity_name}"
+    if inv_row.get('entry_type') == 'gear_instance':
+        text += f" · {t('inventory.instance_tier', lang, tier=tier_value)}"
 
     if item['item_type'] == 'weapon':
         wtype = WEAPON_TYPE_NAME.get(lang, WEAPON_TYPE_NAME['ru']).get(item['weapon_type'], '')
         text += f" | {wtype} | Ур.{item['req_level']}\n\n"
-        text += t('inventory.damage', lang, min=item['damage_min'], max=item['damage_max']) + '\n'
+        weapon_min = resolved_instance['damage_min'] if resolved_instance else item['damage_min']
+        weapon_max = resolved_instance['damage_max'] if resolved_instance else item['damage_max']
+        text += t('inventory.damage', lang, min=weapon_min, max=weapon_max) + '\n'
     elif item['item_type'] in ('armor', 'accessory'):
         text += f" | Ур.{item['req_level']}\n\n"
         text += t('inventory.defense', lang, val=item['defense']) + '\n'
@@ -374,10 +398,19 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
         text += t('inventory.reqs', lang, val=', '.join(reqs)) + '\n'
 
     # Бонусы
-    stat_bonus = json.loads(item['stat_bonus_json'])
+    stat_bonus = resolved_instance.get('resolved_stat_bonus', {}) if resolved_instance else json.loads(item['stat_bonus_json'])
     bonuses = [f"{_get_localized_stat_label(k, lang)} +{v}" for k, v in stat_bonus.items() if k not in ('heal', 'mana')]
     if bonuses:
         text += t('inventory.bonuses', lang, val=', '.join(bonuses)) + '\n'
+
+    if resolved_instance:
+        secondary_rolls = resolved_instance.get('secondary_rolls', [])
+        if secondary_rolls:
+            secondary_lines = [
+                f"{_get_localized_stat_label(str(roll.get('stat')), lang)} +{int(roll.get('value', 0))}"
+                for roll in secondary_rolls
+            ]
+            text += t('inventory.instance_secondaries', lang, val=', '.join(secondary_lines)) + '\n'
 
     if item['description']:
         text += f"\n<i>{item['description']}</i>\n"
