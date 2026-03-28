@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from database import get_player, get_connection, is_in_battle
 from game.locations import get_location, get_connected_locations
 from game.mobs import get_mob
+from game.gear_instances import grant_item_to_player
 from game.items_data import get_item
 from game.i18n import t, get_player_lang, get_mob_name, get_location_name, get_location_desc, get_item_name
 
@@ -46,26 +47,6 @@ def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
             'price': item['buy_price'],
         })
     return available
-
-
-def _add_item_to_inventory(telegram_id: int, item_id: str, quantity: int = 1):
-    conn = get_connection()
-    existing = conn.execute(
-        'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
-        (telegram_id, item_id),
-    ).fetchone()
-    if existing:
-        conn.execute(
-            'UPDATE inventory SET quantity=? WHERE id=?',
-            (existing['quantity'] + quantity, existing['id']),
-        )
-    else:
-        conn.execute(
-            'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)',
-            (telegram_id, item_id, quantity),
-        )
-    conn.commit()
-    conn.close()
 
 
 def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: int, item_id: str) -> dict:
@@ -104,7 +85,7 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
     conn.commit()
     conn.close()
 
-    _add_item_to_inventory(telegram_id, item_id, quantity=1)
+    grant_item_to_player(telegram_id, item_id, quantity=1)
     return {'ok': True, 'price': price}
 
 

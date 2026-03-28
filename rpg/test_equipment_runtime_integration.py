@@ -225,11 +225,15 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
         effective = build_effective_player_stats(player, bonuses)
         self.assertEqual(effective['max_mana'], 60)
 
-    def test_no_schema_changes_required(self):
+    def test_schema_changes_are_additive(self):
         conn = get_connection()
         equipment_columns = {
             row['name']
             for row in conn.execute('PRAGMA table_info(equipment)').fetchall()
+        }
+        gear_columns = {
+            row['name']
+            for row in conn.execute('PRAGMA table_info(gear_instances)').fetchall()
         }
         conn.close()
 
@@ -237,6 +241,8 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
         self.assertIn('offhand', equipment_columns)
         self.assertIn('chest', equipment_columns)
         self.assertNotIn('effective_max_hp', equipment_columns)
+        self.assertIn('base_item_id', gear_columns)
+        self.assertIn('item_tier', gear_columns)
 
     def test_unequip_max_hp_gear_clamps_current_hp_to_new_effective_cap(self):
         conn = get_connection()

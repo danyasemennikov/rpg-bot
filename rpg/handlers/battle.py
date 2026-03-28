@@ -26,6 +26,7 @@ from game.items_data import get_item, get_item_encumbrance
 from game.itemization import get_item_archetype_metadata
 from game.i18n import t, get_item_name, get_skill_name, get_mob_name
 from game.equipment_stats import get_equipped_item_ids, get_player_effective_stats
+from game.gear_instances import grant_item_to_player
 
 
 # ────────────────────────────────────────
@@ -54,28 +55,7 @@ def end_battle(telegram_id: int):
 
 def add_to_inventory(telegram_id: int, item_id: str, quantity: int = 1):
     """Добавляет предмет в инвентарь."""
-    conn = get_connection()
-    try:
-        conn.execute("PRAGMA foreign_keys = OFF")
-
-        existing = conn.execute(
-            'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
-            (telegram_id, item_id)
-        ).fetchone()
-
-        if existing:
-            conn.execute(
-                'UPDATE inventory SET quantity=? WHERE id=?',
-                (existing['quantity'] + quantity, existing['id'])
-            )
-        else:
-            conn.execute(
-                'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)',
-                (telegram_id, item_id, quantity)
-            )
-        conn.commit()
-    finally:
-        conn.close()
+    grant_item_to_player(telegram_id, item_id, quantity=quantity)
 
 def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     new_exp  = player['exp'] + rewards['exp']

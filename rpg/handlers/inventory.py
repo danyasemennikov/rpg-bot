@@ -11,6 +11,13 @@ from database import get_player, get_connection, is_in_battle
 from game.items_data import get_item, get_item_metadata
 from game.i18n import t, get_player_lang, get_item_name
 from game.equipment_stats import get_player_effective_stats, clamp_player_resources_to_effective_caps
+from game.gear_instances import (
+    list_player_gear_instances,
+    get_equipped_gear_instances,
+    equip_gear_instance_in_slot,
+    equip_legacy_inventory_in_slot,
+    unequip_slot_across_models,
+)
 
 RARITY_KEYS = {
     'common':    'rarity_common',
@@ -124,19 +131,56 @@ def get_inventory(telegram_id: int, item_type: str = None) -> list:
     conn.close()
     return [dict(r) for r in rows]
 
+def get_gear_inventory_entries(telegram_id: int, item_type: str | None = None) -> list[dict]:
+    out: list[dict] = []
+    for row in list_player_gear_instances(telegram_id):
+        item = get_item(row['base_item_id'])
+        if not item:
+            continue
+        if item_type and item.get('item_type') != item_type:
+            continue
+        out.append({
+            'entry_type': 'gear_instance',
+            'id': row['id'],
+            'item_id': row['base_item_id'],
+            'quantity': 1,
+            'enhance_level': row.get('enhance_level', 0),
+            'equipped_slot': row.get('equipped_slot'),
+            'instance': row,
+        })
+    return out
+
+
+def make_entry_token(entry_type: str, entry_id: int) -> str:
+    return f"g{entry_id}" if entry_type == 'gear_instance' else f"i{entry_id}"
+
+
 def get_equipped(telegram_id: int) -> dict:
+    equipped_instances = get_equipped_gear_instances(telegram_id)
+    out = {slot: make_entry_token('gear_instance', row['id']) for slot, row in equipped_instances.items()}
     conn = get_connection()
-    eq = conn.execute(
-        'SELECT * FROM equipment WHERE telegram_id=?', (telegram_id,)
-    ).fetchone()
-    conn.close()
-    return dict(eq) if eq else {}
+    try:
+        legacy = conn.execute('SELECT * FROM equipment WHERE telegram_id=?', (telegram_id,)).fetchone()
+        if not legacy:
+            return out
+        for slot in EQUIPMENT_SLOT_KEYS:
+            if slot in out:
+                continue
+            if legacy[slot] is not None:
+                out[slot] = make_entry_token('legacy_inventory', legacy[slot])
+        return out
+    finally:
+        conn.close()
 
 
 def get_equipped_slot_for_inventory_id(equipped: dict, inv_id: int) -> str | None:
+    return get_equipped_slot_for_entry_token(equipped, make_entry_token('legacy_inventory', inv_id))
+
+
+def get_equipped_slot_for_entry_token(equipped: dict, entry_token: str) -> str | None:
     for slot in EQUIPMENT_SLOT_KEYS:
-        equipped_inv_id = equipped.get(slot)
-        if equipped_inv_id == inv_id:
+        equipped_entry = equipped.get(slot)
+        if equipped_entry == entry_token:
             return slot
     return None
 
@@ -194,7 +238,8 @@ def _get_localized_stat_label(stat_key: str, lang: str) -> str:
 
 def is_equipped(telegram_id: int, inv_id: int) -> bool:
     eq = get_equipped(telegram_id)
-    return any(eq.get(slot) == inv_id for slot in EQUIPMENT_SLOT_KEYS)
+    token = make_entry_token('legacy_inventory', inv_id)
+    return token in eq.values()
 
 
 def _calc_safe_restore_amount(current_value: int, effective_cap: int, restore_value: int) -> int:
@@ -211,9 +256,48 @@ def build_tab_keyboard(active_tab: str, lang: str) -> list:
             row.append(InlineKeyboardButton(label, callback_data=f'inv_tab_{tab_key}'))
     return row
 
+
+def _parse_entry_token(token: str) -> tuple[str, int]:
+    if token.startswith('g'):
+        return 'gear_instance', int(token[1:])
+    if token.startswith('i'):
+        return 'legacy_inventory', int(token[1:])
+    return 'legacy_inventory', int(token)
+
+
+def _load_inventory_entry(telegram_id: int, token: str) -> dict | None:
+    entry_type, entry_id = _parse_entry_token(token)
+    if entry_type == 'gear_instance':
+        for row in get_gear_inventory_entries(telegram_id):
+            if row['id'] == entry_id:
+                return row
+        return None
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            'SELECT * FROM inventory WHERE id=? AND telegram_id=?',
+            (entry_id, telegram_id)
+        ).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out['entry_type'] = 'legacy_inventory'
+        return out
+    finally:
+        conn.close()
+
+
 def build_inventory_list(telegram_id: int, active_tab: str, lang: str = 'ru') -> tuple:
-    items    = get_inventory(telegram_id, active_tab)
-    eq       = get_equipped(telegram_id)
+    items = []
+    if active_tab in ('weapon', 'armor', 'accessory'):
+        items.extend(get_gear_inventory_entries(telegram_id, active_tab))
+    legacy_items = get_inventory(telegram_id, active_tab)
+    for row in legacy_items:
+        row['entry_type'] = 'legacy_inventory'
+        items.append(row)
+
+    eq = get_equipped(telegram_id)
     keyboard = [build_tab_keyboard(active_tab, lang)]
 
     text = t('inventory.title', lang) + '\n\n'
@@ -229,33 +313,27 @@ def build_inventory_list(telegram_id: int, active_tab: str, lang: str = 'ru') ->
             rarity  = t(f"inventory.{RARITY_KEYS.get(item['rarity'], 'rarity_common')}", lang)
             enhance = f" +{inv_row['enhance_level']}" if inv_row['enhance_level'] > 0 else ""
             qty     = f" x{inv_row['quantity']}" if inv_row['quantity'] > 1 else ""
-            eq_mark = t('inventory.equipped', lang) if inv_row['id'] in eq.values() else ""
+            token = make_entry_token(inv_row.get('entry_type', 'legacy_inventory'), inv_row['id'])
+            eq_mark = t('inventory.equipped', lang) if token in eq.values() else ""
 
             label = f"{rarity} {get_item_name(inv_row['item_id'], lang)}{enhance}{qty}{eq_mark}"
             keyboard.append([InlineKeyboardButton(
                 label,
-                callback_data=f"inv_item_{inv_row['id']}_{active_tab}"
+                callback_data=f"inv_item_{token}_{active_tab}"
             )])
 
     return text, InlineKeyboardMarkup(keyboard)
 
-def build_item_detail(telegram_id: int, inv_id: int, back_tab: str, lang: str = 'ru') -> tuple:
-    conn    = get_connection()
-    inv_row = conn.execute(
-        'SELECT * FROM inventory WHERE id=? AND telegram_id=?',
-        (inv_id, telegram_id)
-    ).fetchone()
-    conn.close()
-
+def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: str = 'ru') -> tuple:
+    inv_row = _load_inventory_entry(telegram_id, entry_token)
     if not inv_row:
         return t('inventory.item_not_found', lang), InlineKeyboardMarkup([[
             InlineKeyboardButton(t('inventory.back_btn', lang), callback_data=f"inv_tab_{back_tab}")
         ]])
 
-    inv_row      = dict(inv_row)
     item         = get_item(inv_row['item_id'])
     eq           = get_equipped(telegram_id)
-    equipped_slot = get_equipped_slot_for_inventory_id(eq, inv_row['id'])
+    equipped_slot = get_equipped_slot_for_entry_token(eq, entry_token)
     equipped     = bool(equipped_slot)
     metadata     = get_item_metadata(inv_row['item_id'])
 
@@ -311,17 +389,17 @@ def build_item_detail(telegram_id: int, inv_id: int, back_tab: str, lang: str = 
     keyboard = []
     if item['item_type'] in ('weapon', 'armor', 'accessory'):
         if equipped:
-            keyboard.append([InlineKeyboardButton(t('inventory.unequip_btn', lang), callback_data=f"inv_unequip_{inv_id}_{equipped_slot}_{back_tab}")])
+            keyboard.append([InlineKeyboardButton(t('inventory.unequip_btn', lang), callback_data=f"inv_unequip_{entry_token}_{equipped_slot}_{back_tab}")])
         else:
             equip_slot = resolve_equip_slot_for_item(inv_row['item_id'], eq)
             if equip_slot:
-                keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=f"inv_equip_{inv_id}_{equip_slot}_{back_tab}")])
+                keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=f"inv_equip_{entry_token}_{equip_slot}_{back_tab}")])
     elif item['item_type'] == 'potion':
-        keyboard.append([InlineKeyboardButton(t('inventory.use_btn', lang), callback_data=f"inv_use_{inv_id}_{back_tab}")])
+        keyboard.append([InlineKeyboardButton(t('inventory.use_btn', lang), callback_data=f"inv_use_{entry_token}_{back_tab}")])
 
     keyboard.append([
-        InlineKeyboardButton(t('inventory.drop_btn', lang),     callback_data=f"inv_drop_{inv_id}_{back_tab}"),
-        InlineKeyboardButton(t('inventory.transfer_btn', lang), callback_data=f"inv_transfer_{inv_id}"),
+        InlineKeyboardButton(t('inventory.drop_btn', lang),     callback_data=f"inv_drop_{entry_token}_{back_tab}"),
+        InlineKeyboardButton(t('inventory.transfer_btn', lang), callback_data=f"inv_transfer_{entry_token}"),
     ])
     keyboard.append([InlineKeyboardButton(t('inventory.back_btn', lang), callback_data=f"inv_tab_{back_tab}")])
 
@@ -370,9 +448,9 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     # ── Детальный вид ──
     if data.startswith('inv_item_'):
         parts    = data.split('_')
-        inv_id   = int(parts[2])
+        entry_token = parts[2]
         back_tab = parts[3]
-        text, keyboard = build_item_detail(user.id, inv_id, back_tab, lang)
+        text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
         return
@@ -380,13 +458,14 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     # ── Экипировать ──
     if data.startswith('inv_equip_'):
         parts    = data.split('_')
-        inv_id   = int(parts[2])
+        entry_token = parts[2]
         slot     = parts[3]
         back_tab = parts[4]
 
-        conn    = get_connection()
-        inv_row = conn.execute('SELECT * FROM inventory WHERE id=?', (inv_id,)).fetchone()
-        conn.close()
+        inv_row = _load_inventory_entry(user.id, entry_token)
+        if not inv_row:
+            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
+            return
         item = get_item(inv_row['item_id'])
 
         if p['level']     < item['req_level']:     await query.answer(t('inventory.req_level',     lang, level=item['req_level']),     show_alert=True); return
@@ -395,44 +474,45 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         if p['intuition'] < item['req_intuition']: await query.answer(t('inventory.req_intuition', lang, val=item['req_intuition']),   show_alert=True); return
         if p['wisdom']    < item['req_wisdom']:    await query.answer(t('inventory.req_wisdom',    lang, val=item['req_wisdom']),      show_alert=True); return
 
-        conn = get_connection()
-        conn.execute(f'UPDATE equipment SET {slot}=? WHERE telegram_id=?', (inv_id, user.id))
-        conn.commit()
-        conn.close()
+        if inv_row.get('entry_type') == 'gear_instance':
+            equip_gear_instance_in_slot(user.id, inv_row['id'], slot)
+        else:
+            equip_legacy_inventory_in_slot(user.id, inv_row['id'], slot)
         clamp_player_resources_to_effective_caps(user.id)
 
         await query.answer(t('inventory.equipped_ok', lang, name=get_item_name(inv_row['item_id'], lang)))
-        text, keyboard = build_item_detail(user.id, inv_id, back_tab, lang)
+        text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
     # ── Снять ──
     if data.startswith('inv_unequip_'):
         parts    = data.split('_')
-        inv_id   = int(parts[2])
+        entry_token = parts[2]
         slot     = parts[3]
         back_tab = parts[4]
 
-        conn = get_connection()
-        conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (user.id,))
-        conn.commit()
-        conn.close()
+        unequip_slot_across_models(user.id, slot)
         clamp_player_resources_to_effective_caps(user.id)
 
         await query.answer(t('inventory.unequipped_ok', lang))
-        text, keyboard = build_item_detail(user.id, inv_id, back_tab, lang)
+        text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
     # ── Использовать зелье ──
     if data.startswith('inv_use_'):
         parts    = data.split('_')
-        inv_id   = int(parts[2])
+        entry_token = parts[2]
         back_tab = parts[3]
 
-        conn    = get_connection()
-        inv_row = conn.execute('SELECT * FROM inventory WHERE id=?', (inv_id,)).fetchone()
-        conn.close()
+        inv_row = _load_inventory_entry(user.id, entry_token)
+        if not inv_row:
+            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
+            return
+        if inv_row.get('entry_type') == 'gear_instance':
+            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
+            return
         item  = get_item(inv_row['item_id'])
         bonus = json.loads(item['stat_bonus_json'])
 
@@ -450,9 +530,9 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
             msg += t('inventory.mana_restored', lang, val=mana_gain) + '\n'
 
         if inv_row['quantity'] > 1:
-            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
+            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_row['id'],))
         else:
-            conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
+            conn.execute('DELETE FROM inventory WHERE id=?', (inv_row['id'],))
 
         conn.commit()
         conn.close()
@@ -465,21 +545,29 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     # ── Выбросить ──
     if data.startswith('inv_drop_'):
         parts    = data.split('_')
-        inv_id   = int(parts[2])
+        entry_token = parts[2]
         back_tab = parts[3]
 
-        if is_equipped(user.id, inv_id):
+        inv_row = _load_inventory_entry(user.id, entry_token)
+        if not inv_row:
+            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
+            return
+
+        if inv_row.get('entry_type') == 'legacy_inventory' and is_equipped(user.id, inv_row['id']):
+            await query.answer(t('inventory.drop_equipped', lang), show_alert=True)
+            return
+        if inv_row.get('entry_type') == 'gear_instance' and inv_row.get('equipped_slot'):
             await query.answer(t('inventory.drop_equipped', lang), show_alert=True)
             return
 
         conn    = get_connection()
-        inv_row = conn.execute('SELECT * FROM inventory WHERE id=?', (inv_id,)).fetchone()
-        item    = get_item(inv_row['item_id'])
-
-        if inv_row['quantity'] > 1:
-            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
+        if inv_row.get('entry_type') == 'gear_instance':
+            conn.execute('DELETE FROM gear_instances WHERE telegram_id=? AND id=?', (user.id, inv_row['id']))
         else:
-            conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
+            if inv_row['quantity'] > 1:
+                conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_row['id'],))
+            else:
+                conn.execute('DELETE FROM inventory WHERE id=?', (inv_row['id'],))
         conn.commit()
         conn.close()
 
@@ -490,8 +578,8 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
 
     # ── Передать ──
     if data.startswith('inv_transfer_'):
-        inv_id = int(data.replace('inv_transfer_', ''))
-        context.user_data['transfer_item'] = inv_id
+        entry_token = data.replace('inv_transfer_', '')
+        context.user_data['transfer_item'] = entry_token
         await query.edit_message_text(
             t('inventory.transfer_prompt', lang),
             parse_mode='HTML'
@@ -506,7 +594,7 @@ async def handle_transfer_input(update: Update, context: ContextTypes.DEFAULT_TY
     if 'transfer_item' not in context.user_data:
         return False
 
-    inv_id   = context.user_data.pop('transfer_item')
+    entry_token = context.user_data.pop('transfer_item')
     username = update.message.text.strip().lstrip('@')
     user     = update.effective_user
     lang     = get_player_lang(user.id)
@@ -524,34 +612,40 @@ async def handle_transfer_input(update: Update, context: ContextTypes.DEFAULT_TY
         conn.close()
         return True
 
-    inv_row = conn.execute(
-        'SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inv_id, user.id)
-    ).fetchone()
+    inv_row = _load_inventory_entry(user.id, entry_token)
 
     if not inv_row:
         await update.message.reply_text(t('inventory.item_not_found', lang))
         conn.close()
         return True
 
-    item = get_item(inv_row['item_id'])
-
-    existing = conn.execute(
-        'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
-        (target['telegram_id'], inv_row['item_id'])
-    ).fetchone()
-
-    if existing:
-        conn.execute('UPDATE inventory SET quantity=quantity+1 WHERE id=?', (existing['id'],))
-    else:
+    if inv_row.get('entry_type') == 'gear_instance':
+        if inv_row.get('equipped_slot'):
+            await update.message.reply_text(t('inventory.drop_equipped', lang))
+            conn.close()
+            return True
         conn.execute(
-            'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?,?,1)',
-            (target['telegram_id'], inv_row['item_id'])
+            'UPDATE gear_instances SET telegram_id=? WHERE id=? AND telegram_id=?',
+            (target['telegram_id'], inv_row['id'], user.id),
         )
-
-    if inv_row['quantity'] > 1:
-        conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
     else:
-        conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
+        existing = conn.execute(
+            'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+            (target['telegram_id'], inv_row['item_id'])
+        ).fetchone()
+
+        if existing:
+            conn.execute('UPDATE inventory SET quantity=quantity+1 WHERE id=?', (existing['id'],))
+        else:
+            conn.execute(
+                'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?,?,1)',
+                (target['telegram_id'], inv_row['item_id'])
+            )
+
+        if inv_row['quantity'] > 1:
+            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_row['id'],))
+        else:
+            conn.execute('DELETE FROM inventory WHERE id=?', (inv_row['id'],))
 
     conn.commit()
     conn.close()
