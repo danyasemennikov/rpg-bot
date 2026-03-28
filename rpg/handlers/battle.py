@@ -25,6 +25,7 @@ from game.balance import (
 from game.items_data import get_item, get_item_encumbrance
 from game.itemization import get_item_archetype_metadata
 from game.i18n import t, get_item_name, get_skill_name, get_mob_name
+from game.equipment_stats import get_equipped_item_ids, get_player_effective_stats
 
 
 # ────────────────────────────────────────
@@ -278,44 +279,26 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
         await query.answer(t('battle.mob_not_found', lang), show_alert=True)
         return
 
-    conn = get_connection()
-    equipment_columns = {
-        row['name']
-        for row in conn.execute('PRAGMA table_info(equipment)').fetchall()
-    }
+    equipped_item_ids = get_equipped_item_ids(user.id)
+    weapon_item = get_item(equipped_item_ids['weapon']) if 'weapon' in equipped_item_ids else None
+    offhand_item = get_item(equipped_item_ids['offhand']) if 'offhand' in equipped_item_ids else None
+    chest_item = get_item(equipped_item_ids['chest']) if 'chest' in equipped_item_ids else None
 
-    weapon_item = None
-    offhand_item = None
-    chest_item = None
-
-    # Поддерживаем обе модели: slot-based (telegram_id, slot, item_id)
-    # и legacy wide-table, чтобы не ломать старые окружения.
-    if {'slot', 'item_id'}.issubset(equipment_columns):
-        equipped_rows = conn.execute(
-            'SELECT slot, item_id FROM equipment WHERE telegram_id=?', (user.id,)
-        ).fetchall()
-        equipped_by_slot = {row['slot']: get_item(row['item_id']) for row in equipped_rows}
-        weapon_item = equipped_by_slot.get('weapon')
-        offhand_item = equipped_by_slot.get('offhand')
-        chest_item = equipped_by_slot.get('chest')
-    else:
-        eq = conn.execute(
-            'SELECT weapon, offhand, chest FROM equipment WHERE telegram_id=?', (user.id,)
-        ).fetchone()
-
-        def _load_legacy_equipped_item(inv_id):
-            if not inv_id:
-                return None
-            inv_row = conn.execute('SELECT item_id FROM inventory WHERE id=?', (inv_id,)).fetchone()
-            if not inv_row:
-                return None
-            return get_item(inv_row['item_id'])
-
-        weapon_item = _load_legacy_equipped_item(eq['weapon']) if eq else None
-        offhand_item = _load_legacy_equipped_item(eq['offhand']) if eq else None
-        chest_item = _load_legacy_equipped_item(eq['chest']) if eq else None
-
-    conn.close()
+    effective_stats = get_player_effective_stats(user.id, p)
+    p['strength'] = effective_stats['strength']
+    p['agility'] = effective_stats['agility']
+    p['intuition'] = effective_stats['intuition']
+    p['vitality'] = effective_stats['vitality']
+    p['wisdom'] = effective_stats['wisdom']
+    p['luck'] = effective_stats['luck']
+    p['max_hp'] = effective_stats['max_hp']
+    p['max_mana'] = effective_stats['max_mana']
+    p['hp'] = min(p['hp'], p['max_hp'])
+    p['mana'] = min(p['mana'], p['max_mana'])
+    p['equipment_physical_defense_bonus'] = effective_stats['physical_defense_bonus']
+    p['equipment_magic_defense_bonus'] = effective_stats['magic_defense_bonus']
+    p['equipment_accuracy_bonus'] = effective_stats['accuracy_bonus']
+    p['equipment_evasion_bonus'] = effective_stats['evasion_bonus']
 
     # Явный special-case для unarmed, чтобы profile не падал в sword_1h.
     if weapon_item:
@@ -359,6 +342,16 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     battle_state['encumbrance'] = p.get('encumbrance')
     battle_state['weapon_damage'] = p.get('weapon_damage', 10)
     battle_state['weapon_name']   = p.get('weapon_name', t('battle.unarmed', lang))
+    battle_state['equipment_physical_defense_bonus'] = p.get('equipment_physical_defense_bonus', 0)
+    battle_state['equipment_magic_defense_bonus'] = p.get('equipment_magic_defense_bonus', 0)
+    battle_state['equipment_accuracy_bonus'] = p.get('equipment_accuracy_bonus', 0)
+    battle_state['equipment_evasion_bonus'] = p.get('equipment_evasion_bonus', 0)
+    battle_state['effective_strength'] = p.get('strength', 1)
+    battle_state['effective_agility'] = p.get('agility', 1)
+    battle_state['effective_intuition'] = p.get('intuition', 1)
+    battle_state['effective_vitality'] = p.get('vitality', 1)
+    battle_state['effective_wisdom'] = p.get('wisdom', 1)
+    battle_state['effective_luck'] = p.get('luck', 1)
 
     # Владение оружием
     actual_weapon_id = 'unarmed'

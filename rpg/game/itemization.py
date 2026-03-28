@@ -101,6 +101,7 @@ SECONDARY_STAT_POOLS = {
     'offhand_focus': (
         'magic_power',
         'max_mana',
+        'intuition',
         'mana_regen',
         'cast_tempo',
         'accuracy',
@@ -109,6 +110,7 @@ SECONDARY_STAT_POOLS = {
     'offhand_censer': (
         'healing_power',
         'buff_power',
+        'wisdom',
         'support_power',
         'max_mana',
         'mana_regen',

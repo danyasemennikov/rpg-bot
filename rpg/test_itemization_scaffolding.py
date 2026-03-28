@@ -18,6 +18,20 @@ from game.itemization import (
 
 
 class ItemizationScaffoldingTests(unittest.TestCase):
+    RUNTIME_SUPPORTED_CURATED_BONUS_KEYS = {
+        'strength',
+        'agility',
+        'intuition',
+        'vitality',
+        'wisdom',
+        'luck',
+        'max_hp',
+        'max_mana',
+        'physical_defense',
+        'magic_defense',
+        'accuracy',
+        'evasion',
+    }
 
     def test_non_weapon_items_keep_neutral_weapon_profile(self):
         shield_meta = get_item_archetype_metadata({
@@ -184,6 +198,55 @@ class ItemizationScaffoldingTests(unittest.TestCase):
             budget = get_secondary_count_budget_for_rarity(item['rarity'])
             actual = len(json.loads(item['stat_bonus_json']).keys())
             self.assertLessEqual(actual, budget, msg=f'{item_id} exceeds rarity budget')
+
+    def test_curated_items_do_not_expose_inert_bonus_keys(self):
+        curated_ids = (
+            'oak_guard_shield',
+            'warden_kite_shield',
+            'apprentice_focus_orb',
+            'azure_focus_prism',
+            'novice_censer',
+            'choir_censer',
+            'militia_cuirass',
+            'tracker_jacket',
+            'acolyte_robe',
+            'band_of_precision',
+            'ring_of_quiet_mind',
+            'amulet_of_kindled_prayer',
+            'dual_path_loop',
+        )
+        for item_id in curated_ids:
+            bonuses = json.loads(get_item(item_id)['stat_bonus_json'])
+            self.assertTrue(
+                set(bonuses.keys()).issubset(self.RUNTIME_SUPPORTED_CURATED_BONUS_KEYS),
+                msg=f'{item_id} contains inert runtime bonus keys: {set(bonuses.keys()) - self.RUNTIME_SUPPORTED_CURATED_BONUS_KEYS}',
+            )
+
+    def test_each_curated_item_has_runtime_mechanical_value(self):
+        curated_ids = (
+            'oak_guard_shield',
+            'warden_kite_shield',
+            'apprentice_focus_orb',
+            'azure_focus_prism',
+            'novice_censer',
+            'choir_censer',
+            'militia_cuirass',
+            'tracker_jacket',
+            'acolyte_robe',
+            'band_of_precision',
+            'ring_of_quiet_mind',
+            'amulet_of_kindled_prayer',
+            'dual_path_loop',
+        )
+        for item_id in curated_ids:
+            bonuses = json.loads(get_item(item_id)['stat_bonus_json'])
+            metadata = get_item_metadata(item_id)
+            has_runtime_bonus = len(bonuses) > 0
+            has_identity_runtime = metadata.get('slot_identity') in {'weapon', 'offhand', 'chest'}
+            self.assertTrue(
+                has_runtime_bonus or has_identity_runtime,
+                msg=f'{item_id} has neither runtime bonus nor runtime identity effect',
+            )
 
     def test_secondary_roll_helper_is_deterministic_with_injected_rng(self):
         import random
