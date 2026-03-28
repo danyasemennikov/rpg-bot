@@ -64,6 +64,7 @@ MOBS = {
         'loot_table':  [
             ('spider_silk',  0.50),
             ('spider_venom', 0.30),
+            ('novice_censer', 0.04),
         ]
     },
 
@@ -83,6 +84,8 @@ MOBS = {
             ('ancient_bark',  0.55),
             ('treant_heart',  0.15),
             ('iron_sword',    0.05),   # редкий дроп оружия
+            ('apprentice_focus_orb', 0.05),
+            ('militia_cuirass', 0.04),
         ]
     },
 
@@ -122,6 +125,9 @@ MOBS = {
             ('iron_ore',        0.60),
             ('goblin_ear',      0.40),
             ('worn_pickaxe',    0.15),
+            ('tracker_jacket',  0.04),
+            ('band_of_precision', 0.03),
+            ('ring_of_quiet_mind', 0.02),
         ]
     },
 
@@ -158,6 +164,11 @@ MOBS = {
             ('stone_core',      0.40),
             ('golem_fragment',  0.25),
             ('iron_shield',     0.08),
+            ('warden_kite_shield', 0.04),
+            ('azure_focus_prism', 0.04),
+            ('choir_censer', 0.04),
+            ('amulet_of_kindled_prayer', 0.03),
+            ('dual_path_loop', 0.03),
         ]
     },
 }

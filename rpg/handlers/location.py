@@ -11,7 +11,134 @@ from telegram.ext import ContextTypes
 from database import get_player, get_connection, is_in_battle
 from game.locations import get_location, get_connected_locations
 from game.mobs import get_mob
+from game.items_data import get_item
 from game.i18n import t, get_player_lang, get_mob_name, get_location_name, get_location_desc, get_item_name
+
+CURATED_EQUIPMENT_VENDOR_STOCK = {
+    'village': [
+        {'item_id': 'oak_guard_shield', 'level_min': 4},
+        {'item_id': 'apprentice_focus_orb', 'level_min': 3},
+        {'item_id': 'novice_censer', 'level_min': 3},
+        {'item_id': 'militia_cuirass', 'level_min': 4},
+        {'item_id': 'acolyte_robe', 'level_min': 4},
+        {'item_id': 'band_of_precision', 'level_min': 5},
+        {'item_id': 'ring_of_quiet_mind', 'level_min': 5},
+    ],
+}
+
+
+def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
+    """Возвращает доступный список витрины магазина для локации и уровня."""
+    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(location_id, [])
+    available = []
+    for row in stock_rows:
+        item = get_item(row['item_id'])
+        if not item:
+            continue
+        level_min = row.get('level_min', item.get('req_level', 1))
+        if player_level < level_min:
+            continue
+        if item.get('buy_price', 0) <= 0:
+            continue
+        available.append({
+            'item_id': row['item_id'],
+            'level_min': level_min,
+            'price': item['buy_price'],
+        })
+    return available
+
+
+def _add_item_to_inventory(telegram_id: int, item_id: str, quantity: int = 1):
+    conn = get_connection()
+    existing = conn.execute(
+        'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+        (telegram_id, item_id),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            'UPDATE inventory SET quantity=? WHERE id=?',
+            (existing['quantity'] + quantity, existing['id']),
+        )
+    else:
+        conn.execute(
+            'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)',
+            (telegram_id, item_id, quantity),
+        )
+    conn.commit()
+    conn.close()
+
+
+def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: int, item_id: str) -> dict:
+    """Покупка предмета из витрины магазина. Возвращает статус операции."""
+    stock_by_id = {
+        row['item_id']: row
+        for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(location_id, [])
+    }
+    stock_row = stock_by_id.get(item_id)
+    if not stock_row:
+        return {'ok': False, 'reason': 'not_available'}
+
+    item = get_item(item_id)
+    if not item:
+        return {'ok': False, 'reason': 'not_available'}
+
+    level_min = stock_row.get('level_min', item.get('req_level', 1))
+    if player_level < level_min:
+        return {'ok': False, 'reason': 'level_required', 'required_level': level_min}
+
+    price = item.get('buy_price', 0)
+    conn = get_connection()
+    player_row = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
+    if not player_row:
+        conn.close()
+        return {'ok': False, 'reason': 'not_available'}
+
+    if player_row['gold'] < price:
+        conn.close()
+        return {'ok': False, 'reason': 'not_enough_gold', 'price': price}
+
+    conn.execute(
+        'UPDATE players SET gold=gold-? WHERE telegram_id=?',
+        (price, telegram_id),
+    )
+    conn.commit()
+    conn.close()
+
+    _add_item_to_inventory(telegram_id, item_id, quantity=1)
+    return {'ok': True, 'price': price}
+
+
+def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
+    lang = player.get('lang', 'ru')
+    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(location['id'], [])
+    text = t('location.shop_title', lang) + '\n\n'
+    keyboard = []
+
+    if not stock_rows:
+        text += t('location.shop_empty', lang)
+    else:
+        for stock_row in stock_rows:
+            item = get_item(stock_row['item_id'])
+            if not item:
+                continue
+            item_name = get_item_name(stock_row['item_id'], lang)
+            req_level = stock_row.get('level_min', item.get('req_level', 1))
+            price = item.get('buy_price', 0)
+            text += t(
+                'location.shop_entry',
+                lang,
+                name=item_name,
+                level=req_level,
+                price=price,
+            ) + '\n'
+            if player['level'] >= req_level:
+                keyboard.append([InlineKeyboardButton(
+                    t('location.shop_buy_btn', lang, name=item_name, price=price),
+                    callback_data=f"shop_buy_{stock_row['item_id']}",
+                )])
+
+    keyboard.append([InlineKeyboardButton(t('location.shop_back_btn', lang), callback_data='shop_back')])
+    return text, InlineKeyboardMarkup(keyboard)
 
 # ────────────────────────────────────────
 # ОТОБРАЖЕНИЕ ЛОКАЦИИ
@@ -159,7 +286,66 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
     lang = p['lang'] if p else 'ru'
     
     if p and p['in_battle']:
-        await update.message.reply_text("⚔️ Сначала разберись с противником!")
+        await query.answer(t('location.in_battle_block', lang), show_alert=True)
+        return
+
+    if data == 'shop':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'shop' not in location.get('services', []):
+            await query.answer(t('location.shop_not_available', lang), show_alert=True)
+            return
+
+        text, keyboard = build_shop_message(dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data == 'shop_back':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'shop' not in location.get('services', []):
+            await query.answer(t('location.shop_not_available', lang), show_alert=True)
+            return
+
+        text, keyboard = build_location_message(dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('shop_buy_'):
+        item_id = data.replace('shop_buy_', '', 1)
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'shop' not in location.get('services', []):
+            await query.answer(t('location.shop_not_available', lang), show_alert=True)
+            return
+
+        result = try_buy_curated_shop_item(
+            telegram_id=user.id,
+            location_id=location['id'],
+            player_level=p['level'],
+            item_id=item_id,
+        )
+        if not result['ok']:
+            if result['reason'] == 'level_required':
+                await query.answer(t('location.shop_level_required', lang, level=result['required_level']), show_alert=True)
+            elif result['reason'] == 'not_enough_gold':
+                await query.answer(t('location.shop_no_gold', lang, price=result['price']), show_alert=True)
+            else:
+                await query.answer(t('location.shop_not_available', lang), show_alert=True)
+            return
+
+        player_after = dict(get_player(user.id))
+        text, keyboard = build_shop_message(player_after, location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer(t('location.shop_buy_ok', lang, name=get_item_name(item_id, lang), price=result['price']))
         return
 
     if data.startswith('goto_') and is_in_battle(user.id):
