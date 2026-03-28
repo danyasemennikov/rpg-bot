@@ -6,6 +6,8 @@ from handlers.inventory import (
     _get_localized_stat_label,
     is_equipped,
     get_equipped_slot_for_inventory_id,
+    get_equipped_slot_for_entry_token,
+    make_entry_token,
     resolve_equip_slot_for_item,
 )
 from handlers.profile import _format_equipped_identity
@@ -14,10 +16,18 @@ from game.items_data import get_item_metadata
 
 class InventoryMetadataIntegrationTests(unittest.TestCase):
     def test_detect_equipped_slot_by_inventory_id(self):
-        equipped = {'telegram_id': 999, 'weapon': 11, 'offhand': 12, 'ring1': 21, 'ring2': None, 'amulet': 31}
+        equipped = {
+            'telegram_id': 999,
+            'weapon': make_entry_token('legacy_inventory', 11),
+            'offhand': make_entry_token('legacy_inventory', 12),
+            'ring1': make_entry_token('gear_instance', 21),
+            'ring2': None,
+            'amulet': make_entry_token('legacy_inventory', 31),
+        }
         self.assertEqual(get_equipped_slot_for_inventory_id(equipped, 12), 'offhand')
         self.assertEqual(get_equipped_slot_for_inventory_id(equipped, 31), 'amulet')
         self.assertIsNone(get_equipped_slot_for_inventory_id(equipped, 999))
+        self.assertEqual(get_equipped_slot_for_entry_token(equipped, 'g21'), 'ring1')
 
     def test_resolve_equip_slot_uses_normalized_slot_identity(self):
         eq = {'weapon': None, 'offhand': None, 'ring1': None, 'ring2': None, 'amulet': None}
@@ -52,7 +62,7 @@ class InventoryMetadataIntegrationTests(unittest.TestCase):
         self.assertEqual(_get_localized_stat_label('cast_tempo', 'es'), '⚡ Ritmo de lanzamiento')
 
     def test_is_equipped_ignores_non_slot_columns(self):
-        mocked_equipment = {'telegram_id': 777, 'weapon': 101, 'offhand': None}
+        mocked_equipment = {'telegram_id': 777, 'weapon': 'i101', 'offhand': None}
         with patch('handlers.inventory.get_equipped', return_value=mocked_equipment):
             self.assertTrue(is_equipped(777, 101))
             self.assertFalse(is_equipped(777, 777))

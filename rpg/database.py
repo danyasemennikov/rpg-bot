@@ -150,6 +150,25 @@ def init_db():
         )
     ''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS gear_instances (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id           INTEGER NOT NULL,
+            base_item_id          TEXT NOT NULL,
+            slot_identity         TEXT,
+            item_tier             INTEGER DEFAULT 1,
+            rarity                TEXT DEFAULT 'common',
+            secondary_rolls_json  TEXT DEFAULT '[]',
+            enhance_level         INTEGER DEFAULT 0,
+            durability            INTEGER DEFAULT 100,
+            max_durability        INTEGER DEFAULT 100,
+            equipped_slot         TEXT,
+            created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (telegram_id) REFERENCES players(telegram_id),
+            FOREIGN KEY (base_item_id) REFERENCES items(item_id)
+        )
+    ''')
+
     # ────────────────────────────────────────
     # КВЕСТЫ ИГРОКА
     # ────────────────────────────────────────

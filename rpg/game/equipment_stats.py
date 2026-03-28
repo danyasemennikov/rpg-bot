@@ -3,6 +3,7 @@ from typing import Any
 
 from database import get_connection
 from game.balance import calc_magic_defense, calc_max_hp, calc_max_mana, calc_physical_defense
+from game.gear_instances import resolve_equipped_item_ids_with_fallback
 from game.items_data import get_item
 
 EQUIPMENT_SLOT_KEYS = (
@@ -61,46 +62,8 @@ def _parse_item_stat_bonus(item: dict | None) -> dict[str, int]:
 
 
 def get_equipped_item_ids(telegram_id: int) -> dict[str, str]:
-    """Returns equipped item_id by slot, supporting both legacy and slot-row layouts."""
-    conn = get_connection()
-    try:
-        equipment_columns = {
-            row['name']
-            for row in conn.execute('PRAGMA table_info(equipment)').fetchall()
-        }
-
-        if {'slot', 'item_id'}.issubset(equipment_columns):
-            rows = conn.execute(
-                'SELECT slot, item_id FROM equipment WHERE telegram_id=?',
-                (telegram_id,),
-            ).fetchall()
-            out: dict[str, str] = {}
-            for row in rows:
-                if row['slot'] in EQUIPMENT_SLOT_KEYS:
-                    out[row['slot']] = row['item_id']
-            return out
-
-        equipped = conn.execute(
-            'SELECT * FROM equipment WHERE telegram_id=?',
-            (telegram_id,),
-        ).fetchone()
-        if not equipped:
-            return {}
-
-        out: dict[str, str] = {}
-        for slot in EQUIPMENT_SLOT_KEYS:
-            inv_id = equipped[slot]
-            if inv_id is None:
-                continue
-            inv_row = conn.execute(
-                'SELECT item_id FROM inventory WHERE telegram_id=? AND id=?',
-                (telegram_id, inv_id),
-            ).fetchone()
-            if inv_row:
-                out[slot] = inv_row['item_id']
-        return out
-    finally:
-        conn.close()
+    """Returns equipped item_id by slot, instance-first with legacy fallback."""
+    return resolve_equipped_item_ids_with_fallback(telegram_id)
 
 
 def aggregate_equipped_stat_bonuses(telegram_id: int) -> dict[str, int]:

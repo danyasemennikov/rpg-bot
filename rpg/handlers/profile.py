@@ -12,6 +12,7 @@ from game.balance import exp_to_next_level, calc_max_hp, calc_max_mana, calc_car
 from game.i18n import t, get_player_lang, get_item_name
 from game.items_data import get_item, get_item_metadata
 from game.equipment_stats import get_player_effective_stats
+from game.gear_instances import resolve_equipped_item_ids_with_fallback
 
 STAT_RESET_COST = 100  # стоимость сброса статов в золоте
 
@@ -42,34 +43,11 @@ def _format_equipped_identity(item_id: str, lang: str) -> str:
 
 
 def _build_equipment_summary(telegram_id: int, lang: str) -> str:
-    conn = get_connection()
-    equipped = conn.execute(
-        'SELECT weapon, offhand, chest FROM equipment WHERE telegram_id=?',
-        (telegram_id,),
-    ).fetchone()
-    if not equipped:
-        conn.close()
-        return ''
-
-    inventory_ids = [equipped['weapon'], equipped['offhand'], equipped['chest']]
-    inventory_ids = [value for value in inventory_ids if value is not None]
-    if not inventory_ids:
-        conn.close()
-        return ''
-
-    placeholders = ','.join('?' * len(inventory_ids))
-    inv_rows = conn.execute(
-        f'SELECT id, item_id FROM inventory WHERE telegram_id=? AND id IN ({placeholders})',
-        (telegram_id, *inventory_ids),
-    ).fetchall()
-    conn.close()
-
-    by_inv_id = {row['id']: row['item_id'] for row in inv_rows}
+    equipped_item_ids = resolve_equipped_item_ids_with_fallback(telegram_id)
     labels = EQUIP_SLOT_LABELS.get(lang, EQUIP_SLOT_LABELS['ru'])
     lines = []
     for slot in ('weapon', 'offhand', 'chest'):
-        inv_id = equipped[slot]
-        item_id = by_inv_id.get(inv_id)
+        item_id = equipped_item_ids.get(slot)
         if not item_id:
             continue
         item = get_item(item_id)

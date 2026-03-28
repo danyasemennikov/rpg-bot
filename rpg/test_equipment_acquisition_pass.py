@@ -86,6 +86,10 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         self.assertTrue(result['ok'])
 
         conn = get_connection()
+        gear_row = conn.execute(
+            'SELECT base_item_id, equipped_slot FROM gear_instances WHERE telegram_id=? AND base_item_id=?',
+            (9001, 'apprentice_focus_orb'),
+        ).fetchone()
         inv_row = conn.execute(
             'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?',
             (9001, 'apprentice_focus_orb'),
@@ -93,8 +97,8 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         player_row = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (9001,)).fetchone()
         conn.close()
 
-        self.assertIsNotNone(inv_row)
-        self.assertEqual(inv_row['quantity'], 1)
+        self.assertIsNotNone(gear_row)
+        self.assertIsNone(inv_row)
         self.assertEqual(player_row['gold'], 320)
 
     def test_shop_purchase_enforces_level_gating(self):
@@ -141,14 +145,17 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         surfaced = shop_items | drop_items
         self.assertTrue(curated_ids.issubset(surfaced))
 
-    def test_no_schema_migration_required_for_acquisition_pass(self):
+    def test_schema_changes_are_additive_for_acquisition_pass(self):
         conn = get_connection()
         columns = {row['name'] for row in conn.execute('PRAGMA table_info(players)').fetchall()}
+        gear_columns = {row['name'] for row in conn.execute('PRAGMA table_info(gear_instances)').fetchall()}
         conn.close()
 
         self.assertIn('gold', columns)
         self.assertIn('location_id', columns)
         self.assertNotIn('shop_rank', columns)
+        self.assertIn('base_item_id', gear_columns)
+        self.assertIn('equipped_slot', gear_columns)
 
 
 class ShopBackNavigationTests(unittest.IsolatedAsyncioTestCase):
