@@ -36,6 +36,20 @@ RUNTIME_EQUIPMENT_STATS = {
 }
 
 
+
+
+def _normalize_player_record(player: Any) -> dict[str, Any]:
+    if isinstance(player, dict):
+        return player
+    if player is None:
+        return {}
+    try:
+        normalized = dict(player)
+    except (TypeError, ValueError):
+        return {}
+    return normalized if isinstance(normalized, dict) else {}
+
+
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -118,7 +132,8 @@ def build_runtime_equipment_bonus_channels(equipment_bonuses: dict[str, int]) ->
     return normalized
 
 
-def build_effective_player_stats(player: dict, equipment_bonuses: dict[str, int]) -> dict[str, int]:
+def build_effective_player_stats(player: Any, equipment_bonuses: dict[str, int]) -> dict[str, int]:
+    player = _normalize_player_record(player)
     runtime_bonus_channels = build_runtime_equipment_bonus_channels(equipment_bonuses)
 
     effective_strength = _safe_int(player.get('strength', 0)) + _safe_int(equipment_bonuses.get('strength', 0))
@@ -177,7 +192,8 @@ def build_effective_player_stats(player: dict, equipment_bonuses: dict[str, int]
     }
 
 
-def get_player_effective_stats(telegram_id: int, player: dict) -> dict[str, Any]:
+def get_player_effective_stats(telegram_id: int, player: Any) -> dict[str, Any]:
+    player = _normalize_player_record(player)
     equipment_bonuses = aggregate_equipped_stat_bonuses(telegram_id)
     effective = build_effective_player_stats(player, equipment_bonuses)
     effective['equipment_bonuses'] = equipment_bonuses
@@ -185,7 +201,7 @@ def get_player_effective_stats(telegram_id: int, player: dict) -> dict[str, Any]
     return effective
 
 
-def clamp_player_resources_to_effective_caps(telegram_id: int, player: dict | None = None) -> dict[str, int | bool]:
+def clamp_player_resources_to_effective_caps(telegram_id: int, player: Any = None) -> dict[str, int | bool]:
     """
     Clamps current HP/Mana against effective caps derived from currently equipped gear.
     Returns clamped values and whether an UPDATE was executed.
@@ -203,6 +219,7 @@ def clamp_player_resources_to_effective_caps(telegram_id: int, player: dict | No
                 return {'changed': False, 'hp': 0, 'mana': 0, 'max_hp': 0, 'max_mana': 0}
             loaded_player = dict(row)
 
+        loaded_player = _normalize_player_record(loaded_player)
         effective = get_player_effective_stats(telegram_id, loaded_player)
         clamped_hp = min(_safe_int(loaded_player.get('hp', 0)), effective['max_hp'])
         clamped_mana = min(_safe_int(loaded_player.get('mana', 0)), effective['max_mana'])
