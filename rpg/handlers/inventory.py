@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from database import get_player, get_connection, is_in_battle
-from game.items_data import get_item
+from game.items_data import get_item, get_item_metadata
 from game.i18n import t, get_player_lang, get_item_name
 
 RARITY_KEYS = {
@@ -37,7 +37,73 @@ STAT_NAMES = {
     'es': {'strength': '💪 Fuerza', 'agility': '🤸 Agilidad', 'intuition': '🔮 Intuición', 'vitality': '❤️ Vitalidad', 'wisdom': '🧠 Sabiduría', 'luck': '🍀 Suerte'},
 }
 
-TABS = ['weapon', 'armor', 'potion', 'material']
+TABS = ['weapon', 'armor', 'accessory', 'potion', 'material']
+EQUIPMENT_SLOT_KEYS = (
+    'weapon',
+    'offhand',
+    'helmet',
+    'chest',
+    'legs',
+    'boots',
+    'gloves',
+    'ring1',
+    'ring2',
+    'amulet',
+)
+
+SLOT_IDENTITY_NAME = {
+    'ru': {
+        'weapon': '⚔️ Основное оружие',
+        'offhand': '🛡️ Оффхенд',
+        'helmet': '⛑️ Шлем',
+        'chest': '🧥 Нагрудник',
+        'legs': '🥾 Поножи',
+        'boots': '👢 Обувь',
+        'gloves': '🧤 Перчатки',
+        'ring': '💍 Кольцо',
+        'amulet': '📿 Амулет',
+    },
+    'en': {
+        'weapon': '⚔️ Main-hand',
+        'offhand': '🛡️ Offhand',
+        'helmet': '⛑️ Helmet',
+        'chest': '🧥 Chest',
+        'legs': '🥾 Legs',
+        'boots': '👢 Boots',
+        'gloves': '🧤 Gloves',
+        'ring': '💍 Ring',
+        'amulet': '📿 Amulet',
+    },
+    'es': {
+        'weapon': '⚔️ Mano principal',
+        'offhand': '🛡️ Mano secundaria',
+        'helmet': '⛑️ Casco',
+        'chest': '🧥 Pecho',
+        'legs': '🥾 Piernas',
+        'boots': '👢 Botas',
+        'gloves': '🧤 Guantes',
+        'ring': '💍 Anillo',
+        'amulet': '📿 Amuleto',
+    },
+}
+
+ARMOR_CLASS_NAME = {
+    'ru': {'heavy': 'Тяжёлая', 'medium': 'Средняя', 'light': 'Лёгкая'},
+    'en': {'heavy': 'Heavy', 'medium': 'Medium', 'light': 'Light'},
+    'es': {'heavy': 'Pesada', 'medium': 'Media', 'light': 'Ligera'},
+}
+
+OFFHAND_PROFILE_NAME = {
+    'ru': {'shield': 'Щит', 'focus': 'Фокус', 'censer': 'Кадило'},
+    'en': {'shield': 'Shield', 'focus': 'Focus', 'censer': 'Censer'},
+    'es': {'shield': 'Escudo', 'focus': 'Foco', 'censer': 'Incensario'},
+}
+
+WEAPON_PROFILE_NAME = {
+    'ru': {'sword_1h': 'Одноручный меч', 'sword_2h': 'Двуручный меч', 'axe_2h': 'Двуручный топор', 'daggers': 'Парные кинжалы', 'bow': 'Лук', 'magic_staff': 'Маг. посох', 'holy_staff': 'Святой посох', 'wand': 'Волшебная палочка', 'holy_rod': 'Святой жезл', 'tome': 'Фолиант', 'unarmed': 'Без оружия'},
+    'en': {'sword_1h': '1H Sword', 'sword_2h': '2H Sword', 'axe_2h': '2H Axe', 'daggers': 'Daggers', 'bow': 'Bow', 'magic_staff': 'Magic Staff', 'holy_staff': 'Holy Staff', 'wand': 'Wand', 'holy_rod': 'Holy Rod', 'tome': 'Tome', 'unarmed': 'Unarmed'},
+    'es': {'sword_1h': 'Espada 1M', 'sword_2h': 'Espada 2M', 'axe_2h': 'Hacha 2M', 'daggers': 'Dagas', 'bow': 'Arco', 'magic_staff': 'Bastón mágico', 'holy_staff': 'Bastón sagrado', 'wand': 'Varita', 'holy_rod': 'Vara sagrada', 'tome': 'Tomo', 'unarmed': 'Sin arma'},
+}
 
 def get_inventory(telegram_id: int, item_type: str = None) -> list:
     conn = get_connection()
@@ -65,9 +131,69 @@ def get_equipped(telegram_id: int) -> dict:
     conn.close()
     return dict(eq) if eq else {}
 
+
+def get_equipped_slot_for_inventory_id(equipped: dict, inv_id: int) -> str | None:
+    for slot in EQUIPMENT_SLOT_KEYS:
+        equipped_inv_id = equipped.get(slot)
+        if equipped_inv_id == inv_id:
+            return slot
+    return None
+
+
+def resolve_equip_slot_for_item(item_id: str, equipped: dict) -> str | None:
+    metadata = get_item_metadata(item_id)
+    slot_identity = metadata.get('slot_identity')
+
+    if slot_identity in {'weapon', 'offhand', 'helmet', 'chest', 'legs', 'boots', 'gloves'}:
+        return slot_identity
+
+    if slot_identity == 'amulet':
+        return 'amulet'
+
+    if slot_identity == 'ring':
+        if equipped.get('ring1') is None:
+            return 'ring1'
+        if equipped.get('ring2') is None:
+            return 'ring2'
+        return 'ring1'
+
+    return None
+
+
+def _build_metadata_text_lines(metadata: dict, lang: str) -> list[str]:
+    lines = []
+    lang_map = SLOT_IDENTITY_NAME.get(lang, SLOT_IDENTITY_NAME['ru'])
+    slot_identity = metadata.get('slot_identity')
+    if slot_identity in lang_map:
+        lines.append(lang_map[slot_identity])
+
+    armor_class = metadata.get('armor_class')
+    if armor_class:
+        armor_label = ARMOR_CLASS_NAME.get(lang, ARMOR_CLASS_NAME['ru']).get(armor_class, armor_class)
+        lines.append(f"🧱 {armor_label}")
+
+    offhand_profile = metadata.get('offhand_profile')
+    if offhand_profile and offhand_profile != 'none':
+        offhand_label = OFFHAND_PROFILE_NAME.get(lang, OFFHAND_PROFILE_NAME['ru']).get(offhand_profile, offhand_profile)
+        lines.append(f"🔰 {offhand_label}")
+
+    if metadata.get('slot_identity') == 'weapon':
+        weapon_profile = metadata.get('weapon_profile')
+        profile_label = WEAPON_PROFILE_NAME.get(lang, WEAPON_PROFILE_NAME['ru']).get(weapon_profile, weapon_profile)
+        lines.append(f"⚙️ {profile_label}")
+
+    return lines
+
+
+def _get_localized_stat_label(stat_key: str, lang: str) -> str:
+    localized = t(f'inventory.stat_labels.{stat_key}', lang)
+    if localized and localized != f'[inventory.stat_labels.{stat_key}]':
+        return localized
+    return STAT_NAMES.get(lang, STAT_NAMES['ru']).get(stat_key, stat_key.replace('_', ' ').title())
+
 def is_equipped(telegram_id: int, inv_id: int) -> bool:
     eq = get_equipped(telegram_id)
-    return inv_id in eq.values()
+    return any(eq.get(slot) == inv_id for slot in EQUIPMENT_SLOT_KEYS)
 
 def build_tab_keyboard(active_tab: str, lang: str) -> list:
     row = []
@@ -123,7 +249,9 @@ def build_item_detail(telegram_id: int, inv_id: int, back_tab: str, lang: str = 
     inv_row      = dict(inv_row)
     item         = get_item(inv_row['item_id'])
     eq           = get_equipped(telegram_id)
-    equipped     = inv_row['id'] in eq.values()
+    equipped_slot = get_equipped_slot_for_inventory_id(eq, inv_row['id'])
+    equipped     = bool(equipped_slot)
+    metadata     = get_item_metadata(inv_row['item_id'])
 
     rarity_emoji = t(f"inventory.{RARITY_KEYS.get(item['rarity'], 'rarity_common')}", lang)
     rarity_name  = RARITY_NAME.get(lang, RARITY_NAME['ru']).get(item['rarity'], '')
@@ -136,11 +264,15 @@ def build_item_detail(telegram_id: int, inv_id: int, back_tab: str, lang: str = 
         wtype = WEAPON_TYPE_NAME.get(lang, WEAPON_TYPE_NAME['ru']).get(item['weapon_type'], '')
         text += f" | {wtype} | Ур.{item['req_level']}\n\n"
         text += t('inventory.damage', lang, min=item['damage_min'], max=item['damage_max']) + '\n'
-    elif item['item_type'] == 'armor':
+    elif item['item_type'] in ('armor', 'accessory'):
         text += f" | Ур.{item['req_level']}\n\n"
         text += t('inventory.defense', lang, val=item['defense']) + '\n'
     else:
         text += '\n\n'
+
+    metadata_lines = _build_metadata_text_lines(metadata, lang)
+    if metadata_lines:
+        text += " · ".join(metadata_lines) + '\n'
 
     text += t('inventory.weight', lang, val=item['weight']) + '\n'
 
@@ -159,7 +291,7 @@ def build_item_detail(telegram_id: int, inv_id: int, back_tab: str, lang: str = 
 
     # Бонусы
     stat_bonus = json.loads(item['stat_bonus_json'])
-    bonuses = [f"{stat_names.get(k, k)} +{v}" for k, v in stat_bonus.items() if k not in ('heal', 'mana')]
+    bonuses = [f"{_get_localized_stat_label(k, lang)} +{v}" for k, v in stat_bonus.items() if k not in ('heal', 'mana')]
     if bonuses:
         text += t('inventory.bonuses', lang, val=', '.join(bonuses)) + '\n'
 
@@ -171,18 +303,13 @@ def build_item_detail(telegram_id: int, inv_id: int, back_tab: str, lang: str = 
 
     # Кнопки
     keyboard = []
-    if item['item_type'] == 'weapon':
-        slot = 'weapon'
+    if item['item_type'] in ('weapon', 'armor', 'accessory'):
         if equipped:
-            keyboard.append([InlineKeyboardButton(t('inventory.unequip_btn', lang), callback_data=f"inv_unequip_{inv_id}_{slot}_{back_tab}")])
+            keyboard.append([InlineKeyboardButton(t('inventory.unequip_btn', lang), callback_data=f"inv_unequip_{inv_id}_{equipped_slot}_{back_tab}")])
         else:
-            keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=f"inv_equip_{inv_id}_{slot}_{back_tab}")])
-    elif item['item_type'] == 'armor':
-        slot = 'chest'
-        if equipped:
-            keyboard.append([InlineKeyboardButton(t('inventory.unequip_btn', lang), callback_data=f"inv_unequip_{inv_id}_{slot}_{back_tab}")])
-        else:
-            keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=f"inv_equip_{inv_id}_{slot}_{back_tab}")])
+            equip_slot = resolve_equip_slot_for_item(inv_row['item_id'], eq)
+            if equip_slot:
+                keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=f"inv_equip_{inv_id}_{equip_slot}_{back_tab}")])
     elif item['item_type'] == 'potion':
         keyboard.append([InlineKeyboardButton(t('inventory.use_btn', lang), callback_data=f"inv_use_{inv_id}_{back_tab}")])
 

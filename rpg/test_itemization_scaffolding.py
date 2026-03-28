@@ -1,4 +1,5 @@
 import unittest
+import json
 
 from game.items_data import get_item, get_item_metadata
 from game.itemization import (
@@ -117,6 +118,72 @@ class ItemizationScaffoldingTests(unittest.TestCase):
         self.assertEqual(metadata['slot_identity'], 'offhand')
         self.assertEqual(metadata['offhand_profile'], 'shield')
         self.assertEqual(metadata['rarity'], 'common')
+
+    def test_curated_offhands_have_expected_normalized_identity(self):
+        shield_meta = get_item_metadata('warden_kite_shield')
+        focus_meta = get_item_metadata('azure_focus_prism')
+        censer_meta = get_item_metadata('choir_censer')
+
+        self.assertEqual(shield_meta['slot_identity'], 'offhand')
+        self.assertEqual(shield_meta['offhand_profile'], 'shield')
+        self.assertEqual(shield_meta['weapon_profile'], 'unarmed')
+
+        self.assertEqual(focus_meta['slot_identity'], 'offhand')
+        self.assertEqual(focus_meta['offhand_profile'], 'focus')
+        self.assertEqual(focus_meta['weapon_profile'], 'unarmed')
+
+        self.assertEqual(censer_meta['slot_identity'], 'offhand')
+        self.assertEqual(censer_meta['offhand_profile'], 'censer')
+        self.assertEqual(censer_meta['weapon_profile'], 'unarmed')
+
+    def test_curated_armor_items_match_class_identity(self):
+        heavy_meta = get_item_metadata('militia_cuirass')
+        medium_meta = get_item_metadata('tracker_jacket')
+        light_meta = get_item_metadata('acolyte_robe')
+
+        self.assertEqual(heavy_meta['armor_class'], 'heavy')
+        self.assertEqual(medium_meta['armor_class'], 'medium')
+        self.assertEqual(light_meta['armor_class'], 'light')
+
+        heavy_pool = set(get_secondary_pool_for_item(get_item('militia_cuirass')))
+        light_pool = set(get_secondary_pool_for_item(get_item('acolyte_robe')))
+
+        heavy_stats = set(json.loads(get_item('militia_cuirass')['stat_bonus_json']).keys())
+        light_stats = set(json.loads(get_item('acolyte_robe')['stat_bonus_json']).keys())
+        self.assertTrue(heavy_stats.issubset(heavy_pool))
+        self.assertTrue(light_stats.issubset(light_pool))
+
+    def test_accessory_slice_stays_flexible_but_bounded(self):
+        accessory_pool = set(SECONDARY_STAT_POOLS['accessory'])
+        for item_id in ('band_of_precision', 'ring_of_quiet_mind', 'amulet_of_kindled_prayer', 'dual_path_loop'):
+            metadata = get_item_metadata(item_id)
+            self.assertIn(metadata['slot_identity'], ('ring', 'amulet'))
+            bonuses = set(json.loads(get_item(item_id)['stat_bonus_json']).keys())
+            self.assertTrue(bonuses.issubset(accessory_pool))
+            self.assertNotIn('aggro_power', bonuses)
+            self.assertNotIn('armor_break', bonuses)
+
+    def test_curated_items_respect_rarity_secondary_budget(self):
+        curated_ids = (
+            'oak_guard_shield',
+            'warden_kite_shield',
+            'apprentice_focus_orb',
+            'azure_focus_prism',
+            'novice_censer',
+            'choir_censer',
+            'militia_cuirass',
+            'tracker_jacket',
+            'acolyte_robe',
+            'band_of_precision',
+            'ring_of_quiet_mind',
+            'amulet_of_kindled_prayer',
+            'dual_path_loop',
+        )
+        for item_id in curated_ids:
+            item = get_item(item_id)
+            budget = get_secondary_count_budget_for_rarity(item['rarity'])
+            actual = len(json.loads(item['stat_bonus_json']).keys())
+            self.assertLessEqual(actual, budget, msg=f'{item_id} exceeds rarity budget')
 
     def test_secondary_roll_helper_is_deterministic_with_injected_rng(self):
         import random

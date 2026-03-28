@@ -9,9 +9,77 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboard
 from telegram.ext import ContextTypes
 from database import get_player, get_connection
 from game.balance import exp_to_next_level, calc_max_hp, calc_max_mana, calc_carry_weight
-from game.i18n import t, get_player_lang
+from game.i18n import t, get_player_lang, get_item_name
+from game.items_data import get_item, get_item_metadata
 
 STAT_RESET_COST = 100  # стоимость сброса статов в золоте
+
+EQUIP_SLOT_LABELS = {
+    'ru': {'weapon': '⚔️ Оружие', 'offhand': '🛡️ Оффхенд', 'chest': '🧥 Тело'},
+    'en': {'weapon': '⚔️ Weapon', 'offhand': '🛡️ Offhand', 'chest': '🧥 Chest'},
+    'es': {'weapon': '⚔️ Arma', 'offhand': '🛡️ Mano secundaria', 'chest': '🧥 Pecho'},
+}
+
+
+def _format_equipped_identity(item_id: str, lang: str) -> str:
+    metadata = get_item_metadata(item_id)
+    parts = []
+    if metadata.get('armor_class'):
+        key = f"profile.identity.armor_class.{metadata['armor_class']}"
+        label = t(key, lang)
+        parts.append(label if label != f'[{key}]' else metadata['armor_class'].replace('_', ' '))
+    if metadata.get('offhand_profile') and metadata['offhand_profile'] != 'none':
+        key = f"profile.identity.offhand_profile.{metadata['offhand_profile']}"
+        label = t(key, lang)
+        parts.append(label if label != f'[{key}]' else metadata['offhand_profile'].replace('_', ' '))
+    if metadata.get('slot_identity') == 'weapon':
+        profile = metadata.get('weapon_profile', 'unarmed')
+        key = f'profile.identity.weapon_profile.{profile}'
+        label = t(key, lang)
+        parts.append(label if label != f'[{key}]' else profile.replace('_', ' '))
+    return f" ({', '.join(parts)})" if parts else ""
+
+
+def _build_equipment_summary(telegram_id: int, lang: str) -> str:
+    conn = get_connection()
+    equipped = conn.execute(
+        'SELECT weapon, offhand, chest FROM equipment WHERE telegram_id=?',
+        (telegram_id,),
+    ).fetchone()
+    if not equipped:
+        conn.close()
+        return ''
+
+    inventory_ids = [equipped['weapon'], equipped['offhand'], equipped['chest']]
+    inventory_ids = [value for value in inventory_ids if value is not None]
+    if not inventory_ids:
+        conn.close()
+        return ''
+
+    placeholders = ','.join('?' * len(inventory_ids))
+    inv_rows = conn.execute(
+        f'SELECT id, item_id FROM inventory WHERE telegram_id=? AND id IN ({placeholders})',
+        (telegram_id, *inventory_ids),
+    ).fetchall()
+    conn.close()
+
+    by_inv_id = {row['id']: row['item_id'] for row in inv_rows}
+    labels = EQUIP_SLOT_LABELS.get(lang, EQUIP_SLOT_LABELS['ru'])
+    lines = []
+    for slot in ('weapon', 'offhand', 'chest'):
+        inv_id = equipped[slot]
+        item_id = by_inv_id.get(inv_id)
+        if not item_id:
+            continue
+        item = get_item(item_id)
+        if not item:
+            continue
+        lines.append(
+            f"{labels[slot]}: {get_item_name(item_id, lang)}{_format_equipped_identity(item_id, lang)}"
+        )
+    if not lines:
+        return ''
+    return "\n\n" + "\n".join(lines)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = get_player_lang(update.effective_user.id)
@@ -67,6 +135,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     if p['stat_points'] > 0:
         text += f"\n🔸 {t('profile.stat_points', lang, val=p['stat_points'])} — /stats"
+    text += _build_equipment_summary(user.id, lang)
 
     await update.message.reply_text(text, parse_mode='HTML')
 
