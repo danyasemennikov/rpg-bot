@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 from database import get_player, get_connection, is_in_battle
 from game.items_data import get_item, get_item_metadata
 from game.i18n import t, get_player_lang, get_item_name
+from game.equipment_stats import get_player_effective_stats, clamp_player_resources_to_effective_caps
 
 RARITY_KEYS = {
     'common':    'rarity_common',
@@ -195,6 +196,11 @@ def is_equipped(telegram_id: int, inv_id: int) -> bool:
     eq = get_equipped(telegram_id)
     return any(eq.get(slot) == inv_id for slot in EQUIPMENT_SLOT_KEYS)
 
+
+def _calc_safe_restore_amount(current_value: int, effective_cap: int, restore_value: int) -> int:
+    missing = max(0, int(effective_cap) - int(current_value))
+    return max(0, min(int(restore_value), missing))
+
 def build_tab_keyboard(active_tab: str, lang: str) -> list:
     row = []
     for tab_key in TABS:
@@ -347,6 +353,7 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     user  = query.from_user
     p     = dict(get_player(user.id))
     lang  = get_player_lang(user.id)
+    effective_stats = get_player_effective_stats(user.id, p)
 
     if data == 'inv_noop':
         await query.answer()
@@ -392,6 +399,7 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         conn.execute(f'UPDATE equipment SET {slot}=? WHERE telegram_id=?', (inv_id, user.id))
         conn.commit()
         conn.close()
+        clamp_player_resources_to_effective_caps(user.id)
 
         await query.answer(t('inventory.equipped_ok', lang, name=get_item_name(inv_row['item_id'], lang)))
         text, keyboard = build_item_detail(user.id, inv_id, back_tab, lang)
@@ -409,6 +417,7 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (user.id,))
         conn.commit()
         conn.close()
+        clamp_player_resources_to_effective_caps(user.id)
 
         await query.answer(t('inventory.unequipped_ok', lang))
         text, keyboard = build_item_detail(user.id, inv_id, back_tab, lang)
@@ -431,12 +440,12 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         msg  = ""
 
         if 'heal' in bonus:
-            heal = min(bonus['heal'], p['max_hp'] - p['hp'])
+            heal = _calc_safe_restore_amount(p['hp'], effective_stats['max_hp'], bonus['heal'])
             conn.execute('UPDATE players SET hp=hp+? WHERE telegram_id=?', (heal, user.id))
             msg += t('inventory.healed', lang, val=heal) + '\n'
 
         if 'mana' in bonus:
-            mana_gain = min(bonus['mana'], p['max_mana'] - p['mana'])
+            mana_gain = _calc_safe_restore_amount(p['mana'], effective_stats['max_mana'], bonus['mana'])
             conn.execute('UPDATE players SET mana=mana+? WHERE telegram_id=?', (mana_gain, user.id))
             msg += t('inventory.mana_restored', lang, val=mana_gain) + '\n'
 

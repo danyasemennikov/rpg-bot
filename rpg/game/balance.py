@@ -79,14 +79,24 @@ def get_player_accuracy_rating(player, battle_state) -> int:
     intuition = _read_rating_source_value(player, 'intuition', 0)
     mastery_level = _read_rating_source_value(battle_state, 'mastery_level', 0)
     accuracy_bonus = _read_rating_source_value(battle_state, 'accuracy_bonus', 0)
-    return 100 + agility * 2 + intuition + mastery_level * 2 + accuracy_bonus
+    equipment_bonus = _read_rating_source_value(
+        battle_state,
+        'equipment_accuracy_bonus',
+        _read_rating_source_value(player, 'equipment_accuracy_bonus', 0),
+    )
+    return 100 + agility * 2 + intuition + mastery_level * 2 + accuracy_bonus + equipment_bonus
 
 
 def get_player_evasion_rating(player, battle_state) -> int:
     agility = _read_rating_source_value(player, 'agility', 0)
     luck = _read_rating_source_value(player, 'luck', 0)
     evasion_bonus = _read_rating_source_value(battle_state, 'evasion_bonus', 0)
-    return 100 + agility * 2 + luck + evasion_bonus
+    equipment_bonus = _read_rating_source_value(
+        battle_state,
+        'equipment_evasion_bonus',
+        _read_rating_source_value(player, 'equipment_evasion_bonus', 0),
+    )
+    return 100 + agility * 2 + luck + evasion_bonus + equipment_bonus
 
 
 def get_enemy_accuracy_rating(mob, battle_state) -> int:

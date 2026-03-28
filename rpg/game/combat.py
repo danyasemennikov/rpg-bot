@@ -834,6 +834,16 @@ def process_skill_turn(
     player_state = dict(player)
     player_state['hp'] = battle_state['player_hp']
     player_state['mana'] = battle_state['player_mana']
+    player_state['strength'] = battle_state.get('effective_strength', player_state.get('strength', 1))
+    player_state['agility'] = battle_state.get('effective_agility', player_state.get('agility', 1))
+    player_state['intuition'] = battle_state.get('effective_intuition', player_state.get('intuition', 1))
+    player_state['vitality'] = battle_state.get('effective_vitality', player_state.get('vitality', 1))
+    player_state['wisdom'] = battle_state.get('effective_wisdom', player_state.get('wisdom', 1))
+    player_state['luck'] = battle_state.get('effective_luck', player_state.get('luck', 1))
+    player_state['equipment_physical_defense_bonus'] = battle_state.get('equipment_physical_defense_bonus', 0)
+    player_state['equipment_magic_defense_bonus'] = battle_state.get('equipment_magic_defense_bonus', 0)
+    player_state['equipment_accuracy_bonus'] = battle_state.get('equipment_accuracy_bonus', 0)
+    player_state['equipment_evasion_bonus'] = battle_state.get('equipment_evasion_bonus', 0)
 
     mob_state = {
         'hp': battle_state['mob_hp'],
@@ -1190,9 +1200,9 @@ def mob_attack(mob: dict, player: dict, *, allow_dodge: bool = True) -> dict:
 
     # Защита игрока зависит от типа урона моба
     if incoming_school in ('magic', 'holy'):
-        defense = calc_magic_defense(player['wisdom'])
+        defense = calc_magic_defense(player['wisdom']) + int(player.get('equipment_magic_defense_bonus', 0))
     else:
-        defense = calc_physical_defense(player['vitality'])
+        defense = calc_physical_defense(player['vitality']) + int(player.get('equipment_physical_defense_bonus', 0))
     defense_multiplier = (
         calc_armor_class_defense_multiplier(player.get('armor_class'))
         * calc_offhand_defense_multiplier(player.get('offhand_profile'))
@@ -1320,6 +1330,16 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'weapon_name':          '',
         'mastery_level':        1,
         'mastery_exp':          0,
+        'equipment_physical_defense_bonus': 0,
+        'equipment_magic_defense_bonus': 0,
+        'equipment_accuracy_bonus': 0,
+        'equipment_evasion_bonus': 0,
+        'effective_strength': player.get('strength', 1),
+        'effective_agility': player.get('agility', 1),
+        'effective_intuition': player.get('intuition', 1),
+        'effective_vitality': player.get('vitality', 1),
+        'effective_wisdom': player.get('wisdom', 1),
+        'effective_luck': player.get('luck', 1),
     }
 
 # ────────────────────────────────────────
@@ -1338,6 +1358,16 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
     player['armor_class'] = battle_state.get('armor_class')
     player['offhand_profile'] = battle_state.get('offhand_profile', 'none')
     player['encumbrance'] = battle_state.get('encumbrance')
+    player['equipment_physical_defense_bonus'] = battle_state.get('equipment_physical_defense_bonus', 0)
+    player['equipment_magic_defense_bonus'] = battle_state.get('equipment_magic_defense_bonus', 0)
+    player['equipment_accuracy_bonus'] = battle_state.get('equipment_accuracy_bonus', 0)
+    player['equipment_evasion_bonus'] = battle_state.get('equipment_evasion_bonus', 0)
+    player['strength'] = battle_state.get('effective_strength', player.get('strength', 1))
+    player['agility'] = battle_state.get('effective_agility', player.get('agility', 1))
+    player['intuition'] = battle_state.get('effective_intuition', player.get('intuition', 1))
+    player['vitality'] = battle_state.get('effective_vitality', player.get('vitality', 1))
+    player['wisdom'] = battle_state.get('effective_wisdom', player.get('wisdom', 1))
+    player['luck'] = battle_state.get('effective_luck', player.get('luck', 1))
 
     if battle_state.get('blessing_turns', 0) > 0:
         mult = 1 + battle_state['blessing_value'] / 100

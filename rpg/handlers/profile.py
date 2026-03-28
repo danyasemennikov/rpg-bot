@@ -11,6 +11,7 @@ from database import get_player, get_connection
 from game.balance import exp_to_next_level, calc_max_hp, calc_max_mana, calc_carry_weight
 from game.i18n import t, get_player_lang, get_item_name
 from game.items_data import get_item, get_item_metadata
+from game.equipment_stats import get_player_effective_stats
 
 STAT_RESET_COST = 100  # стоимость сброса статов в золоте
 
@@ -107,20 +108,23 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     exp_needed = exp_to_next_level(p['level'])
+    effective_stats = get_player_effective_stats(user.id, p)
+    effective_max_hp = effective_stats['max_hp']
+    effective_max_mana = effective_stats['max_mana']
     exp_pct    = int((p['exp'] / exp_needed) * 10)
     exp_bar    = '█' * exp_pct + '░' * (10 - exp_pct)
 
-    hp_pct  = int((p['hp'] / p['max_hp']) * 10)
+    hp_pct  = int((p['hp'] / max(1, effective_max_hp)) * 10)
     hp_bar  = '█' * hp_pct + '░' * (10 - hp_pct)
 
-    mp_pct  = int((p['mana'] / p['max_mana']) * 10)
+    mp_pct  = int((p['mana'] / max(1, effective_max_mana)) * 10)
     mp_bar  = '█' * mp_pct + '░' * (10 - mp_pct)
 
     text = (
         f"{t('profile.title', lang, name=p['name'])}\n"
         f"{t('profile.level', lang, level=p['level'])}  |  📍 {p['location_id']}\n\n"
-        f"❤️ HP:   {hp_bar} {p['hp']}/{p['max_hp']}\n"
-        f"🔵 {t('common.mana', lang)}: {mp_bar} {p['mana']}/{p['max_mana']}\n"
+        f"❤️ HP:   {hp_bar} {p['hp']}/{effective_max_hp}\n"
+        f"🔵 {t('common.mana', lang)}: {mp_bar} {p['mana']}/{effective_max_mana}\n"
         f"✨ {t('common.exp', lang)}: {exp_bar} {p['exp']}/{exp_needed}\n\n"
         f"━━━━━━━━━━━━━━━\n"
         f"{t('profile.strength',  lang, val=p['strength'])}\n"

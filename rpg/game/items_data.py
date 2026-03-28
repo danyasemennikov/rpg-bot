@@ -168,7 +168,7 @@ ITEMS = {
         'req_level': 7, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 8, 'req_wisdom': 0,
         'buy_price': 430, 'sell_price': 128,
-        'skills_json': '[]', 'stat_bonus_json': '{"magic_power": 4, "cast_tempo": 2}',
+        'skills_json': '[]', 'stat_bonus_json': '{"intuition": 2, "max_mana": 12}',
     },
     'novice_censer': {
         'item_id': 'novice_censer', 'name': '🕯️ Кадило послушника',
@@ -180,7 +180,7 @@ ITEMS = {
         'req_level': 3, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 0, 'req_wisdom': 3,
         'buy_price': 175, 'sell_price': 46,
-        'skills_json': '[]', 'stat_bonus_json': '{"healing_power": 3}',
+        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 1}',
     },
     'choir_censer': {
         'item_id': 'choir_censer', 'name': '🕯️ Кадило храмового хора',
@@ -192,7 +192,7 @@ ITEMS = {
         'req_level': 7, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 0, 'req_wisdom': 8,
         'buy_price': 425, 'sell_price': 124,
-        'skills_json': '[]', 'stat_bonus_json': '{"healing_power": 4, "buff_power": 3}',
+        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2, "max_mana": 10}',
     },
     'militia_cuirass': {
         'item_id': 'militia_cuirass', 'name': '🛡️ Кираса ополченца',
@@ -258,7 +258,7 @@ ITEMS = {
         'req_level': 7, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 0, 'req_wisdom': 8,
         'buy_price': 430, 'sell_price': 126,
-        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2, "healing_power": 4}',
+        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2, "max_mana": 12}',
     },
     'dual_path_loop': {
         'item_id': 'dual_path_loop', 'name': '💍 Петля двойного пути',
@@ -269,7 +269,7 @@ ITEMS = {
         'req_level': 7, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 5, 'req_wisdom': 0,
         'buy_price': 420, 'sell_price': 122,
-        'skills_json': '[]', 'stat_bonus_json': '{"magic_power": 3, "accuracy": 2}',
+        'skills_json': '[]', 'stat_bonus_json': '{"intuition": 2, "accuracy": 2}',
     },
 
     # ── ЗЕЛЬЯ ────────────────────────────────────────────────

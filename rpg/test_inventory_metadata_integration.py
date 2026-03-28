@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 from handlers.inventory import (
     _build_metadata_text_lines,
+    _calc_safe_restore_amount,
     _get_localized_stat_label,
     is_equipped,
     get_equipped_slot_for_inventory_id,
@@ -55,6 +56,11 @@ class InventoryMetadataIntegrationTests(unittest.TestCase):
         with patch('handlers.inventory.get_equipped', return_value=mocked_equipment):
             self.assertTrue(is_equipped(777, 101))
             self.assertFalse(is_equipped(777, 777))
+
+    def test_safe_restore_amount_never_goes_negative_above_cap(self):
+        self.assertEqual(_calc_safe_restore_amount(current_value=150, effective_cap=120, restore_value=30), 0)
+        self.assertEqual(_calc_safe_restore_amount(current_value=100, effective_cap=120, restore_value=30), 20)
+        self.assertEqual(_calc_safe_restore_amount(current_value=100, effective_cap=120, restore_value=-5), 0)
 
 
 if __name__ == '__main__':
