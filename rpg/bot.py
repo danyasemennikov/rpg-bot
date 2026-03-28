@@ -1,9 +1,12 @@
 import sys
+import os
+import logging
+import traceback
 sys.path.append('/content/rpg_bot')
 
 from telegram.ext import (
     ApplicationBuilder, CommandHandler,
-    MessageHandler, CallbackQueryHandler, filters
+    MessageHandler, CallbackQueryHandler, ContextTypes, filters
 )
 
 from database import init_db
@@ -15,7 +18,14 @@ from handlers.inventory import inventory_command, handle_inventory_buttons, hand
 from handlers.skills_ui import skills_command, handle_skills_buttons
 from handlers.settings import settings_command, handle_settings_buttons
 
-BOT_TOKEN = "8680028003:AAFzt3wkJp862HKKke_yPvoXhFWTgCbSC3I"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
 async def regen_tick(context):
     """Каждую минуту регенерирует всех игроков вне боя."""
@@ -35,9 +45,37 @@ async def handle_text(update, context):
         return
     await handle_name_input(update, context)
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Глобальный обработчик ошибок PTB."""
+    logger.error("Exception while handling an update", exc_info=context.error)
+
+    update_data = repr(update)
+    if update is not None and hasattr(update, "to_dict"):
+        try:
+            update_data = update.to_dict()
+        except Exception:
+            logger.warning("Failed to serialize update with to_dict()")
+    logger.error("Update data: %s", update_data)
+
+    if getattr(context, "user_data", None):
+        logger.error("context.user_data: %s", context.user_data)
+    if getattr(context, "chat_data", None):
+        logger.error("context.chat_data: %s", context.chat_data)
+
+    if context.error is not None:
+        tb_text = ''.join(
+            traceback.format_exception(
+                type(context.error), context.error, context.error.__traceback__
+            )
+        )
+        logger.error("Full traceback:\n%s", tb_text)
+
 def main():
     init_db()
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN environment variable is not set")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_error_handler(error_handler)
 
     # Фоновый реген каждую минуту
     job_queue = app.job_queue
