@@ -120,7 +120,7 @@ ITEMS = {
         'req_level': 3, 'req_strength': 5, 'req_agility': 0,
         'req_intuition': 0, 'req_wisdom': 0,
         'buy_price': 180, 'sell_price': 45,
-        'skills_json': '[]', 'stat_bonus_json': '{"vitality": 1}',
+        'skills_json': '[]', 'stat_bonus_json': '{"block_chance": 4}',
     },
     'oak_guard_shield': {
         'item_id': 'oak_guard_shield', 'name': '🛡️ Щит дубового дозора',
@@ -144,7 +144,7 @@ ITEMS = {
         'req_level': 7, 'req_strength': 8, 'req_agility': 0,
         'req_intuition': 0, 'req_wisdom': 0,
         'buy_price': 420, 'sell_price': 120,
-        'skills_json': '[]', 'stat_bonus_json': '{"vitality": 2, "physical_defense": 4}',
+        'skills_json': '[]', 'stat_bonus_json': '{"physical_defense": 4, "block_chance": 10}',
     },
     'apprentice_focus_orb': {
         'item_id': 'apprentice_focus_orb', 'name': '🔮 Фокус ученика',
@@ -156,7 +156,7 @@ ITEMS = {
         'req_level': 3, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 3, 'req_wisdom': 0,
         'buy_price': 180, 'sell_price': 48,
-        'skills_json': '[]', 'stat_bonus_json': '{"max_mana": 15}',
+        'skills_json': '[]', 'stat_bonus_json': '{"magic_power": 8}',
     },
     'azure_focus_prism': {
         'item_id': 'azure_focus_prism', 'name': '🔷 Лазурная призма фокуса',
@@ -168,7 +168,7 @@ ITEMS = {
         'req_level': 7, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 8, 'req_wisdom': 0,
         'buy_price': 430, 'sell_price': 128,
-        'skills_json': '[]', 'stat_bonus_json': '{"intuition": 2, "max_mana": 12}',
+        'skills_json': '[]', 'stat_bonus_json': '{"intuition": 2, "magic_power": 12}',
     },
     'novice_censer': {
         'item_id': 'novice_censer', 'name': '🕯️ Кадило послушника',
@@ -180,7 +180,7 @@ ITEMS = {
         'req_level': 3, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 0, 'req_wisdom': 3,
         'buy_price': 175, 'sell_price': 46,
-        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 1}',
+        'skills_json': '[]', 'stat_bonus_json': '{"healing_power": 8}',
     },
     'choir_censer': {
         'item_id': 'choir_censer', 'name': '🕯️ Кадило храмового хора',
@@ -192,7 +192,7 @@ ITEMS = {
         'req_level': 7, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 0, 'req_wisdom': 8,
         'buy_price': 425, 'sell_price': 124,
-        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2, "max_mana": 10}',
+        'skills_json': '[]', 'stat_bonus_json': '{"wisdom": 2, "healing_power": 12}',
     },
     'militia_cuirass': {
         'item_id': 'militia_cuirass', 'name': '🛡️ Кираса ополченца',

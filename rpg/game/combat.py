@@ -36,6 +36,8 @@ from game.skill_engine import (
 
 SLOW_MISS_CHANCE = 0.35
 DOT_EFFECT_TYPES = {'poison', 'burn', 'bleed'}
+MAX_BLOCK_CHANCE_PERCENT = 60
+BLOCK_DAMAGE_MULTIPLIER = 0.5
 
 
 # ────────────────────────────────────────
@@ -318,6 +320,7 @@ def apply_direct_damage_action_modifiers(
     base_damage: int,
     *,
     can_consume_guaranteed_crit: bool,
+    damage_school: str | None = None,
 ) -> dict:
     """
     Применяет модификаторы только к прямому урону действия игрока.
@@ -359,6 +362,17 @@ def apply_direct_damage_action_modifiers(
         damage += int(battle_state.get('berserk_damage', 0))
         modifiers_applied = True
 
+    normalized_school = normalize_damage_school(
+        damage_school,
+        weapon_profile=battle_state.get('weapon_profile'),
+        weapon_type=battle_state.get('weapon_type', 'melee'),
+    )
+    if normalized_school in ('magic', 'holy'):
+        magic_power_bonus = max(0, int(battle_state.get('equipment_magic_power_bonus', 0)))
+        if magic_power_bonus > 0:
+            damage = int(damage * (1 + magic_power_bonus / 100))
+            modifiers_applied = True
+
     return {
         'damage': damage,
         'modifiers_applied': modifiers_applied,
@@ -384,6 +398,7 @@ def finalize_player_direct_damage_action(
         battle_state,
         base_damage,
         can_consume_guaranteed_crit=can_consume_guaranteed_crit,
+        damage_school=damage_school,
     )
     final_damage = modifier_result['damage']
     mob_hp_after = max(0, mob_hp_before - final_damage)
@@ -436,16 +451,22 @@ def finalize_direct_damage_skill_result(skill_result: dict, lang: str) -> None:
         log_params['total'] = final_damage
 
     heal_from_damage_ratio = skill_result.get('heal_from_damage_ratio', 0)
+    healing_power_bonus = max(0, int(skill_result.get('healing_power_bonus', 0)))
     if heal_from_damage_ratio > 0:
         heal_cap_missing_hp = max(0, skill_result.get('heal_cap_missing_hp', 0))
         recomputed_heal = int(final_damage * heal_from_damage_ratio)
+        if recomputed_heal > 0 and healing_power_bonus > 0:
+            recomputed_heal = int(recomputed_heal * (1 + healing_power_bonus / 100))
         skill_result['heal'] = min(recomputed_heal, heal_cap_missing_hp)
         if 'heal' in log_params:
             log_params['heal'] = skill_result['heal']
 
     lifesteal_ratio = skill_result.get('lifesteal_ratio', 0)
     if lifesteal_ratio > 0:
-        skill_result['heal'] = int(final_damage * lifesteal_ratio)
+        lifesteal_heal = int(final_damage * lifesteal_ratio)
+        if lifesteal_heal > 0 and healing_power_bonus > 0:
+            lifesteal_heal = int(lifesteal_heal * (1 + healing_power_bonus / 100))
+        skill_result['heal'] = lifesteal_heal
 
     skill_result['log'] = build_skill_result_log(skill_result, lang)
 
@@ -844,6 +865,9 @@ def process_skill_turn(
     player_state['equipment_magic_defense_bonus'] = battle_state.get('equipment_magic_defense_bonus', 0)
     player_state['equipment_accuracy_bonus'] = battle_state.get('equipment_accuracy_bonus', 0)
     player_state['equipment_evasion_bonus'] = battle_state.get('equipment_evasion_bonus', 0)
+    player_state['equipment_block_chance_bonus'] = battle_state.get('equipment_block_chance_bonus', 0)
+    player_state['equipment_magic_power_bonus'] = battle_state.get('equipment_magic_power_bonus', 0)
+    player_state['equipment_healing_power_bonus'] = battle_state.get('equipment_healing_power_bonus', 0)
 
     mob_state = {
         'hp': battle_state['mob_hp'],
@@ -1219,6 +1243,11 @@ def mob_attack(mob: dict, player: dict, *, allow_dodge: bool = True) -> dict:
 
     total_mitigation = combine_mitigation_percents(defense_mitigation, agility_mitigation)
     final_damage = apply_mitigation_percent(base_damage, total_mitigation)
+    block_chance = max(0, min(MAX_BLOCK_CHANCE_PERCENT, int(player.get('equipment_block_chance_bonus', 0))))
+    blocked = False
+    if final_damage > 0 and block_chance > 0 and random.random() < (block_chance / 100):
+        final_damage = max(0, int(final_damage * BLOCK_DAMAGE_MULTIPLIER))
+        blocked = True
     new_hp        = max(0, player['hp'] - final_damage)
 
     return {
@@ -1226,6 +1255,7 @@ def mob_attack(mob: dict, player: dict, *, allow_dodge: bool = True) -> dict:
         'damage':     final_damage,
         'player_hp':  new_hp,
         'dodged':     False,
+        'blocked':    blocked,
     }
 
 # ────────────────────────────────────────
@@ -1334,6 +1364,9 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
         'equipment_magic_defense_bonus': 0,
         'equipment_accuracy_bonus': 0,
         'equipment_evasion_bonus': 0,
+        'equipment_block_chance_bonus': 0,
+        'equipment_magic_power_bonus': 0,
+        'equipment_healing_power_bonus': 0,
         'effective_strength': player.get('strength', 1),
         'effective_agility': player.get('agility', 1),
         'effective_intuition': player.get('intuition', 1),
@@ -1362,6 +1395,9 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
     player['equipment_magic_defense_bonus'] = battle_state.get('equipment_magic_defense_bonus', 0)
     player['equipment_accuracy_bonus'] = battle_state.get('equipment_accuracy_bonus', 0)
     player['equipment_evasion_bonus'] = battle_state.get('equipment_evasion_bonus', 0)
+    player['equipment_block_chance_bonus'] = battle_state.get('equipment_block_chance_bonus', 0)
+    player['equipment_magic_power_bonus'] = battle_state.get('equipment_magic_power_bonus', 0)
+    player['equipment_healing_power_bonus'] = battle_state.get('equipment_healing_power_bonus', 0)
     player['strength'] = battle_state.get('effective_strength', player.get('strength', 1))
     player['agility'] = battle_state.get('effective_agility', player.get('agility', 1))
     player['intuition'] = battle_state.get('effective_intuition', player.get('intuition', 1))

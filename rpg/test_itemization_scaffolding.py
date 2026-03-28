@@ -31,6 +31,9 @@ class ItemizationScaffoldingTests(unittest.TestCase):
         'magic_defense',
         'accuracy',
         'evasion',
+        'block_chance',
+        'magic_power',
+        'healing_power',
     }
 
     def test_non_weapon_items_keep_neutral_weapon_profile(self):

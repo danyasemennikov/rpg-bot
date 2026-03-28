@@ -299,6 +299,9 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     p['equipment_magic_defense_bonus'] = effective_stats['magic_defense_bonus']
     p['equipment_accuracy_bonus'] = effective_stats['accuracy_bonus']
     p['equipment_evasion_bonus'] = effective_stats['evasion_bonus']
+    p['equipment_block_chance_bonus'] = effective_stats['block_chance_bonus']
+    p['equipment_magic_power_bonus'] = effective_stats['magic_power_bonus']
+    p['equipment_healing_power_bonus'] = effective_stats['healing_power_bonus']
 
     # Явный special-case для unarmed, чтобы profile не падал в sword_1h.
     if weapon_item:
@@ -346,6 +349,9 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     battle_state['equipment_magic_defense_bonus'] = p.get('equipment_magic_defense_bonus', 0)
     battle_state['equipment_accuracy_bonus'] = p.get('equipment_accuracy_bonus', 0)
     battle_state['equipment_evasion_bonus'] = p.get('equipment_evasion_bonus', 0)
+    battle_state['equipment_block_chance_bonus'] = p.get('equipment_block_chance_bonus', 0)
+    battle_state['equipment_magic_power_bonus'] = p.get('equipment_magic_power_bonus', 0)
+    battle_state['equipment_healing_power_bonus'] = p.get('equipment_healing_power_bonus', 0)
     battle_state['effective_strength'] = p.get('strength', 1)
     battle_state['effective_agility'] = p.get('agility', 1)
     battle_state['effective_intuition'] = p.get('intuition', 1)
