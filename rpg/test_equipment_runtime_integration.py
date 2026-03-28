@@ -12,6 +12,7 @@ from game.equipment_stats import (
     build_effective_player_stats,
     clamp_player_resources_to_effective_caps,
 )
+from game.skill_engine import use_skill
 
 
 class EquipmentRuntimeIntegrationTests(unittest.TestCase):
@@ -36,6 +37,8 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
             'band_of_precision',
             'ring_of_quiet_mind',
             'iron_sword',
+            'apprentice_focus_orb',
+            'novice_censer',
         ]
         for item_id in items:
             conn.execute(
@@ -49,6 +52,8 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
             (3, 'band_of_precision'),
             (4, 'ring_of_quiet_mind'),
             (5, 'iron_sword'),
+            (6, 'apprentice_focus_orb'),
+            (7, 'novice_censer'),
         ]
         for inv_id, item_id in inv_rows:
             conn.execute(
@@ -138,6 +143,76 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
             without_bonus = mob_attack(mob, dict(player), allow_dodge=False)
 
         self.assertLess(with_bonus['damage'], without_bonus['damage'])
+
+    def test_block_chance_can_reduce_incoming_damage(self):
+        conn = get_connection()
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (1001,)).fetchone())
+        conn.close()
+
+        with_block = dict(player)
+        with_block['equipment_block_chance_bonus'] = 100  # проверяем clamp+roll path
+        without_block = dict(player)
+        without_block['equipment_block_chance_bonus'] = 0
+        mob = {'damage_min': 60, 'damage_max': 60, 'damage_school': 'physical', 'weapon_type': 'melee'}
+
+        with patch('game.combat.random.randint', return_value=60), patch('game.combat.random.random', return_value=0.0):
+            blocked = mob_attack(mob, with_block, allow_dodge=False)
+            plain = mob_attack(mob, without_block, allow_dodge=False)
+
+        self.assertTrue(blocked['blocked'])
+        self.assertLess(blocked['damage'], plain['damage'])
+
+    def test_magic_power_scales_existing_magic_direct_damage_path(self):
+        battle_state = {
+            'weapon_type': 'magic',
+            'weapon_profile': 'magic_staff',
+            'mob_hp': 500,
+            'equipment_magic_power_bonus': 20,
+            'vulnerability_turns': 0,
+            'press_the_line_turns': 0,
+            'berserk_turns': 0,
+        }
+
+        from game.combat import finalize_player_direct_damage_action
+        plain = finalize_player_direct_damage_action(dict(battle_state, equipment_magic_power_bonus=0), base_damage=100, can_consume_guaranteed_crit=False, damage_school='magic')
+        boosted = finalize_player_direct_damage_action(dict(battle_state), base_damage=100, can_consume_guaranteed_crit=False, damage_school='magic')
+
+        self.assertEqual(plain['final_damage'], 100)
+        self.assertEqual(boosted['final_damage'], 120)
+
+    def test_healing_power_scales_existing_heal_path(self):
+        player = {'mana': 100, 'wisdom': 18}
+        state_plain = {
+            'weapon_damage': 14,
+            'weapon_type': 'light',
+            'weapon_profile': 'holy_staff',
+            'player_hp': 10,
+            'player_max_hp': 300,
+            'equipment_healing_power_bonus': 0,
+        }
+        state_boosted = dict(state_plain, equipment_healing_power_bonus=25)
+        mob_state = {'hp': 100, 'defense': 0, 'effects': []}
+
+        with patch('game.skill_engine.get_skill_level', return_value=1), patch('game.skill_engine.get_skill_cooldown', return_value=0), patch('game.skill_engine.set_skill_cooldown'):
+            plain = use_skill('heal', dict(player), dict(mob_state), dict(state_plain), telegram_id=1001, lang='ru')
+            boosted = use_skill('heal', dict(player), dict(mob_state), dict(state_boosted), telegram_id=1001, lang='ru')
+
+        self.assertGreater(boosted['heal'], plain['heal'])
+
+    def test_new_secondary_hooks_use_equipped_bonuses_only(self):
+        bonuses = aggregate_equipped_stat_bonuses(1001)
+        self.assertNotIn('block_chance', bonuses)
+        self.assertNotIn('magic_power', bonuses)
+        self.assertNotIn('healing_power', bonuses)
+
+    def test_curated_secondary_stats_are_runtime_active_not_inert(self):
+        bonuses = build_effective_player_stats(
+            {'strength': 1, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1, 'max_hp': 100, 'max_mana': 50},
+            {'block_chance': 6, 'magic_power': 8, 'healing_power': 10},
+        )
+        self.assertEqual(bonuses['block_chance_bonus'], 6)
+        self.assertEqual(bonuses['magic_power_bonus'], 8)
+        self.assertEqual(bonuses['healing_power_bonus'], 10)
 
     def test_legacy_items_remain_backward_compatible(self):
         bonuses = aggregate_equipped_stat_bonuses(1001)

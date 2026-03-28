@@ -115,7 +115,20 @@ def aggregate_equipped_stat_bonuses(telegram_id: int) -> dict[str, int]:
     return total
 
 
+def build_runtime_equipment_bonus_channels(equipment_bonuses: dict[str, int]) -> dict[str, int]:
+    """
+    Нормализует только runtime-поддерживаемые каналы бонусов экипировки.
+    Центральная точка для интеграции рантайм-хуков.
+    """
+    normalized: dict[str, int] = {}
+    for stat_key in RUNTIME_EQUIPMENT_STATS:
+        normalized[stat_key] = _safe_int(equipment_bonuses.get(stat_key, 0))
+    return normalized
+
+
 def build_effective_player_stats(player: dict, equipment_bonuses: dict[str, int]) -> dict[str, int]:
+    runtime_bonus_channels = build_runtime_equipment_bonus_channels(equipment_bonuses)
+
     effective_strength = _safe_int(player.get('strength', 0)) + _safe_int(equipment_bonuses.get('strength', 0))
     effective_agility = _safe_int(player.get('agility', 0)) + _safe_int(equipment_bonuses.get('agility', 0))
     effective_intuition = _safe_int(player.get('intuition', 0)) + _safe_int(equipment_bonuses.get('intuition', 0))
@@ -123,10 +136,10 @@ def build_effective_player_stats(player: dict, equipment_bonuses: dict[str, int]
     effective_wisdom = _safe_int(player.get('wisdom', 0)) + _safe_int(equipment_bonuses.get('wisdom', 0))
     effective_luck = _safe_int(player.get('luck', 0)) + _safe_int(equipment_bonuses.get('luck', 0))
 
-    max_hp_bonus = _safe_int(equipment_bonuses.get('max_hp', 0))
-    max_mana_bonus = _safe_int(equipment_bonuses.get('max_mana', 0))
-    physical_defense_bonus = _safe_int(equipment_bonuses.get('physical_defense', 0))
-    magic_defense_bonus = _safe_int(equipment_bonuses.get('magic_defense', 0))
+    max_hp_bonus = runtime_bonus_channels['max_hp']
+    max_mana_bonus = runtime_bonus_channels['max_mana']
+    physical_defense_bonus = runtime_bonus_channels['physical_defense']
+    magic_defense_bonus = runtime_bonus_channels['magic_defense']
 
     base_vitality = _safe_int(player.get('vitality', 0))
     base_wisdom = _safe_int(player.get('wisdom', 0))
@@ -162,13 +175,13 @@ def build_effective_player_stats(player: dict, equipment_bonuses: dict[str, int]
         'max_mana_bonus': max_mana_bonus,
         'physical_defense_bonus': physical_defense_bonus,
         'magic_defense_bonus': magic_defense_bonus,
-        'accuracy_bonus': _safe_int(equipment_bonuses.get('accuracy', 0)),
-        'evasion_bonus': _safe_int(equipment_bonuses.get('evasion', 0)),
+        'accuracy_bonus': runtime_bonus_channels['accuracy'],
+        'evasion_bonus': runtime_bonus_channels['evasion'],
         'effective_physical_defense': effective_physical_defense,
         'effective_magic_defense': effective_magic_defense,
-        'block_chance_bonus': _safe_int(equipment_bonuses.get('block_chance', 0)),
-        'magic_power_bonus': _safe_int(equipment_bonuses.get('magic_power', 0)),
-        'healing_power_bonus': _safe_int(equipment_bonuses.get('healing_power', 0)),
+        'block_chance_bonus': runtime_bonus_channels['block_chance'],
+        'magic_power_bonus': runtime_bonus_channels['magic_power'],
+        'healing_power_bonus': runtime_bonus_channels['healing_power'],
     }
 
 
@@ -176,6 +189,7 @@ def get_player_effective_stats(telegram_id: int, player: dict) -> dict[str, Any]
     equipment_bonuses = aggregate_equipped_stat_bonuses(telegram_id)
     effective = build_effective_player_stats(player, equipment_bonuses)
     effective['equipment_bonuses'] = equipment_bonuses
+    effective['runtime_equipment_bonuses'] = build_runtime_equipment_bonus_channels(equipment_bonuses)
     return effective
 
 

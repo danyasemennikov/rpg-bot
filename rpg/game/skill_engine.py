@@ -17,6 +17,13 @@ from game.balance import (
 )
 from game.i18n import t, get_skill_name
 
+
+def _apply_healing_power_bonus(base_heal: int, battle_state: dict) -> int:
+    healing_power_bonus = max(0, int(battle_state.get('equipment_healing_power_bonus', 0)))
+    if base_heal <= 0 or healing_power_bonus <= 0:
+        return max(0, int(base_heal))
+    return int(base_heal * (1 + healing_power_bonus / 100))
+
 def _get_runtime_mob_effects(mob_state: dict, battle_state: dict) -> list[dict]:
     """
     Единый источник эффектов моба в рантайме:
@@ -633,6 +640,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
         'target_ids': [],
         'mixed_school_hooks': _collect_mixed_school_hooks(skill, battle_state),
         'heal_applied_runtime': False,
+        'healing_power_bonus': max(0, int(battle_state.get('equipment_healing_power_bonus', 0))),
     }
 
     skill_type = skill['type']
@@ -1406,6 +1414,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     # ── ЛЕЧЕНИЕ ────────────────────────────
     elif skill_type == 'heal':
         heal = int(value)
+        heal = _apply_healing_power_bonus(heal, battle_state)
         target_states, target_ids, applied_kind = _resolve_support_targets(
             battle_state,
             target_kind=target_kind,
@@ -1589,6 +1598,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
             removed = 0
             total_heal = 0
             cleanse_heal = max(1, int(value * skill.get('cleanse_heal_ratio', 0.4)))
+            cleanse_heal = _apply_healing_power_bonus(cleanse_heal, battle_state)
             cleanse_max_effects = max(1, int(skill.get('cleanse_max_effects', 3)))
             for target_state in target_states:
                 removed += _cleanse_supported_effects(
