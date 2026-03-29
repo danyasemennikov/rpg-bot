@@ -47,4 +47,8 @@ ITEM_NAMES = {
     'herb_common': '🌿 Обычная трава',
     'herb_magic':  '✨ Магическая трава',
     'wood_dark':   '🌑 Тёмное дерево',
+    'enhance_shard': '🧩 Осколок заточки',
+    'enhancement_crystal': '⚙️ Кристалл усиления',
+    'power_essence': '✴️ Эссенция мощи',
+    'ashen_core': '🌑 Пепельный сердечник',
 }

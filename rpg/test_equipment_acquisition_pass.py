@@ -111,7 +111,7 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
     def test_existing_loot_behavior_remains_intact(self):
         wolf = get_mob('forest_wolf')
         with patch('game.combat.random.randint', return_value=3), \
-             patch('game.combat.random.random', side_effect=[0.01, 0.99, 0.99]):
+             patch('game.combat.random.random', side_effect=[0.01, 0.99, 0.99, 0.99]):
             rewards = calc_rewards(wolf)
 
         self.assertEqual(rewards['gold'], 3)
@@ -147,6 +147,21 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
 
         surfaced = shop_items | drop_items
         self.assertTrue(curated_ids.issubset(surfaced))
+
+    def test_enhancement_materials_are_available_via_live_routes(self):
+        shop_items = {
+            row['item_id']
+            for rows in CURATED_EQUIPMENT_VENDOR_STOCK.values()
+            for row in rows
+        }
+        drop_items = set()
+        for mob in ('forest_wolf', 'forest_spider', 'goblin_miner', 'stone_golem'):
+            drop_items.update(item_id for item_id, _chance in get_mob(mob)['loot_table'])
+
+        self.assertIn('enhance_shard', drop_items)
+        self.assertIn('enhancement_crystal', drop_items)
+        self.assertIn('power_essence', drop_items)
+        self.assertIn('ashen_core', shop_items)
 
     def test_schema_changes_are_additive_for_acquisition_pass(self):
         conn = get_connection()

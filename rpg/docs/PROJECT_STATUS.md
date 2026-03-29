@@ -130,6 +130,12 @@
   - `backstab` читает opening через `slow`;
 - тесты зелёные.
 
+### 9. Equipment enhancement phase 1 (bootstrap acquisition)
+Считать подтверждённым для текущего этапа:
+- phase-1 заточка `+0..+15` использует временные bootstrap-сources для материалов;
+- это intentional interim-решение для live usability;
+- при следующем pass по мобам/луту источники должны быть переведены в системную tier/content-band модель.
+
 ---
 
 ## Что НЕ считать подтверждённо смерженным

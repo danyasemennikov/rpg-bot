@@ -9,9 +9,12 @@ import database
 from database import get_connection, init_db
 from game.equipment_stats import get_equipped_item_ids
 from game.gear_instances import (
+    MAX_ENHANCE_LEVEL,
     create_gear_instance,
     determine_mob_drop_item_tier,
     determine_shop_item_tier,
+    enhance_gear_instance_once,
+    get_enhance_requirements_for_target_level,
     generate_secondary_rolls_for_item,
     grant_item_to_player,
     resolve_gear_instance_item_data,
@@ -42,7 +45,11 @@ class GearInstanceTransitionTests(unittest.TestCase):
         )
 
         from game.items_data import get_item
-        for item_id in ('wooden_sword', 'health_potion', 'iron_sword'):
+        for item_id in (
+            'wooden_sword', 'health_potion', 'iron_sword',
+            'enhance_shard', 'enhancement_crystal', 'power_essence', 'ashen_core',
+            'iron_ore', 'coal', 'gem_common', 'stone_core', 'treant_heart',
+        ):
             item = get_item(item_id)
             conn.execute(
                 '''INSERT INTO items (
@@ -272,6 +279,152 @@ class GearInstanceTransitionTests(unittest.TestCase):
         self.assertIn('Tier 5', text)
         self.assertIn('Secondaries', text)
         self.assertIn('Accuracy +2', text)
+
+    def test_inventory_detail_surfaces_enhancement_ui(self):
+        instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=2)
+        text, keyboard = build_item_detail(2001, f'g{instance_id}', 'weapon', 'en')
+        self.assertIn('+2', text)
+        flat_buttons = [btn.text for row in keyboard.inline_keyboard for btn in row]
+        self.assertIn('🔨 Enhance', flat_buttons)
+        self.assertIn('Upgrade to +3', text)
+        self.assertIn('Chance: success', text)
+
+    def test_enhancement_level_cannot_exceed_cap(self):
+        conn = get_connection()
+        conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (999999, 2001))
+        conn.execute('INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)', (2001, 'iron_ore', 999))
+        conn.commit()
+        conn.close()
+
+        instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=MAX_ENHANCE_LEVEL)
+        result = enhance_gear_instance_once(2001, instance_id, rng_roll=0.10)
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['reason'], 'max_level')
+
+    def test_enhancement_consumes_gold_and_material_atomically(self):
+        req = get_enhance_requirements_for_target_level(1)
+        conn = get_connection()
+        conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (req['gold'] + 50, 2001))
+        conn.execute(
+            'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)',
+            (2001, req['material_id'], req['material_qty'] + 2),
+        )
+        conn.commit()
+        conn.close()
+        instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=0)
+
+        result = enhance_gear_instance_once(2001, instance_id, rng_roll=0.10)
+        self.assertTrue(result['ok'])
+
+        conn = get_connection()
+        player = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (2001,)).fetchone()
+        mat = conn.execute(
+            'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+            (2001, req['material_id']),
+        ).fetchone()
+        row = dict(conn.execute('SELECT * FROM gear_instances WHERE id=?', (instance_id,)).fetchone())
+        conn.close()
+
+        self.assertEqual(player['gold'], 50)
+        self.assertEqual(mat['quantity'], 2)
+        resolved = resolve_gear_instance_item_data(row)
+        self.assertEqual(resolved['enhance_level'], 1)
+
+    def test_enhancement_forced_success_path(self):
+        req = get_enhance_requirements_for_target_level(10)
+        conn = get_connection()
+        conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (req['gold'] + 100, 2001))
+        conn.execute('INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)', (2001, req['material_id'], req['material_qty']))
+        conn.commit()
+        conn.close()
+        instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=9)
+        result = enhance_gear_instance_once(2001, instance_id, rng_roll=0.10)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['outcome'], 'success')
+        self.assertEqual(result['enhance_level_after'], 10)
+        conn = get_connection()
+        player = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (2001,)).fetchone()
+        mat = conn.execute('SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?', (2001, req['material_id'])).fetchone()
+        conn.close()
+        self.assertEqual(player['gold'], 100)
+        self.assertIsNone(mat)
+
+    def test_enhancement_forced_fail_path(self):
+        req = get_enhance_requirements_for_target_level(10)
+        conn = get_connection()
+        conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (req['gold'] + 100, 2001))
+        conn.execute('INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)', (2001, req['material_id'], req['material_qty']))
+        conn.commit()
+        conn.close()
+        instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=9)
+        result = enhance_gear_instance_once(2001, instance_id, rng_roll=0.30)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['outcome'], 'fail')
+        self.assertEqual(result['enhance_level_after'], 9)
+        conn = get_connection()
+        player = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (2001,)).fetchone()
+        mat = conn.execute('SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?', (2001, req['material_id'])).fetchone()
+        conn.close()
+        self.assertEqual(player['gold'], 100)
+        self.assertIsNone(mat)
+
+    def test_enhancement_forced_rollback_path(self):
+        req = get_enhance_requirements_for_target_level(10)
+        conn = get_connection()
+        conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (req['gold'] + 100, 2001))
+        conn.execute('INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)', (2001, req['material_id'], req['material_qty']))
+        conn.commit()
+        conn.close()
+        instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=9)
+        result = enhance_gear_instance_once(2001, instance_id, rng_roll=0.70)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['outcome'], 'rollback')
+        self.assertEqual(result['enhance_level_after'], 8)
+        conn = get_connection()
+        player = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (2001,)).fetchone()
+        mat = conn.execute('SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?', (2001, req['material_id'])).fetchone()
+        conn.close()
+        self.assertEqual(player['gold'], 100)
+        self.assertIsNone(mat)
+
+    def test_enhancement_forced_break_path(self):
+        req = get_enhance_requirements_for_target_level(10)
+        conn = get_connection()
+        conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (req['gold'] + 100, 2001))
+        conn.execute('INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)', (2001, req['material_id'], req['material_qty']))
+        conn.commit()
+        conn.close()
+        instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=9)
+        result = enhance_gear_instance_once(2001, instance_id, rng_roll=0.95)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['outcome'], 'break')
+        self.assertIsNone(result['enhance_level_after'])
+
+        conn = get_connection()
+        row = conn.execute('SELECT id FROM gear_instances WHERE id=?', (instance_id,)).fetchone()
+        player = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (2001,)).fetchone()
+        mat = conn.execute('SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?', (2001, req['material_id'])).fetchone()
+        conn.close()
+        self.assertIsNone(row)
+        self.assertEqual(player['gold'], 100)
+        self.assertIsNone(mat)
+
+    def test_generated_and_enhancement_layers_compose(self):
+        instance_id = create_gear_instance(
+            2001,
+            'wooden_sword',
+            item_tier=10,
+            rarity='rare',
+            secondary_rolls_json='[{\"stat\":\"strength\",\"value\":3}]',
+            enhance_level=5,
+        )
+        conn = get_connection()
+        row = dict(conn.execute('SELECT * FROM gear_instances WHERE id=?', (instance_id,)).fetchone())
+        conn.close()
+        resolved = resolve_gear_instance_item_data(row)
+        self.assertEqual(resolved['item_tier'], 10)
+        self.assertEqual(resolved['enhance_level'], 5)
+        self.assertGreaterEqual(resolved['resolved_stat_bonus'].get('strength', 0), 3)
 
 
 if __name__ == '__main__':

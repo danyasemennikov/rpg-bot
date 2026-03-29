@@ -12,7 +12,7 @@ from game.balance import exp_to_next_level, calc_max_hp, calc_max_mana, calc_car
 from game.i18n import t, get_player_lang, get_item_name
 from game.items_data import get_item, get_item_metadata
 from game.equipment_stats import get_player_effective_stats
-from game.gear_instances import resolve_equipped_item_ids_with_fallback
+from game.gear_instances import get_equipped_gear_instances, resolve_equipped_item_ids_with_fallback
 
 STAT_RESET_COST = 100  # стоимость сброса статов в золоте
 
@@ -44,6 +44,7 @@ def _format_equipped_identity(item_id: str, lang: str) -> str:
 
 def _build_equipment_summary(telegram_id: int, lang: str) -> str:
     equipped_item_ids = resolve_equipped_item_ids_with_fallback(telegram_id)
+    equipped_instances = get_equipped_gear_instances(telegram_id)
     labels = EQUIP_SLOT_LABELS.get(lang, EQUIP_SLOT_LABELS['ru'])
     lines = []
     for slot in ('weapon', 'offhand', 'chest'):
@@ -53,8 +54,13 @@ def _build_equipment_summary(telegram_id: int, lang: str) -> str:
         item = get_item(item_id)
         if not item:
             continue
+        enhance_level = 0
+        instance_row = equipped_instances.get(slot)
+        if instance_row:
+            enhance_level = int(instance_row.get('enhance_level', 0))
+        enhance_suffix = f" +{enhance_level}" if enhance_level > 0 else ""
         lines.append(
-            f"{labels[slot]}: {get_item_name(item_id, lang)}{_format_equipped_identity(item_id, lang)}"
+            f"{labels[slot]}: {get_item_name(item_id, lang)}{enhance_suffix}{_format_equipped_identity(item_id, lang)}"
         )
     if not lines:
         return ''

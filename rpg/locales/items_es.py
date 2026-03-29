@@ -47,4 +47,8 @@ ITEM_NAMES = {
     'herb_common': '🌿 Hierba Común',
     'herb_magic':  '✨ Hierba Mágica',
     'wood_dark':   '🌑 Madera Oscura',
+    'enhance_shard': '🧩 Fragmento de mejora',
+    'enhancement_crystal': '⚙️ Cristal de refuerzo',
+    'power_essence': '✴️ Esencia de poder',
+    'ashen_core': '🌑 Núcleo ceniciento',
 }

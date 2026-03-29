@@ -329,6 +329,37 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
         self.assertEqual(weapon['damage_min'], 12)
         self.assertEqual(weapon['damage_max'], 18)
 
+    def test_enhancement_increases_resolved_weapon_damage(self):
+        instance_id = create_gear_instance(
+            1001,
+            'iron_sword',
+            item_tier=1,
+            rarity='common',
+            enhance_level=5,
+        )
+        set_gear_instance_equipped_slot(1001, instance_id, 'weapon')
+
+        conn = get_connection()
+        row = dict(conn.execute('SELECT * FROM gear_instances WHERE id=?', (instance_id,)).fetchone())
+        conn.close()
+
+        resolved = resolve_gear_instance_item_data(row)
+        self.assertGreater(resolved['damage_min'], 0)
+        self.assertGreater(resolved['damage_max'], resolved['damage_min'])
+
+    def test_enhancement_scales_resolved_stat_bonus_path(self):
+        instance_id = create_gear_instance(
+            1001,
+            'band_of_precision',
+            item_tier=1,
+            rarity='rare',
+            secondary_rolls_json='[{\"stat\":\"accuracy\",\"value\":4}]',
+            enhance_level=4,
+        )
+        set_gear_instance_equipped_slot(1001, instance_id, 'ring1')
+        bonuses = aggregate_equipped_stat_bonuses(1001)
+        self.assertGreaterEqual(bonuses.get('accuracy', 0), 4)
+
     def test_inventory_detail_does_not_overstate_unwired_scaled_defense(self):
         instance_id = create_gear_instance(
             1001,
