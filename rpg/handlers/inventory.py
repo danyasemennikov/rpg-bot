@@ -12,10 +12,14 @@ from game.items_data import get_item, get_item_metadata
 from game.i18n import t, get_player_lang, get_item_name
 from game.equipment_stats import get_player_effective_stats, clamp_player_resources_to_effective_caps
 from game.gear_instances import (
+    MAX_ENHANCE_LEVEL,
+    get_enhance_requirements_for_target_level,
+    get_enhance_outcome_chances_for_target_level,
     list_player_gear_instances,
     get_equipped_gear_instances,
     equip_gear_instance_in_slot,
     equip_legacy_inventory_in_slot,
+    enhance_gear_instance_once,
     resolve_gear_instance_item_data,
     unequip_slot_across_models,
 )
@@ -159,6 +163,13 @@ def _get_entry_rarity_and_tier(inv_row: dict, item: dict) -> tuple[str, int]:
         tier = int(resolved.get('item_tier', 1))
         return rarity, tier
     return item.get('rarity', 'common'), 1
+
+
+def _get_entry_enhance_level(inv_row: dict) -> int:
+    if inv_row.get('entry_type') == 'gear_instance':
+        resolved = resolve_gear_instance_item_data(inv_row.get('instance', {}))
+        return int(resolved.get('enhance_level', 0))
+    return int(inv_row.get('enhance_level', 0))
 
 
 def make_entry_token(entry_type: str, entry_id: int) -> str:
@@ -321,8 +332,9 @@ def build_inventory_list(telegram_id: int, active_tab: str, lang: str = 'ru') ->
                 continue
 
             entry_rarity, entry_tier = _get_entry_rarity_and_tier(inv_row, item)
+            entry_enhance = _get_entry_enhance_level(inv_row)
             rarity  = t(f"inventory.{RARITY_KEYS.get(entry_rarity, 'rarity_common')}", lang)
-            enhance = f" +{inv_row['enhance_level']}" if inv_row['enhance_level'] > 0 else ""
+            enhance = f" +{entry_enhance}" if entry_enhance > 0 else ""
             qty     = f" x{inv_row['quantity']}" if inv_row['quantity'] > 1 else ""
             token = make_entry_token(inv_row.get('entry_type', 'legacy_inventory'), inv_row['id'])
             eq_mark = t('inventory.equipped', lang) if token in eq.values() else ""
@@ -360,11 +372,17 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
     rarity_emoji = t(f"inventory.{RARITY_KEYS.get(rarity_key, 'rarity_common')}", lang)
     rarity_name  = RARITY_NAME.get(lang, RARITY_NAME['ru']).get(rarity_key, '')
     enhance      = f" <b>+{inv_row['enhance_level']}</b>" if inv_row['enhance_level'] > 0 else ""
+    if resolved_instance:
+        instance_enhance = int(resolved_instance.get('enhance_level', inv_row.get('enhance_level', 0)))
+    else:
+        instance_enhance = int(inv_row.get('enhance_level', 0))
+    enhance      = f" <b>+{instance_enhance}</b>" if instance_enhance > 0 else ""
     item_name    = get_item_name(inv_row['item_id'], lang)
 
     text = f"{rarity_emoji} <b>{item_name}{enhance}</b>\n{rarity_name}"
     if inv_row.get('entry_type') == 'gear_instance':
         text += f" · {t('inventory.instance_tier', lang, tier=tier_value)}"
+        text += f" · {t('inventory.enhance_level', lang, level=instance_enhance, max=MAX_ENHANCE_LEVEL)}"
 
     if item['item_type'] == 'weapon':
         wtype = WEAPON_TYPE_NAME.get(lang, WEAPON_TYPE_NAME['ru']).get(item['weapon_type'], '')
@@ -415,6 +433,27 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
     if item['description']:
         text += f"\n<i>{item['description']}</i>\n"
 
+    if inv_row.get('entry_type') == 'gear_instance' and instance_enhance < MAX_ENHANCE_LEVEL:
+        req = get_enhance_requirements_for_target_level(instance_enhance + 1)
+        chances = get_enhance_outcome_chances_for_target_level(instance_enhance + 1)
+        material_name = get_item_name(req['material_id'], lang)
+        text += '\n' + t(
+            'inventory.enhance_cost',
+            lang,
+            next=instance_enhance + 1,
+            gold=req['gold'],
+            material=material_name,
+            qty=req['material_qty'],
+        )
+        text += '\n' + t(
+            'inventory.enhance_risk',
+            lang,
+            success=int(round(chances['success'] * 100)),
+            fail=int(round(chances['fail'] * 100)),
+            rollback=int(round(chances['rollback'] * 100)),
+            break_chance=int(round(chances['break'] * 100)),
+        )
+
     if equipped:
         text += f"\n<b>{t('inventory.equipped', lang)}</b>"
 
@@ -427,6 +466,8 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
             equip_slot = resolve_equip_slot_for_item(inv_row['item_id'], eq)
             if equip_slot:
                 keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=f"inv_equip_{entry_token}_{equip_slot}_{back_tab}")])
+        if inv_row.get('entry_type') == 'gear_instance' and instance_enhance < MAX_ENHANCE_LEVEL:
+            keyboard.append([InlineKeyboardButton(t('inventory.enhance_btn', lang), callback_data=f"inv_enhance_{entry_token}_{back_tab}")])
     elif item['item_type'] == 'potion':
         keyboard.append([InlineKeyboardButton(t('inventory.use_btn', lang), callback_data=f"inv_use_{entry_token}_{back_tab}")])
 
@@ -486,6 +527,92 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
+        return
+
+    if data.startswith('inv_enhance_'):
+        parts = data.split('_')
+        entry_token = parts[2]
+        back_tab = parts[3]
+        inv_row = _load_inventory_entry(user.id, entry_token)
+        if not inv_row:
+            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
+            return
+        if inv_row.get('entry_type') != 'gear_instance':
+            await query.answer(t('inventory.enhance_only_instance', lang), show_alert=True)
+            return
+
+        result = enhance_gear_instance_once(user.id, inv_row['id'])
+        if not result.get('ok'):
+            if result.get('reason') == 'max_level':
+                await query.answer(t('inventory.enhance_max_reached', lang), show_alert=True)
+            elif result.get('reason') == 'no_gold':
+                await query.answer(
+                    t('inventory.enhance_no_gold', lang, need=result.get('need_gold', 0), gold=result.get('current_gold', 0)),
+                    show_alert=True,
+                )
+            elif result.get('reason') == 'no_material':
+                material_name = get_item_name(result.get('material_id', 'enhance_shard'), lang)
+                await query.answer(
+                    t(
+                        'inventory.enhance_no_material',
+                        lang,
+                        material=material_name,
+                        need=result.get('need_material', 0),
+                        have=result.get('current_material', 0),
+                    ),
+                    show_alert=True,
+                )
+            else:
+                await query.answer(t('common.error', lang), show_alert=True)
+            return
+
+        material_name = get_item_name(result['material_id'], lang)
+        outcome = result.get('outcome', 'fail')
+        if outcome == 'success':
+            msg = t(
+                'inventory.enhance_ok',
+                lang,
+                level=result['enhance_level_after'],
+                gold=result['gold_cost'],
+                material=material_name,
+                qty=result['material_qty'],
+            )
+        elif outcome == 'rollback':
+            msg = t(
+                'inventory.enhance_rollback',
+                lang,
+                before=result['enhance_level_before'],
+                after=result['enhance_level_after'],
+                gold=result['gold_cost'],
+                material=material_name,
+                qty=result['material_qty'],
+            )
+        elif outcome == 'break':
+            msg = t(
+                'inventory.enhance_break',
+                lang,
+                before=result['enhance_level_before'],
+                gold=result['gold_cost'],
+                material=material_name,
+                qty=result['material_qty'],
+            )
+        else:
+            msg = t(
+                'inventory.enhance_fail',
+                lang,
+                level=result['enhance_level_before'],
+                gold=result['gold_cost'],
+                material=material_name,
+                qty=result['material_qty'],
+            )
+
+        await query.answer(msg, show_alert=True)
+        if outcome == 'break':
+            text, keyboard = build_inventory_list(user.id, back_tab, lang)
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+            return
+        text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
     # ── Экипировать ──

@@ -47,4 +47,8 @@ ITEM_NAMES = {
     'herb_common': '🌿 Common Herb',
     'herb_magic':  '✨ Magic Herb',
     'wood_dark':   '🌑 Dark Wood',
+    'enhance_shard': '🧩 Enhancement Shard',
+    'enhancement_crystal': '⚙️ Enhancement Crystal',
+    'power_essence': '✴️ Power Essence',
+    'ashen_core': '🌑 Ashen Core',
 }

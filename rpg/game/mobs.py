@@ -26,6 +26,7 @@ MOBS = {
         'loot_table':  [
             ('wolf_pelt',   0.60),   # 60% шанс
             ('wolf_fang',   0.25),
+            ('enhance_shard', 0.20),
             ('health_potion_small', 0.10),
         ]
     },
@@ -64,6 +65,7 @@ MOBS = {
         'loot_table':  [
             ('spider_silk',  0.50),
             ('spider_venom', 0.30),
+            ('enhance_shard', 0.15),
             ('novice_censer', 0.04),
         ]
     },
@@ -124,6 +126,7 @@ MOBS = {
         'loot_table':  [
             ('iron_ore',        0.60),
             ('goblin_ear',      0.40),
+            ('enhancement_crystal', 0.12),
             ('worn_pickaxe',    0.15),
             ('tracker_jacket',  0.04),
             ('band_of_precision', 0.03),
@@ -163,6 +166,7 @@ MOBS = {
         'loot_table':  [
             ('stone_core',      0.40),
             ('golem_fragment',  0.25),
+            ('power_essence',   0.10),
             ('iron_shield',     0.08),
             ('warden_kite_shield', 0.04),
             ('azure_focus_prism', 0.04),
