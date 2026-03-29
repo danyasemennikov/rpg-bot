@@ -7,13 +7,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from database import get_player, get_connection
+from database import get_player
 from game.skills import get_skill, get_weapon_tree, SKILL_TREES
 from game.weapon_mastery import (
-    get_mastery, get_skill_level, upgrade_skill, mastery_exp_needed
+    get_mastery, get_skill_level, upgrade_skill, mastery_exp_needed, get_all_masteries_grouped
 )
 from game.items_data import get_item
+from game.gear_instances import resolve_equipped_item_ids_with_fallback
 from game.i18n import t, get_player_lang, get_item_name, get_skill_name
+from game.skills import normalize_weapon_family_key
 
 STAT_NAMES = {
     'ru': {'strength': '💪 Сила', 'agility': '🤸 Ловкость', 'intuition': '🔮 Интуиция', 'vitality': '❤️ Живучесть', 'wisdom': '🧠 Мудрость', 'luck': '🍀 Удача'},
@@ -28,28 +30,28 @@ BRANCH_KEYS = {
 }
 
 def get_equipped_weapon(telegram_id: int, lang: str = 'ru') -> tuple:
-    conn = get_connection()
-    eq   = conn.execute(
-        'SELECT weapon FROM equipment WHERE telegram_id=?', (telegram_id,)
-    ).fetchone()
-    conn.close()
-
     unarmed_name = t('skills.unarmed', lang)
-
-    if not eq or not eq['weapon']:
+    equipped = resolve_equipped_item_ids_with_fallback(telegram_id)
+    weapon_item_id = equipped.get('weapon')
+    if not weapon_item_id:
         return 'unarmed', unarmed_name
 
-    conn    = get_connection()
-    inv_row = conn.execute(
-        'SELECT item_id FROM inventory WHERE id=?', (eq['weapon'],)
-    ).fetchone()
-    conn.close()
-
-    if not inv_row:
+    item = get_item(weapon_item_id)
+    if not item:
         return 'unarmed', unarmed_name
+    family_id = normalize_weapon_family_key(item.get('weapon_profile') or weapon_item_id)
+    return family_id, _get_weapon_family_name(family_id, lang)
 
-    item = get_item(inv_row['item_id'])
-    return inv_row['item_id'], get_item_name(inv_row['item_id'], lang) if item else ('unarmed', unarmed_name)
+def _get_weapon_family_name(weapon_id: str, lang: str) -> str:
+    if weapon_id == 'base':
+        return t('skills.base_skills', lang)
+    if weapon_id == 'unarmed':
+        return t('skills.unarmed', lang)
+    profile_key = f'profile.identity.weapon_profile.{weapon_id}'
+    profile_name = t(profile_key, lang)
+    if not profile_name.startswith('['):
+        return profile_name
+    return get_item_name(weapon_id, lang)
 
 def build_skills_main(telegram_id: int, lang: str = 'ru') -> tuple:
     text = t('skills.title', lang) + '\n\n'
@@ -59,11 +61,7 @@ def build_skills_main(telegram_id: int, lang: str = 'ru') -> tuple:
 
     keyboard = []
 
-    conn = get_connection()
-    masteries = conn.execute(
-        'SELECT * FROM weapon_mastery WHERE telegram_id=?', (telegram_id,)
-    ).fetchall()
-    conn.close()
+    masteries = get_all_masteries_grouped(telegram_id)
 
     known_weapons = {m['weapon_id'] for m in masteries}
     if weapon_id != 'unarmed' and weapon_id not in known_weapons:
@@ -75,7 +73,7 @@ def build_skills_main(telegram_id: int, lang: str = 'ru') -> tuple:
         m      = dict(m)
         if m['weapon_id'] == 'base':
             continue
-        w_name = get_item_name(m['weapon_id'], lang)
+        w_name = _get_weapon_family_name(m['weapon_id'], lang)
         level  = m['level']
         exp    = m['exp']
         needed = mastery_exp_needed(level)
@@ -112,7 +110,7 @@ def build_skill_tree(telegram_id: int, weapon_id: str, lang: str = 'ru') -> tupl
     else:
         tree    = get_weapon_tree(weapon_id)
         mastery = get_mastery(telegram_id, weapon_id)
-        w_name  = get_item_name(weapon_id, lang)
+        w_name  = _get_weapon_family_name(weapon_id, lang)
 
     mastery_level = mastery['level']
     skill_points  = mastery['skill_points']

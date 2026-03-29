@@ -9,12 +9,65 @@ from database import get_connection
 
 MAX_MASTERY = 20
 
+def _normalize_weapon_id(weapon_id: str) -> str:
+    from game.skills import normalize_weapon_family_key
+    return normalize_weapon_family_key(weapon_id)
+
+def _mastery_total_exp(level: int, exp: int) -> int:
+    total = max(0, int(exp))
+    for current in range(1, max(1, int(level))):
+        total += mastery_exp_needed(current)
+    return total
+
+def _exp_to_level(total_exp: int) -> tuple[int, int]:
+    level = 1
+    exp_left = max(0, int(total_exp))
+    while level < MAX_MASTERY and exp_left >= mastery_exp_needed(level):
+        exp_left -= mastery_exp_needed(level)
+        level += 1
+    return level, exp_left
+
+def _merge_rows(rows: list[dict]) -> dict:
+    total_exp = sum(_mastery_total_exp(row['level'], row['exp']) for row in rows)
+    level, exp = _exp_to_level(total_exp)
+    return {
+        'level': level,
+        'exp': exp,
+        'skill_points': sum(max(0, int(row['skill_points'])) for row in rows),
+    }
+
+def get_all_masteries_grouped(telegram_id: int) -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute(
+        'SELECT * FROM weapon_mastery WHERE telegram_id=?', (telegram_id,)
+    ).fetchall()
+    conn.close()
+
+    grouped = {}
+    for row in rows:
+        row_dict = dict(row)
+        family_key = _normalize_weapon_id(row_dict['weapon_id'])
+        grouped.setdefault(family_key, []).append(row_dict)
+
+    result = []
+    for family_key, family_rows in grouped.items():
+        merged = _merge_rows(family_rows)
+        result.append({
+            'telegram_id': telegram_id,
+            'weapon_id': family_key,
+            'level': merged['level'],
+            'exp': merged['exp'],
+            'skill_points': merged['skill_points'],
+        })
+    return result
+
 def mastery_exp_needed(level: int) -> int:
     """Опыт для следующего уровня владения."""
     return level * 50
 
 def get_mastery(telegram_id: int, weapon_id: str) -> dict:
     """Получить данные владения оружием."""
+    weapon_id = _normalize_weapon_id(weapon_id)
     conn = get_connection()
     row  = conn.execute(
         '''SELECT * FROM weapon_mastery
@@ -26,11 +79,38 @@ def get_mastery(telegram_id: int, weapon_id: str) -> dict:
     if row:
         return dict(row)
 
+    conn = get_connection()
+    legacy_rows = conn.execute(
+        'SELECT * FROM weapon_mastery WHERE telegram_id=?',
+        (telegram_id,),
+    ).fetchall()
+    conn.close()
+    matching = [dict(r) for r in legacy_rows if _normalize_weapon_id(r['weapon_id']) == weapon_id]
+    if matching:
+        merged = _merge_rows(matching)
+        conn = get_connection()
+        conn.execute(
+            '''INSERT OR REPLACE INTO weapon_mastery
+               (telegram_id, weapon_id, level, exp, skill_points)
+               VALUES (?, ?, ?, ?, ?)''',
+            (telegram_id, weapon_id, merged['level'], merged['exp'], merged['skill_points'])
+        )
+        conn.commit()
+        conn.close()
+        return {
+            'telegram_id': telegram_id,
+            'weapon_id': weapon_id,
+            'level': merged['level'],
+            'exp': merged['exp'],
+            'skill_points': merged['skill_points'],
+        }
+
     # Создаём запись если нет
     return create_mastery(telegram_id, weapon_id)
 
 def create_mastery(telegram_id: int, weapon_id: str) -> dict:
     """Создаёт запись владения если её нет."""
+    weapon_id = _normalize_weapon_id(weapon_id)
     conn = get_connection()
     conn.execute(
         '''INSERT OR IGNORE INTO weapon_mastery
@@ -51,6 +131,7 @@ def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int) -> dict:
     Добавляет опыт владения оружием.
     Возвращает словарь с результатом (левелап, новые скиллы).
     """
+    weapon_id  = _normalize_weapon_id(weapon_id)
     mastery    = get_mastery(telegram_id, weapon_id)
     new_exp    = mastery['exp'] + exp
     new_level  = mastery['level']
@@ -106,6 +187,7 @@ def get_skill_level(telegram_id: int, skill_id: str) -> int:
 def upgrade_skill(telegram_id: int, weapon_id: str, skill_id: str) -> dict:
     """Прокачать скилл на 1 уровень."""
     from game.skills import get_skill
+    weapon_id = _normalize_weapon_id(weapon_id)
     skill   = get_skill(skill_id)
     mastery = get_mastery(telegram_id, weapon_id)
 

@@ -2278,9 +2278,17 @@ SKILL_TREES = {
         'A': ['sword_rush', 'defensive_stance', 'shield_bash', 'parry', 'counter'],
         'B': ['driving_slash', 'expose_guard', 'press_the_line', 'punishing_cut', 'vanguard_surge'],
     },
+    'daggers': {
+        'A': ['envenom_blades', 'toxic_cut', 'crippling_venom', 'widows_kiss', 'rupture_toxins'],
+        'B': ['smoke_bomb', 'feint_step', 'quick_slice', 'backstab', 'shadow_chain'],
+    },
     'dagger': {
         'A': ['envenom_blades', 'toxic_cut', 'crippling_venom', 'widows_kiss', 'rupture_toxins'],
         'B': ['smoke_bomb', 'feint_step', 'quick_slice', 'backstab', 'shadow_chain'],
+    },
+    'bow': {
+        'A': ['hunters_mark', 'aimed_shot', 'steady_aim', 'piercing_arrow', 'deadeye'],
+        'B': ['quick_shot', 'hamstring_arrow', 'reposition', 'volley_step', 'rain_of_barbs'],
     },
     'short_bow': {
         'A': ['hunters_mark', 'aimed_shot', 'steady_aim', 'piercing_arrow', 'deadeye'],
@@ -2319,16 +2327,33 @@ SKILL_TREES = {
 def get_skill(skill_id: str) -> dict:
     return SKILLS.get(skill_id)
 
+LEGACY_WEAPON_FAMILY_MAP = {
+    'wooden_sword': 'sword_1h',
+    'iron_sword': 'sword_1h',
+    'dagger': 'daggers',
+    'short_bow': 'bow',
+    'fists': 'unarmed',
+    'bare_hands': 'unarmed',
+    'hands': 'unarmed',
+}
+
+def normalize_weapon_family_key(weapon_id: str | None) -> str:
+    if not weapon_id:
+        return 'unarmed'
+    return LEGACY_WEAPON_FAMILY_MAP.get(weapon_id, weapon_id)
+
 def _resolve_tree_key(weapon_id: str, weapon_profile: str | None = None) -> str:
     """
     Приоритетно используем дерево по weapon_id.
     Если его нет — пытаемся взять профильное дерево (минимальный bridge для slice).
     """
-    if weapon_id in SKILL_TREES:
-        return weapon_id
-    if weapon_profile and weapon_profile in SKILL_TREES:
-        return weapon_profile
-    return weapon_id
+    normalized_weapon = normalize_weapon_family_key(weapon_id)
+    normalized_profile = normalize_weapon_family_key(weapon_profile)
+    if normalized_weapon in SKILL_TREES:
+        return normalized_weapon
+    if normalized_profile in SKILL_TREES:
+        return normalized_profile
+    return normalized_weapon
 
 def get_weapon_tree(weapon_id: str, weapon_profile: str | None = None) -> dict:
     tree_key = _resolve_tree_key(weapon_id, weapon_profile)
