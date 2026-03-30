@@ -5,6 +5,10 @@ import unittest
 import database
 from database import get_connection, init_db
 from game.gear_instances import grant_item_to_player
+from game.enhancement_material_routing import (
+    get_enhancement_material_tier,
+    resolve_enhancement_material_routing,
+)
 from game.reward_source_metadata import (
     RewardSourceMetadata,
     build_open_world_combat_source_metadata,
@@ -30,14 +34,18 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (333, 'meta', 'MetaTester', 10, 100, 100, 50, 50, 5, 5, 5, 5, 5, 5),
         )
-        conn.execute(
-            '''INSERT INTO items (
-                item_id, name, item_type, rarity, req_level,
-                req_strength, req_agility, req_intuition, req_wisdom,
-                buy_price, stat_bonus_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        for item_row in (
             ('wolf_pelt', 'wolf_pelt', 'material', 'common', 1, 0, 0, 0, 0, 0, '{}'),
-        )
+            ('power_essence', 'power_essence', 'material', 'rare', 1, 0, 0, 0, 0, 0, '{}'),
+        ):
+            conn.execute(
+                '''INSERT INTO items (
+                    item_id, name, item_type, rarity, req_level,
+                    req_strength, req_agility, req_intuition, req_wisdom,
+                    buy_price, stat_bonus_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                item_row,
+            )
         conn.commit()
         conn.close()
 
@@ -130,6 +138,73 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         families = resolve_allowed_reward_families(typo_meta)
         self.assertIn('creature_loot', families)
         self.assertTrue(len(families) > 0)
+
+
+    def test_enhancement_material_tiers_are_explicitly_mapped(self):
+        self.assertEqual(get_enhancement_material_tier('enhance_shard'), 1)
+        self.assertEqual(get_enhancement_material_tier('enhancement_crystal'), 2)
+        self.assertEqual(get_enhancement_material_tier('power_essence'), 3)
+        self.assertEqual(get_enhancement_material_tier('ashen_core'), 4)
+        self.assertIsNone(get_enhancement_material_tier('wolf_pelt'))
+
+    def test_enhancement_routing_resolver_distinguishes_normal_fallback_and_disallowed(self):
+        normal = resolve_enhancement_material_routing('enhance_shard', 'open_world_normal')
+        fallback = resolve_enhancement_material_routing('power_essence', 'open_world_elite')
+        disallowed = resolve_enhancement_material_routing('power_essence', 'open_world_normal')
+
+        self.assertIsNotNone(normal)
+        self.assertEqual(normal.status, 'normal')
+        self.assertTrue(normal.is_allowed)
+
+        self.assertIsNotNone(fallback)
+        self.assertEqual(fallback.status, 'temporary_fallback')
+        self.assertTrue(fallback.is_allowed)
+
+        self.assertIsNotNone(disallowed)
+        self.assertEqual(disallowed.status, 'disallowed')
+        self.assertFalse(disallowed.is_allowed)
+
+    def test_live_grant_flow_blocks_disallowed_enhancement_routing(self):
+        combat_meta = RewardSourceMetadata(
+            source_category='open_world_normal',
+            content_tier=1,
+            content_identity='forest_wolf',
+        )
+
+        blocked = grant_item_to_player(
+            333,
+            'power_essence',
+            quantity=1,
+            source='mob_drop',
+            source_level=2,
+            source_metadata=combat_meta,
+        )
+        self.assertEqual(blocked, {'gear_instances_created': 0, 'stackable_added': 0})
+
+        conn = get_connection()
+        row = conn.execute(
+            'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+            (333, 'power_essence'),
+        ).fetchone()
+        conn.close()
+        self.assertIsNone(row)
+
+    def test_live_grant_flow_allows_temporary_fallback_enhancement_routing(self):
+        elite_meta = RewardSourceMetadata(
+            source_category='open_world_elite',
+            content_tier=1,
+            content_identity='stone_golem',
+        )
+
+        dropped = grant_item_to_player(
+            333,
+            'power_essence',
+            quantity=1,
+            source='mob_drop',
+            source_level=8,
+            source_metadata=elite_meta,
+        )
+        self.assertEqual(dropped, {'gear_instances_created': 0, 'stackable_added': 1})
 
     def test_content_tier_is_normalized_to_tier_bands(self):
         self.assertEqual(resolve_content_tier_band(1), 1)
