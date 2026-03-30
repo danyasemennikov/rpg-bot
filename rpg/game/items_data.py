@@ -337,6 +337,38 @@ ITEMS = {
     'ashen_core': {'item_id': 'ashen_core', 'name': '🌑 Пепельный сердечник', 'description': 'Материал заточки +13..+15.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'epic', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 25000, 'sell_price': 140, 'skills_json': '[]', 'stat_bonus_json': '{}'},
 }
 
+ITEM_REWARD_TAGS = {
+    # Creature loot
+    'wolf_pelt': {'reward_family': 'creature_loot', 'material_subtype': 'hide'},
+    'wolf_fang': {'reward_family': 'creature_loot', 'material_subtype': 'fang_claw_horn'},
+    'boar_meat': {'reward_family': 'creature_loot', 'material_subtype': 'meat'},
+    'boar_tusk': {'reward_family': 'creature_loot', 'material_subtype': 'fang_claw_horn'},
+    'spider_silk': {'reward_family': 'creature_loot', 'material_subtype': 'special_part'},
+    'ancient_bark': {'reward_family': 'creature_loot', 'material_subtype': 'resin'},
+    'goblin_ear': {'reward_family': 'creature_loot', 'material_subtype': 'humanoid_trophy'},
+    'rat_tail': {'reward_family': 'creature_loot', 'material_subtype': 'special_part'},
+    'rat_fur': {'reward_family': 'creature_loot', 'material_subtype': 'hide'},
+    # Gathering vs crafting vs reagent split
+    'herb_common': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+    'herb_magic': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+    'wood_dark': {'reward_family': 'gathering_material', 'material_subtype': 'wood'},
+    'iron_ore': {'reward_family': 'gathering_material', 'material_subtype': 'ore'},
+    'coal': {'reward_family': 'crafting_material', 'material_subtype': 'fuel'},
+    'worn_pickaxe': {'reward_family': 'crafting_material', 'material_subtype': 'scrap'},
+    'gem_common': {'reward_family': 'crafting_material', 'material_subtype': 'gem'},
+    'golem_fragment': {'reward_family': 'crafting_material', 'material_subtype': 'construct_fragment'},
+    'spider_venom': {'reward_family': 'reagent', 'material_subtype': 'venom'},
+    'bat_wing': {'reward_family': 'reagent', 'material_subtype': 'wing'},
+    'treant_heart': {'reward_family': 'reagent', 'material_subtype': 'heart'},
+    'stone_core': {'reward_family': 'reagent', 'material_subtype': 'core'},
+    # Enhancement economy
+    'enhance_shard': {'reward_family': 'enhancement_material', 'material_subtype': 'material_1'},
+    'enhancement_crystal': {'reward_family': 'enhancement_material', 'material_subtype': 'material_2'},
+    'power_essence': {'reward_family': 'enhancement_material', 'material_subtype': 'material_3'},
+    'ashen_core': {'reward_family': 'enhancement_material', 'material_subtype': 'material_4'},
+}
+
+
 def get_item(item_id: str) -> dict:
     return ITEMS.get(item_id)
 
@@ -344,6 +376,10 @@ def get_item(item_id: str) -> dict:
 def get_item_metadata(item_id: str) -> dict:
     """Normalized archetype metadata for equipment-related systems."""
     return get_item_archetype_metadata(get_item(item_id))
+
+
+def get_item_reward_tags(item_id: str) -> dict:
+    return dict(ITEM_REWARD_TAGS.get(item_id, {}))
 
 
 def get_item_encumbrance(item: dict | None) -> int | None:

@@ -117,7 +117,8 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     source_metadata = build_open_world_combat_source_metadata(
         source_id=str(rewards.get('mob_id', 'unknown_mob')),
         mob_level=mob_level,
-        source_category=rewards.get('source_category', 'open_world_normal'),
+        source_category=rewards.get('source_category'),
+        creature_taxonomy=rewards.get('creature_taxonomy'),
     )
     for item_id in rewards['loot']:
         grant_item_to_player(
