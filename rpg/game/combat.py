@@ -614,7 +614,7 @@ def resolve_enemy_targeted_direct_damage_skill_action(
         skill_result['log'] = t(
             'battle.mob_dodge',
             lang,
-            mob_name=get_mob_name(mob['mob_id'], lang),
+            mob_name=get_mob_name(mob.get('mob_id', mob.get('id', 'unknown_mob')), lang),
         )
         return {'handled': True, 'is_hit': False, 'hit_check': hit_check}
 
@@ -1165,7 +1165,7 @@ def resolve_normal_attack_action(
             'log_line': t(
                 'battle.mob_dodge',
                 lang,
-                mob_name=get_mob_name(mob['mob_id'], lang),
+                mob_name=get_mob_name(mob.get('mob_id', mob.get('id', 'unknown_mob')), lang),
             ),
             'direct_damage_result': None,
             'hit_check': hit_check,
