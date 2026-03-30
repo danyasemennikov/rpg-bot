@@ -10,6 +10,7 @@ from game.reward_source_metadata import (
     build_open_world_combat_source_metadata,
     classify_item_reward_family,
     normalize_reward_source_category,
+    resolve_content_tier_band,
     resolve_allowed_reward_families,
 )
 
@@ -75,6 +76,8 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         self.assertEqual(classify_item_reward_family('enhance_shard'), 'enhancement_material')
         self.assertEqual(classify_item_reward_family('wolf_pelt'), 'creature_loot')
         self.assertEqual(classify_item_reward_family('herb_common'), 'gathering_material')
+        self.assertEqual(classify_item_reward_family('spider_venom'), 'reagent')
+        self.assertEqual(classify_item_reward_family('coal'), 'crafting_material')
 
     def test_grant_item_respects_source_family_allowlist_when_metadata_is_provided(self):
         quest_meta = RewardSourceMetadata(
@@ -127,6 +130,33 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         families = resolve_allowed_reward_families(typo_meta)
         self.assertIn('creature_loot', families)
         self.assertTrue(len(families) > 0)
+
+    def test_content_tier_is_normalized_to_tier_bands(self):
+        self.assertEqual(resolve_content_tier_band(1), 1)
+        self.assertEqual(resolve_content_tier_band(10), 1)
+        self.assertEqual(resolve_content_tier_band(11), 2)
+        self.assertEqual(resolve_content_tier_band(55), 6)
+        self.assertEqual(resolve_content_tier_band(100), 10)
+        self.assertEqual(resolve_content_tier_band(145), 10)
+
+    def test_combat_metadata_contains_taxonomy_identity(self):
+        source_meta = build_open_world_combat_source_metadata(
+            source_id='forest_spider',
+            mob_level=3,
+            source_category=None,
+            creature_taxonomy={
+                'body_type': 'arachnid',
+                'special_trait': 'venomous',
+                'encounter_class': 'elite',
+            },
+        )
+        self.assertEqual(source_meta.source_category, 'open_world_elite')
+        self.assertEqual(source_meta.content_tier, 1)
+        self.assertEqual(source_meta.creature_body_type, 'arachnid')
+        self.assertEqual(source_meta.creature_special_trait, 'venomous')
+        self.assertEqual(source_meta.creature_encounter_class, 'elite')
+        self.assertIn('venom_gland', source_meta.creature_loot_identity)
+        self.assertIn('special_part', source_meta.creature_loot_identity)
 
 
 if __name__ == '__main__':

@@ -23,6 +23,11 @@ MOBS = {
         'gold_min':    2,
         'gold_max':    5,
         'aggressive':  False,
+        'creature_taxonomy': {
+            'body_type': 'beast',
+            'special_trait': 'predator',
+            'encounter_class': 'normal',
+        },
         'loot_table':  [
             ('wolf_pelt',   0.60),   # 60% шанс
             ('wolf_fang',   0.25),
@@ -43,6 +48,11 @@ MOBS = {
         'gold_min':    1,
         'gold_max':    3,
         'aggressive':  False,
+        'creature_taxonomy': {
+            'body_type': 'beast',
+            'special_trait': 'armored',
+            'encounter_class': 'normal',
+        },
         'loot_table':  [
             ('boar_meat',   0.75),
             ('boar_tusk',   0.20),
@@ -61,6 +71,11 @@ MOBS = {
         'gold_min':    3,
         'gold_max':    6,
         'aggressive':  False,
+        'creature_taxonomy': {
+            'body_type': 'arachnid',
+            'special_trait': 'venomous',
+            'encounter_class': 'normal',
+        },
         'effects':     [('poison', 0.40, 3)],  # 40% шанс яда на 3 хода
         'loot_table':  [
             ('spider_silk',  0.50),
@@ -82,6 +97,12 @@ MOBS = {
         'gold_min':    8,
         'gold_max':    15,
         'aggressive':  False,
+        'reward_source_category': 'open_world_regional_boss',
+        'creature_taxonomy': {
+            'body_type': 'plant',
+            'special_trait': 'giant',
+            'encounter_class': 'boss',
+        },
         'loot_table':  [
             ('ancient_bark',  0.55),
             ('treant_heart',  0.15),
@@ -105,6 +126,11 @@ MOBS = {
         'gold_min':    1,
         'gold_max':    4,
         'aggressive':  False,
+        'creature_taxonomy': {
+            'body_type': 'beast',
+            'special_trait': 'toxic',
+            'encounter_class': 'normal',
+        },
         'loot_table':  [
             ('rat_tail',    0.50),
             ('rat_fur',     0.30),
@@ -123,6 +149,12 @@ MOBS = {
         'gold_min':    5,
         'gold_max':    12,
         'aggressive':  True,
+        'reward_source_category': 'open_world_elite',
+        'creature_taxonomy': {
+            'body_type': 'humanoid',
+            'special_trait': 'armored',
+            'encounter_class': 'elite',
+        },
         'loot_table':  [
             ('iron_ore',        0.60),
             ('goblin_ear',      0.40),
@@ -146,6 +178,11 @@ MOBS = {
         'gold_min':    0,
         'gold_max':    2,
         'aggressive':  False,
+        'creature_taxonomy': {
+            'body_type': 'avian',
+            'special_trait': 'frost_touched',
+            'encounter_class': 'normal',
+        },
         'loot_table':  [
             ('bat_wing',    0.45),
         ]
@@ -163,6 +200,12 @@ MOBS = {
         'gold_min':    15,
         'gold_max':    30,
         'aggressive':  False,
+        'reward_source_category': 'open_world_elite',
+        'creature_taxonomy': {
+            'body_type': 'construct',
+            'special_trait': 'armored',
+            'encounter_class': 'elite',
+        },
         'loot_table':  [
             ('stone_core',      0.40),
             ('golem_fragment',  0.25),

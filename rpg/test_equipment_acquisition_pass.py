@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock
 import database
 from database import get_connection, init_db
 from game.combat import calc_rewards
-from game.mobs import get_mob
+from game.mobs import MOBS, get_mob
+from game.reward_source_metadata import build_open_world_combat_source_metadata
 from handlers.location import (
     CURATED_EQUIPMENT_VENDOR_STOCK,
     get_curated_shop_stock,
@@ -174,6 +175,76 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         self.assertNotIn('shop_rank', columns)
         self.assertIn('base_item_id', gear_columns)
         self.assertIn('equipped_slot', gear_columns)
+
+    def test_all_current_mobs_have_phase2_creature_taxonomy_tags(self):
+        for mob in MOBS.values():
+            taxonomy = mob.get('creature_taxonomy')
+            self.assertIsInstance(taxonomy, dict, msg=f'mob {mob["id"]} has no taxonomy')
+            self.assertIn('body_type', taxonomy, msg=f'mob {mob["id"]} misses body_type')
+            self.assertIn('special_trait', taxonomy, msg=f'mob {mob["id"]} misses special_trait')
+            self.assertIn('encounter_class', taxonomy, msg=f'mob {mob["id"]} misses encounter_class')
+
+    def test_live_rewards_flow_passes_taxonomy_and_tier_band_metadata(self):
+        mob = get_mob('stone_golem')
+        rewards = calc_rewards(mob)
+        source_meta = build_open_world_combat_source_metadata(
+            source_id=rewards['mob_id'],
+            mob_level=rewards['mob_level'],
+            source_category=rewards['source_category'],
+            creature_taxonomy=rewards['creature_taxonomy'],
+        )
+        self.assertEqual(source_meta.content_tier, 1)
+        self.assertEqual(source_meta.creature_body_type, 'construct')
+        self.assertEqual(source_meta.creature_encounter_class, 'elite')
+        self.assertIn('core', source_meta.creature_loot_identity)
+
+    def test_live_flow_bridge_maps_elite_encounter_to_open_world_elite_when_source_missing(self):
+        mob = {
+            'id': 'synthetic_elite_beast',
+            'level': 18,
+            'exp_reward': 10,
+            'gold_min': 1,
+            'gold_max': 1,
+            'loot_table': [],
+            'creature_taxonomy': {
+                'body_type': 'beast',
+                'special_trait': 'predator',
+                'encounter_class': 'elite',
+            },
+        }
+        rewards = calc_rewards(mob)
+        self.assertIsNone(rewards['source_category'])
+        source_meta = build_open_world_combat_source_metadata(
+            source_id=rewards['mob_id'],
+            mob_level=rewards['mob_level'],
+            source_category=rewards.get('source_category'),
+            creature_taxonomy=rewards.get('creature_taxonomy'),
+        )
+        self.assertEqual(source_meta.source_category, 'open_world_elite')
+
+    def test_live_flow_bridge_maps_boss_encounter_to_regional_boss_when_source_missing(self):
+        mob = {
+            'id': 'synthetic_boss_plant',
+            'level': 26,
+            'exp_reward': 10,
+            'gold_min': 1,
+            'gold_max': 1,
+            'loot_table': [],
+            'creature_taxonomy': {
+                'body_type': 'plant',
+                'special_trait': 'giant',
+                'encounter_class': 'boss',
+            },
+        }
+        rewards = calc_rewards(mob)
+        self.assertIsNone(rewards['source_category'])
+        source_meta = build_open_world_combat_source_metadata(
+            source_id=rewards['mob_id'],
+            mob_level=rewards['mob_level'],
+            source_category=rewards.get('source_category'),
+            creature_taxonomy=rewards.get('creature_taxonomy'),
+        )
+        self.assertEqual(source_meta.source_category, 'open_world_regional_boss')
 
 
 class ShopBackNavigationTests(unittest.IsolatedAsyncioTestCase):
