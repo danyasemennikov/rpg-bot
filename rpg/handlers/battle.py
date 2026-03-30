@@ -31,6 +31,7 @@ from game.gear_instances import (
     grant_item_to_player,
     resolve_gear_instance_item_data,
 )
+from game.reward_source_metadata import build_open_world_combat_source_metadata
 
 
 # ────────────────────────────────────────
@@ -113,6 +114,11 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     conn2.close()
 
     mob_level = rewards.get('mob_level', 1)
+    source_metadata = build_open_world_combat_source_metadata(
+        source_id=str(rewards.get('mob_id', 'unknown_mob')),
+        mob_level=mob_level,
+        source_category=rewards.get('source_category', 'open_world_normal'),
+    )
     for item_id in rewards['loot']:
         grant_item_to_player(
             telegram_id,
@@ -120,6 +126,7 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
             quantity=1,
             source='mob_drop',
             source_level=mob_level,
+            source_metadata=source_metadata,
         )
 
     return {

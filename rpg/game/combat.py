@@ -1466,6 +1466,8 @@ def calc_rewards(mob: dict) -> dict:
         'gold': gold,
         'loot': loot,
         'mob_level': mob.get('level', 1),
+        'mob_id': mob.get('id', 'unknown_mob'),
+        'source_category': mob.get('reward_source_category', 'open_world_normal'),
     }
 
 # ────────────────────────────────────────
