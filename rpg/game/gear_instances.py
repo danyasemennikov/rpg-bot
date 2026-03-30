@@ -14,6 +14,7 @@ from game.reward_source_metadata import (
     is_reward_family_allowed_for_source,
 )
 from game.items_data import get_item, get_item_metadata
+from game.enhancement_material_routing import resolve_enhancement_material_routing
 
 LEGACY_EQUIPMENT_SLOT_KEYS = (
     'weapon',
@@ -624,6 +625,11 @@ def grant_item_to_player(
         reward_family = classify_item_reward_family(item_id)
         if not is_reward_family_allowed_for_source(source_metadata, reward_family):
             return {'gear_instances_created': 0, 'stackable_added': 0}
+
+        if reward_family == 'enhancement_material':
+            routing = resolve_enhancement_material_routing(item_id, source_metadata.source_category)
+            if routing is not None and not routing.is_allowed:
+                return {'gear_instances_created': 0, 'stackable_added': 0}
 
     if is_gear_item_id(item_id):
         created = 0

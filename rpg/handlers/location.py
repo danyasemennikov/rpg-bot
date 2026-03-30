@@ -24,6 +24,7 @@ CURATED_EQUIPMENT_VENDOR_STOCK = {
         {'item_id': 'acolyte_robe', 'level_min': 4},
         {'item_id': 'band_of_precision', 'level_min': 5},
         {'item_id': 'ring_of_quiet_mind', 'level_min': 5},
+        # Temporary bridge before full apex/world-boss rollout (Phase 3 routing).
         {'item_id': 'ashen_core', 'level_min': 12},
     ],
 }
