@@ -8,6 +8,11 @@ from game.itemization import (
     get_secondary_count_budget_for_rarity,
     roll_generated_rarity,
 )
+from game.reward_source_metadata import (
+    RewardSourceMetadata,
+    classify_item_reward_family,
+    is_reward_family_allowed_for_source,
+)
 from game.items_data import get_item, get_item_metadata
 
 LEGACY_EQUIPMENT_SLOT_KEYS = (
@@ -609,10 +614,16 @@ def grant_item_to_player(
     *,
     source: str = 'generic',
     source_level: int | None = None,
+    source_metadata: RewardSourceMetadata | None = None,
     rng: random.Random | None = None,
 ) -> dict[str, int]:
     if quantity <= 0:
         return {'gear_instances_created': 0, 'stackable_added': 0}
+
+    if source_metadata is not None:
+        reward_family = classify_item_reward_family(item_id)
+        if not is_reward_family_allowed_for_source(source_metadata, reward_family):
+            return {'gear_instances_created': 0, 'stackable_added': 0}
 
     if is_gear_item_id(item_id):
         created = 0
