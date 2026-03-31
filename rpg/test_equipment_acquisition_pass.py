@@ -9,7 +9,9 @@ import database
 from database import get_connection, init_db
 from game.combat import calc_rewards
 from game.mobs import MOBS, get_mob
+from game.locations import get_mob_location_id
 from game.reward_source_metadata import build_open_world_combat_source_metadata
+from handlers.battle import apply_rewards
 from handlers.location import (
     CURATED_EQUIPMENT_VENDOR_STOCK,
     get_curated_shop_stock,
@@ -192,11 +194,15 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             mob_level=rewards['mob_level'],
             source_category=rewards['source_category'],
             creature_taxonomy=rewards['creature_taxonomy'],
+            location_id=get_mob_location_id(rewards['mob_id']),
         )
         self.assertEqual(source_meta.content_tier, 1)
         self.assertEqual(source_meta.creature_body_type, 'construct')
         self.assertEqual(source_meta.creature_encounter_class, 'elite')
         self.assertIn('core', source_meta.creature_loot_identity)
+        self.assertEqual(source_meta.open_world_pool_profile, 'open_world_elite_surface')
+        self.assertEqual(source_meta.open_world_region_identity, 'old_mines')
+        self.assertEqual(source_meta.quality_floor_rarity, 'uncommon')
 
     def test_live_flow_bridge_maps_elite_encounter_to_open_world_elite_when_source_missing(self):
         mob = {
@@ -245,6 +251,66 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             creature_taxonomy=rewards.get('creature_taxonomy'),
         )
         self.assertEqual(source_meta.source_category, 'open_world_regional_boss')
+
+    def test_grant_item_blocks_open_world_gear_outside_source_content_identity(self):
+        from game.gear_instances import grant_item_to_player
+
+        meta = build_open_world_combat_source_metadata(
+            source_id='forest_wolf',
+            mob_level=2,
+            source_category='open_world_normal',
+            creature_taxonomy=get_mob('forest_wolf').get('creature_taxonomy'),
+            location_id='dark_forest',
+        )
+        blocked = grant_item_to_player(
+            9001,
+            'iron_shield',
+            quantity=1,
+            source='mob_drop',
+            source_level=2,
+            source_metadata=meta,
+        )
+        self.assertEqual(blocked, {'gear_instances_created': 0, 'stackable_added': 0})
+
+    def test_live_reward_flow_prefers_mob_region_over_player_region(self):
+        rewards = {
+            'exp': 0,
+            'gold': 0,
+            'loot': ['stone_core'],
+            'mob_level': 8,
+            'mob_id': 'stone_golem',
+            'source_category': 'open_world_elite',
+            'creature_taxonomy': get_mob('stone_golem').get('creature_taxonomy'),
+        }
+        conn = get_connection()
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
+        conn.close()
+
+        with patch('handlers.battle.grant_item_to_player') as grant_mock:
+            apply_rewards(9001, player, rewards)
+
+        source_meta = grant_mock.call_args.kwargs['source_metadata']
+        self.assertEqual(source_meta.open_world_region_identity, 'old_mines')
+
+    def test_live_reward_flow_falls_back_to_player_region_when_mob_region_unknown(self):
+        rewards = {
+            'exp': 0,
+            'gold': 0,
+            'loot': ['wolf_pelt'],
+            'mob_level': 2,
+            'mob_id': 'synthetic_unknown_mob',
+            'source_category': 'open_world_normal',
+            'creature_taxonomy': get_mob('forest_wolf').get('creature_taxonomy'),
+        }
+        conn = get_connection()
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
+        conn.close()
+
+        with patch('handlers.battle.grant_item_to_player') as grant_mock:
+            apply_rewards(9001, player, rewards)
+
+        source_meta = grant_mock.call_args.kwargs['source_metadata']
+        self.assertEqual(source_meta.open_world_region_identity, 'village')
 
 
 class ShopBackNavigationTests(unittest.IsolatedAsyncioTestCase):
