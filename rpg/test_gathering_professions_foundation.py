@@ -17,6 +17,9 @@ class GatheringProfessionsFoundationTests(unittest.TestCase):
         self.assertEqual(resolve_gather_resource_identity('iron_ore').profession_key, 'mining')
         self.assertEqual(resolve_gather_resource_identity('coal').profession_key, 'mining')
         self.assertEqual(resolve_gather_resource_identity('gem_common').profession_key, 'mining')
+        self.assertEqual(resolve_gather_resource_identity('wolf_pelt').profession_key, 'hunting')
+        self.assertEqual(resolve_gather_resource_identity('boar_meat').profession_key, 'hunting')
+        self.assertEqual(resolve_gather_resource_identity('spider_silk').profession_key, 'hunting')
 
     def test_foundation_access_gate_uses_profession_level_and_zone_tier(self):
         denied = resolve_gather_access_decision(
