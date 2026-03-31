@@ -9,6 +9,12 @@ from game.enhancement_material_routing import (
     get_enhancement_material_tier,
     resolve_enhancement_material_routing,
 )
+from game.open_world_reward_pools import (
+    build_open_world_reward_pool_profile,
+    clamp_rarity_to_quality_floor,
+    is_gear_item_allowed_for_open_world_content_identity,
+    is_item_tier_band_allowed_for_bounds,
+)
 from game.reward_source_metadata import (
     RewardSourceMetadata,
     build_open_world_combat_source_metadata,
@@ -16,6 +22,10 @@ from game.reward_source_metadata import (
     normalize_reward_source_category,
     resolve_content_tier_band,
     resolve_allowed_reward_families,
+)
+from game.reward_policies import (
+    REWARD_FAMILIES_BY_SOURCE,
+    resolve_content_tier_band as resolve_content_tier_band_policy,
 )
 
 
@@ -37,6 +47,7 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         for item_row in (
             ('wolf_pelt', 'wolf_pelt', 'material', 'common', 1, 0, 0, 0, 0, 0, '{}'),
             ('power_essence', 'power_essence', 'material', 'rare', 1, 0, 0, 0, 0, 0, '{}'),
+            ('tracker_jacket', 'tracker_jacket', 'armor', 'uncommon', 4, 0, 0, 0, 0, 0, '{}'),
         ):
             conn.execute(
                 '''INSERT INTO items (
@@ -214,6 +225,9 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         self.assertEqual(resolve_content_tier_band(100), 10)
         self.assertEqual(resolve_content_tier_band(145), 10)
 
+    def test_content_tier_band_helper_has_single_source_of_truth(self):
+        self.assertIs(resolve_content_tier_band, resolve_content_tier_band_policy)
+
     def test_combat_metadata_contains_taxonomy_identity(self):
         source_meta = build_open_world_combat_source_metadata(
             source_id='forest_spider',
@@ -232,6 +246,73 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         self.assertEqual(source_meta.creature_encounter_class, 'elite')
         self.assertIn('venom_gland', source_meta.creature_loot_identity)
         self.assertIn('special_part', source_meta.creature_loot_identity)
+
+    def test_open_world_pool_profile_contract_has_surface_identity_and_quality_floor(self):
+        profile = build_open_world_reward_pool_profile(
+            source_category='open_world_regional_boss',
+            source_id='dark_treant',
+            mob_level=5,
+            location_id='dark_forest',
+        )
+        self.assertIsNotNone(profile)
+        assert profile is not None
+        self.assertEqual(profile.reward_pool_profile, 'open_world_regional_boss_surface')
+        self.assertEqual(profile.region_identity, 'dark_forest')
+        self.assertEqual(profile.content_identity, 'dark_treant')
+        self.assertEqual(profile.quality_floor, 'epic')
+        self.assertIn('gear', profile.allowed_reward_families)
+        self.assertEqual(
+            profile.allowed_reward_families,
+            REWARD_FAMILIES_BY_SOURCE['open_world_regional_boss'],
+        )
+
+    def test_quality_floor_is_differentiated_between_open_world_surfaces(self):
+        self.assertEqual(clamp_rarity_to_quality_floor('common', 'common'), 'common')
+        self.assertEqual(clamp_rarity_to_quality_floor('common', 'uncommon'), 'uncommon')
+        self.assertEqual(clamp_rarity_to_quality_floor('uncommon', 'rare'), 'rare')
+        self.assertEqual(clamp_rarity_to_quality_floor('rare', 'epic'), 'epic')
+
+    def test_bounded_tier_band_rules_block_out_of_band_items(self):
+        self.assertTrue(is_item_tier_band_allowed_for_bounds(item_level=8, tier_band_min=1, tier_band_max=2))
+        self.assertFalse(is_item_tier_band_allowed_for_bounds(item_level=95, tier_band_min=1, tier_band_max=2))
+
+    def test_bounded_content_identity_blocks_gear_not_from_current_source(self):
+        self.assertTrue(
+            is_gear_item_allowed_for_open_world_content_identity(
+                item_id='iron_sword',
+                source_id='dark_treant',
+            )
+        )
+        self.assertFalse(
+            is_gear_item_allowed_for_open_world_content_identity(
+                item_id='iron_shield',
+                source_id='dark_treant',
+            )
+        )
+
+    def test_live_grant_flow_uses_open_world_quality_floor_for_harder_sources(self):
+        from game.gear_instances import _create_generated_gear_instance
+
+        elite_meta = build_open_world_combat_source_metadata(
+            source_id='goblin_miner',
+            mob_level=4,
+            source_category='open_world_elite',
+            location_id='old_mines',
+        )
+        with unittest.mock.patch('game.gear_instances.roll_generated_rarity', return_value='common'):
+            instance_id = _create_generated_gear_instance(
+                333,
+                'tracker_jacket',
+                source='mob_drop',
+                source_level=4,
+                source_metadata=elite_meta,
+            )
+
+        conn = get_connection()
+        row = conn.execute('SELECT rarity FROM gear_instances WHERE id=?', (instance_id,)).fetchone()
+        conn.close()
+        self.assertIsNotNone(row)
+        self.assertEqual(row['rarity'], 'uncommon')
 
 
 if __name__ == '__main__':

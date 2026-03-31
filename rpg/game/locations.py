@@ -52,6 +52,11 @@ LOCATIONS = {
     },
 }
 
+MOB_LOCATION_INDEX: dict[str, str] = {}
+for _location_id, _location_data in LOCATIONS.items():
+    for _mob_id in _location_data.get('mobs', []):
+        MOB_LOCATION_INDEX[_mob_id] = _location_id
+
 def get_location(location_id: str) -> dict:
     return LOCATIONS.get(location_id)
 
@@ -61,6 +66,10 @@ def get_connected_locations(location_id: str) -> list:
     if not loc:
         return []
     return [LOCATIONS[lid] for lid in loc['connections'] if lid in LOCATIONS]
+
+
+def get_mob_location_id(mob_id: str) -> str | None:
+    return MOB_LOCATION_INDEX.get(mob_id)
 
 print('✅ game/locations.py создан!')
 print(f'   Локаций в базе: {len(LOCATIONS)}')

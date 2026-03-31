@@ -7,7 +7,6 @@ without broad rewrites.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
 from game.creature_loot_taxonomy import (
     encounter_class_to_source_category,
@@ -15,130 +14,14 @@ from game.creature_loot_taxonomy import (
     resolve_creature_loot_identity,
 )
 from game.items_data import get_item, get_item_reward_tags
-
-RewardSourceCategory = Literal[
-    'open_world_normal',
-    'open_world_elite',
-    'open_world_rare_spawn',
-    'open_world_regional_boss',
-    'dungeon_trash',
-    'dungeon_elite',
-    'dungeon_boss',
-    'world_boss',
-    'quest_reward',
-    # Placeholder for later-only surfaces.
-    'event_reward',
-]
-
-RewardFamily = Literal[
-    'base_combat',
-    'gear',
-    'enhancement_material',
-    'creature_loot',
-    'gathering_material',
-    'crafting_material',
-    'recipe',
-    'reagent',
-    'quest_tagged',
-    'prestige_or_apex',
-]
-
-REWARD_FAMILIES_BY_SOURCE: dict[RewardSourceCategory, tuple[RewardFamily, ...]] = {
-    'open_world_normal': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-    ),
-    'open_world_elite': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-        'reagent',
-    ),
-    'open_world_rare_spawn': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-        'reagent',
-        'recipe',
-    ),
-    'open_world_regional_boss': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-        'reagent',
-        'recipe',
-        'prestige_or_apex',
-    ),
-    'dungeon_trash': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-        'reagent',
-    ),
-    'dungeon_elite': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-        'reagent',
-        'recipe',
-    ),
-    'dungeon_boss': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-        'reagent',
-        'recipe',
-        'prestige_or_apex',
-    ),
-    'world_boss': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'reagent',
-        'recipe',
-        'prestige_or_apex',
-    ),
-    'quest_reward': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'crafting_material',
-        'gathering_material',
-        'recipe',
-        'reagent',
-        'quest_tagged',
-    ),
-    'event_reward': (
-        'base_combat',
-        'gear',
-        'enhancement_material',
-        'creature_loot',
-        'crafting_material',
-        'gathering_material',
-        'recipe',
-        'reagent',
-        'quest_tagged',
-        'prestige_or_apex',
-    ),
-}
-
-DEFAULT_SOURCE_CATEGORY: RewardSourceCategory = 'open_world_normal'
+from game.open_world_reward_pools import build_open_world_reward_pool_profile
+from game.reward_policies import (
+    DEFAULT_SOURCE_CATEGORY,
+    REWARD_FAMILIES_BY_SOURCE,
+    RewardFamily,
+    RewardSourceCategory,
+    resolve_content_tier_band,
+)
 ENHANCEMENT_MATERIAL_IDS = {
     'enhance_shard',
     'enhancement_crystal',
@@ -157,6 +40,11 @@ class RewardSourceMetadata:
     creature_special_trait: str | None = None
     creature_encounter_class: str | None = None
     creature_loot_identity: tuple[str, ...] = ()
+    open_world_pool_profile: str | None = None
+    open_world_region_identity: str | None = None
+    quality_floor_rarity: str | None = None
+    content_tier_band_min: int | None = None
+    content_tier_band_max: int | None = None
 
 
 def normalize_reward_source_category(category: str | None) -> RewardSourceCategory:
@@ -224,12 +112,19 @@ def build_open_world_combat_source_metadata(
     mob_level: int,
     source_category: str | None = DEFAULT_SOURCE_CATEGORY,
     creature_taxonomy: dict | None = None,
+    location_id: str | None = None,
 ) -> RewardSourceMetadata:
     taxonomy = normalize_creature_taxonomy(creature_taxonomy)
     resolved_source_category = source_category
     if resolved_source_category is None:
         resolved_source_category = encounter_class_to_source_category(taxonomy.encounter_class)
     normalized_category = normalize_reward_source_category(resolved_source_category)
+    open_world_profile = build_open_world_reward_pool_profile(
+        source_category=normalized_category,
+        source_id=source_id,
+        mob_level=mob_level,
+        location_id=location_id,
+    )
     return RewardSourceMetadata(
         source_category=normalized_category,
         content_tier=resolve_content_tier_band(mob_level),
@@ -239,10 +134,9 @@ def build_open_world_combat_source_metadata(
         creature_special_trait=taxonomy.special_trait,
         creature_encounter_class=taxonomy.encounter_class,
         creature_loot_identity=resolve_creature_loot_identity(taxonomy),
+        open_world_pool_profile=open_world_profile.reward_pool_profile if open_world_profile else None,
+        open_world_region_identity=open_world_profile.region_identity if open_world_profile else None,
+        quality_floor_rarity=open_world_profile.quality_floor if open_world_profile else None,
+        content_tier_band_min=open_world_profile.content_tier_band_min if open_world_profile else None,
+        content_tier_band_max=open_world_profile.content_tier_band_max if open_world_profile else None,
     )
-
-
-def resolve_content_tier_band(level: int) -> int:
-    """Normalize raw level to 1..10 tier bands: 1-10 => 1, 11-20 => 2 ... 91-100 => 10."""
-    normalized_level = max(1, int(level))
-    return min(10, ((normalized_level - 1) // 10) + 1)

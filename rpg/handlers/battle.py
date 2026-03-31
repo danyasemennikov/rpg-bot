@@ -32,6 +32,7 @@ from game.gear_instances import (
     resolve_gear_instance_item_data,
 )
 from game.reward_source_metadata import build_open_world_combat_source_metadata
+from game.locations import get_mob_location_id
 
 
 # ────────────────────────────────────────
@@ -119,6 +120,7 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
         mob_level=mob_level,
         source_category=rewards.get('source_category'),
         creature_taxonomy=rewards.get('creature_taxonomy'),
+        location_id=get_mob_location_id(str(rewards.get('mob_id', ''))) or player.get('location_id'),
     )
     for item_id in rewards['loot']:
         grant_item_to_player(

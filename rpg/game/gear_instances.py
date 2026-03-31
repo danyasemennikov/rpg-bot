@@ -15,6 +15,12 @@ from game.reward_source_metadata import (
 )
 from game.items_data import get_item, get_item_metadata
 from game.enhancement_material_routing import resolve_enhancement_material_routing
+from game.open_world_reward_pools import (
+    clamp_rarity_to_quality_floor,
+    is_gear_item_allowed_for_open_world_content_identity,
+    is_item_tier_band_allowed_for_bounds,
+    is_open_world_source_category,
+)
 
 LEGACY_EQUIPMENT_SLOT_KEYS = (
     'weapon',
@@ -587,6 +593,7 @@ def _create_generated_gear_instance(
     *,
     source: str = 'generic',
     source_level: int | None = None,
+    source_metadata: RewardSourceMetadata | None = None,
     rng: random.Random | None = None,
 ) -> int:
     item = get_item(item_id) or {}
@@ -598,6 +605,8 @@ def _create_generated_gear_instance(
         item_tier = resolve_item_tier_band(max(_safe_int(item.get('req_level', 1)), _safe_int(source_level, 1)))
 
     rarity = roll_generated_rarity(rng=rng)
+    if source_metadata is not None and source_metadata.quality_floor_rarity:
+        rarity = clamp_rarity_to_quality_floor(rarity, source_metadata.quality_floor_rarity)
     secondary_rolls = generate_secondary_rolls_for_item(item, rarity=rarity, item_tier=item_tier, rng=rng)
     return create_gear_instance(
         telegram_id,
@@ -631,6 +640,25 @@ def grant_item_to_player(
             if routing is not None and not routing.is_allowed:
                 return {'gear_instances_created': 0, 'stackable_added': 0}
 
+        if is_gear_item_id(item_id) and is_open_world_source_category(source_metadata.source_category):
+            item = get_item(item_id) or {}
+            item_level = _safe_int(item.get('req_level', 1), 1)
+            if (
+                source_metadata.content_tier_band_min is not None
+                and source_metadata.content_tier_band_max is not None
+                and not is_item_tier_band_allowed_for_bounds(
+                    item_level=item_level,
+                    tier_band_min=source_metadata.content_tier_band_min,
+                    tier_band_max=source_metadata.content_tier_band_max,
+                )
+            ):
+                return {'gear_instances_created': 0, 'stackable_added': 0}
+            if not is_gear_item_allowed_for_open_world_content_identity(
+                item_id=item_id,
+                source_id=source_metadata.content_identity,
+            ):
+                return {'gear_instances_created': 0, 'stackable_added': 0}
+
     if is_gear_item_id(item_id):
         created = 0
         for _ in range(quantity):
@@ -639,6 +667,7 @@ def grant_item_to_player(
                 item_id,
                 source=source,
                 source_level=source_level,
+                source_metadata=source_metadata,
                 rng=rng,
             )
             created += 1
