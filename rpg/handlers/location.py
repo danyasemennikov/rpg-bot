@@ -10,6 +10,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from database import get_player, get_connection, is_in_battle
 from game.locations import get_location, get_connected_locations
+from game.gathering_foundation import build_location_gather_source_profiles
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
 from game.items_data import get_item
@@ -178,9 +179,10 @@ def build_location_message(player: dict, location: dict) -> tuple:
         text += "\n"
 
     # ── Ресурсы ──
-    if location['gather']:
+    gather_profiles = build_location_gather_source_profiles(location['id'])
+    if gather_profiles:
         text += t('location.gather_title', lang) + " "
-        text += ", ".join(get_item_name(g[0], lang) for g in location['gather']) + "\n"
+        text += ", ".join(get_item_name(profile.item_id, lang) for profile in gather_profiles) + "\n"
         keyboard.append([InlineKeyboardButton(
             t('location.gather_btn', lang), callback_data="gather"
         )])
