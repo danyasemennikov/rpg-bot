@@ -21,6 +21,7 @@ CraftStatus = Literal[
     'invalid_recipe_contract',
     'profession_level_too_low',
     'missing_materials',
+    'craft_failed_atomic',
 ]
 
 
@@ -162,7 +163,8 @@ def craft_recipe(telegram_id: int, recipe_id: str, profession_levels: dict[Craft
             player_profession_level=player_level,
         )
 
-    missing = _find_missing_materials(telegram_id, recipe)
+    aggregated_requirements = _aggregate_recipe_requirements(recipe)
+    missing = _find_missing_materials(telegram_id, aggregated_requirements)
     if missing:
         return CraftResult(
             status='missing_materials',
@@ -171,16 +173,35 @@ def craft_recipe(telegram_id: int, recipe_id: str, profession_levels: dict[Craft
             missing_materials=tuple(missing),
         )
 
-    _consume_recipe_materials(telegram_id, recipe)
-    grant = grant_item_to_player(telegram_id, recipe.output_item_id, recipe.output_quantity, source='crafting')
-    crafted_quantity = int(grant.get('stackable_added', 0) + grant.get('gear_instances_created', 0))
-    return CraftResult(
-        status='crafted',
-        recipe_id=recipe.recipe_id,
-        profession_key=recipe.profession_key,
-        crafted_item_id=recipe.output_item_id,
-        crafted_quantity=crafted_quantity,
-    )
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN')
+        _consume_recipe_materials(conn, telegram_id, aggregated_requirements)
+        grant = grant_item_to_player(
+            telegram_id,
+            recipe.output_item_id,
+            recipe.output_quantity,
+            source='crafting',
+            conn=conn,
+        )
+        crafted_quantity = int(grant.get('stackable_added', 0) + grant.get('gear_instances_created', 0))
+        conn.commit()
+        return CraftResult(
+            status='crafted',
+            recipe_id=recipe.recipe_id,
+            profession_key=recipe.profession_key,
+            crafted_item_id=recipe.output_item_id,
+            crafted_quantity=crafted_quantity,
+        )
+    except Exception:
+        conn.rollback()
+        return CraftResult(
+            status='craft_failed_atomic',
+            recipe_id=recipe.recipe_id,
+            profession_key=recipe.profession_key,
+        )
+    finally:
+        conn.close()
 
 
 def validate_recipe_contract(recipe: RecipeDefinition) -> list[str]:
@@ -201,6 +222,12 @@ def validate_recipe_contract(recipe: RecipeDefinition) -> list[str]:
 
     if not recipe.material_requirements and not recipe.special_ingredient_requirements:
         errors.append('recipe must include at least one material requirement')
+
+    bulk_ids = {requirement.item_id for requirement in recipe.material_requirements}
+    special_ids = {requirement.item_id for requirement in recipe.special_ingredient_requirements}
+    cross_kind_duplicates = sorted(bulk_ids.intersection(special_ids))
+    for item_id in cross_kind_duplicates:
+        errors.append(f'{item_id}: duplicate requirement across bulk and special is not allowed')
 
     contract = CRAFTING_PROFESSION_CONTRACTS[recipe.profession_key]
     output_families = resolve_crafting_output_families(recipe.output_item_id)
@@ -304,17 +331,28 @@ def _validate_requirements(
     return errors
 
 
-def _find_missing_materials(telegram_id: int, recipe: RecipeDefinition) -> list[MissingMaterial]:
+def _aggregate_recipe_requirements(recipe: RecipeDefinition) -> dict[str, dict[str, int]]:
+    aggregated = {'bulk': {}, 'special': {}}
+    for requirement in recipe.material_requirements:
+        aggregated['bulk'][requirement.item_id] = aggregated['bulk'].get(requirement.item_id, 0) + int(requirement.quantity)
+    for requirement in recipe.special_ingredient_requirements:
+        aggregated['special'][requirement.item_id] = (
+            aggregated['special'].get(requirement.item_id, 0) + int(requirement.quantity)
+        )
+    return aggregated
+
+
+def _find_missing_materials(telegram_id: int, aggregated_requirements: dict[str, dict[str, int]]) -> list[MissingMaterial]:
     inventory = _get_inventory_quantities(telegram_id)
     missing: list[MissingMaterial] = []
-    for requirement in recipe.material_requirements:
-        available = inventory.get(requirement.item_id, 0)
-        if available < requirement.quantity:
-            missing.append(MissingMaterial(requirement.item_id, requirement.quantity, available, 'bulk'))
-    for requirement in recipe.special_ingredient_requirements:
-        available = inventory.get(requirement.item_id, 0)
-        if available < requirement.quantity:
-            missing.append(MissingMaterial(requirement.item_id, requirement.quantity, available, 'special'))
+    for item_id, required_qty in aggregated_requirements['bulk'].items():
+        available = inventory.get(item_id, 0)
+        if available < required_qty:
+            missing.append(MissingMaterial(item_id, required_qty, available, 'bulk'))
+    for item_id, required_qty in aggregated_requirements['special'].items():
+        available = inventory.get(item_id, 0)
+        if available < required_qty:
+            missing.append(MissingMaterial(item_id, required_qty, available, 'special'))
     return missing
 
 
@@ -327,21 +365,17 @@ def _get_inventory_quantities(telegram_id: int) -> dict[str, int]:
         conn.close()
 
 
-def _consume_recipe_materials(telegram_id: int, recipe: RecipeDefinition):
-    conn = get_connection()
-    try:
-        for requirement in recipe.material_requirements + recipe.special_ingredient_requirements:
+def _consume_recipe_materials(conn, telegram_id: int, aggregated_requirements: dict[str, dict[str, int]]):
+    for requirement_kind in ('bulk', 'special'):
+        for item_id, required_qty in aggregated_requirements[requirement_kind].items():
             row = conn.execute(
                 'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
-                (telegram_id, requirement.item_id),
+                (telegram_id, item_id),
             ).fetchone()
             if not row:
                 continue
-            new_quantity = int(row['quantity']) - int(requirement.quantity)
+            new_quantity = int(row['quantity']) - int(required_qty)
             if new_quantity > 0:
                 conn.execute('UPDATE inventory SET quantity=? WHERE id=?', (new_quantity, row['id']))
             else:
                 conn.execute('DELETE FROM inventory WHERE id=?', (row['id'],))
-        conn.commit()
-    finally:
-        conn.close()
