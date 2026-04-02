@@ -130,6 +130,7 @@ def create_gear_instance(
     telegram_id: int,
     base_item_id: str,
     *,
+    conn=None,
     slot_identity: str | None = None,
     item_tier: int = 1,
     rarity: str | None = None,
@@ -145,7 +146,9 @@ def create_gear_instance(
     resolved_slot = slot_identity or _resolve_instance_slot_identity(base_item_id)
     resolved_rarity = rarity or item.get('rarity', 'common')
 
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
         cur = conn.execute(
             '''INSERT INTO gear_instances (
@@ -164,10 +167,12 @@ def create_gear_instance(
                 max_durability,
             ),
         )
-        conn.commit()
+        if owns_connection:
+            conn.commit()
         return int(cur.lastrowid)
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()
 
 
 def list_player_gear_instances(telegram_id: int) -> list[dict[str, Any]]:
@@ -591,6 +596,7 @@ def _create_generated_gear_instance(
     telegram_id: int,
     item_id: str,
     *,
+    conn=None,
     source: str = 'generic',
     source_level: int | None = None,
     source_metadata: RewardSourceMetadata | None = None,
@@ -611,6 +617,7 @@ def _create_generated_gear_instance(
     return create_gear_instance(
         telegram_id,
         item_id,
+        conn=conn,
         item_tier=item_tier,
         rarity=rarity,
         secondary_rolls_json=json.dumps(secondary_rolls, ensure_ascii=False),
@@ -626,6 +633,7 @@ def grant_item_to_player(
     source_level: int | None = None,
     source_metadata: RewardSourceMetadata | None = None,
     rng: random.Random | None = None,
+    conn=None,
 ) -> dict[str, int]:
     if quantity <= 0:
         return {'gear_instances_created': 0, 'stackable_added': 0}
@@ -665,6 +673,7 @@ def grant_item_to_player(
             _create_generated_gear_instance(
                 telegram_id,
                 item_id,
+                conn=conn,
                 source=source,
                 source_level=source_level,
                 source_metadata=source_metadata,
@@ -673,7 +682,9 @@ def grant_item_to_player(
             created += 1
         return {'gear_instances_created': created, 'stackable_added': 0}
 
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
         existing = conn.execute(
             'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
@@ -689,7 +700,9 @@ def grant_item_to_player(
                 'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)',
                 (telegram_id, item_id, quantity),
             )
-        conn.commit()
+        if owns_connection:
+            conn.commit()
         return {'gear_instances_created': 0, 'stackable_added': quantity}
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()

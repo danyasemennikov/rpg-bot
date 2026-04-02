@@ -9,6 +9,7 @@ from game.crafting_runtime import (
     RECIPE_BY_ID,
     RecipeDefinition,
     RecipeRequirement,
+    _aggregate_recipe_requirements,
     craft_recipe,
     get_recipe,
     validate_recipe_contract,
@@ -197,6 +198,86 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
         self.assertIsNotNone(gear_row)
         self.assertEqual(self._get_inventory_qty('iron_ore'), 0)
         self.assertEqual(self._get_inventory_qty('coal'), 0)
+
+    def test_crafting_is_atomic_when_grant_fails(self):
+        self._set_inventory('herb_common', 5)
+        self._set_inventory('herb_magic', 2)
+        self._set_inventory('spider_venom', 1)
+
+        with patch('game.crafting_runtime.grant_item_to_player', side_effect=RuntimeError('grant_failed')):
+            result = craft_recipe(
+                telegram_id=9101,
+                recipe_id='alchemy_minor_health_potion',
+                profession_levels={'alchemy': 2},
+            )
+
+        self.assertEqual(result.status, 'craft_failed_atomic')
+        self.assertEqual(self._get_inventory_qty('herb_common'), 5)
+        self.assertEqual(self._get_inventory_qty('herb_magic'), 2)
+        self.assertEqual(self._get_inventory_qty('spider_venom'), 1)
+
+    def test_duplicate_requirements_are_aggregated_for_validation_and_consume(self):
+        duplicate_recipe = RecipeDefinition(
+            recipe_id='dup_req_recipe',
+            output_item_id='health_potion_small',
+            output_quantity=1,
+            profession_key='alchemy',
+            minimum_profession_level=1,
+            material_requirements=(
+                RecipeRequirement(item_id='herb_common', quantity=2, expected_group='herb_base'),
+                RecipeRequirement(item_id='herb_common', quantity=2, expected_group='herb_base'),
+            ),
+            special_ingredient_requirements=(
+                RecipeRequirement(item_id='spider_venom', quantity=1, expected_group='venom'),
+            ),
+        )
+        self.assertEqual(validate_recipe_contract(duplicate_recipe), [])
+
+        aggregated = _aggregate_recipe_requirements(duplicate_recipe)
+        self.assertEqual(aggregated['bulk']['herb_common'], 4)
+
+        self._set_inventory('herb_common', 4)
+        self._set_inventory('spider_venom', 1)
+
+        result = craft_recipe(
+            telegram_id=9101,
+            recipe_id='alchemy_minor_health_potion',
+            profession_levels={'alchemy': 2},
+        )
+        self.assertEqual(result.status, 'missing_materials')
+
+        original = RECIPE_BY_ID['alchemy_minor_health_potion']
+        RECIPE_BY_ID['alchemy_minor_health_potion'] = duplicate_recipe
+        try:
+            result = craft_recipe(
+                telegram_id=9101,
+                recipe_id='alchemy_minor_health_potion',
+                profession_levels={'alchemy': 2},
+            )
+        finally:
+            RECIPE_BY_ID['alchemy_minor_health_potion'] = original
+
+        self.assertEqual(result.status, 'crafted')
+        self.assertEqual(self._get_inventory_qty('herb_common'), 0)
+        self.assertEqual(self._get_inventory_qty('spider_venom'), 0)
+
+    def test_contract_rejects_duplicate_item_across_bulk_and_special(self):
+        cross_kind_duplicate_recipe = RecipeDefinition(
+            recipe_id='cross_kind_dup_recipe',
+            output_item_id='health_potion_small',
+            output_quantity=1,
+            profession_key='alchemy',
+            minimum_profession_level=1,
+            material_requirements=(
+                RecipeRequirement(item_id='herb_common', quantity=2, expected_group='herb_base'),
+            ),
+            special_ingredient_requirements=(
+                RecipeRequirement(item_id='herb_common', quantity=1, expected_group='venom'),
+            ),
+        )
+
+        errors = validate_recipe_contract(cross_kind_duplicate_recipe)
+        self.assertTrue(any('duplicate requirement across bulk and special' in error for error in errors))
 
 
 if __name__ == '__main__':
