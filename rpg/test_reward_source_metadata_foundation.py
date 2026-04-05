@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import database
 from database import get_connection, init_db
@@ -9,6 +10,7 @@ from game.enhancement_material_routing import (
     get_enhancement_material_tier,
     resolve_enhancement_material_routing,
 )
+from game.dungeon_reward_framework import build_dungeon_reward_surface_profile
 from game.open_world_reward_pools import (
     build_open_world_reward_pool_profile,
     clamp_rarity_to_quality_floor,
@@ -17,6 +19,7 @@ from game.open_world_reward_pools import (
 )
 from game.reward_source_metadata import (
     RewardSourceMetadata,
+    build_dungeon_combat_source_metadata,
     build_open_world_combat_source_metadata,
     classify_item_reward_family,
     normalize_reward_source_category,
@@ -299,7 +302,7 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
             source_category='open_world_elite',
             location_id='old_mines',
         )
-        with unittest.mock.patch('game.gear_instances.roll_generated_rarity', return_value='common'):
+        with patch('game.gear_instances.roll_generated_rarity', return_value='common'):
             instance_id = _create_generated_gear_instance(
                 333,
                 'tracker_jacket',
@@ -313,6 +316,179 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         conn.close()
         self.assertIsNotNone(row)
         self.assertEqual(row['rarity'], 'uncommon')
+
+    def test_dungeon_source_metadata_contains_identity_band_and_reward_profile(self):
+        dungeon_meta = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_guardian',
+            mob_level=38,
+            source_category='dungeon_elite',
+            creature_taxonomy={
+                'body_type': 'construct',
+                'special_trait': 'armored',
+                'encounter_class': 'elite',
+            },
+        )
+        self.assertEqual(dungeon_meta.source_category, 'dungeon_elite')
+        self.assertEqual(dungeon_meta.dungeon_id, 'amber_catacombs')
+        self.assertEqual(dungeon_meta.dungeon_encounter_identity, 'amber_guardian')
+        self.assertEqual(dungeon_meta.dungeon_reward_profile_identity, 'dungeon_elite_surface')
+        self.assertEqual(dungeon_meta.content_tier, 4)
+        self.assertEqual(dungeon_meta.content_tier_band_min, 3)
+        self.assertEqual(dungeon_meta.content_tier_band_max, 5)
+
+    def test_invalid_dungeon_surface_falls_back_to_dungeon_trash_not_open_world(self):
+        profile = build_dungeon_reward_surface_profile(
+            source_category='dungeon_typo_surface',
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_guardian',
+            mob_level=38,
+        )
+        self.assertEqual(profile.source_category, 'dungeon_trash')
+        self.assertEqual(profile.reward_profile_identity, 'dungeon_trash_surface')
+
+        meta = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_guardian',
+            mob_level=38,
+            source_category='dungeon_typo_surface',
+        )
+        self.assertEqual(meta.source_category, 'dungeon_trash')
+        self.assertEqual(meta.dungeon_reward_profile_identity, 'dungeon_trash_surface')
+        self.assertEqual(meta.dungeon_payoff_role, 'baseline_dungeon_feed')
+        self.assertFalse(meta.dungeon_recipe_hook_enabled)
+
+    def test_dungeon_surface_roles_are_differentiated_between_trash_elite_and_boss(self):
+        trash = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='catacomb_rat',
+            mob_level=34,
+            source_category='dungeon_trash',
+        )
+        elite = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_guardian',
+            mob_level=36,
+            source_category='dungeon_elite',
+        )
+        boss = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_overseer',
+            mob_level=40,
+            source_category='dungeon_boss',
+        )
+
+        self.assertEqual(trash.dungeon_payoff_role, 'baseline_dungeon_feed')
+        self.assertEqual(elite.dungeon_payoff_role, 'structured_progression_step')
+        self.assertEqual(boss.dungeon_payoff_role, 'primary_dungeon_payoff')
+        self.assertEqual(trash.quality_floor_rarity, 'common')
+        self.assertEqual(elite.quality_floor_rarity, 'uncommon')
+        self.assertEqual(boss.quality_floor_rarity, 'rare')
+
+    def test_material_3_is_dungeon_primary_in_live_routing_flow(self):
+        dungeon_elite_meta = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_guardian',
+            mob_level=40,
+            source_category='dungeon_elite',
+        )
+        open_world_meta = build_open_world_combat_source_metadata(
+            source_id='forest_wolf',
+            mob_level=2,
+            source_category='open_world_normal',
+        )
+
+        allowed = grant_item_to_player(
+            333,
+            'power_essence',
+            quantity=1,
+            source='mob_drop',
+            source_level=40,
+            source_metadata=dungeon_elite_meta,
+        )
+        blocked = grant_item_to_player(
+            333,
+            'power_essence',
+            quantity=1,
+            source='mob_drop',
+            source_level=2,
+            source_metadata=open_world_meta,
+        )
+
+        self.assertEqual(dungeon_elite_meta.power_essence_role, 'meaningful_layer')
+        self.assertEqual(allowed, {'gear_instances_created': 0, 'stackable_added': 1})
+        self.assertEqual(blocked, {'gear_instances_created': 0, 'stackable_added': 0})
+
+    def test_dungeon_recipe_and_reagent_hooks_are_exposed_by_surface(self):
+        trash = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='catacomb_rat',
+            mob_level=34,
+            source_category='dungeon_trash',
+        )
+        elite = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_guardian',
+            mob_level=36,
+            source_category='dungeon_elite',
+        )
+        boss = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_overseer',
+            mob_level=40,
+            source_category='dungeon_boss',
+        )
+
+        self.assertFalse(trash.dungeon_recipe_hook_enabled)
+        self.assertFalse(trash.dungeon_reagent_hook_enabled)
+        self.assertTrue(elite.dungeon_recipe_hook_enabled)
+        self.assertTrue(elite.dungeon_reagent_hook_enabled)
+        self.assertFalse(elite.boss_reagent_hook_enabled)
+        self.assertTrue(boss.dungeon_recipe_hook_enabled)
+        self.assertTrue(boss.dungeon_reagent_hook_enabled)
+        self.assertTrue(boss.boss_reagent_hook_enabled)
+        self.assertTrue(boss.future_set_crafting_input_hook_enabled)
+
+    def test_live_grant_flow_uses_dungeon_quality_floor_and_family_allowlist(self):
+        from game.gear_instances import _create_generated_gear_instance
+
+        boss_meta = build_dungeon_combat_source_metadata(
+            dungeon_id='amber_catacombs',
+            encounter_identity='amber_overseer',
+            mob_level=40,
+            source_category='dungeon_boss',
+        )
+
+        with patch('game.gear_instances.roll_generated_rarity', return_value='common'):
+            instance_id = _create_generated_gear_instance(
+                333,
+                'tracker_jacket',
+                source='mob_drop',
+                source_level=40,
+                source_metadata=boss_meta,
+            )
+
+        denied = grant_item_to_player(
+            333,
+            'herb_common',
+            quantity=1,
+            source='mob_drop',
+            source_level=40,
+            source_metadata=boss_meta,
+        )
+
+        conn = get_connection()
+        row = conn.execute('SELECT rarity FROM gear_instances WHERE id=?', (instance_id,)).fetchone()
+        herb_row = conn.execute(
+            'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+            (333, 'herb_common'),
+        ).fetchone()
+        conn.close()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row['rarity'], 'rare')
+        self.assertEqual(denied, {'gear_instances_created': 0, 'stackable_added': 0})
+        self.assertIsNone(herb_row)
 
 
 if __name__ == '__main__':
