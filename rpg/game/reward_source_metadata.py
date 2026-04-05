@@ -13,6 +13,10 @@ from game.creature_loot_taxonomy import (
     normalize_creature_taxonomy,
     resolve_creature_loot_identity,
 )
+from game.dungeon_reward_framework import (
+    build_dungeon_reward_surface_profile,
+    normalize_dungeon_surface,
+)
 from game.items_data import get_item, get_item_reward_tags
 from game.open_world_reward_pools import build_open_world_reward_pool_profile
 from game.reward_policies import (
@@ -42,6 +46,15 @@ class RewardSourceMetadata:
     creature_loot_identity: tuple[str, ...] = ()
     open_world_pool_profile: str | None = None
     open_world_region_identity: str | None = None
+    dungeon_id: str | None = None
+    dungeon_encounter_identity: str | None = None
+    dungeon_reward_profile_identity: str | None = None
+    dungeon_payoff_role: str | None = None
+    power_essence_role: str | None = None
+    dungeon_recipe_hook_enabled: bool = False
+    dungeon_reagent_hook_enabled: bool = False
+    boss_reagent_hook_enabled: bool = False
+    future_set_crafting_input_hook_enabled: bool = False
     quality_floor_rarity: str | None = None
     content_tier_band_min: int | None = None
     content_tier_band_max: int | None = None
@@ -139,4 +152,45 @@ def build_open_world_combat_source_metadata(
         quality_floor_rarity=open_world_profile.quality_floor if open_world_profile else None,
         content_tier_band_min=open_world_profile.content_tier_band_min if open_world_profile else None,
         content_tier_band_max=open_world_profile.content_tier_band_max if open_world_profile else None,
+    )
+
+
+def build_dungeon_combat_source_metadata(
+    *,
+    dungeon_id: str,
+    encounter_identity: str,
+    mob_level: int,
+    source_category: str,
+    creature_taxonomy: dict | None = None,
+) -> RewardSourceMetadata:
+    taxonomy = normalize_creature_taxonomy(creature_taxonomy)
+    normalized_surface = normalize_dungeon_surface(source_category)
+    profile = build_dungeon_reward_surface_profile(
+        source_category=normalized_surface,
+        dungeon_id=dungeon_id,
+        encounter_identity=encounter_identity,
+        mob_level=mob_level,
+    )
+
+    return RewardSourceMetadata(
+        source_category=profile.source_category,
+        content_tier=profile.content_tier_band,
+        content_identity=encounter_identity,
+        channel_hint='combat',
+        creature_body_type=taxonomy.body_type,
+        creature_special_trait=taxonomy.special_trait,
+        creature_encounter_class=taxonomy.encounter_class,
+        creature_loot_identity=resolve_creature_loot_identity(taxonomy),
+        dungeon_id=profile.dungeon_id,
+        dungeon_encounter_identity=profile.encounter_identity,
+        dungeon_reward_profile_identity=profile.reward_profile_identity,
+        dungeon_payoff_role=profile.payoff_role,
+        power_essence_role=profile.power_essence_role,
+        dungeon_recipe_hook_enabled=profile.dungeon_recipe_hook_enabled,
+        dungeon_reagent_hook_enabled=profile.dungeon_reagent_hook_enabled,
+        boss_reagent_hook_enabled=profile.boss_reagent_hook_enabled,
+        future_set_crafting_input_hook_enabled=profile.future_set_crafting_input_hook_enabled,
+        quality_floor_rarity=profile.quality_floor,
+        content_tier_band_min=profile.content_tier_band_min,
+        content_tier_band_max=profile.content_tier_band_max,
     )
