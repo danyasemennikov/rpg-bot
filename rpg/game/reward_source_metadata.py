@@ -45,7 +45,16 @@ class RewardSourceMetadata:
     creature_encounter_class: str | None = None
     creature_loot_identity: tuple[str, ...] = ()
     open_world_pool_profile: str | None = None
+    open_world_world_identity: str | None = None
+    open_world_macro_region_identity: str | None = None
     open_world_region_identity: str | None = None
+    open_world_zone_identity: str | None = None
+    open_world_zone_role: str | None = None
+    open_world_encounter_role: str | None = None
+    open_world_region_flavor_tags: tuple[str, ...] = ()
+    future_dungeon_link_id: str | None = None
+    future_world_boss_governance_id: str | None = None
+    open_world_future_pvp_ruleset_id: str | None = None
     dungeon_id: str | None = None
     dungeon_encounter_identity: str | None = None
     dungeon_reward_profile_identity: str | None = None
@@ -126,6 +135,7 @@ def build_open_world_combat_source_metadata(
     source_category: str | None = DEFAULT_SOURCE_CATEGORY,
     creature_taxonomy: dict | None = None,
     location_id: str | None = None,
+    encounter_role: str | None = None,
 ) -> RewardSourceMetadata:
     taxonomy = normalize_creature_taxonomy(creature_taxonomy)
     resolved_source_category = source_category
@@ -137,6 +147,8 @@ def build_open_world_combat_source_metadata(
         source_id=source_id,
         mob_level=mob_level,
         location_id=location_id,
+        creature_taxonomy=creature_taxonomy,
+        encounter_role=encounter_role,
     )
     return RewardSourceMetadata(
         source_category=normalized_category,
@@ -148,7 +160,16 @@ def build_open_world_combat_source_metadata(
         creature_encounter_class=taxonomy.encounter_class,
         creature_loot_identity=resolve_creature_loot_identity(taxonomy),
         open_world_pool_profile=open_world_profile.reward_pool_profile if open_world_profile else None,
+        open_world_world_identity=open_world_profile.world_identity if open_world_profile else None,
+        open_world_macro_region_identity=open_world_profile.macro_region_identity if open_world_profile else None,
         open_world_region_identity=open_world_profile.region_identity if open_world_profile else None,
+        open_world_zone_identity=open_world_profile.zone_identity if open_world_profile else None,
+        open_world_zone_role=open_world_profile.zone_role if open_world_profile else None,
+        open_world_encounter_role=open_world_profile.encounter_role if open_world_profile else None,
+        open_world_region_flavor_tags=open_world_profile.region_flavor_tags if open_world_profile else (),
+        future_dungeon_link_id=open_world_profile.linked_dungeon_id if open_world_profile else None,
+        future_world_boss_governance_id=open_world_profile.world_boss_governance_id if open_world_profile else None,
+        open_world_future_pvp_ruleset_id=open_world_profile.future_pvp_ruleset_id if open_world_profile else None,
         quality_floor_rarity=open_world_profile.quality_floor if open_world_profile else None,
         content_tier_band_min=open_world_profile.content_tier_band_min if open_world_profile else None,
         content_tier_band_max=open_world_profile.content_tier_band_max if open_world_profile else None,

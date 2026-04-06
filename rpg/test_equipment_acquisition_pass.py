@@ -201,7 +201,15 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         self.assertEqual(source_meta.creature_encounter_class, 'elite')
         self.assertIn('core', source_meta.creature_loot_identity)
         self.assertEqual(source_meta.open_world_pool_profile, 'open_world_elite_surface')
-        self.assertEqual(source_meta.open_world_region_identity, 'old_mines')
+        self.assertEqual(source_meta.open_world_world_identity, 'ashen_continent')
+        self.assertIsNone(source_meta.open_world_macro_region_identity)
+        self.assertEqual(source_meta.open_world_region_identity, 'ember_valley')
+        self.assertEqual(source_meta.open_world_zone_identity, 'old_mines')
+        self.assertEqual(source_meta.open_world_zone_role, 'elite')
+        self.assertEqual(source_meta.open_world_encounter_role, 'elite')
+        self.assertEqual(source_meta.future_dungeon_link_id, 'amber_catacombs')
+        self.assertEqual(source_meta.future_world_boss_governance_id, 'ember_valley_world_boss')
+        self.assertEqual(source_meta.open_world_future_pvp_ruleset_id, 'open_world_frontier')
         self.assertEqual(source_meta.quality_floor_rarity, 'uncommon')
 
     def test_live_flow_bridge_maps_elite_encounter_to_open_world_elite_when_source_missing(self):
@@ -290,7 +298,8 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             apply_rewards(9001, player, rewards)
 
         source_meta = grant_mock.call_args.kwargs['source_metadata']
-        self.assertEqual(source_meta.open_world_region_identity, 'old_mines')
+        self.assertEqual(source_meta.open_world_region_identity, 'ember_valley')
+        self.assertEqual(source_meta.open_world_zone_identity, 'old_mines')
 
     def test_live_reward_flow_falls_back_to_player_region_when_mob_region_unknown(self):
         rewards = {
@@ -310,7 +319,8 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             apply_rewards(9001, player, rewards)
 
         source_meta = grant_mock.call_args.kwargs['source_metadata']
-        self.assertEqual(source_meta.open_world_region_identity, 'village')
+        self.assertEqual(source_meta.open_world_region_identity, 'ember_valley')
+        self.assertEqual(source_meta.open_world_zone_identity, 'ember_village')
 
 
 class ShopBackNavigationTests(unittest.IsolatedAsyncioTestCase):

@@ -120,6 +120,7 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
         mob_level=mob_level,
         source_category=rewards.get('source_category'),
         creature_taxonomy=rewards.get('creature_taxonomy'),
+        encounter_role=rewards.get('encounter_role'),
         location_id=get_mob_location_id(str(rewards.get('mob_id', ''))) or player.get('location_id'),
     )
     for item_id in rewards['loot']:

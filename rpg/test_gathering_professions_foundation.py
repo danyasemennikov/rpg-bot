@@ -59,7 +59,16 @@ class GatheringProfessionsFoundationTests(unittest.TestCase):
         forest_profiles = build_location_gather_source_profiles('dark_forest')
         self.assertTrue(forest_profiles)
         for profile in forest_profiles:
-            self.assertEqual(profile.region_identity, 'dark_forest')
+            self.assertEqual(profile.world_identity, 'ashen_continent')
+            self.assertIsNone(profile.macro_region_identity)
+            self.assertEqual(profile.region_identity, 'ember_valley')
+            self.assertEqual(profile.zone_identity, 'dark_forest')
+            self.assertEqual(profile.zone_role, 'normal')
+            self.assertEqual(profile.encounter_role, 'normal')
+            self.assertIn('dark_wood', profile.region_flavor_tags)
+            self.assertEqual(profile.linked_dungeon_id, 'rootbound_hollow')
+            self.assertEqual(profile.world_boss_governance_id, 'ember_valley_world_boss')
+            self.assertEqual(profile.future_pvp_ruleset_id, 'open_world_frontier')
             self.assertEqual(profile.zone_tier_band, 1)
 
     def test_hunting_is_contractual_supplemental_layer_not_creature_loot_replacement(self):

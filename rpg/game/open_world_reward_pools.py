@@ -15,6 +15,10 @@ from typing import Literal
 from game.items_data import get_item
 from game.mobs import MOBS
 from game.reward_policies import REWARD_FAMILIES_BY_SOURCE, resolve_content_tier_band
+from game.world_scaffolding import (
+    OpenWorldRegionIdentity,
+    resolve_open_world_region_identity as resolve_world_region_identity,
+)
 
 OpenWorldSourceCategory = Literal[
     'open_world_normal',
@@ -59,7 +63,16 @@ class OpenWorldRewardPoolProfile:
     source_category: OpenWorldSourceCategory
     reward_pool_profile: str
     content_identity: str
+    world_identity: str
+    macro_region_identity: str | None
+    zone_identity: str
+    zone_role: str
+    encounter_role: str
     region_identity: str
+    region_flavor_tags: tuple[str, ...]
+    linked_dungeon_id: str | None
+    world_boss_governance_id: str | None
+    future_pvp_ruleset_id: str | None
     content_tier_band: int
     content_tier_band_min: int
     content_tier_band_max: int
@@ -71,9 +84,22 @@ def is_open_world_source_category(category: str | None) -> bool:
     return category in OPEN_WORLD_SOURCE_CATEGORIES
 
 def resolve_open_world_region_identity(location_id: str | None) -> str:
-    if isinstance(location_id, str) and location_id:
-        return location_id
-    return 'open_world_unknown_region'
+    return resolve_open_world_region_profile(location_id=location_id).region_identity
+
+
+def resolve_open_world_region_profile(
+    *,
+    location_id: str | None,
+    source_category: str | None = None,
+    creature_taxonomy: dict | None = None,
+    encounter_role: str | None = None,
+) -> OpenWorldRegionIdentity:
+    return resolve_world_region_identity(
+        location_id=location_id,
+        source_category=source_category,
+        creature_taxonomy=creature_taxonomy,
+        explicit_encounter_role=encounter_role,
+    )
 
 
 def build_open_world_reward_pool_profile(
@@ -82,17 +108,34 @@ def build_open_world_reward_pool_profile(
     source_id: str,
     mob_level: int,
     location_id: str | None,
+    creature_taxonomy: dict | None = None,
+    encounter_role: str | None = None,
 ) -> OpenWorldRewardPoolProfile | None:
     if not is_open_world_source_category(source_category):
         return None
 
     typed_category: OpenWorldSourceCategory = source_category  # type: ignore[assignment]
     tier_band = resolve_content_tier_band(mob_level)
+    region_profile = resolve_open_world_region_profile(
+        location_id=location_id,
+        source_category=typed_category,
+        creature_taxonomy=creature_taxonomy,
+        encounter_role=encounter_role,
+    )
     return OpenWorldRewardPoolProfile(
         source_category=typed_category,
         reward_pool_profile=OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY[typed_category],
         content_identity=source_id,
-        region_identity=resolve_open_world_region_identity(location_id),
+        world_identity=region_profile.world_id,
+        macro_region_identity=region_profile.macro_region_identity,
+        zone_identity=region_profile.zone_identity,
+        zone_role=region_profile.zone_role,
+        encounter_role=region_profile.encounter_role,
+        region_identity=region_profile.region_identity,
+        region_flavor_tags=region_profile.region_flavor_tags,
+        linked_dungeon_id=region_profile.linked_dungeon_id,
+        world_boss_governance_id=region_profile.world_boss_governance_id,
+        future_pvp_ruleset_id=region_profile.future_pvp_ruleset_id,
         content_tier_band=tier_band,
         content_tier_band_min=max(1, tier_band - 1),
         content_tier_band_max=min(10, tier_band + 1),
