@@ -33,6 +33,7 @@ from game.gear_instances import (
 )
 from game.reward_source_metadata import build_open_world_combat_source_metadata
 from game.locations import get_mob_location_id
+from game.pvp_death_policy import resolve_death_respawn_hub
 
 
 # ────────────────────────────────────────
@@ -141,20 +142,21 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     }
 
 def apply_death(telegram_id: int, player: dict):
-    """Применяет штраф смерти и возрождает в деревне."""
+    """Применяет штраф смерти и возрождает в региональном safe-хабе."""
     penalty  = calc_death_penalty(player)
     new_exp  = max(0, player['exp'] - penalty['exp_loss'])
     new_gold = max(0, player['gold'] - penalty['gold_loss'])
 
     conn = get_connection()
     revive_hp = int(calc_max_hp(player['vitality']) * 0.30)
+    respawn_hub_id = resolve_death_respawn_hub(location_id=player.get('location_id'))
 
     conn.execute(
         '''UPDATE players SET
             exp=?, gold=?, hp=?,
-            location_id='village', in_battle=0
+            location_id=?, in_battle=0
            WHERE telegram_id=?''',
-        (new_exp, new_gold, revive_hp, telegram_id)
+        (new_exp, new_gold, revive_hp, respawn_hub_id, telegram_id)
     )
     conn.commit()
     conn.close()

@@ -5,8 +5,18 @@
 import sqlite3
 import os
 
-import os
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'game.db')
+
+
+def _add_column_if_missing(conn: sqlite3.Connection, table_name: str, column_name: str, sql_suffix: str) -> None:
+    existing_columns = {
+        row['name']
+        for row in conn.execute(f'PRAGMA table_info({table_name})').fetchall()
+    }
+    if column_name in existing_columns:
+        return
+    conn.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {sql_suffix}')
+    conn.commit()
 
 def get_connection():
     """Подключение к БД."""
@@ -18,14 +28,6 @@ def get_connection():
 def init_db():
     """Создаёт все таблицы если их нет."""
     conn = get_connection()
-    # Добавляем last_seen если колонки нет
-    try:
-        conn.execute(
-            'ALTER TABLE players ADD COLUMN last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
-        )
-        conn.commit()
-    except:
-        pass
     c = conn.cursor()
 
     # ────────────────────────────────────────
@@ -68,6 +70,13 @@ def init_db():
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    conn.commit()
+    _add_column_if_missing(conn, 'players', 'last_seen', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    _add_column_if_missing(conn, 'players', 'pvp_status', "TEXT DEFAULT 'neutral'")
+    _add_column_if_missing(conn, 'players', 'combat_tag_until', "INTEGER DEFAULT 0")
+    _add_column_if_missing(conn, 'players', 'red_flag', "INTEGER DEFAULT 0")
+    _add_column_if_missing(conn, 'players', 'infamy', "INTEGER DEFAULT 0")
+    _add_column_if_missing(conn, 'players', 'novice_protection', "INTEGER DEFAULT 1")
 
     # ────────────────────────────────────────
     # СПРАВОЧНИК ПРЕДМЕТОВ
@@ -255,6 +264,25 @@ def init_db():
         )
     ''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS pvp_engagements (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            attacker_id           INTEGER NOT NULL,
+            defender_id           INTEGER NOT NULL,
+            location_id           TEXT NOT NULL,
+            engagement_started_at TIMESTAMP NOT NULL,
+            engagement_ready_at   TIMESTAMP NOT NULL,
+            engagement_state      TEXT NOT NULL,
+            reason_context        TEXT,
+            reinforcement_hook    TEXT,
+            created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (attacker_id) REFERENCES players(telegram_id),
+            FOREIGN KEY (defender_id) REFERENCES players(telegram_id)
+        )
+    ''')
+
     # ────────────────────────────────────────
     # РЕЙДЫ
     # ────────────────────────────────────────
@@ -276,7 +304,7 @@ def init_db():
     print('✅ База данных создана!')
     print('📋 Таблицы: players, items, inventory, equipment,')
     print('           player_quests, skill_cooldowns,')
-    print('           active_effects, pvp_log, raids')
+    print('           active_effects, pvp_log, pvp_engagements, raids')
 # ────────────────────────────────────────
 # ФУНКЦИИ ИГРОКА
 # ────────────────────────────────────────

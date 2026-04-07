@@ -14,6 +14,8 @@ LOCATIONS = {
         'linked_dungeon_id': None,
         'world_boss_governance_id': 'ember_valley_world_boss',
         'future_pvp_ruleset_id': 'open_world_frontier',
+        'security_tier': 'safe',
+        'is_regional_safe_hub': True,
         'name':        '🏘️ Пепельная Деревня',
         'description': 'Мирные поля, тихая деревушка на краю тёмного леса. Здесь можно отдохнуть, закупиться и взять квесты.',
         'level_min':   1,
@@ -35,6 +37,8 @@ LOCATIONS = {
         'linked_dungeon_id': 'rootbound_hollow',
         'world_boss_governance_id': 'ember_valley_world_boss',
         'future_pvp_ruleset_id': 'open_world_frontier',
+        'security_tier': 'guarded',
+        'is_regional_safe_hub': False,
         'name':        '🌲 Тёмный лес',
         'description': 'Густой лес, пронизанный тьмой. Здесь рыщут волки, а на деревьях затаились пауки.',
         'level_min':   1,
@@ -60,6 +64,8 @@ LOCATIONS = {
         'linked_dungeon_id': 'amber_catacombs',
         'world_boss_governance_id': 'ember_valley_world_boss',
         'future_pvp_ruleset_id': 'open_world_frontier',
+        'security_tier': 'frontier',
+        'is_regional_safe_hub': False,
         'name':        '⛏️ Старые шахты',
         'description': 'Заброшенные шахты, населённые гоблинами и жуткими тварями. Богаты рудой, но таят в себе опасности.',
         'level_min':   3,
@@ -94,6 +100,49 @@ def get_connected_locations(location_id: str) -> list:
 
 def get_mob_location_id(mob_id: str) -> str | None:
     return MOB_LOCATION_INDEX.get(mob_id)
+
+
+SECURITY_TIERS: tuple[str, ...] = ('safe', 'guarded', 'frontier', 'core_war')
+DEFAULT_SECURITY_TIER = 'safe'
+FALLBACK_SAFE_HUB_ID = 'village'
+
+
+def normalize_security_tier(value: str | None) -> str:
+    if value in SECURITY_TIERS:
+        return str(value)
+    return DEFAULT_SECURITY_TIER
+
+
+def get_location_security_tier(location_id: str | None) -> str:
+    location = get_location(location_id or '') or {}
+    explicit_tier = normalize_security_tier(location.get('security_tier'))
+    if explicit_tier != DEFAULT_SECURITY_TIER:
+        return explicit_tier
+    if location.get('safe'):
+        return 'safe'
+    return explicit_tier
+
+
+def resolve_region_safe_hub(
+    *,
+    location_id: str | None = None,
+    region_id: str | None = None,
+    world_id: str | None = None,
+) -> str:
+    resolved_location = get_location(location_id or '') or {}
+    resolved_region_id = region_id or resolved_location.get('region_id')
+    resolved_world_id = world_id or resolved_location.get('world_id')
+
+    for hub_id, hub_data in LOCATIONS.items():
+        if not hub_data.get('is_regional_safe_hub'):
+            continue
+        if resolved_region_id and hub_data.get('region_id') != resolved_region_id:
+            continue
+        if resolved_world_id and hub_data.get('world_id') != resolved_world_id:
+            continue
+        return hub_id
+
+    return FALLBACK_SAFE_HUB_ID
 
 print('✅ game/locations.py создан!')
 print(f'   Локаций в базе: {len(LOCATIONS)}')
