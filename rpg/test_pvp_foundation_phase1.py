@@ -233,6 +233,20 @@ class OpenWorldPvpFoundationTests(unittest.TestCase):
         self.assertEqual(resolved.action_id, 'finish_strike')
         self.assertTrue(resolved.timed_out)
 
+    def test_timed_turn_waits_before_timeout_when_no_action_selected(self):
+        started_at = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        options = [
+            PvpActionOption('finish_strike', ACTION_FAMILY_FINISHING, True),
+            PvpActionOption('normal_attack', ACTION_FAMILY_ATTACK, True),
+        ]
+        resolved = resolve_timed_turn_action(
+            turn_started_at=started_at,
+            available_options=options,
+            selected_action_id=None,
+            now=started_at + timedelta(seconds=5),
+        )
+        self.assertIsNone(resolved)
+
     def test_timed_turn_preserves_player_action_before_timeout(self):
         started_at = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         options = [
@@ -245,6 +259,7 @@ class OpenWorldPvpFoundationTests(unittest.TestCase):
             selected_action_id='core_slash',
             now=started_at + timedelta(seconds=5),
         )
+        self.assertIsNotNone(resolved)
         self.assertEqual(resolved.action_source, 'player')
         self.assertEqual(resolved.action_id, 'core_slash')
         self.assertFalse(resolved.timed_out)
@@ -274,6 +289,25 @@ class OpenWorldPvpFoundationTests(unittest.TestCase):
         self.assertEqual(state.pvp_status, 'neutral')
         flagged = build_player_pvp_state({'pvp_status': 'war_flagged'})
         self.assertEqual(flagged.pvp_status, 'war_flagged')
+
+    def test_missing_novice_protection_defaults_to_enabled(self):
+        attacker = {'telegram_id': 1, 'level': 20, 'novice_protection': 0, 'red_flag': 0}
+        defender = {'telegram_id': 2, 'level': 5, 'red_flag': 0}
+
+        self.assertTrue(
+            does_novice_protection_block_interaction(
+                attacker=attacker,
+                defender=defender,
+                location_id='dark_forest',
+            )
+        )
+        self.assertFalse(
+            is_target_attackable(
+                attacker=attacker,
+                defender=defender,
+                location_id='dark_forest',
+            )
+        )
 
 
 if __name__ == '__main__':

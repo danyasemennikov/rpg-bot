@@ -66,16 +66,18 @@ def resolve_timed_turn_action(
     available_options: list[PvpActionOption],
     selected_action_id: str | None,
     now: datetime | None = None,
-) -> PvpTurnResolution:
+) -> PvpTurnResolution | None:
     timed_out = is_turn_timed_out(turn_started_at=turn_started_at, now=now)
-    if not timed_out and selected_action_id:
-        for option in available_options:
-            if option.action_id == selected_action_id and option.is_ready:
-                return PvpTurnResolution(
-                    action_id=selected_action_id,
-                    action_source='player',
-                    timed_out=False,
-                )
+    if not timed_out:
+        if selected_action_id:
+            for option in available_options:
+                if option.action_id == selected_action_id and option.is_ready:
+                    return PvpTurnResolution(
+                        action_id=selected_action_id,
+                        action_source='player',
+                        timed_out=False,
+                    )
+        return None
 
     return PvpTurnResolution(
         action_id=resolve_auto_pvp_action(available_options),
