@@ -14,8 +14,8 @@ from typing import Literal
 
 from game.items_data import get_item_reward_tags
 from game.locations import get_location
-from game.open_world_reward_pools import resolve_open_world_region_identity
 from game.reward_policies import resolve_content_tier_band
+from game.world_scaffolding import resolve_open_world_region_identity
 
 GatherProfessionKey = Literal['herbalism', 'woodcutting', 'mining', 'fishing', 'hunting']
 
@@ -45,7 +45,16 @@ class GatherResourceIdentity:
 @dataclass(frozen=True)
 class LocationGatherSourceProfile:
     location_id: str
+    world_identity: str
+    macro_region_identity: str | None
     region_identity: str
+    zone_identity: str
+    zone_role: str
+    encounter_role: str
+    region_flavor_tags: tuple[str, ...]
+    linked_dungeon_id: str | None
+    world_boss_governance_id: str | None
+    future_pvp_ruleset_id: str | None
     zone_tier_band: int
     item_id: str
     chance: float
@@ -302,7 +311,7 @@ def resolve_required_profession_for_resource(item_id: str) -> GatherProfessionKe
 def build_location_gather_source_profiles(location_id: str) -> tuple[LocationGatherSourceProfile, ...]:
     location = get_location(location_id) or {}
     zone_tier_band = resolve_content_tier_band(location.get('level_max', 1))
-    region_identity = resolve_open_world_region_identity(location_id)
+    world_region = resolve_open_world_region_identity(location_id=location_id)
 
     profiles: list[LocationGatherSourceProfile] = []
     for raw in location.get('gather', ()):  # tuple[item_id, chance, display_name]
@@ -314,7 +323,16 @@ def build_location_gather_source_profiles(location_id: str) -> tuple[LocationGat
         profiles.append(
             LocationGatherSourceProfile(
                 location_id=location_id,
-                region_identity=region_identity,
+                world_identity=world_region.world_id,
+                macro_region_identity=world_region.macro_region_identity,
+                region_identity=world_region.region_identity,
+                zone_identity=world_region.zone_identity,
+                zone_role=world_region.zone_role,
+                encounter_role=world_region.encounter_role,
+                region_flavor_tags=world_region.region_flavor_tags,
+                linked_dungeon_id=world_region.linked_dungeon_id,
+                world_boss_governance_id=world_region.world_boss_governance_id,
+                future_pvp_ruleset_id=world_region.future_pvp_ruleset_id,
                 zone_tier_band=zone_tier_band,
                 item_id=item_id,
                 chance=chance,

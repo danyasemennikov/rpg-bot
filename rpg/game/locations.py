@@ -6,6 +6,14 @@ LOCATIONS = {
 
     'village': {
         'id':          'village',
+        'world_id':    'ashen_continent',
+        'region_id':   'ember_valley',
+        'zone_id':     'ember_village',
+        'zone_role':   'normal',
+        'region_flavor_tags': ['civilized_frontier', 'ashen_farmland'],
+        'linked_dungeon_id': None,
+        'world_boss_governance_id': 'ember_valley_world_boss',
+        'future_pvp_ruleset_id': 'open_world_frontier',
         'name':        '🏘️ Пепельная Деревня',
         'description': 'Мирные поля, тихая деревушка на краю тёмного леса. Здесь можно отдохнуть, закупиться и взять квесты.',
         'level_min':   1,
@@ -19,6 +27,14 @@ LOCATIONS = {
 
     'dark_forest': {
         'id':          'dark_forest',
+        'world_id':    'ashen_continent',
+        'region_id':   'ember_valley',
+        'zone_id':     'dark_forest',
+        'zone_role':   'normal',
+        'region_flavor_tags': ['beast_hunting', 'poison_herbs', 'dark_wood'],
+        'linked_dungeon_id': 'rootbound_hollow',
+        'world_boss_governance_id': 'ember_valley_world_boss',
+        'future_pvp_ruleset_id': 'open_world_frontier',
         'name':        '🌲 Тёмный лес',
         'description': 'Густой лес, пронизанный тьмой. Здесь рыщут волки, а на деревьях затаились пауки.',
         'level_min':   1,
@@ -36,6 +52,14 @@ LOCATIONS = {
 
     'old_mines': {
         'id':          'old_mines',
+        'world_id':    'ashen_continent',
+        'region_id':   'ember_valley',
+        'zone_id':     'old_mines',
+        'zone_role':   'elite',
+        'region_flavor_tags': ['ore_veins', 'construct_ruins', 'goblin_camps'],
+        'linked_dungeon_id': 'amber_catacombs',
+        'world_boss_governance_id': 'ember_valley_world_boss',
+        'future_pvp_ruleset_id': 'open_world_frontier',
         'name':        '⛏️ Старые шахты',
         'description': 'Заброшенные шахты, населённые гоблинами и жуткими тварями. Богаты рудой, но таят в себе опасности.',
         'level_min':   3,

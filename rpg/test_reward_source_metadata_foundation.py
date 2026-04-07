@@ -260,7 +260,16 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         self.assertIsNotNone(profile)
         assert profile is not None
         self.assertEqual(profile.reward_pool_profile, 'open_world_regional_boss_surface')
-        self.assertEqual(profile.region_identity, 'dark_forest')
+        self.assertEqual(profile.world_identity, 'ashen_continent')
+        self.assertIsNone(profile.macro_region_identity)
+        self.assertEqual(profile.region_identity, 'ember_valley')
+        self.assertEqual(profile.zone_identity, 'dark_forest')
+        self.assertEqual(profile.zone_role, 'regional_boss')
+        self.assertEqual(profile.encounter_role, 'regional_boss')
+        self.assertIn('poison_herbs', profile.region_flavor_tags)
+        self.assertEqual(profile.linked_dungeon_id, 'rootbound_hollow')
+        self.assertEqual(profile.world_boss_governance_id, 'ember_valley_world_boss')
+        self.assertEqual(profile.future_pvp_ruleset_id, 'open_world_frontier')
         self.assertEqual(profile.content_identity, 'dark_treant')
         self.assertEqual(profile.quality_floor, 'epic')
         self.assertIn('gear', profile.allowed_reward_families)
@@ -316,6 +325,46 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         conn.close()
         self.assertIsNotNone(row)
         self.assertEqual(row['rarity'], 'uncommon')
+
+    def test_open_world_metadata_exposes_region_zone_and_future_linkage_hooks(self):
+        source_meta = build_open_world_combat_source_metadata(
+            source_id='goblin_miner',
+            mob_level=4,
+            source_category='open_world_elite',
+            creature_taxonomy={
+                'body_type': 'humanoid',
+                'special_trait': 'armored',
+                'encounter_class': 'elite',
+            },
+            location_id='old_mines',
+        )
+        self.assertEqual(source_meta.open_world_world_identity, 'ashen_continent')
+        self.assertIsNone(source_meta.open_world_macro_region_identity)
+        self.assertEqual(source_meta.open_world_region_identity, 'ember_valley')
+        self.assertEqual(source_meta.open_world_zone_identity, 'old_mines')
+        self.assertEqual(source_meta.open_world_zone_role, 'elite')
+        self.assertEqual(source_meta.open_world_encounter_role, 'elite')
+        self.assertEqual(source_meta.future_dungeon_link_id, 'amber_catacombs')
+        self.assertEqual(source_meta.future_world_boss_governance_id, 'ember_valley_world_boss')
+        self.assertEqual(source_meta.open_world_future_pvp_ruleset_id, 'open_world_frontier')
+        self.assertIn('ore_veins', source_meta.open_world_region_flavor_tags)
+
+    def test_explicit_encounter_role_maps_to_rare_spawn_even_with_normal_taxonomy(self):
+        source_meta = build_open_world_combat_source_metadata(
+            source_id='synthetic_rare_spawn',
+            mob_level=24,
+            source_category='open_world_rare_spawn',
+            creature_taxonomy={
+                'body_type': 'beast',
+                'special_trait': 'predator',
+                'encounter_class': 'normal',
+            },
+            encounter_role='rare_spawn',
+            location_id='dark_forest',
+        )
+        self.assertEqual(source_meta.source_category, 'open_world_rare_spawn')
+        self.assertEqual(source_meta.open_world_encounter_role, 'rare_spawn')
+        self.assertEqual(source_meta.open_world_zone_role, 'rare_spawn')
 
     def test_dungeon_source_metadata_contains_identity_band_and_reward_profile(self):
         dungeon_meta = build_dungeon_combat_source_metadata(

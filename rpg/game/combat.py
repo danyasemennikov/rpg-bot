@@ -1468,6 +1468,7 @@ def calc_rewards(mob: dict) -> dict:
         'mob_level': mob.get('level', 1),
         'mob_id': mob.get('id', 'unknown_mob'),
         'source_category': mob.get('reward_source_category'),
+        'encounter_role': mob.get('encounter_role'),
         'creature_taxonomy': mob.get('creature_taxonomy'),
     }
 

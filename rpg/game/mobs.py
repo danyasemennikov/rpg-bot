@@ -23,6 +23,7 @@ MOBS = {
         'gold_min':    2,
         'gold_max':    5,
         'aggressive':  False,
+        'encounter_role': 'normal',
         'creature_taxonomy': {
             'body_type': 'beast',
             'special_trait': 'predator',
@@ -48,6 +49,7 @@ MOBS = {
         'gold_min':    1,
         'gold_max':    3,
         'aggressive':  False,
+        'encounter_role': 'normal',
         'creature_taxonomy': {
             'body_type': 'beast',
             'special_trait': 'armored',
@@ -71,6 +73,7 @@ MOBS = {
         'gold_min':    3,
         'gold_max':    6,
         'aggressive':  False,
+        'encounter_role': 'normal',
         'creature_taxonomy': {
             'body_type': 'arachnid',
             'special_trait': 'venomous',
@@ -97,6 +100,7 @@ MOBS = {
         'gold_min':    8,
         'gold_max':    15,
         'aggressive':  False,
+        'encounter_role': 'regional_boss',
         'reward_source_category': 'open_world_regional_boss',
         'creature_taxonomy': {
             'body_type': 'plant',
@@ -126,6 +130,7 @@ MOBS = {
         'gold_min':    1,
         'gold_max':    4,
         'aggressive':  False,
+        'encounter_role': 'normal',
         'creature_taxonomy': {
             'body_type': 'beast',
             'special_trait': 'toxic',
@@ -149,6 +154,7 @@ MOBS = {
         'gold_min':    5,
         'gold_max':    12,
         'aggressive':  True,
+        'encounter_role': 'elite',
         'reward_source_category': 'open_world_elite',
         'creature_taxonomy': {
             'body_type': 'humanoid',
@@ -178,6 +184,7 @@ MOBS = {
         'gold_min':    0,
         'gold_max':    2,
         'aggressive':  False,
+        'encounter_role': 'normal',
         'creature_taxonomy': {
             'body_type': 'avian',
             'special_trait': 'frost_touched',
@@ -200,6 +207,7 @@ MOBS = {
         'gold_min':    15,
         'gold_max':    30,
         'aggressive':  False,
+        'encounter_role': 'elite',
         'reward_source_category': 'open_world_elite',
         'creature_taxonomy': {
             'body_type': 'construct',
