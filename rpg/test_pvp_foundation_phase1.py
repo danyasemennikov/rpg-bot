@@ -293,6 +293,9 @@ class OpenWorldPvpFoundationTests(unittest.TestCase):
     def test_missing_novice_protection_defaults_to_enabled(self):
         attacker = {'telegram_id': 1, 'level': 20, 'novice_protection': 0, 'red_flag': 0}
         defender = {'telegram_id': 2, 'level': 5, 'red_flag': 0}
+        defender_state = build_player_pvp_state(defender)
+
+        self.assertEqual(defender_state.novice_protection, 1)
 
         self.assertTrue(
             does_novice_protection_block_interaction(
@@ -302,6 +305,29 @@ class OpenWorldPvpFoundationTests(unittest.TestCase):
             )
         )
         self.assertFalse(
+            is_target_attackable(
+                attacker=attacker,
+                defender=defender,
+                location_id='dark_forest',
+            )
+        )
+
+    def test_explicit_novice_protection_zero_stays_disabled(self):
+        state = build_player_pvp_state({'level': 5, 'novice_protection': 0})
+        self.assertEqual(state.novice_protection, 0)
+
+    def test_guarded_zone_not_blocked_when_low_level_player_opted_out(self):
+        attacker = {'telegram_id': 1, 'level': 20, 'novice_protection': 0, 'red_flag': 0}
+        defender = {'telegram_id': 2, 'level': 5, 'novice_protection': 0, 'red_flag': 0}
+
+        self.assertFalse(
+            does_novice_protection_block_interaction(
+                attacker=attacker,
+                defender=defender,
+                location_id='dark_forest',
+            )
+        )
+        self.assertTrue(
             is_target_attackable(
                 attacker=attacker,
                 defender=defender,
