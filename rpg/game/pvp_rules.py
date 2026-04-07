@@ -6,6 +6,7 @@ Phase-1 contract only: legality/state checks without full PvP combat flow.
 from __future__ import annotations
 
 from game.locations import get_location_security_tier
+from game.pvp_state import build_player_pvp_state
 
 PVP_STATUS_NEUTRAL = 'neutral'
 PVP_STATUS_FLAGGED = 'flagged'
@@ -22,23 +23,11 @@ DEFAULT_NOVICE_PROTECTION_LEVEL_CAP = 15
 
 
 def get_player_pvp_status(player: dict | None) -> str:
-    if not player:
-        return PVP_STATUS_NEUTRAL
-    status = str(player.get('pvp_status') or PVP_STATUS_NEUTRAL)
-    if status in {
-        PVP_STATUS_NEUTRAL,
-        PVP_STATUS_FLAGGED,
-        PVP_STATUS_FORCED_FLAGGED,
-        PVP_STATUS_WAR_FLAGGED,
-    }:
-        return status
-    return PVP_STATUS_NEUTRAL
+    return build_player_pvp_state(player).pvp_status
 
 
 def is_player_red_flagged(player: dict | None) -> bool:
-    if not player:
-        return False
-    return bool(int(player.get('red_flag', 0) or 0))
+    return bool(build_player_pvp_state(player).red_flag)
 
 
 def is_novice_protection_active(
@@ -48,7 +37,8 @@ def is_novice_protection_active(
 ) -> bool:
     if not player:
         return False
-    novice_enabled = bool(int(player.get('novice_protection', 0) or 0))
+    state = build_player_pvp_state(player)
+    novice_enabled = bool(state.novice_protection)
     return novice_enabled and int(player.get('level', 1) or 1) <= novice_level_cap
 
 
