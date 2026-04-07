@@ -15,6 +15,18 @@ from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
 from game.items_data import get_item
 from game.i18n import t, get_player_lang, get_mob_name, get_location_name, get_location_desc, get_item_name
+from game.pvp_live import (
+    advance_engagement_to_live_battle_if_ready,
+    apply_illegal_aggression_penalties,
+    can_create_live_engagement,
+    create_live_engagement,
+    get_pending_player_engagement,
+    get_manual_pvp_action_labels,
+    is_player_busy_with_live_pvp,
+    resolve_engagement_escape,
+    resolve_live_battle_turn,
+)
+from game.pvp_rules import is_aggression_illegal, is_target_attackable, should_apply_red_flag
 
 CURATED_EQUIPMENT_VENDOR_STOCK = {
     'village': [
@@ -150,6 +162,58 @@ def build_location_message(player: dict, location: dict) -> tuple:
 
     keyboard = []
 
+    # ── PvP nearby players ──
+    conn = get_connection()
+    nearby_players = conn.execute(
+        '''
+        SELECT telegram_id, name, level
+        FROM players
+        WHERE location_id=? AND telegram_id!=?
+        ORDER BY level DESC, telegram_id ASC
+        LIMIT 5
+        ''',
+        (location['id'], player['telegram_id']),
+    ).fetchall()
+    conn.close()
+    if nearby_players and not location['safe']:
+        text += t('location.players_nearby', lang) + '\n'
+        for row in nearby_players:
+            is_busy = is_player_busy_with_live_pvp(int(row['telegram_id']))
+            busy_tag = f" {t('location.pvp_busy_tag', lang)}" if is_busy else ""
+            text += f"👤 {row['name']}  {t('common.level_short', lang)}{row['level']}{busy_tag}\n"
+            if not is_busy:
+                keyboard.append([InlineKeyboardButton(
+                    t('location.attack_player_btn', lang, name=row['name']),
+                    callback_data=f"pvp_attack_{row['telegram_id']}",
+                )])
+        text += '\n'
+
+    engagement_row = get_pending_player_engagement(int(player['telegram_id']))
+    if engagement_row:
+        state, payload = advance_engagement_to_live_battle_if_ready(engagement_row)
+        if state == 'pending':
+            text += t('location.pvp_pending', lang) + '\n'
+            keyboard.append([InlineKeyboardButton(
+                t('location.pvp_escape_btn', lang),
+                callback_data=f"pvp_escape_{engagement_row['id']}",
+            )])
+        elif state == 'converted_to_battle':
+            battle = payload.get('battle') or {}
+            text += t(
+                'location.pvp_live_status',
+                lang,
+                attacker_hp=battle.get('attacker_hp', 0),
+                defender_hp=battle.get('defender_hp', 0),
+            ) + '\n'
+            for action_id, action_label in get_manual_pvp_action_labels(
+                player_id=int(player['telegram_id']),
+                lang=lang,
+            ):
+                keyboard.append([InlineKeyboardButton(
+                    action_label,
+                    callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
+                )])
+
     # ── Мобы ──
     if location['mobs']:
         text += t('location.mobs_nearby', lang) + '\n'
@@ -276,8 +340,111 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
     p    = get_player(user.id)
     lang = p['lang'] if p else 'ru'
     
-    if p and p['in_battle']:
+    if p and p['in_battle'] and not data.startswith('pvp_'):
         await query.answer(t('location.in_battle_block', lang), show_alert=True)
+        return
+
+    if data.startswith('pvp_attack_'):
+        target_id = int(data.replace('pvp_attack_', '', 1))
+        defender = get_player(target_id)
+        attacker = p
+        if not defender:
+            await query.answer(t('location.pvp_target_missing', lang), show_alert=True)
+            return
+        if defender['location_id'] != attacker['location_id']:
+            await query.answer(t('location.pvp_target_missing', lang), show_alert=True)
+            return
+        if not is_target_attackable(attacker=dict(attacker), defender=dict(defender), location_id=attacker['location_id']):
+            await query.answer(t('location.pvp_not_allowed', lang), show_alert=True)
+            return
+        can_create, reason = can_create_live_engagement(
+            attacker_id=int(attacker['telegram_id']),
+            defender_id=int(defender['telegram_id']),
+        )
+        if not can_create:
+            if reason in {'defender_busy', 'already_in_battle'}:
+                await query.answer(t('location.pvp_target_busy', lang), show_alert=True)
+            else:
+                await query.answer(t('location.pvp_you_busy', lang), show_alert=True)
+            return
+
+        illegal = is_aggression_illegal(attacker=dict(attacker), defender=dict(defender), location_id=attacker['location_id'])
+        create_live_engagement(
+            attacker=dict(attacker),
+            defender=dict(defender),
+            location_id=attacker['location_id'],
+            illegal_aggression=illegal,
+        )
+        if should_apply_red_flag(attacker=dict(attacker), defender=dict(defender), location_id=attacker['location_id']):
+            apply_illegal_aggression_penalties(attacker_id=int(attacker['telegram_id']))
+
+        defender_lang = get_player_lang(int(defender['telegram_id']))
+        try:
+            await context.bot.send_message(
+                chat_id=int(defender['telegram_id']),
+                text=t('location.pvp_defender_alert', defender_lang, name=attacker.get('name', 'Unknown')),
+            )
+        except Exception:
+            pass
+        await query.answer(t('location.pvp_engagement_started', lang), show_alert=True)
+        location = get_location(attacker['location_id'])
+        text, keyboard = build_location_message(dict(get_player(user.id)), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_escape_'):
+        engagement_id = int(data.replace('pvp_escape_', '', 1))
+        conn = get_connection()
+        engagement_row = conn.execute(
+            'SELECT * FROM pvp_engagements WHERE id=?',
+            (engagement_id,),
+        ).fetchone()
+        conn.close()
+        if not engagement_row:
+            await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        success = random.randint(1, 100) <= 50
+        state, _ = resolve_engagement_escape(engagement_row, escape_succeeded=success)
+        if state == 'escaped':
+            await query.answer(t('location.pvp_escape_success', lang), show_alert=True)
+        else:
+            await query.answer(t('location.pvp_escape_fail', lang), show_alert=True)
+        location = get_location(get_player(user.id)['location_id'])
+        text, keyboard = build_location_message(dict(get_player(user.id)), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_act_'):
+        raw = data.replace('pvp_act_', '', 1)
+        engagement_id = int(raw.split('_', 1)[0])
+        action_id = raw.split('_', 1)[1]
+        conn = get_connection()
+        engagement_row = conn.execute(
+            'SELECT * FROM pvp_engagements WHERE id=?',
+            (engagement_id,),
+        ).fetchone()
+        conn.close()
+        if not engagement_row:
+            await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        status, _payload = resolve_live_battle_turn(
+            engagement_row,
+            actor_id=int(user.id),
+            selected_action_id=action_id,
+        )
+        if status == 'waiting':
+            await query.answer(t('location.pvp_wait_turn_timeout', lang), show_alert=True)
+        elif status == 'invalid_action':
+            await query.answer(t('location.pvp_action_not_ready', lang), show_alert=True)
+        elif status == 'not_your_turn':
+            await query.answer(t('location.pvp_not_your_turn', lang), show_alert=True)
+        elif status == 'finished':
+            await query.answer(t('location.pvp_battle_finished', lang), show_alert=True)
+        else:
+            await query.answer(t('location.pvp_action_done', lang), show_alert=True)
+        location = get_location(get_player(user.id)['location_id'])
+        text, keyboard = build_location_message(dict(get_player(user.id)), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
     if data == 'shop':

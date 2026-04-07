@@ -39,6 +39,11 @@ async def regen_tick(context):
     for p in players:
         apply_regen(dict(p))
 
+async def pvp_tick(context):
+    """Фоновый тик open-world PvP: таймеры engagement/turn timeout."""
+    from game.pvp_live import run_live_pvp_tick
+    await run_live_pvp_tick(context.bot)
+
 async def handle_text(update, context):
     """Роутер текстовых сообщений."""
     if await handle_transfer_input(update, context):
@@ -84,6 +89,7 @@ def main():
             'JobQueue недоступен. Установи: pip install "python-telegram-bot[job-queue]"'
         )
     job_queue.run_repeating(regen_tick, interval=60, first=10)
+    job_queue.run_repeating(pvp_tick, interval=3, first=3)
 
     # Команды
     app.add_handler(CommandHandler('start',    start_command))
@@ -98,7 +104,7 @@ def main():
 
     # Колбэки
     app.add_handler(CallbackQueryHandler(handle_stat_buttons,     pattern='^stat_'))
-    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern='^(goto_|noop|shop$|shop_back$|shop_buy_)'))
+    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern='^(goto_|noop|shop$|shop_back$|shop_buy_|pvp_)'))
     app.add_handler(CallbackQueryHandler(handle_combat_buttons,   pattern='^(fight_|flee_)'))
     app.add_handler(CallbackQueryHandler(handle_battle_buttons,   pattern='^battle_'))
     app.add_handler(CallbackQueryHandler(handle_stats_buttons,    pattern='^sp_'))
