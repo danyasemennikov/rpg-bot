@@ -39,10 +39,17 @@ def build_player_pvp_state(player: dict | None) -> PlayerPvpState:
     raw_status = str(player.get('pvp_status') or DEFAULT_PVP_STATUS)
     normalized_status = raw_status if raw_status in ALLOWED_PVP_STATUSES else DEFAULT_PVP_STATUS
 
+    raw_novice_protection = player.get('novice_protection', DEFAULT_NOVICE_PROTECTION)
+    novice_protection = (
+        DEFAULT_NOVICE_PROTECTION
+        if raw_novice_protection is None
+        else int(raw_novice_protection)
+    )
+
     return PlayerPvpState(
         pvp_status=normalized_status,
         combat_tag_until=int(player.get('combat_tag_until', DEFAULT_COMBAT_TAG_UNTIL) or DEFAULT_COMBAT_TAG_UNTIL),
         red_flag=int(player.get('red_flag', DEFAULT_RED_FLAG) or DEFAULT_RED_FLAG),
         infamy=max(0, int(player.get('infamy', DEFAULT_INFAMY) or DEFAULT_INFAMY)),
-        novice_protection=int(player.get('novice_protection', DEFAULT_NOVICE_PROTECTION) or DEFAULT_NOVICE_PROTECTION),
+        novice_protection=novice_protection,
     )
