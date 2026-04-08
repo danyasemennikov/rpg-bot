@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from handlers.location import build_location_message, handle_location_buttons, location_command
+from handlers.location import build_location_message, handle_location_buttons, location_command, pvp_command
 from handlers.profile import unstuck_command
 
 
@@ -172,6 +172,198 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             text, _ = build_location_message(player, location, pvp_only_view=True)
         self.assertIn('❤️ 77/120', text)
         self.assertIn('🔵 33/90', text)
+
+    def test_location_view_shows_pending_pvp_encounters_section(self):
+        player = {
+            'telegram_id': 1001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 80,
+            'max_hp': 100,
+            'mana': 40,
+            'max_mana': 60,
+            'gold': 20,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        encounters = [{
+            'id': 12,
+            'attacker_name': 'A',
+            'defender_name': 'D',
+            'seconds_until_start': 55,
+            'initiator_side_count': 3,
+            'defender_side_count': 2,
+        }]
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=encounters),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, keyboard = build_location_message(player, location, pvp_only_view=False)
+        self.assertIn('Active prep PvP encounters', text)
+        callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
+        self.assertIn('pvp_view_12', callback_ids)
+
+    def test_invited_ally_sees_reinforcement_accept_decline_controls_in_location(self):
+        player = {
+            'telegram_id': 3003,
+            'lang': 'en',
+            'level': 10,
+            'hp': 80,
+            'max_hp': 100,
+            'mana': 40,
+            'max_mana': 60,
+            'gold': 20,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'engagement_state': 'pending'}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=engagement),
+            patch('handlers.location.advance_engagement_to_live_battle_if_ready', return_value=('pending', {})),
+            patch('handlers.location.get_engagement_reinforcement_state', return_value={'initiator': {}, 'defender': {}}),
+            patch('handlers.location.get_pending_reinforcement_invite_for_player', return_value={'id': 11, 'ally_id': 3003, 'status': 'pending'}),
+            patch('handlers.location.is_player_joined_pending_encounter', return_value=False),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            _text, keyboard = build_location_message(player, location, pvp_only_view=False)
+        callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
+        self.assertIn('pvp_reinf_accept_9', callback_ids)
+        self.assertIn('pvp_reinf_decline_9', callback_ids)
+
+    def test_accepted_ally_sees_consistent_prep_commitment_notice(self):
+        player = {
+            'telegram_id': 3003,
+            'lang': 'en',
+            'level': 10,
+            'hp': 80,
+            'max_hp': 100,
+            'mana': 40,
+            'max_mana': 60,
+            'gold': 20,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'engagement_state': 'pending'}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=engagement),
+            patch('handlers.location.advance_engagement_to_live_battle_if_ready', return_value=('pending', {})),
+            patch('handlers.location.get_engagement_reinforcement_state', return_value={
+                'initiator': {'ally_id': 3003, 'ally_name': 'Ally', 'status': 'accepted'},
+                'defender': {},
+            }),
+            patch('handlers.location.get_pending_reinforcement_invite_for_player', return_value=None),
+            patch('handlers.location.is_player_joined_pending_encounter', return_value=True),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, keyboard = build_location_message(player, location, pvp_only_view=False)
+        self.assertIn('committed as reinforcement', text)
+        callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
+        self.assertNotIn('pvp_reinf_accept_9', callback_ids)
+        self.assertNotIn('pvp_reinf_decline_9', callback_ids)
+
+    async def test_invited_ally_accept_path_works_from_location_callback(self):
+        update = _FakeCallbackUpdate(3003, 'pvp_reinf_accept_9')
+        player = {'telegram_id': 3003, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        with (
+            patch('handlers.location.get_player', return_value=player),
+            patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
+            patch('handlers.location.respond_to_reinforcement_invite', return_value=(True, None)) as respond_mock,
+            patch('handlers.location.get_location', return_value=location),
+            patch('handlers.location.build_location_message', return_value=('ok', None)),
+            patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
+        ):
+            await handle_location_buttons(update, context=None)
+        respond_mock.assert_called_once_with(engagement_id=9, ally_id=3003, accepted=True)
+        update.callback_query.answer.assert_awaited_once_with('location.pvp_reinforcement_accept_done', show_alert=True)
+
+    async def test_invited_ally_decline_path_works_from_location_callback(self):
+        update = _FakeCallbackUpdate(3003, 'pvp_reinf_decline_9')
+        player = {'telegram_id': 3003, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        with (
+            patch('handlers.location.get_player', return_value=player),
+            patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
+            patch('handlers.location.respond_to_reinforcement_invite', return_value=(True, None)) as respond_mock,
+            patch('handlers.location.get_location', return_value=location),
+            patch('handlers.location.build_location_message', return_value=('ok', None)),
+            patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
+        ):
+            await handle_location_buttons(update, context=None)
+        respond_mock.assert_called_once_with(engagement_id=9, ally_id=3003, accepted=False)
+        update.callback_query.answer.assert_awaited_once_with('location.pvp_reinforcement_decline_done', show_alert=True)
+
+    async def test_pvp_command_lists_pending_location_encounters(self):
+        update = _FakeUpdate(1001)
+        player = {'telegram_id': 1001, 'lang': 'en', 'location_id': 'dark_forest'}
+        location = {'id': 'dark_forest', 'safe': False}
+        encounters = [{
+            'id': 21,
+            'attacker_name': 'A',
+            'defender_name': 'D',
+            'seconds_until_start': 30,
+            'initiator_side_count': 2,
+            'defender_side_count': 4,
+        }]
+        with (
+            patch('handlers.location.get_player', return_value=player),
+            patch('handlers.location.get_location', return_value=location),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_pending_location_encounters', return_value=encounters),
+        ):
+            await pvp_command(update, context=None)
+        update.message.reply_text.assert_awaited()
+        args, kwargs = update.message.reply_text.await_args
+        self.assertIn('Pending PvP encounters', args[0])
+        keyboard = kwargs['reply_markup']
+        callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
+        self.assertIn('pvp_view_21', callback_ids)
+
+    async def test_pvp_view_callback_shows_detail_with_join_buttons(self):
+        update = _FakeCallbackUpdate(1001, 'pvp_view_21')
+        player = {'telegram_id': 1001, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest'}
+        detail = {
+            'id': 21,
+            'engagement_state': 'pending',
+            'location_id': 'dark_forest',
+            'seconds_until_start': 40,
+            'attacker_name': 'A',
+            'defender_name': 'D',
+            'attacker_id': 10,
+            'defender_id': 11,
+            'initiator_names': ['A'],
+            'defender_names': ['D'],
+        }
+        with (
+            patch('handlers.location.get_player', return_value=player),
+            patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
+            patch('handlers.location.get_pending_encounter_detail', return_value=detail),
+            patch('handlers.location.can_join_pending_encounter_side', side_effect=[(True, None), (True, None)]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+        ):
+            await handle_location_buttons(update, context=None)
+        update.callback_query.edit_message_text.assert_awaited()
+        _args, kwargs = update.callback_query.edit_message_text.await_args
+        keyboard = kwargs['reply_markup']
+        callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
+        self.assertIn('pvp_join_21_initiator', callback_ids)
+        self.assertIn('pvp_join_21_defender', callback_ids)
 
     async def test_unstuck_is_blocked_during_active_pvp(self):
         update = _FakeUpdate(12345)

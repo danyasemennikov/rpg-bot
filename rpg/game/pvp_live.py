@@ -21,6 +21,7 @@ from game.balance import (
 from game.equipment_stats import get_equipped_item_ids, get_player_effective_stats
 from game.items_data import get_item
 from game.i18n import get_player_lang, get_skill_name, t
+from game.locations import get_location_security_tier
 from game.pvp_death_policy import resolve_death_respawn_hub, resolve_pvp_death_loss_percent
 from game.pvp_engagement import (
     ENGAGEMENT_STATE_CANCELLED,
@@ -48,6 +49,13 @@ PVP_BATTLE_STATE_LIVE = 'live'
 PVP_BATTLE_STATE_FINISHED = 'finished'
 REPEAT_KILL_WINDOW_MINUTES = 30
 ENGAGEMENT_BUSY_STATES = (ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE)
+REINFORCEMENT_STATUS_PENDING = 'pending'
+REINFORCEMENT_STATUS_ACCEPTED = 'accepted'
+REINFORCEMENT_STATUS_REJECTED = 'rejected'
+REINFORCEMENT_STATUS_EXPIRED = 'expired'
+REINFORCEMENT_SIDE_INITIATOR = 'initiator'
+REINFORCEMENT_SIDE_DEFENDER = 'defender'
+REINFORCEMENT_SIDES = (REINFORCEMENT_SIDE_INITIATOR, REINFORCEMENT_SIDE_DEFENDER)
 
 
 def _utc_now() -> datetime:
@@ -78,6 +86,52 @@ def _deserialize_reason_context(raw_value: str | None) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _ensure_reinforcement_table() -> None:
+    conn = get_connection()
+    conn.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS pvp_engagement_reinforcements (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id INTEGER NOT NULL,
+            side          TEXT NOT NULL,
+            inviter_id    INTEGER NOT NULL,
+            ally_id       INTEGER NOT NULL,
+            status        TEXT NOT NULL,
+            invited_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            responded_at  TIMESTAMP,
+            FOREIGN KEY (engagement_id) REFERENCES pvp_engagements(id)
+        )
+        '''
+    )
+    conn.commit()
+    conn.close()
+
+
+def _is_player_busy_with_live_pvp_conn(conn, *, player_id: int) -> bool:
+    row = conn.execute(
+        '''
+        SELECT id FROM pvp_engagements
+        WHERE (attacker_id=? OR defender_id=?)
+          AND engagement_state IN (?, ?, ?)
+        LIMIT 1
+        ''',
+        (player_id, player_id, *ENGAGEMENT_BUSY_STATES),
+    ).fetchone()
+    reinforcement_row = conn.execute(
+        '''
+        SELECT pr.id
+        FROM pvp_engagement_reinforcements pr
+        JOIN pvp_engagements pe ON pe.id = pr.engagement_id
+        WHERE pr.ally_id=?
+          AND pr.status=?
+          AND pe.engagement_state IN (?, ?)
+        LIMIT 1
+        ''',
+        (player_id, REINFORCEMENT_STATUS_ACCEPTED, ENGAGEMENT_STATE_PENDING, 'active'),
+    ).fetchone()
+    return bool(row or reinforcement_row)
+
+
 def _row_to_engagement(row) -> OpenWorldPvpEngagement:
     return OpenWorldPvpEngagement(
         attacker_id=int(row['attacker_id']),
@@ -92,6 +146,7 @@ def _row_to_engagement(row) -> OpenWorldPvpEngagement:
 
 
 def create_live_engagement(*, attacker: dict, defender: dict, location_id: str, illegal_aggression: bool) -> int:
+    _ensure_reinforcement_table()
     engagement = create_open_world_pvp_engagement(
         attacker_id=int(attacker['telegram_id']),
         defender_id=int(defender['telegram_id']),
@@ -132,6 +187,7 @@ def create_live_engagement(*, attacker: dict, defender: dict, location_id: str, 
 
 
 def can_create_live_engagement(*, attacker_id: int, defender_id: int) -> tuple[bool, str | None]:
+    _ensure_reinforcement_table()
     conn = get_connection()
     attacker = conn.execute(
         'SELECT in_battle FROM players WHERE telegram_id=?',
@@ -147,30 +203,10 @@ def can_create_live_engagement(*, attacker_id: int, defender_id: int) -> tuple[b
     if int(attacker['in_battle'] or 0) == 1 or int(defender['in_battle'] or 0) == 1:
         conn.close()
         return False, 'already_in_battle'
-
-    attacker_active = conn.execute(
-        '''
-        SELECT id FROM pvp_engagements
-        WHERE (attacker_id=? OR defender_id=?)
-          AND engagement_state IN (?, ?, ?)
-        LIMIT 1
-        ''',
-        (attacker_id, attacker_id, *ENGAGEMENT_BUSY_STATES),
-    ).fetchone()
-    if attacker_active:
+    if _is_player_busy_with_live_pvp_conn(conn, player_id=attacker_id):
         conn.close()
         return False, 'attacker_busy'
-
-    defender_active = conn.execute(
-        '''
-        SELECT id FROM pvp_engagements
-        WHERE (attacker_id=? OR defender_id=?)
-          AND engagement_state IN (?, ?, ?)
-        LIMIT 1
-        ''',
-        (defender_id, defender_id, *ENGAGEMENT_BUSY_STATES),
-    ).fetchone()
-    if defender_active:
+    if _is_player_busy_with_live_pvp_conn(conn, player_id=defender_id):
         conn.close()
         return False, 'defender_busy'
 
@@ -190,18 +226,11 @@ def can_create_live_engagement(*, attacker_id: int, defender_id: int) -> tuple[b
 
 
 def is_player_busy_with_live_pvp(player_id: int) -> bool:
+    _ensure_reinforcement_table()
     conn = get_connection()
-    row = conn.execute(
-        '''
-        SELECT id FROM pvp_engagements
-        WHERE (attacker_id=? OR defender_id=?)
-          AND engagement_state IN (?, ?, ?)
-        LIMIT 1
-        ''',
-        (player_id, player_id, *ENGAGEMENT_BUSY_STATES),
-    ).fetchone()
+    is_busy = _is_player_busy_with_live_pvp_conn(conn, player_id=player_id)
     conn.close()
-    return bool(row)
+    return is_busy
 
 
 def has_active_live_pvp_engagement(player_id: int) -> bool:
@@ -228,6 +257,133 @@ def get_pending_player_engagement(player_id: int):
     ).fetchone()
     conn.close()
     return row
+
+
+def get_pending_reinforcement_engagement_for_player(player_id: int):
+    """Return pending engagement row where player is invited or accepted ally."""
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    row = conn.execute(
+        '''
+        SELECT pe.*
+        FROM pvp_engagements pe
+        JOIN pvp_engagement_reinforcements pr ON pr.engagement_id = pe.id
+        WHERE pr.ally_id=?
+          AND pr.status IN (?, ?)
+          AND pe.engagement_state=?
+        ORDER BY pr.id DESC
+        LIMIT 1
+        ''',
+        (
+            player_id,
+            REINFORCEMENT_STATUS_PENDING,
+            REINFORCEMENT_STATUS_ACCEPTED,
+            ENGAGEMENT_STATE_PENDING,
+        ),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def _seconds_until_ready(engagement_row) -> int:
+    ready_at = _from_iso(str(engagement_row['engagement_ready_at']))
+    return max(0, int((ready_at - _utc_now()).total_seconds()))
+
+
+def get_pending_location_encounters(*, location_id: str, limit: int = 3) -> list[dict]:
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT pe.id, pe.attacker_id, pe.defender_id, pe.location_id, pe.engagement_ready_at, pe.engagement_state,
+               a.name AS attacker_name, d.name AS defender_name
+        FROM pvp_engagements pe
+        JOIN players a ON a.telegram_id = pe.attacker_id
+        JOIN players d ON d.telegram_id = pe.defender_id
+        WHERE pe.location_id=? AND pe.engagement_state=?
+        ORDER BY pe.id DESC
+        LIMIT ?
+        ''',
+        (location_id, ENGAGEMENT_STATE_PENDING, max(1, int(limit))),
+    ).fetchall()
+    result: list[dict] = []
+    for row in rows:
+        joined_counts = conn.execute(
+            '''
+            SELECT side, COUNT(1) AS total
+            FROM pvp_engagement_reinforcements
+            WHERE engagement_id=? AND status=?
+            GROUP BY side
+            ''',
+            (int(row['id']), REINFORCEMENT_STATUS_ACCEPTED),
+        ).fetchall()
+        side_counts = {REINFORCEMENT_SIDE_INITIATOR: 1, REINFORCEMENT_SIDE_DEFENDER: 1}
+        for count_row in joined_counts:
+            side = str(count_row['side'])
+            if side in side_counts:
+                side_counts[side] += int(count_row['total'] or 0)
+        result.append({
+            'id': int(row['id']),
+            'location_id': str(row['location_id']),
+            'attacker_id': int(row['attacker_id']),
+            'defender_id': int(row['defender_id']),
+            'attacker_name': row['attacker_name'] or f"#{int(row['attacker_id'])}",
+            'defender_name': row['defender_name'] or f"#{int(row['defender_id'])}",
+            'seconds_until_start': _seconds_until_ready(row),
+            'initiator_side_count': side_counts[REINFORCEMENT_SIDE_INITIATOR],
+            'defender_side_count': side_counts[REINFORCEMENT_SIDE_DEFENDER],
+        })
+    conn.close()
+    return result
+
+
+def get_pending_encounter_detail(*, engagement_id: int) -> dict | None:
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    row = conn.execute(
+        '''
+        SELECT pe.*, a.name AS attacker_name, d.name AS defender_name
+        FROM pvp_engagements pe
+        JOIN players a ON a.telegram_id = pe.attacker_id
+        JOIN players d ON d.telegram_id = pe.defender_id
+        WHERE pe.id=?
+        ''',
+        (engagement_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    joined_rows = conn.execute(
+        '''
+        SELECT side, ally_id, p.name AS ally_name
+        FROM pvp_engagement_reinforcements r
+        LEFT JOIN players p ON p.telegram_id = r.ally_id
+        WHERE r.engagement_id=? AND r.status=?
+        ORDER BY r.id ASC
+        ''',
+        (engagement_id, REINFORCEMENT_STATUS_ACCEPTED),
+    ).fetchall()
+    conn.close()
+    initiator_names = [row['attacker_name'] or f"#{int(row['attacker_id'])}"]
+    defender_names = [row['defender_name'] or f"#{int(row['defender_id'])}"]
+    for joined in joined_rows:
+        name = joined['ally_name'] or f"#{int(joined['ally_id'])}"
+        if str(joined['side']) == REINFORCEMENT_SIDE_INITIATOR:
+            initiator_names.append(name)
+        elif str(joined['side']) == REINFORCEMENT_SIDE_DEFENDER:
+            defender_names.append(name)
+    return {
+        'id': int(row['id']),
+        'location_id': str(row['location_id']),
+        'engagement_state': str(row['engagement_state']),
+        'attacker_id': int(row['attacker_id']),
+        'defender_id': int(row['defender_id']),
+        'attacker_name': row['attacker_name'] or f"#{int(row['attacker_id'])}",
+        'defender_name': row['defender_name'] or f"#{int(row['defender_id'])}",
+        'seconds_until_start': _seconds_until_ready(row),
+        'initiator_names': initiator_names,
+        'defender_names': defender_names,
+    }
 
 
 def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: datetime) -> dict:
@@ -257,6 +413,7 @@ def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: dateti
 
 
 def _write_engagement_state(*, engagement_id: int, state: str, payload: dict) -> None:
+    _ensure_reinforcement_table()
     conn = get_connection()
     conn.execute(
         '''
@@ -266,8 +423,319 @@ def _write_engagement_state(*, engagement_id: int, state: str, payload: dict) ->
         ''',
         (state, _serialize_reason_context(payload), engagement_id),
     )
+    if state != ENGAGEMENT_STATE_PENDING:
+        conn.execute(
+            '''
+            UPDATE pvp_engagement_reinforcements
+            SET status=?, responded_at=CURRENT_TIMESTAMP
+            WHERE engagement_id=? AND status IN (?, ?)
+            ''',
+            (
+                REINFORCEMENT_STATUS_EXPIRED,
+                engagement_id,
+                REINFORCEMENT_STATUS_PENDING,
+                REINFORCEMENT_STATUS_ACCEPTED,
+            ),
+        )
     conn.commit()
     conn.close()
+
+
+def _resolve_side_for_player(*, engagement_row, player_id: int) -> str | None:
+    if int(engagement_row['attacker_id']) == player_id:
+        return REINFORCEMENT_SIDE_INITIATOR
+    if int(engagement_row['defender_id']) == player_id:
+        return REINFORCEMENT_SIDE_DEFENDER
+    return None
+
+
+def _is_reinforcement_eligibility_blocked(
+    *,
+    engagement_row,
+    inviter_id: int,
+    ally_id: int,
+    allow_existing_side_slot: bool = False,
+    allow_existing_ally_invite: bool = False,
+) -> str | None:
+    side = _resolve_side_for_player(engagement_row=engagement_row, player_id=inviter_id)
+    if side is None:
+        return 'not_participant'
+    if int(ally_id) == int(inviter_id):
+        return 'self_target'
+    if int(ally_id) in {int(engagement_row['attacker_id']), int(engagement_row['defender_id'])}:
+        return 'already_participant'
+    if str(engagement_row['engagement_state']) != ENGAGEMENT_STATE_PENDING:
+        return 'engagement_not_pending'
+    if get_location_security_tier(str(engagement_row['location_id'])) == 'safe':
+        return 'safe_zone'
+
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    inviter = conn.execute('SELECT telegram_id, location_id FROM players WHERE telegram_id=?', (inviter_id,)).fetchone()
+    ally = conn.execute('SELECT telegram_id, location_id, in_battle FROM players WHERE telegram_id=?', (ally_id,)).fetchone()
+    if not inviter or not ally:
+        conn.close()
+        return 'missing_player'
+    if str(inviter['location_id']) != str(engagement_row['location_id']) or str(ally['location_id']) != str(engagement_row['location_id']):
+        conn.close()
+        return 'not_same_location'
+    if int(ally['in_battle'] or 0) == 1:
+        conn.close()
+        return 'already_in_battle'
+    if _is_player_busy_with_live_pvp_conn(conn, player_id=int(ally_id)):
+        conn.close()
+        return 'already_in_active_pvp'
+
+    existing_ally_slot = conn.execute(
+        '''
+        SELECT pr.id
+        FROM pvp_engagement_reinforcements pr
+        JOIN pvp_engagements pe ON pe.id = pr.engagement_id
+        WHERE pr.ally_id=?
+          AND pr.status IN (?, ?)
+          AND pe.engagement_state IN (?, ?, ?)
+        LIMIT 1
+        ''',
+        (int(ally_id), REINFORCEMENT_STATUS_PENDING, REINFORCEMENT_STATUS_ACCEPTED, *ENGAGEMENT_BUSY_STATES),
+    ).fetchone()
+    conn.close()
+    if existing_ally_slot and not allow_existing_ally_invite:
+        return 'already_invited'
+    return None
+
+
+def can_join_pending_encounter_side(*, engagement_row, player_id: int, side: str) -> tuple[bool, str | None]:
+    if side not in REINFORCEMENT_SIDES:
+        return False, 'invalid_side'
+    if str(engagement_row['engagement_state']) != ENGAGEMENT_STATE_PENDING:
+        return False, 'engagement_not_pending'
+    if get_location_security_tier(str(engagement_row['location_id'])) == 'safe':
+        return False, 'safe_zone'
+    if player_id in {int(engagement_row['attacker_id']), int(engagement_row['defender_id'])}:
+        return False, 'already_participant'
+
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    player_row = conn.execute(
+        'SELECT telegram_id, location_id, in_battle FROM players WHERE telegram_id=?',
+        (player_id,),
+    ).fetchone()
+    if not player_row:
+        conn.close()
+        return False, 'missing_player'
+    if str(player_row['location_id']) != str(engagement_row['location_id']):
+        conn.close()
+        return False, 'not_same_location'
+    if int(player_row['in_battle'] or 0) == 1:
+        conn.close()
+        return False, 'already_in_battle'
+    if _is_player_busy_with_live_pvp_conn(conn, player_id=player_id):
+        conn.close()
+        return False, 'already_in_active_pvp'
+    already_joined = conn.execute(
+        '''
+        SELECT id
+        FROM pvp_engagement_reinforcements
+        WHERE engagement_id=? AND ally_id=? AND status IN (?, ?)
+        LIMIT 1
+        ''',
+        (int(engagement_row['id']), player_id, REINFORCEMENT_STATUS_PENDING, REINFORCEMENT_STATUS_ACCEPTED),
+    ).fetchone()
+    conn.close()
+    if already_joined:
+        return False, 'already_joined'
+    return True, None
+
+
+def join_pending_encounter_side(*, engagement_row, player_id: int, side: str) -> tuple[bool, str | None]:
+    ok, reason = can_join_pending_encounter_side(engagement_row=engagement_row, player_id=player_id, side=side)
+    if not ok:
+        return False, reason
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    conn.execute(
+        '''
+        INSERT INTO pvp_engagement_reinforcements (engagement_id, side, inviter_id, ally_id, status, responded_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''',
+        (int(engagement_row['id']), side, int(player_id), int(player_id), REINFORCEMENT_STATUS_ACCEPTED),
+    )
+    conn.commit()
+    conn.close()
+    return True, None
+
+
+def invite_reinforcement_ally(*, engagement_row, inviter_id: int, ally_id: int) -> tuple[bool, str | None]:
+    reason = _is_reinforcement_eligibility_blocked(
+        engagement_row=engagement_row,
+        inviter_id=inviter_id,
+        ally_id=ally_id,
+    )
+    if reason is not None:
+        return False, reason
+    side = _resolve_side_for_player(engagement_row=engagement_row, player_id=inviter_id)
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    conn.execute(
+        '''
+        INSERT INTO pvp_engagement_reinforcements (engagement_id, side, inviter_id, ally_id, status)
+        VALUES (?, ?, ?, ?, ?)
+        ''',
+        (int(engagement_row['id']), side, int(inviter_id), int(ally_id), REINFORCEMENT_STATUS_PENDING),
+    )
+    conn.commit()
+    conn.close()
+    return True, None
+
+
+def respond_to_reinforcement_invite(*, engagement_id: int, ally_id: int, accepted: bool) -> tuple[bool, str | None]:
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    engagement_row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    invite_row = conn.execute(
+        '''
+        SELECT * FROM pvp_engagement_reinforcements
+        WHERE engagement_id=? AND ally_id=? AND status=?
+        ORDER BY id DESC
+        LIMIT 1
+        ''',
+        (engagement_id, ally_id, REINFORCEMENT_STATUS_PENDING),
+    ).fetchone()
+    if not engagement_row or not invite_row:
+        conn.close()
+        return False, 'invite_missing'
+    if str(engagement_row['engagement_state']) != ENGAGEMENT_STATE_PENDING:
+        conn.execute(
+            'UPDATE pvp_engagement_reinforcements SET status=?, responded_at=CURRENT_TIMESTAMP WHERE id=?',
+            (REINFORCEMENT_STATUS_EXPIRED, int(invite_row['id'])),
+        )
+        conn.commit()
+        conn.close()
+        return False, 'engagement_not_pending'
+    if not accepted:
+        conn.execute(
+            'UPDATE pvp_engagement_reinforcements SET status=?, responded_at=CURRENT_TIMESTAMP WHERE id=?',
+            (REINFORCEMENT_STATUS_REJECTED, int(invite_row['id'])),
+        )
+        conn.commit()
+        conn.close()
+        return True, None
+
+    block_reason = _is_reinforcement_eligibility_blocked(
+        engagement_row=engagement_row,
+        inviter_id=int(invite_row['inviter_id']),
+        ally_id=int(ally_id),
+        allow_existing_side_slot=True,
+        allow_existing_ally_invite=True,
+    )
+    if block_reason is not None:
+        conn.execute(
+            'UPDATE pvp_engagement_reinforcements SET status=?, responded_at=CURRENT_TIMESTAMP WHERE id=?',
+            (REINFORCEMENT_STATUS_REJECTED, int(invite_row['id'])),
+        )
+        conn.commit()
+        conn.close()
+        return False, block_reason
+    conn.execute(
+        'UPDATE pvp_engagement_reinforcements SET status=?, responded_at=CURRENT_TIMESTAMP WHERE id=?',
+        (REINFORCEMENT_STATUS_ACCEPTED, int(invite_row['id'])),
+    )
+    conn.commit()
+    conn.close()
+    return True, None
+
+
+def get_engagement_reinforcement_state(*, engagement_id: int) -> dict:
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT pr.*, p.name AS ally_name
+        FROM pvp_engagement_reinforcements pr
+        LEFT JOIN players p ON p.telegram_id = pr.ally_id
+        WHERE pr.engagement_id=?
+        ORDER BY pr.id DESC
+        ''',
+        (engagement_id,),
+    ).fetchall()
+    conn.close()
+    state: dict[str, dict] = {REINFORCEMENT_SIDE_INITIATOR: {}, REINFORCEMENT_SIDE_DEFENDER: {}}
+    for row in rows:
+        side = str(row['side'])
+        if side not in state or state[side]:
+            continue
+        state[side] = {
+            'status': str(row['status']),
+            'ally_id': int(row['ally_id']),
+            'ally_name': row['ally_name'] or f"#{int(row['ally_id'])}",
+        }
+    return state
+
+
+def get_pending_reinforcement_invite_for_player(*, engagement_id: int, ally_id: int):
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    row = conn.execute(
+        '''
+        SELECT *
+        FROM pvp_engagement_reinforcements
+        WHERE engagement_id=? AND ally_id=? AND status=?
+        ORDER BY id DESC
+        LIMIT 1
+        ''',
+        (engagement_id, ally_id, REINFORCEMENT_STATUS_PENDING),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def is_player_joined_pending_encounter(*, engagement_id: int, player_id: int) -> bool:
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    row = conn.execute(
+        '''
+        SELECT id
+        FROM pvp_engagement_reinforcements
+        WHERE engagement_id=? AND ally_id=? AND status=?
+        LIMIT 1
+        ''',
+        (engagement_id, player_id, REINFORCEMENT_STATUS_ACCEPTED),
+    ).fetchone()
+    conn.close()
+    return bool(row)
+
+
+def list_reinforcement_candidates(*, engagement_row, inviter_id: int, limit: int = 3) -> list[dict]:
+    side = _resolve_side_for_player(engagement_row=engagement_row, player_id=inviter_id)
+    if side is None or str(engagement_row['engagement_state']) != ENGAGEMENT_STATE_PENDING:
+        return []
+    _ensure_reinforcement_table()
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT telegram_id, name, level, location_id, in_battle
+        FROM players
+        WHERE location_id=? AND telegram_id NOT IN (?, ?)
+        ORDER BY level DESC, telegram_id ASC
+        LIMIT 20
+        ''',
+        (str(engagement_row['location_id']), int(engagement_row['attacker_id']), int(engagement_row['defender_id'])),
+    ).fetchall()
+    conn.close()
+    result: list[dict] = []
+    for row in rows:
+        ally_id = int(row['telegram_id'])
+        reason = _is_reinforcement_eligibility_blocked(
+            engagement_row=engagement_row,
+            inviter_id=inviter_id,
+            ally_id=ally_id,
+        )
+        if reason is not None:
+            continue
+        result.append(dict(row))
+        if len(result) >= limit:
+            break
+    return result
 
 
 def advance_engagement_to_live_battle_if_ready(engagement_row, *, now: datetime | None = None) -> tuple[str, dict]:
@@ -790,11 +1258,17 @@ def _finalize_pvp_battle(*, engagement_row, payload: dict, winner_id: int, loser
     conn = get_connection()
     winner_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (winner_id,)).fetchone()
     loser_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (loser_id,)).fetchone()
+    initiator_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (int(engagement_row['attacker_id']),)).fetchone()
+    initial_target_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (int(engagement_row['defender_id']),)).fetchone()
     winner = dict(winner_row) if winner_row else {'telegram_id': winner_id}
     loser = dict(loser_row) if loser_row else {'telegram_id': loser_id}
+    initiator = dict(initiator_row) if initiator_row else {'telegram_id': int(engagement_row['attacker_id'])}
+    initial_target = dict(initial_target_row) if initial_target_row else {'telegram_id': int(engagement_row['defender_id'])}
     infamy_delta = resolve_kill_infamy_delta(
         winner=winner,
         loser=loser,
+        initiator=initiator,
+        initial_target=initial_target,
         location_id=str(engagement_row['location_id']),
         repeat_kill_count=repeat_kill_count,
     )
