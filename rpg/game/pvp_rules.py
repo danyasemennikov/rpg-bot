@@ -160,16 +160,25 @@ def resolve_kill_infamy_delta(
     *,
     winner: dict,
     loser: dict,
+    initiator: dict | None = None,
+    initial_target: dict | None = None,
     location_id: str | None,
     repeat_kill_count: int,
 ) -> int:
-    if is_aggression_illegal(attacker=winner, defender=loser, location_id=location_id):
+    initiator_row = initiator or winner
+    target_row = initial_target or loser
+    if int(winner.get('telegram_id', 0) or 0) != int(initiator_row.get('telegram_id', 0) or 0):
+        return 0
+    if is_aggression_illegal(attacker=initiator_row, defender=target_row, location_id=location_id):
         infamy = BASE_INFAMY_ILLEGAL_GUARDED_AGGRESSION
-        if has_respawn_protection(loser):
+        if int(loser.get('telegram_id', 0) or 0) == int(target_row.get('telegram_id', 0) or 0) and has_respawn_protection(loser):
             infamy += EXTRA_INFAMY_PROTECTED_TARGET_KILL
         if repeat_kill_count > 0:
             infamy += min(MAX_EXTRA_INFAMY_REPEAT_HARASSMENT, repeat_kill_count)
-        if is_recent_retaliation_context(attacker_id=int(winner['telegram_id']), defender_id=int(loser['telegram_id'])):
+        if is_recent_retaliation_context(
+            attacker_id=int(initiator_row['telegram_id']),
+            defender_id=int(target_row['telegram_id']),
+        ):
             infamy = max(1, infamy - 1)
         return infamy
     return 0

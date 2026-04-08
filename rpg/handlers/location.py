@@ -18,13 +18,24 @@ from game.i18n import t, get_player_lang, get_mob_name, get_location_name, get_l
 from game.pvp_live import (
     advance_engagement_to_live_battle_if_ready,
     apply_illegal_aggression_penalties,
+    can_join_pending_encounter_side,
     can_create_live_engagement,
     create_live_engagement,
+    get_engagement_reinforcement_state,
+    get_pending_encounter_detail,
+    get_pending_location_encounters,
+    get_pending_reinforcement_invite_for_player,
     get_pending_player_engagement,
+    get_pending_reinforcement_engagement_for_player,
     has_active_live_pvp_engagement,
+    is_player_joined_pending_encounter,
+    invite_reinforcement_ally,
     is_pvp_mobility_blocked,
     get_manual_pvp_action_labels,
     is_player_busy_with_live_pvp,
+    join_pending_encounter_side,
+    list_reinforcement_candidates,
+    respond_to_reinforcement_invite,
     resolve_engagement_escape,
     resolve_live_battle_turn,
 )
@@ -78,6 +89,59 @@ def _build_live_pvp_runtime_stats(player: dict, battle: dict, engagement_row) ->
         runtime['mana'] = int(battle.get('defender_mana', runtime['mana']))
         runtime['max_mana'] = int(battle.get('defender_max_mana', runtime['max_mana']))
     return runtime
+
+
+def _format_seconds_short(total_seconds: int) -> str:
+    minutes = max(0, int(total_seconds)) // 60
+    seconds = max(0, int(total_seconds)) % 60
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def build_pvp_encounter_detail_message(player: dict, encounter_id: int) -> tuple[str, InlineKeyboardMarkup]:
+    lang = player.get('lang', 'ru')
+    detail = get_pending_encounter_detail(engagement_id=encounter_id)
+    if not detail or detail['engagement_state'] != 'pending':
+        return t('location.pvp_no_engagement', lang), InlineKeyboardMarkup([])
+    text = t(
+        'location.pvp_detail_header',
+        lang,
+        id=detail['id'],
+        location=get_location_name(detail['location_id'], lang),
+        time_left=_format_seconds_short(detail['seconds_until_start']),
+    ) + '\n'
+    text += t('location.pvp_detail_core', lang, attacker=detail['attacker_name'], defender=detail['defender_name']) + '\n'
+    text += t('location.pvp_detail_side', lang, side=t('location.pvp_side_initiator', lang), players=', '.join(detail['initiator_names'])) + '\n'
+    text += t('location.pvp_detail_side', lang, side=t('location.pvp_side_defender', lang), players=', '.join(detail['defender_names'])) + '\n'
+
+    keyboard_rows: list[list[InlineKeyboardButton]] = []
+    viewer_id = int(player['telegram_id'])
+    can_join_initiator, _ = can_join_pending_encounter_side(
+        engagement_row=detail,
+        player_id=viewer_id,
+        side='initiator',
+    )
+    can_join_defender, _ = can_join_pending_encounter_side(
+        engagement_row=detail,
+        player_id=viewer_id,
+        side='defender',
+    )
+    if can_join_initiator or can_join_defender:
+        join_row: list[InlineKeyboardButton] = []
+        if can_join_initiator:
+            join_row.append(InlineKeyboardButton(
+                t('location.pvp_join_initiator_btn', lang),
+                callback_data=f"pvp_join_{detail['id']}_initiator",
+            ))
+        if can_join_defender:
+            join_row.append(InlineKeyboardButton(
+                t('location.pvp_join_defender_btn', lang),
+                callback_data=f"pvp_join_{detail['id']}_defender",
+            ))
+        if join_row:
+            keyboard_rows.append(join_row)
+    else:
+        text += t('location.pvp_join_commitment_notice', lang) + '\n'
+    return text, InlineKeyboardMarkup(keyboard_rows)
 
 
 def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
@@ -225,16 +289,84 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
                 )])
         text += '\n'
 
-    engagement_row = get_pending_player_engagement(int(player['telegram_id']))
+    if not pvp_only_view:
+        prep_encounters = get_pending_location_encounters(location_id=location['id'], limit=3)
+        if prep_encounters:
+            text += t('location.pvp_encounters_title', lang) + '\n'
+            for encounter in prep_encounters:
+                text += t(
+                    'location.pvp_encounter_row',
+                    lang,
+                    id=encounter['id'],
+                    attacker=encounter['attacker_name'],
+                    defender=encounter['defender_name'],
+                    time_left=_format_seconds_short(encounter['seconds_until_start']),
+                    initiator_count=encounter['initiator_side_count'],
+                    defender_count=encounter['defender_side_count'],
+                ) + '\n'
+                keyboard.append([InlineKeyboardButton(
+                    t('location.pvp_view_fight_btn', lang, id=encounter['id']),
+                    callback_data=f"pvp_view_{encounter['id']}",
+                )])
+            text += '\n'
+
+    player_id = int(player['telegram_id'])
+    engagement_row = get_pending_player_engagement(player_id)
+    if not engagement_row:
+        engagement_row = get_pending_reinforcement_engagement_for_player(player_id)
     runtime_stats = None
     if engagement_row:
         state, payload = advance_engagement_to_live_battle_if_ready(engagement_row)
         if state == 'pending':
             text += t('location.pvp_pending', lang) + '\n'
-            keyboard.append([InlineKeyboardButton(
-                t('location.pvp_escape_btn', lang),
-                callback_data=f"pvp_escape_{engagement_row['id']}",
-            )])
+            reinforcement_state = get_engagement_reinforcement_state(engagement_id=int(engagement_row['id']))
+            initiator_state = reinforcement_state.get('initiator') or {}
+            defender_state = reinforcement_state.get('defender') or {}
+            text += t(
+                'location.pvp_reinforcement_state',
+                lang,
+                initiator=initiator_state.get('ally_name', t('location.pvp_reinforcement_none', lang)),
+                initiator_status=t(f"location.pvp_reinforcement_status_{initiator_state.get('status', 'none')}", lang),
+                defender=defender_state.get('ally_name', t('location.pvp_reinforcement_none', lang)),
+                defender_status=t(f"location.pvp_reinforcement_status_{defender_state.get('status', 'none')}", lang),
+            ) + '\n'
+            if player_id in {int(engagement_row['attacker_id']), int(engagement_row['defender_id'])}:
+                keyboard.append([InlineKeyboardButton(
+                    t('location.pvp_escape_btn', lang),
+                    callback_data=f"pvp_escape_{engagement_row['id']}",
+                )])
+                candidates = list_reinforcement_candidates(
+                    engagement_row=engagement_row,
+                    inviter_id=player_id,
+                    limit=2,
+                )
+                for candidate in candidates:
+                    keyboard.append([InlineKeyboardButton(
+                        t('location.pvp_reinforcement_invite_btn', lang, name=candidate['name']),
+                        callback_data=f"pvp_invite_{engagement_row['id']}_{candidate['telegram_id']}",
+                    )])
+            pending_invite = get_pending_reinforcement_invite_for_player(
+                engagement_id=int(engagement_row['id']),
+                ally_id=player_id,
+            )
+            if pending_invite:
+                text += t('location.pvp_reinforcement_invited_notice', lang) + '\n'
+                keyboard.append([
+                    InlineKeyboardButton(
+                        t('location.pvp_reinforcement_accept_btn', lang),
+                        callback_data=f"pvp_reinf_accept_{engagement_row['id']}",
+                    ),
+                    InlineKeyboardButton(
+                        t('location.pvp_reinforcement_decline_btn', lang),
+                        callback_data=f"pvp_reinf_decline_{engagement_row['id']}",
+                    ),
+                ])
+            else:
+                if is_player_joined_pending_encounter(
+                    engagement_id=int(engagement_row['id']),
+                    player_id=player_id,
+                ):
+                    text += t('location.pvp_reinforcement_accepted_notice', lang) + '\n'
         elif state == 'converted_to_battle':
             battle = payload.get('battle') or {}
             runtime_stats = _build_live_pvp_runtime_stats(player, battle, engagement_row)
@@ -381,6 +513,41 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 
+async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    player = get_player(user.id)
+    lang = player['lang'] if player else 'ru'
+    if not player:
+        await update.message.reply_text(t('common.no_character', lang))
+        return
+    location = get_location(player['location_id'])
+    if not location:
+        await update.message.reply_text(t('location.not_found', lang))
+        return
+    encounters = get_pending_location_encounters(location_id=location['id'], limit=10)
+    if not encounters:
+        await update.message.reply_text(t('location.pvp_list_empty', lang))
+        return
+    text = t('location.pvp_list_title', lang, location=get_location_name(location['id'], lang)) + '\n\n'
+    keyboard = []
+    for encounter in encounters:
+        text += t(
+            'location.pvp_encounter_row',
+            lang,
+            id=encounter['id'],
+            attacker=encounter['attacker_name'],
+            defender=encounter['defender_name'],
+            time_left=_format_seconds_short(encounter['seconds_until_start']),
+            initiator_count=encounter['initiator_side_count'],
+            defender_count=encounter['defender_side_count'],
+        ) + '\n'
+        keyboard.append([InlineKeyboardButton(
+            t('location.pvp_view_fight_btn', lang, id=encounter['id']),
+            callback_data=f"pvp_view_{encounter['id']}",
+        )])
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+
+
 # ────────────────────────────────────────
 # ПЕРЕХОД МЕЖДУ ЛОКАЦИЯМИ
 # ────────────────────────────────────────
@@ -480,6 +647,106 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t('location.pvp_escape_success', lang), show_alert=True)
         else:
             await query.answer(t('location.pvp_escape_fail', lang), show_alert=True)
+        location = get_location(get_player(user.id)['location_id'])
+        refreshed_player = dict(get_player(user.id))
+        text, keyboard = build_location_message(
+            refreshed_player,
+            location,
+            pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_view_'):
+        engagement_id = int(data.replace('pvp_view_', '', 1))
+        detail_text, detail_keyboard = build_pvp_encounter_detail_message(dict(p), engagement_id)
+        await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('pvp_join_'):
+        raw = data.replace('pvp_join_', '', 1)
+        engagement_id = int(raw.split('_', 1)[0])
+        side = raw.split('_', 1)[1]
+        conn = get_connection()
+        engagement_row = conn.execute(
+            'SELECT * FROM pvp_engagements WHERE id=?',
+            (engagement_id,),
+        ).fetchone()
+        conn.close()
+        if not engagement_row:
+            await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        ok, _reason = join_pending_encounter_side(
+            engagement_row=engagement_row,
+            player_id=int(user.id),
+            side=side,
+        )
+        if ok:
+            await query.answer(t('location.pvp_join_success', lang), show_alert=True)
+        else:
+            await query.answer(t('location.pvp_join_blocked', lang), show_alert=True)
+        detail_text, detail_keyboard = build_pvp_encounter_detail_message(dict(get_player(user.id)), engagement_id)
+        await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_invite_'):
+        raw = data.replace('pvp_invite_', '', 1)
+        engagement_id = int(raw.split('_', 1)[0])
+        ally_id = int(raw.split('_', 1)[1])
+        conn = get_connection()
+        engagement_row = conn.execute(
+            'SELECT * FROM pvp_engagements WHERE id=?',
+            (engagement_id,),
+        ).fetchone()
+        conn.close()
+        if not engagement_row:
+            await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        ok, reason = invite_reinforcement_ally(
+            engagement_row=engagement_row,
+            inviter_id=int(user.id),
+            ally_id=ally_id,
+        )
+        if ok:
+            await query.answer(t('location.pvp_reinforcement_invite_sent', lang), show_alert=True)
+        else:
+            await query.answer(t('location.pvp_reinforcement_invite_blocked', lang), show_alert=True)
+        location = get_location(get_player(user.id)['location_id'])
+        refreshed_player = dict(get_player(user.id))
+        text, keyboard = build_location_message(
+            refreshed_player,
+            location,
+            pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        if ok:
+            ally_lang = get_player_lang(ally_id)
+            try:
+                await context.bot.send_message(
+                    chat_id=ally_id,
+                    text=t('location.pvp_reinforcement_invite_alert', ally_lang),
+                )
+            except Exception:
+                pass
+        return
+
+    if data.startswith('pvp_reinf_'):
+        raw = data.replace('pvp_reinf_', '', 1)
+        action = raw.split('_', 1)[0]
+        engagement_id = int(raw.split('_', 1)[1])
+        accepted = action == 'accept'
+        ok, reason = respond_to_reinforcement_invite(
+            engagement_id=engagement_id,
+            ally_id=int(user.id),
+            accepted=accepted,
+        )
+        if ok and accepted:
+            await query.answer(t('location.pvp_reinforcement_accept_done', lang), show_alert=True)
+        elif ok:
+            await query.answer(t('location.pvp_reinforcement_decline_done', lang), show_alert=True)
+        else:
+            await query.answer(t('location.pvp_reinforcement_response_blocked', lang), show_alert=True)
         location = get_location(get_player(user.id)['location_id'])
         refreshed_player = dict(get_player(user.id))
         text, keyboard = build_location_message(

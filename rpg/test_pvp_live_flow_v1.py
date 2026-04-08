@@ -8,10 +8,17 @@ from game.pvp_live import (
     apply_illegal_aggression_penalties,
     can_create_live_engagement,
     create_live_engagement,
+    get_engagement_reinforcement_state,
+    get_pending_encounter_detail,
+    get_pending_location_encounters,
     get_pending_player_engagement,
+    invite_reinforcement_ally,
+    join_pending_encounter_side,
+    list_reinforcement_candidates,
     get_manual_pvp_action_labels,
     is_player_busy_with_live_pvp,
     process_live_pvp_due_events,
+    respond_to_reinforcement_invite,
     resolve_engagement_escape,
     resolve_live_battle_turn,
     _resolve_repeat_kill_dampening,
@@ -29,21 +36,55 @@ from game.weapon_mastery import get_skill_cooldown
 class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
     ATTACKER_ID = 910001
     DEFENDER_ID = 910002
+    ATTACKER_ALLY_ID = 910003
+    DEFENDER_ALLY_ID = 910004
+    OUTSIDER_ID = 910005
 
     def setUp(self):
         conn = get_connection()
-        conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?) OR defender_id IN (?, ?)', (
-            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID,
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS pvp_engagement_reinforcements (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER NOT NULL,
+                side          TEXT NOT NULL,
+                inviter_id    INTEGER NOT NULL,
+                ally_id       INTEGER NOT NULL,
+                status        TEXT NOT NULL,
+                invited_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                responded_at  TIMESTAMP
+            )
+            '''
+        )
+        conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?, ?, ?, ?) OR defender_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
         ))
-        conn.execute('DELETE FROM pvp_engagements WHERE attacker_id IN (?, ?) OR defender_id IN (?, ?)', (
-            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID,
+        conn.execute('DELETE FROM pvp_engagement_reinforcements WHERE ally_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
         ))
-        conn.execute('DELETE FROM inventory WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM player_skills WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM weapon_mastery WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM equipment WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM players WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
+        conn.execute('DELETE FROM pvp_engagements WHERE attacker_id IN (?, ?, ?, ?, ?) OR defender_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM inventory WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM player_skills WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM weapon_mastery WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM equipment WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM players WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
         conn.execute(
             '''
             INSERT INTO players (telegram_id, username, name, level, location_id, hp, max_hp, mana, max_mana, pvp_status, novice_protection, red_flag, infamy)
@@ -60,23 +101,61 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         )
         conn.execute('INSERT INTO equipment (telegram_id) VALUES (?)', (self.ATTACKER_ID,))
         conn.execute('INSERT INTO equipment (telegram_id) VALUES (?)', (self.DEFENDER_ID,))
+        conn.execute(
+            '''
+            INSERT INTO players (telegram_id, username, name, level, location_id, hp, max_hp, mana, max_mana, pvp_status, novice_protection, red_flag, infamy)
+            VALUES (?, 'ally_a', 'AllyA', 18, 'dark_forest', 100, 100, 40, 40, 'neutral', 0, 0, 0)
+            ''',
+            (self.ATTACKER_ALLY_ID,),
+        )
+        conn.execute(
+            '''
+            INSERT INTO players (telegram_id, username, name, level, location_id, hp, max_hp, mana, max_mana, pvp_status, novice_protection, red_flag, infamy)
+            VALUES (?, 'ally_d', 'AllyD', 18, 'dark_forest', 100, 100, 40, 40, 'neutral', 0, 0, 0)
+            ''',
+            (self.DEFENDER_ALLY_ID,),
+        )
+        conn.execute(
+            '''
+            INSERT INTO players (telegram_id, username, name, level, location_id, hp, max_hp, mana, max_mana, pvp_status, novice_protection, red_flag, infamy)
+            VALUES (?, 'outsider', 'Outsider', 18, 'village', 100, 100, 40, 40, 'neutral', 0, 0, 0)
+            ''',
+            (self.OUTSIDER_ID,),
+        )
         conn.commit()
         conn.close()
 
     def tearDown(self):
         conn = get_connection()
-        conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?) OR defender_id IN (?, ?)', (
-            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID,
+        conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?, ?, ?, ?) OR defender_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
         ))
-        conn.execute('DELETE FROM pvp_engagements WHERE attacker_id IN (?, ?) OR defender_id IN (?, ?)', (
-            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID,
+        conn.execute('DELETE FROM pvp_engagement_reinforcements WHERE ally_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
         ))
-        conn.execute('DELETE FROM inventory WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM player_skills WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM weapon_mastery WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM equipment WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
-        conn.execute('DELETE FROM players WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
+        conn.execute('DELETE FROM pvp_engagements WHERE attacker_id IN (?, ?, ?, ?, ?) OR defender_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM inventory WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM player_skills WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM weapon_mastery WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM equipment WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
+        conn.execute('DELETE FROM players WHERE telegram_id IN (?, ?, ?, ?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
+        ))
         conn.commit()
         conn.close()
 
@@ -177,16 +256,304 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         base = resolve_kill_infamy_delta(
             winner=attacker,
             loser=defender,
+            initiator=attacker,
+            initial_target=defender,
             location_id='dark_forest',
             repeat_kill_count=0,
         )
         repeated = resolve_kill_infamy_delta(
             winner=attacker,
             loser=defender,
+            initiator=attacker,
+            initial_target=defender,
             location_id='dark_forest',
             repeat_kill_count=2,
         )
         self.assertGreater(repeated, base)
+
+    def test_defensive_winner_is_not_misclassified_as_illegal_attacker(self):
+        attacker, defender = self._players()
+        defender['pvp_status'] = 'flagged'
+        infamy = resolve_kill_infamy_delta(
+            winner=defender,
+            loser=attacker,
+            initiator=attacker,
+            initial_target=defender,
+            location_id='dark_forest',
+            repeat_kill_count=0,
+        )
+        self.assertEqual(infamy, 0)
+
+    def test_illegal_initiator_winner_still_gets_kill_infamy(self):
+        attacker, defender = self._players()
+        infamy = resolve_kill_infamy_delta(
+            winner=attacker,
+            loser=defender,
+            initiator=attacker,
+            initial_target=defender,
+            location_id='dark_forest',
+            repeat_kill_count=1,
+        )
+        self.assertGreaterEqual(infamy, 2)
+
+    def test_flagged_defender_case_is_not_driven_by_winner_role(self):
+        attacker, defender = self._players()
+        defender['pvp_status'] = 'flagged'
+        when_attacker_wins = resolve_kill_infamy_delta(
+            winner=attacker,
+            loser=defender,
+            initiator=attacker,
+            initial_target=defender,
+            location_id='dark_forest',
+            repeat_kill_count=0,
+        )
+        when_defender_wins = resolve_kill_infamy_delta(
+            winner=defender,
+            loser=attacker,
+            initiator=attacker,
+            initial_target=defender,
+            location_id='dark_forest',
+            repeat_kill_count=0,
+        )
+        self.assertEqual(when_attacker_wins, 0)
+        self.assertEqual(when_defender_wins, 0)
+
+    def test_attacker_side_reinforcement_invite_and_accept(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        ok, reason = invite_reinforcement_ally(engagement_row=row, inviter_id=self.ATTACKER_ID, ally_id=self.ATTACKER_ALLY_ID)
+        self.assertTrue(ok)
+        self.assertIsNone(reason)
+        ok_accept, _ = respond_to_reinforcement_invite(
+            engagement_id=engagement_id,
+            ally_id=self.ATTACKER_ALLY_ID,
+            accepted=True,
+        )
+        self.assertTrue(ok_accept)
+        state = get_engagement_reinforcement_state(engagement_id=engagement_id)
+        self.assertEqual(state['initiator']['ally_id'], self.ATTACKER_ALLY_ID)
+        self.assertEqual(state['initiator']['status'], 'accepted')
+
+    def test_defender_side_reinforcement_invite_and_decline(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        ok, _ = invite_reinforcement_ally(engagement_row=row, inviter_id=self.DEFENDER_ID, ally_id=self.DEFENDER_ALLY_ID)
+        self.assertTrue(ok)
+        ok_decline, _ = respond_to_reinforcement_invite(
+            engagement_id=engagement_id,
+            ally_id=self.DEFENDER_ALLY_ID,
+            accepted=False,
+        )
+        self.assertTrue(ok_decline)
+        state = get_engagement_reinforcement_state(engagement_id=engagement_id)
+        self.assertEqual(state['defender']['status'], 'rejected')
+
+    def test_reinforcement_join_restrictions_busy_battle_location(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id=?', (self.DEFENDER_ALLY_ID,))
+        conn.commit()
+        conn.close()
+        ok_busy, reason_busy = invite_reinforcement_ally(
+            engagement_row=row,
+            inviter_id=self.DEFENDER_ID,
+            ally_id=self.DEFENDER_ALLY_ID,
+        )
+        self.assertFalse(ok_busy)
+        self.assertEqual(reason_busy, 'already_in_battle')
+        ok_far, reason_far = invite_reinforcement_ally(
+            engagement_row=row,
+            inviter_id=self.ATTACKER_ID,
+            ally_id=self.OUTSIDER_ID,
+        )
+        self.assertFalse(ok_far)
+        self.assertEqual(reason_far, 'not_same_location')
+
+    def test_reinforcement_join_restriction_when_ally_already_in_active_pvp(self):
+        attacker, defender = self._players()
+        first_engagement = create_live_engagement(
+            attacker=attacker,
+            defender=defender,
+            location_id='dark_forest',
+            illegal_aggression=False,
+        )
+        conn = get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('dark_forest', self.OUTSIDER_ID))
+        ally_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (self.ATTACKER_ALLY_ID,)).fetchone()
+        outsider_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (self.OUTSIDER_ID,)).fetchone()
+        conn.commit()
+        conn.close()
+        create_live_engagement(
+            attacker=dict(ally_row),
+            defender=dict(outsider_row),
+            location_id='dark_forest',
+            illegal_aggression=False,
+        )
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (first_engagement,)).fetchone()
+        conn.close()
+        ok, reason = invite_reinforcement_ally(
+            engagement_row=row,
+            inviter_id=self.ATTACKER_ID,
+            ally_id=self.ATTACKER_ALLY_ID,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'already_in_active_pvp')
+
+    def test_reinforcement_cannot_join_after_live_conversion(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        conn.execute(
+            "UPDATE pvp_engagements SET engagement_state='converted_to_battle' WHERE id=?",
+            (engagement_id,),
+        )
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        ok, reason = invite_reinforcement_ally(engagement_row=row, inviter_id=self.ATTACKER_ID, ally_id=self.ATTACKER_ALLY_ID)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'engagement_not_pending')
+
+    def test_reinforcement_state_persists_in_pending_window(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        invite_reinforcement_ally(engagement_row=row, inviter_id=self.ATTACKER_ID, ally_id=self.ATTACKER_ALLY_ID)
+        first_state = get_engagement_reinforcement_state(engagement_id=engagement_id)
+        second_state = get_engagement_reinforcement_state(engagement_id=engagement_id)
+        self.assertEqual(first_state['initiator']['ally_id'], self.ATTACKER_ALLY_ID)
+        self.assertEqual(second_state['initiator']['status'], 'pending')
+
+    def test_reinforcement_candidates_do_not_break_default_1v1_flow(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        candidates = list_reinforcement_candidates(engagement_row=row, inviter_id=self.ATTACKER_ID)
+        self.assertTrue(any(int(c['telegram_id']) == self.ATTACKER_ALLY_ID for c in candidates))
+        state, payload = advance_engagement_to_live_battle_if_ready(row)
+        self.assertIn(state, {'pending', 'converted_to_battle'})
+        self.assertTrue('battle' in payload or state == 'pending')
+
+    def test_accepted_reinforcement_cannot_start_new_engagement(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        invite_reinforcement_ally(engagement_row=row, inviter_id=self.ATTACKER_ID, ally_id=self.ATTACKER_ALLY_ID)
+        respond_to_reinforcement_invite(engagement_id=engagement_id, ally_id=self.ATTACKER_ALLY_ID, accepted=True)
+        ok, reason = can_create_live_engagement(
+            attacker_id=self.ATTACKER_ALLY_ID,
+            defender_id=self.OUTSIDER_ID,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'attacker_busy')
+
+    def test_multiple_players_can_join_initiator_side_during_prep(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('dark_forest', self.OUTSIDER_ID))
+        conn.commit()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        ok1, _ = join_pending_encounter_side(engagement_row=row, player_id=self.ATTACKER_ALLY_ID, side='initiator')
+        ok2, _ = join_pending_encounter_side(engagement_row=row, player_id=self.OUTSIDER_ID, side='initiator')
+        self.assertTrue(ok1)
+        self.assertTrue(ok2)
+        detail = get_pending_encounter_detail(engagement_id=engagement_id)
+        self.assertGreaterEqual(len(detail['initiator_names']), 3)
+
+    def test_multiple_players_can_join_defender_side_during_prep(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('dark_forest', self.OUTSIDER_ID))
+        conn.commit()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        ok1, _ = join_pending_encounter_side(engagement_row=row, player_id=self.DEFENDER_ALLY_ID, side='defender')
+        ok2, _ = join_pending_encounter_side(engagement_row=row, player_id=self.OUTSIDER_ID, side='defender')
+        self.assertTrue(ok1)
+        self.assertTrue(ok2)
+        detail = get_pending_encounter_detail(engagement_id=engagement_id)
+        self.assertGreaterEqual(len(detail['defender_names']), 3)
+
+    def test_joined_player_is_blocked_from_other_prep_encounter(self):
+        attacker, defender = self._players()
+        first_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('dark_forest', self.OUTSIDER_ID))
+        ally_row = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (self.DEFENDER_ALLY_ID,)).fetchone())
+        outsider_row = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (self.OUTSIDER_ID,)).fetchone())
+        conn.commit()
+        first_row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (first_id,)).fetchone()
+        conn.close()
+        join_pending_encounter_side(engagement_row=first_row, player_id=self.ATTACKER_ALLY_ID, side='initiator')
+        second_id = create_live_engagement(attacker=ally_row, defender=outsider_row, location_id='dark_forest', illegal_aggression=False)
+        conn2 = get_connection()
+        second_row = conn2.execute('SELECT * FROM pvp_engagements WHERE id=?', (second_id,)).fetchone()
+        conn2.close()
+        ok, reason = join_pending_encounter_side(engagement_row=second_row, player_id=self.ATTACKER_ALLY_ID, side='defender')
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'already_in_active_pvp')
+
+    def test_pending_location_encounter_summary_and_detail_helpers(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        encounters = get_pending_location_encounters(location_id='dark_forest', limit=3)
+        self.assertTrue(any(row['id'] == engagement_id for row in encounters))
+        detail = get_pending_encounter_detail(engagement_id=engagement_id)
+        self.assertEqual(detail['id'], engagement_id)
+        self.assertIn('Attacker', detail['initiator_names'][0])
+
+    def test_accepted_reinforcement_cannot_be_targeted_for_new_engagement(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('dark_forest', self.OUTSIDER_ID))
+        conn.commit()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        invite_reinforcement_ally(engagement_row=row, inviter_id=self.ATTACKER_ID, ally_id=self.ATTACKER_ALLY_ID)
+        respond_to_reinforcement_invite(engagement_id=engagement_id, ally_id=self.ATTACKER_ALLY_ID, accepted=True)
+        ok, reason = can_create_live_engagement(
+            attacker_id=self.OUTSIDER_ID,
+            defender_id=self.ATTACKER_ALLY_ID,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'defender_busy')
+
+    def test_accepted_reinforcement_is_released_on_live_conversion_for_1v1_scope(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(attacker=attacker, defender=defender, location_id='dark_forest', illegal_aggression=False)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        invite_reinforcement_ally(engagement_row=row, inviter_id=self.ATTACKER_ID, ally_id=self.ATTACKER_ALLY_ID)
+        respond_to_reinforcement_invite(engagement_id=engagement_id, ally_id=self.ATTACKER_ALLY_ID, accepted=True)
+        self.assertTrue(is_player_busy_with_live_pvp(self.ATTACKER_ALLY_ID))
+        conn.execute(
+            "UPDATE pvp_engagements SET engagement_ready_at=? WHERE id=?",
+            ((datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(), engagement_id),
+        )
+        conn.commit()
+        ready_row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        state, _payload = advance_engagement_to_live_battle_if_ready(ready_row)
+        self.assertEqual(state, 'converted_to_battle')
+        self.assertFalse(is_player_busy_with_live_pvp(self.ATTACKER_ALLY_ID))
 
     def test_duplicate_parallel_engagements_are_blocked_for_1v1_scope(self):
         attacker, defender = self._players()

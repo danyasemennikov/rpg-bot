@@ -12,7 +12,7 @@ from telegram.ext import (
 from database import init_db
 from handlers.start    import start_command, handle_name_input, handle_stat_buttons
 from handlers.profile  import help_command, profile_command, stats_command, handle_stats_buttons, unstuck_command, main_keyboard
-from handlers.location import location_command, handle_location_buttons, handle_combat_buttons
+from handlers.location import location_command, pvp_command, handle_location_buttons, handle_combat_buttons
 from handlers.battle   import handle_battle_buttons
 from handlers.inventory import inventory_command, handle_inventory_buttons, handle_transfer_input
 from handlers.skills_ui import skills_command, handle_skills_buttons
@@ -96,6 +96,7 @@ def main():
     app.add_handler(CommandHandler('help',     help_command))
     app.add_handler(CommandHandler('profile',  profile_command))
     app.add_handler(CommandHandler('location', location_command))
+    app.add_handler(CommandHandler('pvp',      pvp_command))
     app.add_handler(CommandHandler('stats',    stats_command))
     app.add_handler(CommandHandler('unstuck',  unstuck_command))
     app.add_handler(CommandHandler('inventory', inventory_command))
