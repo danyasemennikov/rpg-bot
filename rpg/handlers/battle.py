@@ -5,6 +5,7 @@
 import sys, json
 sys.path.append('/content/rpg_bot')
 import random
+import copy
 
 from game.skill_engine import get_battle_skills
 from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
@@ -15,7 +16,16 @@ from database import get_player, get_connection
 from game.mobs import get_mob
 from game.combat import (
     init_battle, process_turn, calc_rewards,
-    calc_death_penalty, hp_bar, resolve_enemy_response, process_skill_turn
+    calc_death_penalty, hp_bar, resolve_enemy_response, process_skill_turn,
+    process_enemy_side_turn, apply_timeout_fallback_guard,
+)
+from game.pve_live import (
+    clear_solo_pve_runtime,
+    ensure_runtime_for_battle,
+    process_due_timeout_for_battle,
+    resolve_current_side_if_ready,
+    run_enemy_instant_side,
+    submit_player_commit,
 )
 from game.balance import (
     exp_to_next_level, calc_max_hp, normalize_weapon_profile,
@@ -416,6 +426,7 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     # Сохраняем состояние в context
     context.user_data['battle']     = battle_state
     context.user_data['battle_mob'] = mob
+    ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state)
 
     save_battle(user.id)
 
@@ -448,6 +459,7 @@ async def _handle_victory_cleanup(
     rewards = calc_rewards(mob)
     result_reward = apply_rewards(user_id, player, rewards)
     end_battle(user_id)
+    clear_solo_pve_runtime(user_id)
     context.user_data.pop('battle', None)
     context.user_data.pop('battle_mob', None)
 
@@ -508,6 +520,7 @@ async def _handle_death_or_resurrection(
 
     penalty = apply_death(user_id, player)
     end_battle(user_id)
+    clear_solo_pve_runtime(user_id)
     context.user_data.pop('battle', None)
     context.user_data.pop('battle_mob', None)
     await safe_edit(query,
@@ -586,6 +599,27 @@ async def _handle_battle_continues_update(
     text, keyboard = build_battle_message(player, mob, battle_state, battle_state['log'])
     await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
 
+
+def _build_enemy_response_player_state(player: dict, battle_state: dict) -> dict:
+    return {
+        'hp': battle_state.get('player_hp', player.get('hp', 0)),
+        'agility': battle_state.get('effective_agility', player.get('agility', 1)),
+        'vitality': battle_state.get('effective_vitality', player.get('vitality', 1)),
+        'wisdom': battle_state.get('effective_wisdom', player.get('wisdom', 1)),
+        'luck': battle_state.get('effective_luck', player.get('luck', 1)),
+        'armor_class': battle_state.get('armor_class'),
+        'offhand_profile': battle_state.get('offhand_profile', 'none'),
+        'encumbrance': battle_state.get('encumbrance'),
+        'equipment_physical_defense_bonus': battle_state.get('equipment_physical_defense_bonus', 0),
+        'equipment_magic_defense_bonus': battle_state.get('equipment_magic_defense_bonus', 0),
+        'equipment_block_chance_bonus': battle_state.get('equipment_block_chance_bonus', 0),
+    }
+
+
+def _apply_timeout_fallback_action(action, battle_state: dict, lang: str) -> None:
+    if getattr(action, 'action_type', '') == 'fallback_guard':
+        apply_timeout_fallback_guard(battle_state, lang=lang)
+
 async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data  = query.data
@@ -599,12 +633,46 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     # Если состояние боя потеряно (перезапуск бота)
     if not battle_state or not mob:
         end_battle(user.id)
+        clear_solo_pve_runtime(user.id)
         conn = get_connection()
         conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (user.id,))
         conn.commit()
         conn.close()
 
         await safe_edit(query, t('battle.state_lost', lang))
+        return
+
+    ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state)
+    timed_out = process_due_timeout_for_battle(
+        player_id=user.id,
+        battle_state=battle_state,
+        on_player_timeout_action=lambda action: _apply_timeout_fallback_action(action, battle_state, lang),
+        on_enemy_action=lambda _action: process_enemy_side_turn(
+            mob,
+            _build_enemy_response_player_state(p, battle_state),
+            battle_state,
+            lang=lang,
+            user_id=user.id,
+            include_pre_enemy_ticks=False,
+            tick_player_post_action_buffs=True,
+            tick_timed_trigger_buffs=True,
+            increment_turn=True,
+        ),
+    )
+    if timed_out:
+        context.user_data['battle'] = battle_state
+        handled = await _resolve_post_attack_combat_resolution(
+            query=query,
+            context=context,
+            user_id=user.id,
+            player=p,
+            mob=mob,
+            battle_state=battle_state,
+            lang=lang,
+        )
+        if handled:
+            return
+        await query.answer()
         return
 
     # ── Открыть зелья в бою ──
@@ -698,64 +766,86 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         skill_id, mob_id = rest.split('|', 1)
 
         mob = context.user_data.get('battle_mob')
-        turn_result = process_skill_turn(
+        preview_state = copy.deepcopy(battle_state)
+        preview_result = process_skill_turn(
             skill_id=skill_id,
             player=p,
             mob=mob,
-            battle_state=battle_state,
+            battle_state=preview_state,
             user_id=user.id,
             lang=lang,
+            include_enemy_response=False,
         )
-
-        skill_result = turn_result['skill_result']
-        if not turn_result['success']:
-            await query.answer(skill_result['log'], show_alert=True)
+        if not preview_result.get('success'):
+            skill_result = preview_result.get('skill_result', {})
+            await query.answer(skill_result.get('log', t('battle.turn_not_ready', lang)), show_alert=True)
             return
 
-        battle_state = turn_result['battle_state']
-
-        weapon_id = battle_state.get('weapon_id', 'unarmed')
-        add_mastery_exp(user.id, weapon_id, 5)
-
-        # Проверяем смерть моба после скилла
-        if battle_state.get('mob_dead'):
-            context.user_data['battle'] = battle_state
-            await _handle_victory_cleanup(
-                query=query,
-                context=context,
-                user_id=user.id,
-                player=p,
-                mob=mob,
-                battle_state=battle_state,
-                lang=lang,
-                levelup_before_loot=True,
-            )
+        accepted, _ = submit_player_commit(
+            player_id=user.id,
+            action_type='skill',
+            skill_id=skill_id,
+        )
+        if not accepted:
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
             return
+
+        def _apply_player_skill_action(_action):
+            updated = preview_result['battle_state']
+            battle_state.update(updated)
+            battle_state['mob_dead'] = battle_state.get('mob_dead', battle_state.get('mob_hp', 1) <= 0)
+            battle_state['player_dead'] = battle_state.get('player_dead', battle_state.get('player_hp', 1) <= 0)
+            weapon_id = battle_state.get('weapon_id', 'unarmed')
+            add_mastery_exp(user.id, weapon_id, 5)
+
+        resolve_current_side_if_ready(
+            player_id=user.id,
+            on_player_action=_apply_player_skill_action,
+            on_enemy_action=lambda _action: None,
+        )
 
         tick_cooldowns(user.id)
         context.user_data['battle'] = battle_state
 
-        if battle_state.get('player_dead'):
-            conn = get_connection()
-            conn.execute(
-                'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
-                (battle_state['player_hp'], battle_state['player_mana'], user.id)
+        if battle_state.get('mob_dead'):
+            await _handle_victory_cleanup(
+                query=query, context=context, user_id=user.id, player=p, mob=mob,
+                battle_state=battle_state, lang=lang, levelup_before_loot=True,
             )
-            conn.commit()
-            conn.close()
+            return
 
-            await _handle_death_or_resurrection(
-                query=query,
-                context=context,
-                user_id=user.id,
-                player=p,
-                mob=mob,
+        if (
+            not battle_state.get('mob_dead')
+            and not battle_state.get('player_dead')
+        ):
+            run_enemy_instant_side(
+                player_id=user.id,
                 battle_state=battle_state,
-                lang=lang,
-                log=battle_state['log'],
-                death_key='battle.death',
-                clear_player_dead_flag=False,
-                answer_on_resurrection=True,
+                on_enemy_action=lambda _action: process_enemy_side_turn(
+                    mob,
+                    _build_enemy_response_player_state(p, battle_state),
+                    battle_state,
+                    lang=lang,
+                    user_id=user.id,
+                    include_pre_enemy_ticks=True,
+                    tick_player_post_action_buffs=False,
+                    tick_timed_trigger_buffs=False,
+                    increment_turn=False,
+                ),
+            )
+
+        if battle_state.get('mob_dead'):
+            await _handle_victory_cleanup(
+                query=query, context=context, user_id=user.id, player=p, mob=mob,
+                battle_state=battle_state, lang=lang, levelup_before_loot=True,
+            )
+            return
+
+        if battle_state.get('player_dead'):
+            await _handle_death_or_resurrection(
+                query=query, context=context, user_id=user.id, player=p, mob=mob,
+                battle_state=battle_state, lang=lang, log=battle_state['log'],
+                death_key='battle.death', clear_player_dead_flag=False, answer_on_resurrection=True,
             )
             return
 
@@ -771,10 +861,52 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
     # ── АТАКА ──
     if data.startswith('battle_attack_'):
-        battle_state = process_turn(p, mob, battle_state, lang, user_id=user.id)
-        context.user_data['battle'] = battle_state
+        accepted, _ = submit_player_commit(player_id=user.id, action_type='basic_attack')
+        if not accepted:
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+            return
+
+        def _apply_player_basic_action(_action):
+            battle_state['_runtime_player_only'] = True
+            updated_state = process_turn(
+                p,
+                mob,
+                battle_state,
+                lang,
+                user.id,
+            )
+            if updated_state is not battle_state:
+                battle_state.clear()
+                battle_state.update(updated_state)
+
+        resolve_current_side_if_ready(
+            player_id=user.id,
+            on_player_action=_apply_player_basic_action,
+            on_enemy_action=lambda _action: None,
+        )
 
         tick_cooldowns(user.id)
+
+        if (
+            not battle_state.get('mob_dead')
+            and not battle_state.get('player_dead')
+        ):
+            run_enemy_instant_side(
+                player_id=user.id,
+                battle_state=battle_state,
+                on_enemy_action=lambda _action: process_enemy_side_turn(
+                    mob,
+                    _build_enemy_response_player_state(p, battle_state),
+                    battle_state,
+                    lang=lang,
+                    user_id=user.id,
+                    include_pre_enemy_ticks=False,
+                    tick_player_post_action_buffs=True,
+                    tick_timed_trigger_buffs=True,
+                    increment_turn=True,
+                ),
+            )
+        context.user_data['battle'] = battle_state
 
         handled = await _resolve_post_attack_combat_resolution(
             query=query,
@@ -792,6 +924,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     elif data.startswith('battle_flee_'):
         if random.randint(1, 100) <= 20:
             end_battle(user.id)
+            clear_solo_pve_runtime(user.id)
             conn = get_connection()
             conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (user.id,))
             conn.commit()
@@ -814,6 +947,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             if new_hp <= 0:
                 penalty = apply_death(user.id, p)
                 end_battle(user.id)
+                clear_solo_pve_runtime(user.id)
                 context.user_data.pop('battle', None)
                 context.user_data.pop('battle_mob', None)
                 await safe_edit(query, 
