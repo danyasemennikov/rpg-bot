@@ -202,6 +202,36 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('❤️ 66/111', text)
         self.assertIn('🔵 25/70', text)
 
+    def test_converted_live_battle_shows_controls_only_for_active_core_player(self):
+        player = {
+            'telegram_id': 2002,
+            'lang': 'en',
+            'level': 10,
+            'hp': 1,
+            'max_hp': 1,
+            'mana': 1,
+            'max_mana': 1,
+            'gold': 20,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002}
+        payload = {'battle': {'defender_hp': 66, 'defender_max_hp': 111, 'defender_mana': 25, 'defender_max_mana': 70, 'attacker_hp': 88, 'turn_owner': 1001}}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=engagement),
+            patch('handlers.location.advance_engagement_to_live_battle_if_ready', return_value=('converted_to_battle', payload)),
+            patch('handlers.location.get_manual_pvp_action_labels', return_value=[('normal_attack', '⚔️ Strike')]) as labels_mock,
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, keyboard = build_location_message(player, location, pvp_only_view=True)
+        self.assertIn('turn: enemy', text)
+        self.assertEqual(list(keyboard.inline_keyboard), [])
+        labels_mock.assert_not_called()
+
     def test_converted_live_battle_hides_combat_ui_for_reinforcement_only_viewer(self):
         player = {
             'telegram_id': 3003,
