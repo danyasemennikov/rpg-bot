@@ -317,6 +317,10 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
     runtime_stats = None
     if engagement_row:
         state, payload = advance_engagement_to_live_battle_if_ready(engagement_row)
+        is_live_participant = player_id in {
+            int(engagement_row['attacker_id']),
+            int(engagement_row['defender_id']),
+        }
         if state == 'pending':
             text += t('location.pvp_pending', lang) + '\n'
             reinforcement_state = get_engagement_reinforcement_state(engagement_id=int(engagement_row['id']))
@@ -330,7 +334,7 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
                 defender=defender_state.get('ally_name', t('location.pvp_reinforcement_none', lang)),
                 defender_status=t(f"location.pvp_reinforcement_status_{defender_state.get('status', 'none')}", lang),
             ) + '\n'
-            if player_id in {int(engagement_row['attacker_id']), int(engagement_row['defender_id'])}:
+            if is_live_participant:
                 keyboard.append([InlineKeyboardButton(
                     t('location.pvp_escape_btn', lang),
                     callback_data=f"pvp_escape_{engagement_row['id']}",
@@ -368,30 +372,33 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
                 ):
                     text += t('location.pvp_reinforcement_accepted_notice', lang) + '\n'
         elif state == 'converted_to_battle':
-            battle = payload.get('battle') or {}
-            runtime_stats = _build_live_pvp_runtime_stats(player, battle, engagement_row)
-            turn_owner_id = int(battle.get('turn_owner', 0) or 0)
-            text += t(
-                'location.pvp_live_status',
-                lang,
-                attacker_hp=battle.get('attacker_hp', 0),
-                defender_hp=battle.get('defender_hp', 0),
-                turn=t(
-                    'location.pvp_turn_you' if turn_owner_id == int(player['telegram_id']) else 'location.pvp_turn_enemy',
+            if is_live_participant:
+                battle = payload.get('battle') or {}
+                runtime_stats = _build_live_pvp_runtime_stats(player, battle, engagement_row)
+                turn_owner_id = int(battle.get('turn_owner', 0) or 0)
+                text += t(
+                    'location.pvp_live_status',
                     lang,
-                ),
-            ) + '\n'
-            for action_id, action_label in get_manual_pvp_action_labels(
-                player_id=int(player['telegram_id']),
-                lang=lang,
-                battle=battle,
-                attacker_id=int(engagement_row['attacker_id']),
-                defender_id=int(engagement_row['defender_id']),
-            ):
-                keyboard.append([InlineKeyboardButton(
-                    action_label,
-                    callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
-                )])
+                    attacker_hp=battle.get('attacker_hp', 0),
+                    defender_hp=battle.get('defender_hp', 0),
+                    turn=t(
+                        'location.pvp_turn_you' if turn_owner_id == int(player['telegram_id']) else 'location.pvp_turn_enemy',
+                        lang,
+                    ),
+                ) + '\n'
+                for action_id, action_label in get_manual_pvp_action_labels(
+                    player_id=int(player['telegram_id']),
+                    lang=lang,
+                    battle=battle,
+                    attacker_id=int(engagement_row['attacker_id']),
+                    defender_id=int(engagement_row['defender_id']),
+                ):
+                    keyboard.append([InlineKeyboardButton(
+                        action_label,
+                        callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
+                    )])
+            else:
+                text += t('location.pvp_reinforcement_commitment_released', lang) + '\n'
 
     # ── Мобы ──
     if location['mobs'] and not pvp_only_view:

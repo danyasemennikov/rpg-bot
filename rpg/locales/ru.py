@@ -168,6 +168,7 @@ STRINGS = {
         'pvp_reinforcement_accept_done': '✅ Ты принял зов подкрепления.',
         'pvp_reinforcement_decline_done': '📝 Ты отклонил зов подкрепления.',
         'pvp_reinforcement_response_blocked': '⛔ Ответ на приглашение подкрепления уже недействителен.',
+        'pvp_reinforcement_commitment_released': 'ℹ️ Эта PvP-подготовка перешла в живой бой. Твоя роль подкрепления в фазе подготовки завершена.',
         'pvp_encounters_title': '📡 Активные PvP-стычки (подготовка):',
         'pvp_encounter_row': '• #{id} {attacker} vs {defender} | ⏱ {time_left} | И:{initiator_count} З:{defender_count}',
         'pvp_view_fight_btn': '👁 Смотреть бой #{id}',

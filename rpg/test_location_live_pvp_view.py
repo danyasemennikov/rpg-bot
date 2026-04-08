@@ -173,6 +173,70 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('❤️ 77/120', text)
         self.assertIn('🔵 33/90', text)
 
+    def test_live_pvp_view_uses_battle_runtime_hp_mana_for_defender(self):
+        player = {
+            'telegram_id': 2002,
+            'lang': 'en',
+            'level': 10,
+            'hp': 1,
+            'max_hp': 1,
+            'mana': 1,
+            'max_mana': 1,
+            'gold': 20,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002}
+        payload = {'battle': {'defender_hp': 66, 'defender_max_hp': 111, 'defender_mana': 25, 'defender_max_mana': 70, 'attacker_hp': 88, 'turn_owner': 1001}}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=engagement),
+            patch('handlers.location.advance_engagement_to_live_battle_if_ready', return_value=('converted_to_battle', payload)),
+            patch('handlers.location.get_manual_pvp_action_labels', return_value=[]),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, _ = build_location_message(player, location, pvp_only_view=True)
+        self.assertIn('❤️ 66/111', text)
+        self.assertIn('🔵 25/70', text)
+
+    def test_converted_live_battle_hides_combat_ui_for_reinforcement_only_viewer(self):
+        player = {
+            'telegram_id': 3003,
+            'lang': 'en',
+            'level': 10,
+            'hp': 80,
+            'max_hp': 100,
+            'mana': 40,
+            'max_mana': 60,
+            'gold': 20,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002}
+        payload = {'battle': {'attacker_hp': 77, 'attacker_max_hp': 120, 'attacker_mana': 33, 'attacker_max_mana': 90, 'defender_hp': 22, 'turn_owner': 1001}}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=engagement),
+            patch('handlers.location.advance_engagement_to_live_battle_if_ready', return_value=('converted_to_battle', payload)),
+            patch('handlers.location.get_manual_pvp_action_labels', return_value=[('normal_attack', '⚔️ Strike')]) as action_mock,
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, keyboard = build_location_message(player, location, pvp_only_view=True)
+        self.assertIn('prep commitment is now released', text)
+        self.assertNotIn('PvP battle', text)
+        self.assertIn('❤️ 80/100', text)
+        self.assertIn('🔵 40/60', text)
+        callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
+        self.assertNotIn('pvp_act_9_normal_attack', callback_ids)
+        action_mock.assert_not_called()
+
     def test_location_view_shows_pending_pvp_encounters_section(self):
         player = {
             'telegram_id': 1001,

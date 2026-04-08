@@ -157,6 +157,7 @@ STRINGS = {
         'pvp_reinforcement_accept_done': '✅ You accepted the reinforcement call.',
         'pvp_reinforcement_decline_done': '📝 You declined the reinforcement call.',
         'pvp_reinforcement_response_blocked': '⛔ Reinforcement response is no longer valid.',
+        'pvp_reinforcement_commitment_released': 'ℹ️ This prep encounter has moved into live battle. Your reinforcement prep commitment is now released.',
         'pvp_encounters_title': '📡 Active prep PvP encounters:',
         'pvp_encounter_row': '• #{id} {attacker} vs {defender} | ⏱ {time_left} | I:{initiator_count} D:{defender_count}',
         'pvp_view_fight_btn': '👁 View fight #{id}',
