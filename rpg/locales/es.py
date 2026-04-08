@@ -156,6 +156,7 @@ STRINGS = {
         'pvp_reinforcement_accept_done': '✅ Aceptaste la llamada de refuerzo.',
         'pvp_reinforcement_decline_done': '📝 Rechazaste la llamada de refuerzo.',
         'pvp_reinforcement_response_blocked': '⛔ La respuesta de refuerzo ya no es válida.',
+        'pvp_reinforcement_commitment_released': 'ℹ️ Este encuentro de preparación pasó a batalla PvP en vivo. Tu compromiso de refuerzo de preparación ya terminó.',
         'pvp_encounters_title': '📡 Encuentros PvP en preparación:',
         'pvp_encounter_row': '• #{id} {attacker} vs {defender} | ⏱ {time_left} | I:{initiator_count} D:{defender_count}',
         'pvp_view_fight_btn': '👁 Ver combate #{id}',
