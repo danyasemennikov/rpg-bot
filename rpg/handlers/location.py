@@ -28,7 +28,14 @@ from game.pvp_live import (
     resolve_engagement_escape,
     resolve_live_battle_turn,
 )
-from game.pvp_rules import is_aggression_illegal, is_target_attackable, should_apply_red_flag
+from game.pvp_rules import (
+    clear_respawn_protection,
+    clear_respawn_protection_on_dangerous_reentry,
+    get_attack_block_reason,
+    is_aggression_illegal,
+    is_target_attackable,
+    should_apply_red_flag,
+)
 
 CURATED_EQUIPMENT_VENDOR_STOCK = {
     'village': [
@@ -408,9 +415,14 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         if defender['location_id'] != attacker['location_id']:
             await query.answer(t('location.pvp_target_missing', lang), show_alert=True)
             return
-        if not is_target_attackable(attacker=dict(attacker), defender=dict(defender), location_id=attacker['location_id']):
-            await query.answer(t('location.pvp_not_allowed', lang), show_alert=True)
+        block_reason = get_attack_block_reason(attacker=dict(attacker), defender=dict(defender), location_id=attacker['location_id'])
+        if block_reason is not None:
+            msg_key = 'location.pvp_not_allowed'
+            if block_reason == 'respawn_protection':
+                msg_key = 'location.pvp_respawn_protection_block'
+            await query.answer(t(msg_key, lang), show_alert=True)
             return
+        clear_respawn_protection(player_id=int(attacker['telegram_id']))
         can_create, reason = can_create_live_engagement(
             attacker_id=int(attacker['telegram_id']),
             defender_id=int(defender['telegram_id']),
@@ -618,6 +630,10 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         )
         conn.commit()
         conn.close()
+        clear_respawn_protection_on_dangerous_reentry(
+            player_id=int(user.id),
+            location_id=new_loc_id,
+        )
 
         p = dict(get_player(user.id))
         text, keyboard = build_location_message(p, new_loc)

@@ -136,6 +136,8 @@ STRINGS = {
         'pvp_turn_you': 'turno: tú',
         'pvp_turn_enemy': 'turno: rival',
         'pvp_live_status': '⚔️ <b>Batalla PvP</b> | A❤️{attacker_hp} vs D❤️{defender_hp} | {turn}',
+        'pvp_not_allowed': '⛔ Las reglas de PvP bloquean este ataque ahora.',
+        'pvp_respawn_protection_block': '🛡 El objetivo acaba de reaparecer y tiene protección temporal en esta zona.',
     },
     'battle': {
         'attack_btn':   '⚔️ Atacar',

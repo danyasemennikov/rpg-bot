@@ -77,6 +77,7 @@ def init_db():
     _add_column_if_missing(conn, 'players', 'red_flag', "INTEGER DEFAULT 0")
     _add_column_if_missing(conn, 'players', 'infamy', "INTEGER DEFAULT 0")
     _add_column_if_missing(conn, 'players', 'novice_protection', "INTEGER DEFAULT 1")
+    _add_column_if_missing(conn, 'players', 'pvp_respawn_protection_until', "INTEGER DEFAULT 0")
 
     # ────────────────────────────────────────
     # СПРАВОЧНИК ПРЕДМЕТОВ
