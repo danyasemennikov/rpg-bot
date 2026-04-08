@@ -33,6 +33,12 @@ from game.pvp_engagement import (
     resolve_escape_attempt,
 )
 from game.pvp_inventory_policy import resolve_item_death_vulnerability
+from game.pvp_rules import (
+    RESPAWN_PROTECTION_WINDOW_SECONDS,
+    count_recent_repeat_kills,
+    resolve_illegal_aggression_infamy,
+    resolve_kill_infamy_delta,
+)
 from game.pvp_turn_timing import ACTION_FAMILY_ATTACK, PvpActionOption, resolve_timed_turn_action
 from game.skill_engine import get_battle_skills, precheck_skill_use, use_skill
 from game.weapon_mastery import tick_cooldowns
@@ -40,7 +46,7 @@ from game.weapon_mastery import get_mastery
 
 PVP_BATTLE_STATE_LIVE = 'live'
 PVP_BATTLE_STATE_FINISHED = 'finished'
-PVP_INFAMY_MIN_ILLEGAL_AGGRESSION = 1
+REPEAT_KILL_WINDOW_MINUTES = 30
 ENGAGEMENT_BUSY_STATES = (ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE)
 
 
@@ -675,9 +681,25 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
     return 'resolved', payload
 
 
-def _transfer_vulnerable_inventory(*, winner_id: int, loser_id: int, location_id: str) -> None:
+def _resolve_repeat_kill_dampening(*, winner_id: int, loser_id: int) -> tuple[int, float]:
+    recent_kills = count_recent_repeat_kills(
+        winner_id=winner_id,
+        loser_id=loser_id,
+        window_minutes=REPEAT_KILL_WINDOW_MINUTES,
+    )
+    if recent_kills <= 0:
+        return 0, 1.0
+    if recent_kills == 1:
+        return recent_kills, 0.50
+    return recent_kills, 0.25
+
+
+def _transfer_vulnerable_inventory(*, winner_id: int, loser_id: int, location_id: str, transfer_scale: float = 1.0) -> None:
     loss_percent = resolve_pvp_death_loss_percent(location_id=location_id)
     if loss_percent <= 0:
+        return
+    scaled_loss_percent = max(0.0, min(1.0, loss_percent * transfer_scale))
+    if scaled_loss_percent <= 0:
         return
 
     conn = get_connection()
@@ -694,7 +716,7 @@ def _transfer_vulnerable_inventory(*, winner_id: int, loser_id: int, location_id
         if not vulnerability.vulnerable_on_pvp_death:
             continue
         total_quantity = int(row['quantity'])
-        lost_quantity = int(total_quantity * loss_percent)
+        lost_quantity = int(total_quantity * scaled_loss_percent)
         if lost_quantity <= 0:
             continue
         conn.execute(
@@ -735,10 +757,10 @@ def _apply_pvp_defeat(*, loser_id: int, location_id: str) -> None:
     conn.execute(
         '''
         UPDATE players
-        SET hp=?, location_id=?, in_battle=0
+        SET hp=?, location_id=?, in_battle=0, pvp_respawn_protection_until=?
         WHERE telegram_id=?
         ''',
-        (max(1, int(max_hp * 0.30)), respawn_hub, loser_id),
+        (max(1, int(max_hp * 0.30)), respawn_hub, int(_utc_now().timestamp()) + RESPAWN_PROTECTION_WINDOW_SECONDS, loser_id),
     )
     conn.commit()
     conn.close()
@@ -764,7 +786,18 @@ def _persist_winner_remaining_state(*, winner_id: int, payload: dict, engagement
 
 def _finalize_pvp_battle(*, engagement_row, payload: dict, winner_id: int, loser_id: int) -> None:
     payload.setdefault('battle', {})['state'] = PVP_BATTLE_STATE_FINISHED
+    repeat_kill_count, transfer_scale = _resolve_repeat_kill_dampening(winner_id=winner_id, loser_id=loser_id)
     conn = get_connection()
+    winner_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (winner_id,)).fetchone()
+    loser_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (loser_id,)).fetchone()
+    winner = dict(winner_row) if winner_row else {'telegram_id': winner_id}
+    loser = dict(loser_row) if loser_row else {'telegram_id': loser_id}
+    infamy_delta = resolve_kill_infamy_delta(
+        winner=winner,
+        loser=loser,
+        location_id=str(engagement_row['location_id']),
+        repeat_kill_count=repeat_kill_count,
+    )
     conn.execute(
         '''
         INSERT INTO pvp_log (attacker_id, defender_id, winner_id, exp_gained, gold_gained)
@@ -776,6 +809,11 @@ def _finalize_pvp_battle(*, engagement_row, payload: dict, winner_id: int, loser
         'UPDATE players SET in_battle=0 WHERE telegram_id IN (?, ?)',
         (engagement_row['attacker_id'], engagement_row['defender_id']),
     )
+    if infamy_delta > 0:
+        conn.execute(
+            'UPDATE players SET infamy=infamy+?, red_flag=1 WHERE telegram_id=?',
+            (infamy_delta, winner_id),
+        )
     conn.commit()
     conn.close()
 
@@ -783,6 +821,7 @@ def _finalize_pvp_battle(*, engagement_row, payload: dict, winner_id: int, loser
         winner_id=winner_id,
         loser_id=loser_id,
         location_id=str(engagement_row['location_id']),
+        transfer_scale=transfer_scale,
     )
     _apply_pvp_defeat(
         loser_id=loser_id,
@@ -802,6 +841,29 @@ def _finalize_pvp_battle(*, engagement_row, payload: dict, winner_id: int, loser
 
 def apply_illegal_aggression_penalties(*, attacker_id: int) -> None:
     conn = get_connection()
+    attacker = conn.execute('SELECT * FROM players WHERE telegram_id=?', (attacker_id,)).fetchone()
+    defender_id = None
+    current_row = conn.execute(
+        '''
+        SELECT defender_id, location_id
+        FROM pvp_engagements
+        WHERE attacker_id=?
+          AND engagement_state IN (?, ?, ?)
+        ORDER BY id DESC
+        LIMIT 1
+        ''',
+        (attacker_id, ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE),
+    ).fetchone()
+    location_id = None
+    if current_row:
+        defender_id = int(current_row['defender_id'])
+        location_id = str(current_row['location_id'])
+    defender = conn.execute('SELECT * FROM players WHERE telegram_id=?', (defender_id,)).fetchone() if defender_id else None
+    infamy_delta = resolve_illegal_aggression_infamy(
+        attacker=dict(attacker) if attacker else {'telegram_id': attacker_id},
+        defender=dict(defender) if defender else {'telegram_id': defender_id or 0},
+        location_id=location_id,
+    )
     conn.execute(
         '''
         UPDATE players
@@ -809,7 +871,7 @@ def apply_illegal_aggression_penalties(*, attacker_id: int) -> None:
             infamy=infamy + ?
         WHERE telegram_id=?
         ''',
-        (PVP_INFAMY_MIN_ILLEGAL_AGGRESSION, attacker_id),
+        (max(1, infamy_delta), attacker_id),
     )
     conn.commit()
     conn.close()

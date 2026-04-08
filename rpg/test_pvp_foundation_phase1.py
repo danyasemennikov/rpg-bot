@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
+from database import get_connection
 from game.locations import get_location_security_tier, resolve_region_safe_hub
 from game.pvp_engagement import (
     ENGAGEMENT_PREPARATION_WINDOW_SECONDS,
@@ -23,9 +24,13 @@ from game.pvp_inventory_policy import (
     resolve_item_death_vulnerability,
 )
 from game.pvp_rules import (
+    clear_respawn_protection_on_dangerous_reentry,
     does_novice_protection_block_interaction,
+    has_respawn_protection,
     is_aggression_illegal,
+    is_recent_retaliation_context,
     is_target_attackable,
+    resolve_illegal_aggression_infamy,
     should_apply_red_flag,
 )
 from game.pvp_state import build_player_pvp_state
@@ -40,6 +45,41 @@ from game.pvp_turn_timing import (
 
 
 class OpenWorldPvpFoundationTests(unittest.TestCase):
+    ATTACKER_ID = 920001
+    DEFENDER_ID = 920002
+
+    def setUp(self):
+        conn = get_connection()
+        conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?) OR defender_id IN (?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID,
+        ))
+        conn.execute('DELETE FROM players WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
+        conn.execute(
+            '''
+            INSERT INTO players (telegram_id, username, name, level, location_id, hp, max_hp, mana, max_mana, pvp_status, novice_protection, red_flag, infamy)
+            VALUES (?, 'a', 'A', 20, 'dark_forest', 100, 100, 50, 50, 'neutral', 0, 0, 0)
+            ''',
+            (self.ATTACKER_ID,),
+        )
+        conn.execute(
+            '''
+            INSERT INTO players (telegram_id, username, name, level, location_id, hp, max_hp, mana, max_mana, pvp_status, novice_protection, red_flag, infamy)
+            VALUES (?, 'd', 'D', 20, 'dark_forest', 100, 100, 50, 50, 'neutral', 0, 0, 0)
+            ''',
+            (self.DEFENDER_ID,),
+        )
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        conn = get_connection()
+        conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?) OR defender_id IN (?, ?)', (
+            self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID,
+        ))
+        conn.execute('DELETE FROM players WHERE telegram_id IN (?, ?)', (self.ATTACKER_ID, self.DEFENDER_ID))
+        conn.commit()
+        conn.close()
+
     def test_security_tier_resolution(self):
         self.assertEqual(get_location_security_tier('village'), 'safe')
         self.assertEqual(get_location_security_tier('dark_forest'), 'guarded')
@@ -334,6 +374,56 @@ class OpenWorldPvpFoundationTests(unittest.TestCase):
                 location_id='dark_forest',
             )
         )
+
+    def test_recently_respawned_defender_gets_temporary_protection(self):
+        conn = get_connection()
+        conn.execute(
+            "UPDATE players SET pvp_respawn_protection_until=strftime('%s','now') + 120 WHERE telegram_id=?",
+            (self.DEFENDER_ID,),
+        )
+        defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (self.DEFENDER_ID,)).fetchone())
+        conn.close()
+        self.assertTrue(has_respawn_protection(defender))
+
+    def test_respawn_protection_breaks_on_dangerous_reentry(self):
+        conn = get_connection()
+        conn.execute(
+            "UPDATE players SET pvp_respawn_protection_until=strftime('%s','now') + 120 WHERE telegram_id=?",
+            (self.DEFENDER_ID,),
+        )
+        conn.commit()
+        conn.close()
+        clear_respawn_protection_on_dangerous_reentry(player_id=self.DEFENDER_ID, location_id='old_mines')
+        conn = get_connection()
+        defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (self.DEFENDER_ID,)).fetchone())
+        conn.close()
+        self.assertFalse(has_respawn_protection(defender))
+
+    def test_recent_aggressor_context_marks_retaliation(self):
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO pvp_log (attacker_id, defender_id, winner_id, exp_gained, gold_gained) VALUES (?, ?, ?, 0, 0)",
+            (self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID),
+        )
+        conn.commit()
+        conn.close()
+        self.assertTrue(is_recent_retaliation_context(attacker_id=self.ATTACKER_ID, defender_id=self.DEFENDER_ID))
+
+    def test_lawful_kill_has_lower_infamy_than_illegal(self):
+        illegal_attacker = {'telegram_id': self.ATTACKER_ID, 'pvp_status': 'neutral', 'red_flag': 0}
+        neutral_target = {'telegram_id': self.DEFENDER_ID, 'pvp_status': 'neutral', 'red_flag': 0}
+        flagged_target = {'telegram_id': self.DEFENDER_ID, 'pvp_status': 'flagged', 'red_flag': 0}
+        illegal_infamy = resolve_illegal_aggression_infamy(
+            attacker=illegal_attacker,
+            defender=neutral_target,
+            location_id='dark_forest',
+        )
+        lawful_infamy = resolve_illegal_aggression_infamy(
+            attacker=illegal_attacker,
+            defender=flagged_target,
+            location_id='dark_forest',
+        )
+        self.assertGreater(illegal_infamy, lawful_infamy)
 
 
 if __name__ == '__main__':

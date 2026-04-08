@@ -147,6 +147,7 @@ STRINGS = {
         'in_battle_block': '⚔️ Сначала разберись с противником!',
         'pvp_target_missing': '❌ Цель недоступна.',
         'pvp_not_allowed': '⛔ Атака сейчас запрещена правилами PvP.',
+        'pvp_respawn_protection_block': '🛡 Цель только что возродилась и временно защищена в этой зоне.',
         'pvp_engagement_started': '⚔️ PvP-столкновение началось. Подготовка: 5 минут.',
         'pvp_pending': '⏳ PvP-столкновение в подготовке.',
         'pvp_escape_btn': '🏃 Попытка побега',

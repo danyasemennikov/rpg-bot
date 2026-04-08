@@ -136,6 +136,7 @@ STRINGS = {
         'in_battle_block': '⚔️ Defeat your enemy first!',
         'pvp_target_missing': '❌ Target is not available.',
         'pvp_not_allowed': '⛔ PvP rules currently block this attack.',
+        'pvp_respawn_protection_block': '🛡 Target just respawned and is under short protection in this zone.',
         'pvp_engagement_started': '⚔️ PvP engagement started. Preparation: 5 minutes.',
         'pvp_pending': '⏳ PvP engagement is preparing.',
         'pvp_escape_btn': '🏃 Attempt escape',

@@ -14,8 +14,15 @@ from game.pvp_live import (
     process_live_pvp_due_events,
     resolve_engagement_escape,
     resolve_live_battle_turn,
+    _resolve_repeat_kill_dampening,
 )
-from game.pvp_rules import is_target_attackable
+from game.pvp_rules import (
+    clear_respawn_protection,
+    get_attack_block_reason,
+    is_target_attackable,
+    resolve_illegal_aggression_infamy,
+    resolve_kill_infamy_delta,
+)
 from game.weapon_mastery import get_skill_cooldown
 
 
@@ -101,6 +108,85 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(attacker_after['red_flag'], 1)
         self.assertGreaterEqual(attacker_after['infamy'], 1)
+
+    def test_repeat_kill_dampens_vulnerable_transfer_value(self):
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO pvp_log (attacker_id, defender_id, winner_id, exp_gained, gold_gained) VALUES (?, ?, ?, 0, 0)",
+            (self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ID),
+        )
+        conn.commit()
+        conn.close()
+        repeat_count, transfer_scale = _resolve_repeat_kill_dampening(
+            winner_id=self.ATTACKER_ID,
+            loser_id=self.DEFENDER_ID,
+        )
+        self.assertEqual(repeat_count, 1)
+        self.assertLess(transfer_scale, 1.0)
+
+    def test_respawn_protection_blocks_immediate_reengage_in_guarded_zone(self):
+        conn = get_connection()
+        conn.execute(
+            "UPDATE players SET pvp_respawn_protection_until=strftime('%s','now') + 120 WHERE telegram_id=?",
+            (self.DEFENDER_ID,),
+        )
+        conn.commit()
+        attacker, defender = self._players()
+        conn.close()
+        self.assertFalse(is_target_attackable(attacker=attacker, defender=defender, location_id='dark_forest'))
+        self.assertEqual(
+            get_attack_block_reason(attacker=attacker, defender=defender, location_id='dark_forest'),
+            'respawn_protection',
+        )
+
+    def test_respawn_protection_breaks_on_hostile_action(self):
+        conn = get_connection()
+        conn.execute(
+            "UPDATE players SET pvp_respawn_protection_until=strftime('%s','now') + 120 WHERE telegram_id=?",
+            (self.ATTACKER_ID,),
+        )
+        conn.commit()
+        conn.close()
+        clear_respawn_protection(player_id=self.ATTACKER_ID)
+        attacker, _ = self._players()
+        self.assertEqual(int(attacker['pvp_respawn_protection_until']), 0)
+
+    def test_illegal_infamy_is_stronger_than_retaliation(self):
+        attacker, defender = self._players()
+        fresh = resolve_illegal_aggression_infamy(
+            attacker=attacker,
+            defender=defender,
+            location_id='dark_forest',
+        )
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO pvp_log (attacker_id, defender_id, winner_id, exp_gained, gold_gained) VALUES (?, ?, ?, 0, 0)",
+            (self.DEFENDER_ID, self.ATTACKER_ID, self.DEFENDER_ID),
+        )
+        conn.commit()
+        conn.close()
+        retaliation = resolve_illegal_aggression_infamy(
+            attacker=attacker,
+            defender=defender,
+            location_id='dark_forest',
+        )
+        self.assertGreater(fresh, retaliation)
+
+    def test_repeat_harassment_increases_kill_infamy(self):
+        attacker, defender = self._players()
+        base = resolve_kill_infamy_delta(
+            winner=attacker,
+            loser=defender,
+            location_id='dark_forest',
+            repeat_kill_count=0,
+        )
+        repeated = resolve_kill_infamy_delta(
+            winner=attacker,
+            loser=defender,
+            location_id='dark_forest',
+            repeat_kill_count=2,
+        )
+        self.assertGreater(repeated, base)
 
     def test_duplicate_parallel_engagements_are_blocked_for_1v1_scope(self):
         attacker, defender = self._players()
