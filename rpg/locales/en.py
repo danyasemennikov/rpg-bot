@@ -49,6 +49,7 @@ STRINGS = {
         'saved_ok':      '✅ <b>Stats saved!</b>\n\n',
         'reset_no_gold': '❌ Not enough gold! Need {cost} 💰',
         'reset_success': '✅ Stats reset!',
+        'unstuck_done':  '🔧 Done! Moved to village.',
         'identity': {
             'armor_class': {
                 'heavy': 'Heavy armor',
@@ -141,7 +142,11 @@ STRINGS = {
         'pvp_escape_success': '✅ Escape succeeded. Engagement ended.',
         'pvp_escape_fail': '❌ Escape failed. Battle starts now!',
         'pvp_no_engagement': '❌ PvP engagement not found.',
-        'pvp_live_status': '⚔️ <b>PvP battle</b> | A❤️{attacker_hp} vs D❤️{defender_hp}',
+        'pvp_live_status': '⚔️ <b>PvP battle</b> | A❤️{attacker_hp} vs D❤️{defender_hp} | {turn}',
+        'pvp_turn_you': 'turn: you',
+        'pvp_turn_enemy': 'turn: enemy',
+        'pvp_context_block': '⛔ You are locked in active PvP. Use PvP controls only.',
+        'pvp_mobility_block': '⛔ You cannot change location while PvP engagement is active.',
         'pvp_action_attack_btn': '⚔️ Strike',
         'pvp_action_guard_btn': '🛡 Guard',
         'pvp_wait_turn_timeout': '⏳ Turn has not timed out yet. Auto-action not triggered.',

@@ -13,6 +13,7 @@ from game.i18n import t, get_player_lang, get_item_name
 from game.items_data import get_item, get_item_metadata
 from game.equipment_stats import get_player_effective_stats
 from game.gear_instances import get_equipped_gear_instances, resolve_equipped_item_ids_with_fallback
+from game.pvp_live import is_pvp_mobility_blocked
 
 STAT_RESET_COST = 100  # стоимость сброса статов в золоте
 
@@ -423,6 +424,9 @@ async def handle_stats_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
 async def unstuck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = get_player_lang(user.id)
+    if is_pvp_mobility_blocked(int(user.id)):
+        await update.message.reply_text(t('location.pvp_mobility_block', lang))
+        return
     conn = get_connection()
     conn.execute(
         'UPDATE players SET in_battle=0, location_id="village" WHERE telegram_id=?',
@@ -439,7 +443,7 @@ async def unstuck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
     await update.message.reply_text(
-        "🔧 " + ("Готово! Перенесён в деревню." if lang == 'ru' else "Done! Moved to village."),
+        t('profile.unstuck_done', lang),
         reply_markup=main_keyboard()
     )
 
