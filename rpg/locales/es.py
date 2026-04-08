@@ -49,6 +49,7 @@ STRINGS = {
         'saved_ok':      '✅ <b>¡Stats guardados!</b>\n\n',
         'reset_no_gold': '❌ ¡Oro insuficiente! Necesitas {cost} 💰',
         'reset_success': '✅ ¡Stats reiniciados!',
+        'unstuck_done':  '🔧 ¡Listo! Trasladado al pueblo.',
         'identity': {
             'armor_class': {
                 'heavy': 'Armadura pesada',
@@ -130,6 +131,11 @@ STRINGS = {
         'aggro_fight_first_btn': '⚔️ ¡Aceptar combate (enemigo va primero)!',
         'aggro_flee_fail':  '❌ ¡No pudiste huir! ¡<b>{mob_name}</b> te intercepta!\n\n😤 ¡El enemigo ataca primero!\nNv. {level}  ❤️ {hp} HP',
         'in_battle_block': '⚔️ ¡Primero derrota a tu enemigo!',
+        'pvp_context_block': '⛔ Estás bloqueado en PvP activo. Usa solo controles de PvP.',
+        'pvp_mobility_block': '⛔ No puedes cambiar de ubicación mientras el PvP esté activo.',
+        'pvp_turn_you': 'turno: tú',
+        'pvp_turn_enemy': 'turno: rival',
+        'pvp_live_status': '⚔️ <b>Batalla PvP</b> | A❤️{attacker_hp} vs D❤️{defender_hp} | {turn}',
     },
     'battle': {
         'attack_btn':   '⚔️ Atacar',

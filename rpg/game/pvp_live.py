@@ -198,6 +198,16 @@ def is_player_busy_with_live_pvp(player_id: int) -> bool:
     return bool(row)
 
 
+def has_active_live_pvp_engagement(player_id: int) -> bool:
+    """True when player is in pending/prep or converted live PvP engagement."""
+    return is_player_busy_with_live_pvp(player_id)
+
+
+def is_pvp_mobility_blocked(player_id: int) -> bool:
+    """Movement/world-flow lock during any active live PvP engagement."""
+    return has_active_live_pvp_engagement(player_id)
+
+
 def get_pending_player_engagement(player_id: int):
     conn = get_connection()
     row = conn.execute(

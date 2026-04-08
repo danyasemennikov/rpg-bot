@@ -21,6 +21,8 @@ from game.pvp_live import (
     can_create_live_engagement,
     create_live_engagement,
     get_pending_player_engagement,
+    has_active_live_pvp_engagement,
+    is_pvp_mobility_blocked,
     get_manual_pvp_action_labels,
     is_player_busy_with_live_pvp,
     resolve_engagement_escape,
@@ -45,6 +47,30 @@ CURATED_EQUIPMENT_VENDOR_STOCK = {
 
 def _should_use_pvp_only_location_view(player: dict) -> bool:
     return bool(player.get('in_battle')) and is_player_busy_with_live_pvp(int(player['telegram_id']))
+
+
+def _build_live_pvp_runtime_stats(player: dict, battle: dict, engagement_row) -> dict:
+    runtime = {
+        'hp': player['hp'],
+        'max_hp': player['max_hp'],
+        'mana': player['mana'],
+        'max_mana': player['max_mana'],
+    }
+    if not battle or not engagement_row:
+        return runtime
+    player_id = int(player['telegram_id'])
+    attacker_id = int(engagement_row['attacker_id'])
+    if player_id == attacker_id:
+        runtime['hp'] = int(battle.get('attacker_hp', runtime['hp']))
+        runtime['max_hp'] = int(battle.get('attacker_max_hp', runtime['max_hp']))
+        runtime['mana'] = int(battle.get('attacker_mana', runtime['mana']))
+        runtime['max_mana'] = int(battle.get('attacker_max_mana', runtime['max_mana']))
+    else:
+        runtime['hp'] = int(battle.get('defender_hp', runtime['hp']))
+        runtime['max_hp'] = int(battle.get('defender_max_hp', runtime['max_hp']))
+        runtime['mana'] = int(battle.get('defender_mana', runtime['mana']))
+        runtime['max_mana'] = int(battle.get('defender_max_mana', runtime['max_mana']))
+    return runtime
 
 
 def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
@@ -179,7 +205,7 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
         (location['id'], player['telegram_id']),
     ).fetchall()
     conn.close()
-    if nearby_players and not location['safe']:
+    if nearby_players and not location['safe'] and not pvp_only_view:
         text += t('location.players_nearby', lang) + '\n'
         for row in nearby_players:
             is_busy = is_player_busy_with_live_pvp(int(row['telegram_id']))
@@ -193,6 +219,7 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
         text += '\n'
 
     engagement_row = get_pending_player_engagement(int(player['telegram_id']))
+    runtime_stats = None
     if engagement_row:
         state, payload = advance_engagement_to_live_battle_if_ready(engagement_row)
         if state == 'pending':
@@ -203,11 +230,17 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
             )])
         elif state == 'converted_to_battle':
             battle = payload.get('battle') or {}
+            runtime_stats = _build_live_pvp_runtime_stats(player, battle, engagement_row)
+            turn_owner_id = int(battle.get('turn_owner', 0) or 0)
             text += t(
                 'location.pvp_live_status',
                 lang,
                 attacker_hp=battle.get('attacker_hp', 0),
                 defender_hp=battle.get('defender_hp', 0),
+                turn=t(
+                    'location.pvp_turn_you' if turn_owner_id == int(player['telegram_id']) else 'location.pvp_turn_enemy',
+                    lang,
+                ),
             ) + '\n'
             for action_id, action_label in get_manual_pvp_action_labels(
                 player_id=int(player['telegram_id']),
@@ -296,8 +329,15 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
         keyboard.append(nav_buttons)
 
     # ── Статус игрока ──
-    text += f"\n❤️ {player['hp']}/{player['max_hp']}  " \
-            f"🔵 {player['mana']}/{player['max_mana']}  " \
+    if runtime_stats is None:
+        runtime_stats = {
+            'hp': player['hp'],
+            'max_hp': player['max_hp'],
+            'mana': player['mana'],
+            'max_mana': player['max_mana'],
+        }
+    text += f"\n❤️ {runtime_stats['hp']}/{runtime_stats['max_hp']}  " \
+            f"🔵 {runtime_stats['mana']}/{runtime_stats['max_mana']}  " \
             f"💰 {player['gold']}"
 
     return text, InlineKeyboardMarkup(keyboard)
@@ -349,6 +389,10 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
     user = query.from_user
     p    = get_player(user.id)
     lang = p['lang'] if p else 'ru'
+
+    if p and has_active_live_pvp_engagement(int(user.id)) and not data.startswith('pvp_'):
+        await query.answer(t('location.pvp_context_block', lang), show_alert=True)
+        return
     
     if p and p['in_battle'] and not data.startswith('pvp_'):
         await query.answer(t('location.in_battle_block', lang), show_alert=True)
@@ -531,7 +575,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer(t('location.shop_buy_ok', lang, name=get_item_name(item_id, lang), price=result['price']))
         return
 
-    if data.startswith('goto_') and is_in_battle(user.id):
+    if data.startswith('goto_') and (is_in_battle(user.id) or is_pvp_mobility_blocked(int(user.id))):
         await query.answer(t('location.in_battle_move', lang), show_alert=True)
         return
 
@@ -562,6 +606,10 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         )
 
         await asyncio.sleep(15)
+
+        if is_pvp_mobility_blocked(int(user.id)):
+            await query.edit_message_text(t('location.pvp_mobility_block', lang), parse_mode='HTML')
+            return
 
         conn = get_connection()
         conn.execute(
@@ -651,6 +699,10 @@ async def handle_combat_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     user  = query.from_user
     p     = get_player(user.id)
     lang  = p['lang'] if p else 'ru'
+
+    if has_active_live_pvp_engagement(int(user.id)):
+        await query.answer(t('location.pvp_context_block', lang), show_alert=True)
+        return
 
     if data.startswith('fight_first_'):
         mob_id = data.replace('fight_first_', '')

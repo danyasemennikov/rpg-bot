@@ -56,6 +56,7 @@ STRINGS = {
         'saved_ok':      '✅ <b>Статы сохранены!</b>\n\n',
         'reset_no_gold': '❌ Недостаточно золота! Нужно {cost} 💰',
         'reset_success': '✅ Статы сброшены!',
+        'unstuck_done':  '🔧 Готово! Перенесён в деревню.',
         'identity': {
             'armor_class': {
                 'heavy': 'Тяжёлая броня',
@@ -152,7 +153,11 @@ STRINGS = {
         'pvp_escape_success': '✅ Побег удался. Столкновение завершено.',
         'pvp_escape_fail': '❌ Побег провален. Бой начинается сразу!',
         'pvp_no_engagement': '❌ PvP-столкновение не найдено.',
-        'pvp_live_status': '⚔️ <b>PvP бой</b> | A❤️{attacker_hp} vs D❤️{defender_hp}',
+        'pvp_live_status': '⚔️ <b>PvP бой</b> | A❤️{attacker_hp} vs D❤️{defender_hp} | {turn}',
+        'pvp_turn_you': 'ход: ты',
+        'pvp_turn_enemy': 'ход: соперник',
+        'pvp_context_block': '⛔ Ты уже в активном PvP. Доступны только PvP-действия.',
+        'pvp_mobility_block': '⛔ Нельзя сменить локацию, пока активно PvP-столкновение.',
         'pvp_action_attack_btn': '⚔️ Удар',
         'pvp_action_guard_btn': '🛡 Защита',
         'pvp_wait_turn_timeout': '⏳ Ход ещё не истёк. Авто-действие не запущено.',
