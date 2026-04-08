@@ -217,6 +217,8 @@ STRINGS = {
         'mob_not_found':     '❌ ¡Enemigo no encontrado!',
         'already_in_battle': '❌ ¡Ya estás en combate!',
         'state_lost':        '❌ Estado de batalla perdido — el bot se reinició.\nVe a /location e inicia un nuevo combate.',
+        'fallback_guard':    '🛡️ Te preparas para el impacto (auto-defensa).',
+        'turn_not_ready':    '⏳ Este turno ya está cerrado. Espera la siguiente ronda.',
         'already_over':      '❌ Esta batalla ya ha terminado',
         'effect_poison': '☠️ ¡El veneno causa {damage} de daño!',
         'effect_burn':   '🔥 ¡La quemadura causa {damage} de daño!',

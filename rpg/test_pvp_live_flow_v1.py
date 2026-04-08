@@ -42,7 +42,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
     OUTSIDER_ID = 910005
 
     def setUp(self):
-        _LIVE_PVP_RUNTIME_STORE._encounters.clear()
+        _LIVE_PVP_RUNTIME_STORE.reset()
         conn = get_connection()
         conn.execute(
             '''
@@ -128,7 +128,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         conn.close()
 
     def tearDown(self):
-        _LIVE_PVP_RUNTIME_STORE._encounters.clear()
+        _LIVE_PVP_RUNTIME_STORE.reset()
         conn = get_connection()
         conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?, ?, ?, ?) OR defender_id IN (?, ?, ?, ?, ?)', (
             self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,

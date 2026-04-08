@@ -120,6 +120,10 @@ class LiveCombatRuntimeStore:
         with self._lock:
             self._encounters.pop(encounter_id, None)
 
+    def reset(self) -> None:
+        with self._lock:
+            self._encounters.clear()
+
 
 class LiveCombatRuntime:
     def __init__(self, store: LiveCombatRuntimeStore):

@@ -240,6 +240,8 @@ STRINGS = {
         'mob_not_found':     '❌ Mob not found!',
         'already_in_battle': '❌ You are already in battle!',
         'state_lost':        '❌ Battle state lost — bot was restarted.\nGo to /location and start a new fight.',
+        'fallback_guard':    '🛡️ You brace for impact (auto-guard).',
+        'turn_not_ready':    '⏳ This turn is already resolved. Wait for the next round.',
         'already_over':      '❌ This battle is already over',
         'effect_poison': '☠️ Poison deals {damage} damage!',
         'effect_burn':   '🔥 Burning deals {damage} damage!',

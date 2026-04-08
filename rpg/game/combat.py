@@ -834,6 +834,7 @@ def process_skill_turn(
     battle_state: dict,
     user_id: int,
     lang: str = 'ru',
+    include_enemy_response: bool = True,
 ) -> dict:
     """
     Обрабатывает ход игрока через скилл.
@@ -921,10 +922,10 @@ def process_skill_turn(
             battle_state['mob_effects'] = []
         battle_state['mob_effects'].extend(skill_result['effects'])
 
-    if battle_state['mob_hp'] > 0:
+    if include_enemy_response and battle_state['mob_hp'] > 0:
         log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
 
-    if battle_state['mob_hp'] > 0:
+    if include_enemy_response and battle_state['mob_hp'] > 0:
         player_state['hp'] = battle_state['player_hp']
         log.extend(resolve_enemy_response(mob, player_state, battle_state, lang=lang, user_id=user_id))
 
@@ -1387,7 +1388,23 @@ def init_battle(player: dict, mob: dict, mob_first: bool = False) -> dict:
 # ОБРАБОТКА ПОЛНОГО ХОДА
 # ────────────────────────────────────────
 
-def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', user_id: int | None = None) -> dict:
+def process_turn(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str = 'ru',
+    user_id: int | None = None,
+    include_enemy_response: bool = True,
+) -> dict:
+    runtime_player_only = bool(battle_state.pop('_runtime_player_only', False))
+    if runtime_player_only or not include_enemy_response:
+        return process_player_attack_side_turn(
+            player,
+            mob,
+            battle_state,
+            lang=lang,
+        )
+
     log = []
     log.extend(apply_player_start_of_turn_regen(battle_state, lang))
     log.extend(apply_mob_effect_ticks(mob, battle_state))
@@ -1444,6 +1461,131 @@ def process_turn(player: dict, mob: dict, battle_state: dict, lang: str = 'ru', 
     battle_state['turn']     += 1
     battle_state['log']       = log
 
+    return battle_state
+
+
+def process_player_attack_side_turn(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    *,
+    lang: str = 'ru',
+) -> dict:
+    """
+    Runtime-aware helper for solo PvE player side resolution.
+    Resolves only player attack side (without enemy response side).
+    """
+    log = []
+    log.extend(apply_player_start_of_turn_regen(battle_state, lang))
+    log.extend(apply_mob_effect_ticks(mob, battle_state))
+
+    player = dict(player)
+    player['hp'] = battle_state['player_hp']
+    player['weapon_type'] = battle_state.get('weapon_type', 'melee')
+    player['weapon_profile'] = battle_state.get('weapon_profile', 'unarmed')
+    player['weapon_damage'] = battle_state.get('weapon_damage', 10)
+    player['armor_class'] = battle_state.get('armor_class')
+    player['offhand_profile'] = battle_state.get('offhand_profile', 'none')
+    player['encumbrance'] = battle_state.get('encumbrance')
+    player['equipment_physical_defense_bonus'] = battle_state.get('equipment_physical_defense_bonus', 0)
+    player['equipment_magic_defense_bonus'] = battle_state.get('equipment_magic_defense_bonus', 0)
+    player['equipment_accuracy_bonus'] = battle_state.get('equipment_accuracy_bonus', 0)
+    player['equipment_evasion_bonus'] = battle_state.get('equipment_evasion_bonus', 0)
+    player['equipment_block_chance_bonus'] = battle_state.get('equipment_block_chance_bonus', 0)
+    player['equipment_magic_power_bonus'] = battle_state.get('equipment_magic_power_bonus', 0)
+    player['equipment_healing_power_bonus'] = battle_state.get('equipment_healing_power_bonus', 0)
+    player['strength'] = battle_state.get('effective_strength', player.get('strength', 1))
+    player['agility'] = battle_state.get('effective_agility', player.get('agility', 1))
+    player['intuition'] = battle_state.get('effective_intuition', player.get('intuition', 1))
+    player['vitality'] = battle_state.get('effective_vitality', player.get('vitality', 1))
+    player['wisdom'] = battle_state.get('effective_wisdom', player.get('wisdom', 1))
+    player['luck'] = battle_state.get('effective_luck', player.get('luck', 1))
+
+    if battle_state.get('blessing_turns', 0) > 0:
+        mult = 1 + battle_state['blessing_value'] / 100
+        for stat in ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck'):
+            if stat in player:
+                player[stat] = int(player[stat] * mult)
+
+    player['guaranteed_crit'] = battle_state.get('guaranteed_crit_turns', 0) > 0
+    attack_result = resolve_normal_attack_action(player, mob, battle_state, lang=lang)
+    log.append(attack_result['log_line'])
+
+    battle_state['mob_dead'] = battle_state['mob_hp'] <= 0
+    battle_state['player_dead'] = player['hp'] <= 0
+    battle_state['player_hp'] = player['hp']
+    battle_state['log'] = log
+    return battle_state
+
+
+def process_enemy_side_turn(
+    mob: dict,
+    player: dict,
+    battle_state: dict,
+    *,
+    lang: str = 'ru',
+    user_id: int | None = None,
+    include_pre_enemy_ticks: bool = False,
+    tick_player_post_action_buffs: bool = False,
+    tick_timed_trigger_buffs: bool = False,
+    increment_turn: bool = False,
+) -> dict:
+    """
+    Runtime-aware helper for solo PvE enemy side resolution.
+    Resolves only enemy side and optional post-side tick behavior flags.
+    """
+    enemy_log: list[str] = []
+    if include_pre_enemy_ticks and battle_state.get('mob_hp', 0) > 0:
+        enemy_log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
+
+    player_state = dict(player)
+    player_state['hp'] = battle_state.get('player_hp', player_state.get('hp', 0))
+
+    can_enemy_attack = 'damage_min' in mob and 'damage_max' in mob
+    if battle_state.get('mob_hp', 0) > 0 and can_enemy_attack:
+        enemy_log.extend(
+            resolve_enemy_response(
+                mob,
+                player_state,
+                battle_state,
+                lang=lang,
+                user_id=user_id,
+            )
+        )
+
+    if tick_player_post_action_buffs:
+        tick_post_action_player_buff_durations(battle_state)
+    if tick_timed_trigger_buffs:
+        tick_post_action_timed_trigger_buffs(battle_state)
+    if increment_turn:
+        battle_state['turn'] = int(battle_state.get('turn', 0)) + 1
+
+    combined_log = list(battle_state.get('log', []))
+    combined_log.extend(enemy_log)
+    battle_state['log'] = combined_log[-6:]
+    battle_state['mob_dead'] = battle_state.get('mob_hp', 0) <= 0
+    battle_state['player_dead'] = battle_state.get('player_hp', 0) <= 0
+    return battle_state
+
+
+def apply_timeout_fallback_guard(
+    battle_state: dict,
+    *,
+    lang: str = 'ru',
+) -> dict:
+    """
+    Applies a minimal real fallback action for timeout-driven solo PvE:
+    fallback_guard grants a short defensive window.
+    """
+    current_turns = int(battle_state.get('defense_buff_turns', 0))
+    current_value = int(battle_state.get('defense_buff_value', 0))
+    battle_state['defense_buff_turns'] = max(current_turns, 1)
+    battle_state['defense_buff_value'] = max(current_value, 15)
+    battle_state['defense_buff_source'] = 'timeout_fallback_guard'
+
+    log = list(battle_state.get('log', []))
+    log.append(t('battle.fallback_guard', lang))
+    battle_state['log'] = log[-6:]
     return battle_state
 
 # ────────────────────────────────────────
