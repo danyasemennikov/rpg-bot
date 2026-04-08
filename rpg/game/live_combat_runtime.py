@@ -47,7 +47,6 @@ class RuntimeParticipant:
     participant_id: int
     side_id: str
     phase_state: ParticipantPhaseState = 'eligible'
-    unable_to_act_revision: int | None = None
 
 
 @dataclass
@@ -185,7 +184,6 @@ class LiveCombatRuntime:
                 if participant.phase_state in ('defeated', 'fled', 'released'):
                     continue
                 participant.phase_state = 'eligible'
-                participant.unable_to_act_revision = None
 
             if self._is_active_side_fully_resolved_state(state):
                 state.side_turn_state = 'ready_to_lock'
@@ -218,7 +216,6 @@ class LiveCombatRuntime:
                 return ParticipantPhaseResult(False, 'participant_already_resolved')
 
             participant.phase_state = 'unable_to_act'
-            participant.unable_to_act_revision = state.turn_revision
 
             if self._is_active_side_fully_resolved_state(state):
                 state.side_turn_state = 'ready_to_lock'

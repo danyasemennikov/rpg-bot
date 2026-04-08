@@ -386,17 +386,18 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
                         lang,
                     ),
                 ) + '\n'
-                for action_id, action_label in get_manual_pvp_action_labels(
-                    player_id=int(player['telegram_id']),
-                    lang=lang,
-                    battle=battle,
-                    attacker_id=int(engagement_row['attacker_id']),
-                    defender_id=int(engagement_row['defender_id']),
-                ):
-                    keyboard.append([InlineKeyboardButton(
-                        action_label,
-                        callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
-                    )])
+                if turn_owner_id == int(player['telegram_id']):
+                    for action_id, action_label in get_manual_pvp_action_labels(
+                        player_id=int(player['telegram_id']),
+                        lang=lang,
+                        battle=battle,
+                        attacker_id=int(engagement_row['attacker_id']),
+                        defender_id=int(engagement_row['defender_id']),
+                    ):
+                        keyboard.append([InlineKeyboardButton(
+                            action_label,
+                            callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
+                        )])
             else:
                 text += t('location.pvp_reinforcement_commitment_released', lang) + '\n'
 

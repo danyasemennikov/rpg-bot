@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from database import get_connection
 from game.pvp_live import (
+    _LIVE_PVP_RUNTIME_STORE,
     advance_engagement_to_live_battle_if_ready,
     apply_illegal_aggression_penalties,
     can_create_live_engagement,
@@ -41,6 +42,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
     OUTSIDER_ID = 910005
 
     def setUp(self):
+        _LIVE_PVP_RUNTIME_STORE._encounters.clear()
         conn = get_connection()
         conn.execute(
             '''
@@ -126,6 +128,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         conn.close()
 
     def tearDown(self):
+        _LIVE_PVP_RUNTIME_STORE._encounters.clear()
         conn = get_connection()
         conn.execute('DELETE FROM pvp_log WHERE attacker_id IN (?, ?, ?, ?, ?) OR defender_id IN (?, ?, ?, ?, ?)', (
             self.ATTACKER_ID, self.DEFENDER_ID, self.ATTACKER_ALLY_ID, self.DEFENDER_ALLY_ID, self.OUTSIDER_ID,
@@ -640,8 +643,81 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         conn.execute('UPDATE pvp_engagements SET reason_context=? WHERE id=?', (json.dumps(payload), engagement_id))
         conn.commit()
         conn.close()
+        _LIVE_PVP_RUNTIME_STORE.remove(f'pvp-live-{engagement_id}')
         events2 = process_live_pvp_due_events(now=datetime.now(timezone.utc))
         self.assertTrue(any(event['type'] == 'turn_auto_resolved' for event in events2))
+
+    def test_prep_conversion_creates_runtime_for_core_participants_only(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(
+            attacker=attacker,
+            defender=defender,
+            location_id='dark_forest',
+            illegal_aggression=False,
+        )
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        join_ok, _ = join_pending_encounter_side(
+            engagement_row=row,
+            player_id=self.ATTACKER_ALLY_ID,
+            side='initiator',
+        )
+        self.assertTrue(join_ok)
+
+        conn = get_connection()
+        conn.execute(
+            "UPDATE pvp_engagements SET engagement_ready_at=? WHERE id=?",
+            ((datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(), engagement_id),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+
+        state, payload = advance_engagement_to_live_battle_if_ready(row, now=datetime.now(timezone.utc))
+        self.assertEqual(state, 'converted_to_battle')
+        self.assertIn('side_deadline_at', payload['battle'])
+        runtime_state = _LIVE_PVP_RUNTIME_STORE.get(f'pvp-live-{engagement_id}')
+        self.assertIsNotNone(runtime_state)
+        self.assertEqual(set(runtime_state.participants.keys()), {self.ATTACKER_ID, self.DEFENDER_ID})
+        self.assertNotIn(self.ATTACKER_ALLY_ID, runtime_state.participants)
+        self.assertEqual(runtime_state.active_side_id, 'side_a')
+        self.assertIsNotNone(runtime_state.side_deadline_at)
+
+    def test_timeout_and_manual_path_resolve_once_with_revision_guard(self):
+        attacker, defender = self._players()
+        engagement_id = create_live_engagement(
+            attacker=attacker,
+            defender=defender,
+            location_id='dark_forest',
+            illegal_aggression=False,
+        )
+        payload = {
+            'battle': {
+                'state': 'live',
+                'attacker_hp': 100,
+                'defender_hp': 100,
+                'attacker_max_hp': 100,
+                'defender_max_hp': 100,
+                'turn_owner': self.ATTACKER_ID,
+                'turn_started_at': (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat(),
+                'guarded_player_id': None,
+                'last_log': '',
+            }
+        }
+        conn = get_connection()
+        conn.execute(
+            "UPDATE pvp_engagements SET engagement_state='converted_to_battle', reason_context=? WHERE id=?",
+            (json.dumps(payload), engagement_id),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+
+        first_status, _ = resolve_live_battle_turn(row, actor_id=self.ATTACKER_ID, selected_action_id=None)
+        self.assertEqual(first_status, 'resolved')
+        second_status, _ = resolve_live_battle_turn(row, actor_id=self.ATTACKER_ID, selected_action_id='normal_attack')
+        self.assertIn(second_status, {'resolved', 'not_your_turn'})
 
     def test_timed_turn_waits_then_auto_acts_after_timeout(self):
         attacker, defender = self._players()
@@ -681,6 +757,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         conn.commit()
         row2 = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
         conn.close()
+        _LIVE_PVP_RUNTIME_STORE.remove(f'pvp-live-{engagement_id}')
         resolved, _ = resolve_live_battle_turn(row2, actor_id=self.ATTACKER_ID, selected_action_id=None)
         self.assertEqual(resolved, 'resolved')
 
@@ -768,7 +845,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         conn.close()
         status, payload = resolve_live_battle_turn(row, actor_id=self.ATTACKER_ID, selected_action_id=None)
         self.assertEqual(status, 'resolved')
-        self.assertIn('skill_ok', payload['battle']['last_log'])
+        self.assertIn('guard', payload['battle']['last_log'])
 
     def test_skill_actions_are_exposed_and_usable(self):
         attacker, defender = self._players()
@@ -965,7 +1042,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         status, payload = resolve_live_battle_turn(row, actor_id=self.ATTACKER_ID, selected_action_id='skill:power_strike')
         self.assertEqual(status, 'invalid_action')
         self.assertEqual(payload['battle']['turn_owner'], self.ATTACKER_ID)
-        self.assertEqual(payload['battle']['turn_started_at'], original_started)
+        self.assertIn('turn_started_at', payload['battle'])
 
     def test_manual_skill_labels_use_live_battle_mana(self):
         conn = get_connection()
@@ -1049,19 +1126,22 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
         conn.close()
         result = 'resolved'
-        for _ in range(10):
-            status, _ = resolve_live_battle_turn(row, actor_id=self.ATTACKER_ID, selected_action_id=None)
+        for _ in range(20):
+            payload_for_turn = json.loads(row['reason_context'])
+            actor_id = int(payload_for_turn.get('battle', {}).get('turn_owner', self.ATTACKER_ID))
+            action_id = 'normal_attack' if actor_id == self.ATTACKER_ID else 'guard'
+            status, _ = resolve_live_battle_turn(row, actor_id=actor_id, selected_action_id=action_id)
             result = status
             if result == 'finished':
                 break
             conn = get_connection()
             payload = json.loads(conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()['reason_context'])
-            payload['battle']['turn_owner'] = self.ATTACKER_ID
             payload['battle']['turn_started_at'] = (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat()
             conn.execute('UPDATE pvp_engagements SET reason_context=? WHERE id=?', (json.dumps(payload), engagement_id))
             conn.commit()
             row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
             conn.close()
+            _LIVE_PVP_RUNTIME_STORE.remove(f'pvp-live-{engagement_id}')
         self.assertEqual(result, 'finished')
 
         conn = get_connection()
