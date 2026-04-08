@@ -43,6 +43,10 @@ CURATED_EQUIPMENT_VENDOR_STOCK = {
 }
 
 
+def _should_use_pvp_only_location_view(player: dict) -> bool:
+    return bool(player.get('in_battle')) and is_player_busy_with_live_pvp(int(player['telegram_id']))
+
+
 def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
     """Возвращает доступный список витрины магазина для локации и уровня."""
     stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(location_id, [])
@@ -146,7 +150,7 @@ def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboar
 # ОТОБРАЖЕНИЕ ЛОКАЦИИ
 # ────────────────────────────────────────
 
-def build_location_message(player: dict, location: dict) -> tuple:
+def build_location_message(player: dict, location: dict, *, pvp_only_view: bool = False) -> tuple:
     """Возвращает (текст, клавиатура) для текущей локации."""
     lang = player.get('lang', 'ru')
 
@@ -208,6 +212,9 @@ def build_location_message(player: dict, location: dict) -> tuple:
             for action_id, action_label in get_manual_pvp_action_labels(
                 player_id=int(player['telegram_id']),
                 lang=lang,
+                battle=battle,
+                attacker_id=int(engagement_row['attacker_id']),
+                defender_id=int(engagement_row['defender_id']),
             ):
                 keyboard.append([InlineKeyboardButton(
                     action_label,
@@ -215,7 +222,7 @@ def build_location_message(player: dict, location: dict) -> tuple:
                 )])
 
     # ── Мобы ──
-    if location['mobs']:
+    if location['mobs'] and not pvp_only_view:
         text += t('location.mobs_nearby', lang) + '\n'
         for mob_id in location['mobs']:
             mob = get_mob(mob_id)
@@ -244,7 +251,7 @@ def build_location_message(player: dict, location: dict) -> tuple:
 
     # ── Ресурсы ──
     gather_profiles = build_location_gather_source_profiles(location['id'])
-    if gather_profiles:
+    if gather_profiles and not pvp_only_view:
         text += t('location.gather_title', lang) + " "
         text += ", ".join(get_item_name(profile.item_id, lang) for profile in gather_profiles) + "\n"
         keyboard.append([InlineKeyboardButton(
@@ -253,26 +260,27 @@ def build_location_message(player: dict, location: dict) -> tuple:
         text += "\n"
 
     # ── Сервисы ──
-    service_buttons = []
-    for service in location.get('services', []):
-        if service == 'shop':
-            service_buttons.append(InlineKeyboardButton(
-                t('location.shop_btn', lang), callback_data="shop"
-            ))
-        elif service == 'inn':
-            service_buttons.append(InlineKeyboardButton(
-                t('location.inn_btn', lang), callback_data="inn"
-            ))
-        elif service == 'quest_board':
-            service_buttons.append(InlineKeyboardButton(
-                t('location.quests_btn', lang), callback_data="quests"
-            ))
-    if service_buttons:
-        keyboard.append(service_buttons)
+    if not pvp_only_view:
+        service_buttons = []
+        for service in location.get('services', []):
+            if service == 'shop':
+                service_buttons.append(InlineKeyboardButton(
+                    t('location.shop_btn', lang), callback_data="shop"
+                ))
+            elif service == 'inn':
+                service_buttons.append(InlineKeyboardButton(
+                    t('location.inn_btn', lang), callback_data="inn"
+                ))
+            elif service == 'quest_board':
+                service_buttons.append(InlineKeyboardButton(
+                    t('location.quests_btn', lang), callback_data="quests"
+                ))
+        if service_buttons:
+            keyboard.append(service_buttons)
 
     # ── Переходы в другие локации ──
     connected = get_connected_locations(location['id'])
-    if connected:
+    if connected and not pvp_only_view:
         text += t('location.travel_title', lang) + '\n'
         nav_buttons = []
         for conn_loc in connected:
@@ -303,15 +311,17 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     p    = get_player(user.id)
     lang = p['lang'] if p else 'ru'
-    if p and p['in_battle']:
-        await update.message.reply_text(t('location.in_battle_block', lang))
-        return
 
     if not p:
         await update.message.reply_text(t('common.no_character', lang))
         return
 
-    if is_in_battle(user.id):
+    in_live_pvp = bool(p['in_battle']) and is_player_busy_with_live_pvp(user.id)
+    if p['in_battle'] and not in_live_pvp:
+        await update.message.reply_text(t('location.in_battle_block', lang))
+        return
+
+    if is_in_battle(user.id) and not in_live_pvp:
         await update.message.reply_text(t('location.in_battle', lang))
         return
 
@@ -320,7 +330,7 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('location.not_found', lang))
         return
 
-    text, keyboard = build_location_message(dict(p), location)
+    text, keyboard = build_location_message(dict(p), location, pvp_only_view=in_live_pvp)
     msg = await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 
@@ -388,7 +398,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             pass
         await query.answer(t('location.pvp_engagement_started', lang), show_alert=True)
         location = get_location(attacker['location_id'])
-        text, keyboard = build_location_message(dict(get_player(user.id)), location)
+        refreshed_player = dict(get_player(user.id))
+        text, keyboard = build_location_message(
+            refreshed_player,
+            location,
+            pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
+        )
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
@@ -410,7 +425,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         else:
             await query.answer(t('location.pvp_escape_fail', lang), show_alert=True)
         location = get_location(get_player(user.id)['location_id'])
-        text, keyboard = build_location_message(dict(get_player(user.id)), location)
+        refreshed_player = dict(get_player(user.id))
+        text, keyboard = build_location_message(
+            refreshed_player,
+            location,
+            pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
+        )
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
@@ -443,7 +463,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         else:
             await query.answer(t('location.pvp_action_done', lang), show_alert=True)
         location = get_location(get_player(user.id)['location_id'])
-        text, keyboard = build_location_message(dict(get_player(user.id)), location)
+        refreshed_player = dict(get_player(user.id))
+        text, keyboard = build_location_message(
+            refreshed_player,
+            location,
+            pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
+        )
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
