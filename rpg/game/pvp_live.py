@@ -35,6 +35,7 @@ from game.pvp_engagement import (
 from game.pvp_inventory_policy import resolve_item_death_vulnerability
 from game.pvp_turn_timing import ACTION_FAMILY_ATTACK, PvpActionOption, resolve_timed_turn_action
 from game.skill_engine import get_battle_skills, precheck_skill_use, use_skill
+from game.weapon_mastery import tick_cooldowns
 from game.weapon_mastery import get_mastery
 
 PVP_BATTLE_STATE_LIVE = 'live'
@@ -343,7 +344,18 @@ def _build_player_skill_actions(player_id: int, weapon_id: str, mastery_level: i
     return actions
 
 
-def get_manual_pvp_action_labels(*, player_id: int, lang: str) -> list[tuple[str, str]]:
+def _is_live_skill_action_ready(*, skill_id: str, actor_id: int, actor_mana: int, lang: str) -> bool:
+    return precheck_skill_use(skill_id, actor_mana, actor_id, lang).get('success', False)
+
+
+def get_manual_pvp_action_labels(
+    *,
+    player_id: int,
+    lang: str,
+    battle: dict | None = None,
+    attacker_id: int | None = None,
+    defender_id: int | None = None,
+) -> list[tuple[str, str]]:
     conn = get_connection()
     row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (player_id,)).fetchone()
     conn.close()
@@ -352,6 +364,11 @@ def get_manual_pvp_action_labels(*, player_id: int, lang: str) -> list[tuple[str
     player_row = dict(row)
     profile = _resolve_combat_profile(player_id, player_row)
     current_mana = int(player_row.get('mana', 0))
+    if battle:
+        if attacker_id is not None and player_id == int(attacker_id):
+            current_mana = int(battle.get('attacker_mana', current_mana))
+        elif defender_id is not None and player_id == int(defender_id):
+            current_mana = int(battle.get('defender_mana', current_mana))
     labels = [('normal_attack', t('location.pvp_action_attack_btn', lang)), ('guard', t('location.pvp_action_guard_btn', lang))]
     for action in _build_player_skill_actions(
         player_id,
@@ -360,7 +377,7 @@ def get_manual_pvp_action_labels(*, player_id: int, lang: str) -> list[tuple[str
         profile['weapon_profile'],
     ):
         skill_id = action.replace('skill:', '', 1)
-        if not precheck_skill_use(skill_id, current_mana, player_id, lang).get('success'):
+        if not _is_live_skill_action_ready(skill_id=skill_id, actor_id=player_id, actor_mana=current_mana, lang=lang):
             continue
         labels.append((action, f"🔮 {get_skill_name(skill_id, lang)}"))
     return labels
@@ -390,7 +407,7 @@ def _build_turn_action_options(
         actor_profile['weapon_profile'],
     ):
         skill_id = skill_action.replace('skill:', '', 1)
-        skill_ready = precheck_skill_use(skill_id, actor_mana, actor_id, lang).get('success', False)
+        skill_ready = _is_live_skill_action_ready(skill_id=skill_id, actor_id=actor_id, actor_mana=actor_mana, lang=lang)
         options.append(PvpActionOption(skill_action, 'core', skill_ready))
     return options
 
@@ -484,8 +501,7 @@ def _resolve_skill_action(
     actor_mana_key = 'attacker_mana' if is_attacker_side else 'defender_mana'
     current_mana = int(battle.get(actor_mana_key, 0))
     lang = get_player_lang(actor_id)
-    precheck = precheck_skill_use(skill_id, current_mana, actor_id, lang)
-    if not precheck.get('success'):
+    if not _is_live_skill_action_ready(skill_id=skill_id, actor_id=actor_id, actor_mana=current_mana, lang=lang):
         return 0, current_mana, f'skill_fail:{skill_id}'
 
     player_runtime = {
@@ -620,6 +636,7 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
 
     battle['turn_owner'] = target_id
     battle['turn_started_at'] = _to_iso(_utc_now())
+    tick_cooldowns(actor_id)
 
     winner_id = None
     loser_id = None

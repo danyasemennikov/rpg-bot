@@ -16,6 +16,7 @@ from game.pvp_live import (
     resolve_live_battle_turn,
 )
 from game.pvp_rules import is_target_attackable
+from game.weapon_mastery import get_skill_cooldown
 
 
 class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
@@ -379,6 +380,76 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         self.assertEqual(result, 'resolved')
         self.assertIn('skill_ok', payload['battle']['last_log'])
 
+    def test_live_turn_progression_ticks_skill_cooldowns(self):
+        attacker, defender = self._players()
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, 'iron_sword', 1)",
+            (self.ATTACKER_ID,),
+        )
+        inv_id = conn.execute(
+            "SELECT id FROM inventory WHERE telegram_id=? AND item_id='iron_sword' ORDER BY id DESC LIMIT 1",
+            (self.ATTACKER_ID,),
+        ).fetchone()['id']
+        conn.execute("UPDATE equipment SET weapon=? WHERE telegram_id=?", (inv_id, self.ATTACKER_ID))
+        conn.execute(
+            "INSERT OR REPLACE INTO weapon_mastery (telegram_id, weapon_id, level, exp, skill_points) VALUES (?, 'iron_sword', 1, 0, 1)",
+            (self.ATTACKER_ID,),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO player_skills (telegram_id, skill_id, level) VALUES (?, 'power_strike', 1)",
+            (self.ATTACKER_ID,),
+        )
+        conn.commit()
+        conn.close()
+
+        engagement_id = create_live_engagement(
+            attacker=attacker,
+            defender=defender,
+            location_id='dark_forest',
+            illegal_aggression=False,
+        )
+        conn = get_connection()
+        conn.execute(
+            "UPDATE pvp_engagements SET engagement_state='converted_to_battle', reason_context=? WHERE id=?",
+            (json.dumps({
+                'battle': {
+                    'state': 'live',
+                    'attacker_hp': 100,
+                    'defender_hp': 100,
+                    'attacker_mana': 100,
+                    'defender_mana': 100,
+                    'attacker_max_hp': 100,
+                    'defender_max_hp': 100,
+                    'turn_owner': self.ATTACKER_ID,
+                    'turn_started_at': datetime.now(timezone.utc).isoformat(),
+                    'guarded_player_id': None,
+                    'last_log': '',
+                }
+            }), engagement_id),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+
+        first_result, _ = resolve_live_battle_turn(row, actor_id=self.ATTACKER_ID, selected_action_id='skill:power_strike')
+        self.assertEqual(first_result, 'resolved')
+        self.assertEqual(get_skill_cooldown(self.ATTACKER_ID, 'power_strike'), 1)
+
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        second_result, _ = resolve_live_battle_turn(row, actor_id=self.DEFENDER_ID, selected_action_id='normal_attack')
+        self.assertEqual(second_result, 'resolved')
+        self.assertEqual(get_skill_cooldown(self.ATTACKER_ID, 'power_strike'), 1)
+
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        third_result, _ = resolve_live_battle_turn(row, actor_id=self.ATTACKER_ID, selected_action_id='normal_attack')
+        self.assertEqual(third_result, 'resolved')
+        self.assertEqual(get_skill_cooldown(self.ATTACKER_ID, 'power_strike'), 0)
+
     def test_unready_skill_not_surfaced_and_invalid_submission_does_not_consume_turn(self):
         attacker, defender = self._players()
         conn = get_connection()
@@ -442,6 +513,53 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         self.assertEqual(status, 'invalid_action')
         self.assertEqual(payload['battle']['turn_owner'], self.ATTACKER_ID)
         self.assertEqual(payload['battle']['turn_started_at'], original_started)
+
+    def test_manual_skill_labels_use_live_battle_mana(self):
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, 'iron_sword', 1)",
+            (self.ATTACKER_ID,),
+        )
+        inv_id = conn.execute(
+            "SELECT id FROM inventory WHERE telegram_id=? AND item_id='iron_sword' ORDER BY id DESC LIMIT 1",
+            (self.ATTACKER_ID,),
+        ).fetchone()['id']
+        conn.execute("UPDATE equipment SET weapon=? WHERE telegram_id=?", (inv_id, self.ATTACKER_ID))
+        conn.execute(
+            "INSERT OR REPLACE INTO weapon_mastery (telegram_id, weapon_id, level, exp, skill_points) VALUES (?, 'iron_sword', 1, 0, 1)",
+            (self.ATTACKER_ID,),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO player_skills (telegram_id, skill_id, level) VALUES (?, 'power_strike', 1)",
+            (self.ATTACKER_ID,),
+        )
+        conn.execute("UPDATE players SET mana=100 WHERE telegram_id=?", (self.ATTACKER_ID,))
+        conn.commit()
+        conn.close()
+
+        low_live_mana = {'attacker_mana': 0, 'defender_mana': 100}
+        labels_low = get_manual_pvp_action_labels(
+            player_id=self.ATTACKER_ID,
+            lang='en',
+            battle=low_live_mana,
+            attacker_id=self.ATTACKER_ID,
+            defender_id=self.DEFENDER_ID,
+        )
+        self.assertNotIn('skill:power_strike', {row[0] for row in labels_low})
+
+        conn = get_connection()
+        conn.execute("UPDATE players SET mana=0 WHERE telegram_id=?", (self.ATTACKER_ID,))
+        conn.commit()
+        conn.close()
+        high_live_mana = {'attacker_mana': 100, 'defender_mana': 100}
+        labels_high = get_manual_pvp_action_labels(
+            player_id=self.ATTACKER_ID,
+            lang='en',
+            battle=high_live_mana,
+            attacker_id=self.ATTACKER_ID,
+            defender_id=self.DEFENDER_ID,
+        )
+        self.assertIn('skill:power_strike', {row[0] for row in labels_high})
 
     def test_pvp_resolution_logs_respawn_and_vulnerable_transfer(self):
         attacker, defender = self._players()
