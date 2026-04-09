@@ -273,6 +273,55 @@ class CombatRegressionTests(unittest.TestCase):
              patch('game.combat.resolve_enemy_response', side_effect=enemy_response_side_effect):
             combat.process_skill_turn('fireball', player, mob, battle_state, user_id=101, lang='ru')
 
+    def test_split_skill_flow_defers_resurrection_tick_until_enemy_side(self):
+        player = {'hp': 100, 'mana': 80, 'agility': 0, 'vitality': 0, 'wisdom': 0}
+        mob = {'id': 'wolf', 'defense': 0, 'damage_min': 8, 'damage_max': 8}
+        battle_state = {
+            'player_hp': 100,
+            'player_max_hp': 100,
+            'player_mana': 80,
+            'mob_hp': 50,
+            'mob_effects': [],
+            'resurrection_active': True,
+            'resurrection_turns': 1,
+            'resurrection_hp': 20,
+            'log': [],
+            'turn': 1,
+        }
+
+        with patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}):
+            combat.process_skill_turn(
+                'fireball',
+                player,
+                mob,
+                battle_state,
+                user_id=101,
+                lang='ru',
+                include_enemy_response=False,
+                tick_timed_trigger_buffs_now=False,
+            )
+
+        self.assertEqual(battle_state['resurrection_turns'], 1)
+
+        def enemy_response_side_effect(_mob, _player_state, state, **_kwargs):
+            self.assertEqual(state['resurrection_turns'], 1)
+            return []
+
+        with patch('game.combat.resolve_enemy_response', side_effect=enemy_response_side_effect):
+            combat.process_enemy_side_turn(
+                mob,
+                player,
+                battle_state,
+                lang='ru',
+                user_id=101,
+                include_pre_enemy_ticks=True,
+                tick_player_post_action_buffs=True,
+                tick_timed_trigger_buffs=True,
+                increment_turn=True,
+            )
+
+        self.assertEqual(battle_state['resurrection_turns'], 0)
+
     def test_guardian_light_does_not_refresh_defense_buff_when_direct_hit_fails(self):
         player = {'hp': 100, 'mana': 80}
         mob = {'id': 'wolf', 'defense': 0}

@@ -89,6 +89,7 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
         with patch('handlers.battle.get_player', return_value=self._player_row()), \
              patch('handlers.battle.ensure_runtime_for_battle'), \
              patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.preview_skill_turn_precheck', return_value={'success': True, 'log': ''}) as precheck_mock, \
              patch('handlers.battle.submit_player_commit', return_value=(True, 'committed')), \
              patch('handlers.battle.resolve_current_side_if_ready', side_effect=lambda **kwargs: kwargs['on_player_action'](None) or True), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'battle_state': battle_state, 'skill_result': {'log': 'ok'}}, autospec=True) as skill_turn_mock, \
@@ -99,9 +100,11 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
              patch('handlers.battle._handle_battle_continues_update', new=AsyncMock()) as continues_mock:
             await battle_handler.handle_battle_buttons(update, context)
 
+        self.assertEqual(precheck_mock.call_count, 1)
         self.assertEqual(skill_turn_mock.call_count, 1)
         _, kwargs = skill_turn_mock.call_args
         self.assertFalse(kwargs['include_enemy_response'])
+        self.assertFalse(kwargs['tick_timed_trigger_buffs_now'])
         self.assertEqual(enemy_side_mock.call_count, 1)
         self.assertEqual(continues_mock.call_count, 1)
 
@@ -123,12 +126,73 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
         with patch('handlers.battle.get_player', return_value=self._player_row()), \
              patch('handlers.battle.ensure_runtime_for_battle'), \
              patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
-             patch('handlers.battle.process_skill_turn', return_value={'success': False, 'skill_result': {'log': 'not enough mana'}, 'battle_state': battle_state}), \
+             patch('handlers.battle.preview_skill_turn_precheck', return_value={'success': False, 'log': 'not enough mana'}), \
              patch('handlers.battle.submit_player_commit') as commit_mock:
             await battle_handler.handle_battle_buttons(update, context)
 
         commit_mock.assert_not_called()
         update.callback_query.answer.assert_awaited()
+
+    async def test_rejected_skill_commit_does_not_execute_skill_turn(self):
+        update = _DummyUpdate('battle_skill_fireball|forest_wolf')
+        battle_state = {
+            'mob_hp': 20,
+            'player_hp': 100,
+            'player_mana': 50,
+            'player_max_mana': 50,
+            'player_max_hp': 100,
+            'log': [],
+            'turn': 1,
+            'weapon_id': 'unarmed',
+            'mastery_level': 1,
+        }
+        mob = {'id': 'forest_wolf', 'hp': 20}
+        context = _DummyContext(battle_state, mob)
+
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.ensure_runtime_for_battle'), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.preview_skill_turn_precheck', return_value={'success': True, 'log': ''}), \
+             patch('handlers.battle.submit_player_commit', return_value=(False, 'stale_revision')), \
+             patch('handlers.battle.process_skill_turn') as skill_turn_mock, \
+             patch('handlers.battle.tick_cooldowns') as tick_mock:
+            await battle_handler.handle_battle_buttons(update, context)
+
+        skill_turn_mock.assert_not_called()
+        tick_mock.assert_not_called()
+
+    async def test_accepted_skill_commit_executes_skill_turn_and_ticks_cooldowns(self):
+        update = _DummyUpdate('battle_skill_fireball|forest_wolf')
+        battle_state = {
+            'mob_hp': 20,
+            'player_hp': 100,
+            'player_mana': 50,
+            'player_max_mana': 50,
+            'player_max_hp': 100,
+            'log': [],
+            'turn': 1,
+            'weapon_id': 'unarmed',
+            'mastery_level': 1,
+        }
+        mob = {'id': 'forest_wolf', 'hp': 20}
+        context = _DummyContext(battle_state, mob)
+
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.ensure_runtime_for_battle'), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.preview_skill_turn_precheck', return_value={'success': True, 'log': ''}), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, 'committed')), \
+             patch('handlers.battle.resolve_current_side_if_ready', side_effect=lambda **kwargs: kwargs['on_player_action'](None) or True), \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'battle_state': battle_state, 'skill_result': {'log': 'ok'}}, autospec=True) as skill_turn_mock, \
+             patch('handlers.battle.run_enemy_instant_side', side_effect=lambda **kwargs: kwargs['on_enemy_action'](None)), \
+             patch('handlers.battle.process_enemy_side_turn'), \
+             patch('handlers.battle.add_mastery_exp'), \
+             patch('handlers.battle._handle_battle_continues_update', new=AsyncMock()), \
+             patch('handlers.battle.tick_cooldowns') as tick_mock:
+            await battle_handler.handle_battle_buttons(update, context)
+
+        self.assertEqual(skill_turn_mock.call_count, 1)
+        self.assertEqual(tick_mock.call_count, 1)
 
     async def test_timeout_wiring_executes_before_manual_action(self):
         update = _DummyUpdate('battle_attack_forest_wolf')
