@@ -311,6 +311,51 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(victory_mock.call_count, 0)
                 self.assertEqual(death_mock.call_count, 1)
 
+    async def test_state_lost_without_active_encounter_finishes_with_state_lost_cleanup(self):
+        update = _DummyUpdate('battle_attack_forest_wolf')
+        context = _DummyContext(battle_state={}, mob={})
+        context.user_data = {}
+
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.load_active_solo_pve_encounter', return_value=None), \
+             patch('handlers.battle.finish_solo_pve_encounter') as finish_mock, \
+             patch('handlers.battle.end_battle') as end_battle_mock:
+            await battle_handler.handle_battle_buttons(update, context)
+
+        self.assertEqual(end_battle_mock.call_count, 1)
+        finish_mock.assert_called_once_with(player_id=88001, status='state_lost')
+
+    async def test_state_lost_recovers_from_shared_encounter_payload(self):
+        update = _DummyUpdate('battle_attack_forest_wolf')
+        context = _DummyContext(battle_state={}, mob={})
+        context.user_data = {}
+        restored_state = {
+            'pve_encounter_id': 'pve-enc-test123',
+            'mob_hp': 20,
+            'player_hp': 100,
+            'player_mana': 50,
+            'player_max_mana': 50,
+            'player_max_hp': 100,
+            'log': [],
+            'turn': 1,
+            'weapon_id': 'unarmed',
+            'mob_dead': False,
+            'player_dead': False,
+        }
+        restored_mob = {'id': 'forest_wolf', 'hp': 20}
+
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.load_active_solo_pve_encounter', return_value=(restored_state, restored_mob)), \
+             patch('handlers.battle.ensure_runtime_for_battle'), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(False, 'stale_revision')), \
+             patch('handlers.battle.finish_solo_pve_encounter') as finish_mock:
+            await battle_handler.handle_battle_buttons(update, context)
+
+        self.assertEqual(context.user_data['battle']['pve_encounter_id'], 'pve-enc-test123')
+        self.assertEqual(context.user_data['battle_mob']['id'], 'forest_wolf')
+        self.assertEqual(finish_mock.call_count, 0)
+
 
 if __name__ == '__main__':
     unittest.main()
