@@ -1149,7 +1149,7 @@ class CombatRegressionTests(unittest.TestCase):
             'turn': 7,
         }
 
-        def pre_ticks_side_effect(_mob, state):
+        def pre_ticks_side_effect(_mob, state, **_kwargs):
             state['mob_hp'] = 0
             return ['dot']
 
@@ -2635,7 +2635,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
         context = _DummyContext(battle_state, mob)
 
-        def pre_ticks_side_effect(_mob, state):
+        def pre_ticks_side_effect(_mob, state, **_kwargs):
             state['mob_hp'] = 0
             return ['dot']
 
@@ -2655,7 +2655,7 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response_mock.call_count, 0)
         self.assertEqual(rewards_mock.call_count, 1)
         self.assertEqual(end_battle_mock.call_count, 1)
-        self.assertEqual(battle_state['turn'], 4)
+        self.assertEqual(battle_state['turn'], 5)
 
     async def test_failed_flee_triggers_enemy_response_once(self):
         update = _DummyUpdate('battle_flee_wolf')
