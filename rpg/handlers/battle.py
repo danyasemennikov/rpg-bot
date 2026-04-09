@@ -19,8 +19,10 @@ from game.combat import (
     process_enemy_side_turn, apply_timeout_fallback_guard, preview_skill_turn_precheck,
 )
 from game.pve_live import (
-    clear_solo_pve_runtime,
+    finish_solo_pve_encounter,
     ensure_runtime_for_battle,
+    load_active_solo_pve_encounter,
+    persist_solo_pve_encounter_state,
     process_due_timeout_for_battle,
     resolve_current_side_if_ready,
     run_enemy_instant_side,
@@ -425,7 +427,12 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     # Сохраняем состояние в context
     context.user_data['battle']     = battle_state
     context.user_data['battle_mob'] = mob
-    ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state)
+    ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
+    persist_solo_pve_encounter_state(
+        encounter_id=str(battle_state.get('pve_encounter_id', '')),
+        battle_state=battle_state,
+        mob=mob,
+    )
 
     save_battle(user.id)
 
@@ -458,7 +465,11 @@ async def _handle_victory_cleanup(
     rewards = calc_rewards(mob)
     result_reward = apply_rewards(user_id, player, rewards)
     end_battle(user_id)
-    clear_solo_pve_runtime(user_id)
+    finish_solo_pve_encounter(
+        player_id=user_id,
+        encounter_id=battle_state.get('pve_encounter_id'),
+        status='victory',
+    )
     context.user_data.pop('battle', None)
     context.user_data.pop('battle_mob', None)
 
@@ -510,6 +521,11 @@ async def _handle_death_or_resurrection(
         battle_state['resurrection_active'] = False
         log.append(t('battle.buff_resurrection_proc', lang, hp=revive_hp))
         context.user_data['battle'] = battle_state
+        persist_solo_pve_encounter_state(
+            encounter_id=str(battle_state.get('pve_encounter_id', '')),
+            battle_state=battle_state,
+            mob=mob,
+        )
 
         text, keyboard = build_battle_message(player, mob, battle_state, log)
         await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
@@ -519,7 +535,11 @@ async def _handle_death_or_resurrection(
 
     penalty = apply_death(user_id, player)
     end_battle(user_id)
-    clear_solo_pve_runtime(user_id)
+    finish_solo_pve_encounter(
+        player_id=user_id,
+        encounter_id=battle_state.get('pve_encounter_id'),
+        status='death',
+    )
     context.user_data.pop('battle', None)
     context.user_data.pop('battle_mob', None)
     await safe_edit(query,
@@ -593,6 +613,11 @@ async def _handle_battle_continues_update(
     )
     conn.commit()
     conn.close()
+    persist_solo_pve_encounter_state(
+        encounter_id=str(battle_state.get('pve_encounter_id', '')),
+        battle_state=battle_state,
+        mob=mob,
+    )
 
     # Бой продолжается
     text, keyboard = build_battle_message(player, mob, battle_state, battle_state['log'])
@@ -631,17 +656,23 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Если состояние боя потеряно (перезапуск бота)
     if not battle_state or not mob:
-        end_battle(user.id)
-        clear_solo_pve_runtime(user.id)
-        conn = get_connection()
-        conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (user.id,))
-        conn.commit()
-        conn.close()
+        restored = load_active_solo_pve_encounter(player_id=user.id)
+        if restored:
+            battle_state, mob = restored
+            context.user_data['battle'] = battle_state
+            context.user_data['battle_mob'] = mob
+        else:
+            end_battle(user.id)
+            finish_solo_pve_encounter(player_id=user.id, status='state_lost')
+            conn = get_connection()
+            conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (user.id,))
+            conn.commit()
+            conn.close()
 
-        await safe_edit(query, t('battle.state_lost', lang))
-        return
+            await safe_edit(query, t('battle.state_lost', lang))
+            return
 
-    ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state)
+    ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
     timed_out = process_due_timeout_for_battle(
         player_id=user.id,
         battle_state=battle_state,
@@ -744,6 +775,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         conn.close()
 
         context.user_data['battle'] = battle_state
+        persist_solo_pve_encounter_state(
+            encounter_id=str(battle_state.get('pve_encounter_id', '')),
+            battle_state=battle_state,
+            mob=mob,
+        )
         await query.answer(msg or t('battle.potion_used', lang), show_alert=True)
 
         mob = context.user_data.get('battle_mob')
@@ -779,6 +815,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             player_id=user.id,
             action_type='skill',
             skill_id=skill_id,
+            battle_state=battle_state,
         )
         if not accepted:
             await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
@@ -864,7 +901,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
     # ── АТАКА ──
     if data.startswith('battle_attack_'):
-        accepted, _ = submit_player_commit(player_id=user.id, action_type='basic_attack')
+        accepted, _ = submit_player_commit(
+            player_id=user.id,
+            action_type='basic_attack',
+            battle_state=battle_state,
+        )
         if not accepted:
             await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
             return
@@ -927,7 +968,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     elif data.startswith('battle_flee_'):
         if random.randint(1, 100) <= 20:
             end_battle(user.id)
-            clear_solo_pve_runtime(user.id)
+            finish_solo_pve_encounter(
+                player_id=user.id,
+                encounter_id=battle_state.get('pve_encounter_id'),
+                status='fled',
+            )
             conn = get_connection()
             conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (user.id,))
             conn.commit()
@@ -950,7 +995,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             if new_hp <= 0:
                 penalty = apply_death(user.id, p)
                 end_battle(user.id)
-                clear_solo_pve_runtime(user.id)
+                finish_solo_pve_encounter(
+                    player_id=user.id,
+                    encounter_id=battle_state.get('pve_encounter_id'),
+                    status='death',
+                )
                 context.user_data.pop('battle', None)
                 context.user_data.pop('battle_mob', None)
                 await safe_edit(query, 
@@ -966,6 +1015,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             flee_fail_header = t('battle.flee_fail', lang,
                                   mob_name=get_mob_name(mob['id'], lang),
                                   damage=damage_taken)
+            persist_solo_pve_encounter_state(
+                encounter_id=str(battle_state.get('pve_encounter_id', '')),
+                battle_state=battle_state,
+                mob=mob,
+            )
             text, keyboard = build_battle_message(p, mob, battle_state, flee_log)
             await safe_edit(query, 
                 flee_fail_header + '\n\n' + text,
