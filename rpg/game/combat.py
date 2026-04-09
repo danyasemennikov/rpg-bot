@@ -88,7 +88,12 @@ def hp_bar(current: int, maximum: int, length: int = 10) -> str:
     filled = max(0, min(length, filled))
     return '█' * filled + '░' * (length - filled)
 
-def apply_pre_enemy_response_ticks(mob: dict, battle_state: dict) -> list[str]:
+def apply_pre_enemy_response_ticks(
+    mob: dict,
+    battle_state: dict,
+    *,
+    tick_player_post_action_buffs: bool = True,
+) -> list[str]:
     """Единый pre-turn ticking перед ответом врага."""
     log = []
     mob_state = {
@@ -102,9 +107,8 @@ def apply_pre_enemy_response_ticks(mob: dict, battle_state: dict) -> list[str]:
         battle_state['mob_hp'] = max(0, battle_state['mob_hp'] - eff_dmg)
         log.append(eff_log)
 
-    # Важно: для skill flow сохраняем прежний тайминг —
-    # post-action баффы игрока тикают до enemy response.
-    tick_post_action_player_buff_durations(battle_state)
+    if tick_player_post_action_buffs:
+        tick_post_action_player_buff_durations(battle_state)
 
     battle_state['mob_effects'] = mob_state.get('effects', [])
     return log
@@ -835,6 +839,7 @@ def process_skill_turn(
     user_id: int,
     lang: str = 'ru',
     include_enemy_response: bool = True,
+    tick_timed_trigger_buffs_now: bool = True,
 ) -> dict:
     """
     Обрабатывает ход игрока через скилл.
@@ -929,10 +934,11 @@ def process_skill_turn(
         player_state['hp'] = battle_state['player_hp']
         log.extend(resolve_enemy_response(mob, player_state, battle_state, lang=lang, user_id=user_id))
 
-    tick_post_action_timed_trigger_buffs(
-        battle_state,
-        skip_resurrection_tick=(skill_id == 'resurrection'),
-    )
+    if tick_timed_trigger_buffs_now:
+        tick_post_action_timed_trigger_buffs(
+            battle_state,
+            skip_resurrection_tick=(skill_id == 'resurrection'),
+        )
 
     battle_state['mob_dead'] = battle_state['mob_hp'] <= 0
     battle_state['player_dead'] = battle_state['player_hp'] <= 0
@@ -943,6 +949,25 @@ def process_skill_turn(
         'skill_result': skill_result,
         'battle_state': battle_state,
     }
+
+
+def preview_skill_turn_precheck(
+    skill_id: str,
+    battle_state: dict,
+    *,
+    user_id: int,
+    lang: str = 'ru',
+) -> dict:
+    """
+    Side-effect-free precheck для runtime split skill flow.
+    Проверяет только готовность применения (мана/КД/изученность).
+    """
+    return precheck_skill_use(
+        skill_id,
+        battle_state.get('player_mana', 0),
+        user_id,
+        lang,
+    )
 
 
 
@@ -1536,7 +1561,13 @@ def process_enemy_side_turn(
     """
     enemy_log: list[str] = []
     if include_pre_enemy_ticks and battle_state.get('mob_hp', 0) > 0:
-        enemy_log.extend(apply_pre_enemy_response_ticks(mob, battle_state))
+        enemy_log.extend(
+            apply_pre_enemy_response_ticks(
+                mob,
+                battle_state,
+                tick_player_post_action_buffs=False,
+            )
+        )
 
     player_state = dict(player)
     player_state['hp'] = battle_state.get('player_hp', player_state.get('hp', 0))

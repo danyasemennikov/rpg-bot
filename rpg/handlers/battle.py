@@ -5,7 +5,6 @@
 import sys, json
 sys.path.append('/content/rpg_bot')
 import random
-import copy
 
 from game.skill_engine import get_battle_skills
 from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
@@ -17,7 +16,7 @@ from game.mobs import get_mob
 from game.combat import (
     init_battle, process_turn, calc_rewards,
     calc_death_penalty, hp_bar, resolve_enemy_response, process_skill_turn,
-    process_enemy_side_turn, apply_timeout_fallback_guard,
+    process_enemy_side_turn, apply_timeout_fallback_guard, preview_skill_turn_precheck,
 )
 from game.pve_live import (
     clear_solo_pve_runtime,
@@ -766,19 +765,14 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         skill_id, mob_id = rest.split('|', 1)
 
         mob = context.user_data.get('battle_mob')
-        preview_state = copy.deepcopy(battle_state)
-        preview_result = process_skill_turn(
-            skill_id=skill_id,
-            player=p,
-            mob=mob,
-            battle_state=preview_state,
+        precheck_result = preview_skill_turn_precheck(
+            skill_id,
+            battle_state,
             user_id=user.id,
             lang=lang,
-            include_enemy_response=False,
         )
-        if not preview_result.get('success'):
-            skill_result = preview_result.get('skill_result', {})
-            await query.answer(skill_result.get('log', t('battle.turn_not_ready', lang)), show_alert=True)
+        if not precheck_result.get('success'):
+            await query.answer(precheck_result.get('log', t('battle.turn_not_ready', lang)), show_alert=True)
             return
 
         accepted, _ = submit_player_commit(
@@ -791,7 +785,16 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             return
 
         def _apply_player_skill_action(_action):
-            updated = preview_result['battle_state']
+            updated = process_skill_turn(
+                skill_id=skill_id,
+                player=p,
+                mob=mob,
+                battle_state=battle_state,
+                user_id=user.id,
+                lang=lang,
+                include_enemy_response=False,
+                tick_timed_trigger_buffs_now=False,
+            )['battle_state']
             battle_state.update(updated)
             battle_state['mob_dead'] = battle_state.get('mob_dead', battle_state.get('mob_hp', 1) <= 0)
             battle_state['player_dead'] = battle_state.get('player_dead', battle_state.get('player_hp', 1) <= 0)
@@ -828,9 +831,9 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                     lang=lang,
                     user_id=user.id,
                     include_pre_enemy_ticks=True,
-                    tick_player_post_action_buffs=False,
-                    tick_timed_trigger_buffs=False,
-                    increment_turn=False,
+                    tick_player_post_action_buffs=True,
+                    tick_timed_trigger_buffs=True,
+                    increment_turn=True,
                 ),
             )
 
