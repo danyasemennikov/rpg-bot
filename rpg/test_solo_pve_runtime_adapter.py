@@ -128,6 +128,7 @@ class SoloPveRuntimeAdapterTests(unittest.TestCase):
 
     def test_due_timeout_orchestration_runs_enemy_instant_side(self):
         now = datetime(2026, 4, 8, 12, 0, tzinfo=timezone.utc)
+        self.battle_state.update({'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50})
         ensure_runtime_for_battle(player_id=self.player_id, battle_state=self.battle_state, mob=self.mob, now=now)
 
         events = []
@@ -143,6 +144,52 @@ class SoloPveRuntimeAdapterTests(unittest.TestCase):
         self.assertEqual(events[0], ('player', 'fallback_guard'))
         self.assertIn(('enemy', 'enemy_basic_attack'), events)
         self.assertEqual(self.battle_state['active_side'], SIDE_PLAYER)
+
+    def test_due_timeout_terminal_player_batch_skips_enemy_side(self):
+        now = datetime(2026, 4, 8, 12, 0, tzinfo=timezone.utc)
+        self.battle_state.update({'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50})
+        ensure_runtime_for_battle(player_id=self.player_id, battle_state=self.battle_state, mob=self.mob, now=now)
+
+        events = []
+
+        def _on_timeout(action):
+            events.append(('player', action.action_type))
+            self.battle_state['mob_dead'] = True
+
+        handled = process_due_timeout_for_battle(
+            player_id=self.player_id,
+            battle_state=self.battle_state,
+            now=now + timedelta(seconds=16),
+            on_player_timeout_action=_on_timeout,
+            on_enemy_action=lambda action: events.append(('enemy', action.action_type)),
+        )
+
+        self.assertTrue(handled)
+        self.assertEqual(events[0], ('player', 'fallback_guard'))
+        self.assertNotIn(('enemy', 'enemy_basic_attack'), events)
+
+    def test_due_timeout_death_with_resurrection_still_runs_enemy_side(self):
+        now = datetime(2026, 4, 8, 12, 0, tzinfo=timezone.utc)
+        self.battle_state.update({'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50})
+        ensure_runtime_for_battle(player_id=self.player_id, battle_state=self.battle_state, mob=self.mob, now=now)
+
+        events = []
+
+        def _on_timeout(action):
+            events.append(('player', action.action_type))
+            self.battle_state['player_dead'] = True
+            self.battle_state['resurrection_active'] = True
+
+        handled = process_due_timeout_for_battle(
+            player_id=self.player_id,
+            battle_state=self.battle_state,
+            now=now + timedelta(seconds=16),
+            on_player_timeout_action=_on_timeout,
+            on_enemy_action=lambda action: events.append(('enemy', action.action_type)),
+        )
+
+        self.assertTrue(handled)
+        self.assertIn(('enemy', 'enemy_basic_attack'), events)
 
     def test_payload_round_trip_restores_battle_state_by_encounter(self):
         ensure_runtime_for_battle(player_id=self.player_id, battle_state=self.battle_state, mob=self.mob)
