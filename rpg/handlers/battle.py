@@ -19,14 +19,20 @@ from game.combat import (
     process_enemy_side_turn, apply_timeout_fallback_guard, preview_skill_turn_precheck,
 )
 from game.pve_live import (
+    choose_enemy_target_participant_id,
     finish_solo_pve_encounter,
     ensure_runtime_for_battle,
+    get_pve_encounter_player_ids,
     load_active_solo_pve_encounter,
+    mark_group_participant_defeated,
     persist_solo_pve_encounter_state,
     process_due_timeout_for_battle,
     resolve_current_side_if_ready,
+    run_with_participant_projection,
     run_enemy_instant_side,
     submit_player_commit,
+    sync_projection_for_participant,
+    update_participant_combat_state_from_projection,
 )
 from game.balance import (
     exp_to_next_level, calc_max_hp, normalize_weapon_profile,
@@ -463,8 +469,37 @@ async def _handle_victory_cleanup(
 ):
     """Общий post-victory cleanup для обычной атаки и скиллов."""
     rewards = calc_rewards(mob)
-    result_reward = apply_rewards(user_id, player, rewards)
-    end_battle(user_id)
+    if _is_group_encounter(battle_state):
+        participant_ids = get_pve_encounter_player_ids(encounter_id=str(battle_state.get('pve_encounter_id', '')))
+        if not participant_ids:
+            participant_ids = _group_participant_ids(battle_state)
+    else:
+        participant_ids = [user_id]
+    rewarded_participants: list[int] = []
+    result_reward = None
+    for participant_id in participant_ids:
+        snapshot = _participant_snapshot(battle_state, participant_id)
+        if snapshot and bool(snapshot.get('player_dead', snapshot.get('defeated', False))):
+            end_battle(participant_id)
+            continue
+
+        participant_player_row = get_player(participant_id)
+        if participant_player_row:
+            participant_player = dict(participant_player_row)
+            reward_result = apply_rewards(participant_id, participant_player, rewards)
+            rewarded_participants.append(participant_id)
+            if participant_id == user_id:
+                result_reward = reward_result
+        end_battle(participant_id)
+
+    if result_reward is None:
+        result_reward = {
+            'leveled_up': False,
+            'new_level': player.get('level', 1),
+            'new_exp': player.get('exp', 0),
+            'new_gold': player.get('gold', 0),
+        }
+
     finish_solo_pve_encounter(
         player_id=user_id,
         encounter_id=battle_state.get('pve_encounter_id'),
@@ -477,10 +512,21 @@ async def _handle_victory_cleanup(
     mastery_result = add_mastery_exp(user_id, weapon_id, 10)
     mastery_text = _build_mastery_text(mastery_result, lang)
 
+    owner_penalty = (battle_state.get('group_death_penalties') or {}).get(str(user_id))
+    owner_snapshot = _participant_snapshot(battle_state, user_id)
+    owner_dead = bool(owner_snapshot.get('player_dead', owner_snapshot.get('defeated', False)))
+
     victory_text = t('battle.victory', lang,
                      mob_name=get_mob_name(mob['id'], lang),
                      exp=rewards['exp'],
                      gold=rewards['gold'])
+    if owner_dead and owner_penalty:
+        victory_text = t(
+            'battle.death',
+            lang,
+            exp_loss=owner_penalty.get('exp_loss', 0),
+            gold_loss=owner_penalty.get('gold_loss', 0),
+        )
 
     levelup_text = ""
     if result_reward['leveled_up']:
@@ -520,6 +566,7 @@ async def _handle_death_or_resurrection(
             battle_state['player_dead'] = False
         battle_state['resurrection_active'] = False
         log.append(t('battle.buff_resurrection_proc', lang, hp=revive_hp))
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user_id)
         context.user_data['battle'] = battle_state
         persist_solo_pve_encounter_state(
             encounter_id=str(battle_state.get('pve_encounter_id', '')),
@@ -533,7 +580,33 @@ async def _handle_death_or_resurrection(
             await query.answer()
         return True
 
-    penalty = apply_death(user_id, player)
+    grouped_penalties = battle_state.get('group_death_penalties') or {}
+    cached_penalty = grouped_penalties.get(str(user_id)) if _is_group_encounter(battle_state) else None
+    penalty = cached_penalty or apply_death(user_id, player)
+    battle_state['player_dead'] = True
+    battle_state['player_hp'] = 0
+    update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user_id)
+
+    if _is_group_encounter(battle_state) and not _all_group_participants_defeated(battle_state):
+        mark_group_participant_defeated(
+            encounter_id=str(battle_state.get('pve_encounter_id', '')),
+            participant_id=user_id,
+            status='defeated',
+        )
+        end_battle(user_id)
+        persist_solo_pve_encounter_state(
+            encounter_id=str(battle_state.get('pve_encounter_id', '')),
+            battle_state=battle_state,
+            mob=mob,
+        )
+        context.user_data.pop('battle', None)
+        context.user_data.pop('battle_mob', None)
+        await safe_edit(query,
+            t(death_key, lang, exp_loss=penalty['exp_loss'], gold_loss=penalty['gold_loss']),
+            parse_mode='HTML'
+        )
+        return True
+
     end_battle(user_id)
     finish_solo_pve_encounter(
         player_id=user_id,
@@ -558,6 +631,13 @@ async def _resolve_post_attack_combat_resolution(
     lang: str,
 ) -> bool:
     """Единый post-attack combat resolution: victory/death/persist/render."""
+    _process_group_participant_death_consequences(
+        battle_state=battle_state,
+        owner_player_id=user_id,
+        log=battle_state.get('log'),
+        lang=lang,
+    )
+
     # Моб убит
     if battle_state['mob_dead']:
         await _handle_victory_cleanup(
@@ -606,13 +686,17 @@ async def _handle_battle_continues_update(
     battle_state: dict,
 ) -> None:
     """Общий путь для продолжающегося боя: persist hp/mana + рендер."""
-    conn = get_connection()
-    conn.execute(
-        'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
-        (battle_state['player_hp'], battle_state['player_mana'], user_id)
-    )
-    conn.commit()
-    conn.close()
+    update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user_id)
+    if _is_group_encounter(battle_state):
+        _persist_group_participant_hp_mana(battle_state)
+    else:
+        conn = get_connection()
+        conn.execute(
+            'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
+            (battle_state['player_hp'], battle_state['player_mana'], user_id)
+        )
+        conn.commit()
+        conn.close()
     persist_solo_pve_encounter_state(
         encounter_id=str(battle_state.get('pve_encounter_id', '')),
         battle_state=battle_state,
@@ -640,9 +724,284 @@ def _build_enemy_response_player_state(player: dict, battle_state: dict) -> dict
     }
 
 
+def _group_participant_ids(battle_state: dict) -> list[int]:
+    ids: list[int] = []
+    for raw in battle_state.get('side_a_player_ids', []):
+        try:
+            pid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if pid > 0:
+            ids.append(pid)
+    return ids
+
+
+def _is_group_encounter(battle_state: dict) -> bool:
+    return len(_group_participant_ids(battle_state)) > 1
+
+
+def _participant_snapshot(battle_state: dict, participant_id: int) -> dict:
+    snapshots = battle_state.get('participant_states', {})
+    if not isinstance(snapshots, dict):
+        return {}
+    snapshot = snapshots.get(str(int(participant_id)))
+    return snapshot if isinstance(snapshot, dict) else {}
+
+
+def _all_group_participants_defeated(battle_state: dict) -> bool:
+    participant_ids = _group_participant_ids(battle_state)
+    if not participant_ids:
+        return bool(battle_state.get('player_dead', False))
+    for participant_id in participant_ids:
+        snapshot = _participant_snapshot(battle_state, participant_id)
+        if not bool(snapshot.get('player_dead', snapshot.get('defeated', False))):
+            return False
+    return True
+
+
+def _persist_group_participant_hp_mana(battle_state: dict) -> None:
+    participant_ids = _group_participant_ids(battle_state)
+    if not participant_ids:
+        return
+    conn = get_connection()
+    try:
+        for participant_id in participant_ids:
+            snapshot = _participant_snapshot(battle_state, participant_id)
+            if not snapshot:
+                continue
+            hp_value = int(snapshot.get('player_hp', snapshot.get('hp', 0)) or 0)
+            mana_value = int(snapshot.get('player_mana', snapshot.get('mana', 0)) or 0)
+            conn.execute(
+                'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
+                (hp_value, mana_value, participant_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _resolve_action_player(participant_id: int, fallback_player: dict) -> dict:
+    participant_row = get_player(participant_id)
+    if participant_row:
+        player = dict(participant_row)
+        player['lang'] = fallback_player.get('lang', player.get('lang', 'ru'))
+        return player
+    return dict(fallback_player)
+
+
+def _resolve_enemy_target_player_for_group(*, owner_player: dict, battle_state: dict) -> tuple[int, dict]:
+    target_id = choose_enemy_target_participant_id(battle_state=battle_state) or int(owner_player.get('telegram_id', 0))
+    sync_projection_for_participant(battle_state=battle_state, player_id=target_id)
+    target_player = _resolve_action_player(target_id, owner_player)
+    return target_id, target_player
+
+
 def _apply_timeout_fallback_action(action, battle_state: dict, lang: str) -> None:
     if getattr(action, 'action_type', '') == 'fallback_guard':
+        participant_id = int(getattr(action, 'participant_id', 0) or 0)
+        if participant_id <= 0:
+            apply_timeout_fallback_guard(battle_state, lang=lang)
+            return
+        run_with_participant_projection(
+            battle_state=battle_state,
+            participant_id=participant_id,
+            resolver=lambda: apply_timeout_fallback_guard(battle_state, lang=lang),
+        )
+
+
+def _run_group_enemy_side_action(
+    *,
+    owner_player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str,
+    include_pre_enemy_ticks: bool = False,
+) -> None:
+    target_id, target_player = _resolve_enemy_target_player_for_group(
+        owner_player=owner_player,
+        battle_state=battle_state,
+    )
+    player_state = _build_enemy_response_player_state(target_player, battle_state)
+    process_enemy_side_turn(
+        mob,
+        player_state,
+        battle_state,
+        lang=lang,
+        user_id=target_id,
+        include_pre_enemy_ticks=include_pre_enemy_ticks,
+        tick_player_post_action_buffs=True,
+        tick_timed_trigger_buffs=True,
+        increment_turn=True,
+    )
+    update_participant_combat_state_from_projection(battle_state=battle_state, player_id=target_id)
+    _reconcile_group_participant_outcomes(battle_state)
+
+
+def _reconcile_group_participant_outcomes(battle_state: dict) -> None:
+    if not _is_group_encounter(battle_state):
+        return
+    encounter_id = str(battle_state.get('pve_encounter_id', ''))
+    if not encounter_id:
+        return
+
+    active_participants = get_pve_encounter_player_ids(encounter_id=encounter_id)
+    for participant_id in active_participants:
+        snapshot = _participant_snapshot(battle_state, participant_id)
+        if not snapshot:
+            continue
+        is_dead = bool(snapshot.get('player_dead', snapshot.get('defeated', False)))
+        if int(snapshot.get('player_hp', snapshot.get('hp', 1)) or 0) <= 0:
+            is_dead = True
+        if not is_dead:
+            continue
+        if bool(snapshot.get('resurrection_active')):
+            continue
+        mark_group_participant_defeated(
+            encounter_id=encounter_id,
+            participant_id=participant_id,
+            status='defeated',
+        )
+
+
+def _process_group_participant_death_consequences(
+    *,
+    battle_state: dict,
+    owner_player_id: int,
+    log: list | None = None,
+    lang: str = 'ru',
+) -> None:
+    if not _is_group_encounter(battle_state):
+        return
+    encounter_id = str(battle_state.get('pve_encounter_id', ''))
+    if not encounter_id:
+        return
+
+    participant_ids = _group_participant_ids(battle_state)
+    death_penalties = battle_state.setdefault('group_death_penalties', {})
+    for participant_id in participant_ids:
+        snapshot = _participant_snapshot(battle_state, participant_id)
+        if not snapshot:
+            continue
+        is_dead = bool(snapshot.get('player_dead', snapshot.get('defeated', False)))
+        if int(snapshot.get('player_hp', snapshot.get('hp', 1)) or 0) <= 0:
+            is_dead = True
+        if not is_dead:
+            continue
+
+        sync_projection_for_participant(battle_state=battle_state, player_id=participant_id)
+        participant_snapshot = _participant_snapshot(battle_state, participant_id)
+        if bool(participant_snapshot.get('resurrection_active')):
+            revive_hp = int(
+                int(participant_snapshot.get('player_max_hp', participant_snapshot.get('max_hp', 1)) or 1)
+                * float(participant_snapshot.get('resurrection_hp', 0.3))
+                / 100
+            )
+            if revive_hp <= 0:
+                revive_hp = 1
+            battle_state['player_hp'] = revive_hp
+            battle_state['hp'] = revive_hp
+            battle_state['player_dead'] = False
+            battle_state['defeated'] = False
+            battle_state['resurrection_active'] = False
+            update_participant_combat_state_from_projection(battle_state=battle_state, player_id=participant_id)
+            if isinstance(log, list):
+                participant_player_row = get_player(participant_id)
+                participant_name = str((participant_player_row or {}).get('nickname') or participant_id)
+                log.append(t('battle.buff_resurrection_proc', lang, hp=revive_hp) + f' ({participant_name})')
+            continue
+
+        if str(participant_id) not in death_penalties:
+            participant_player_row = get_player(participant_id)
+            if participant_player_row:
+                penalty = apply_death(participant_id, dict(participant_player_row))
+                death_penalties[str(participant_id)] = penalty
+
+        battle_state['player_dead'] = True
+        battle_state['player_hp'] = 0
+        battle_state['hp'] = 0
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=participant_id)
+        mark_group_participant_defeated(
+            encounter_id=encounter_id,
+            participant_id=participant_id,
+            status='defeated',
+        )
+        end_battle(participant_id)
+
+    sync_projection_for_participant(battle_state=battle_state, player_id=owner_player_id)
+
+
+def _dispatch_group_player_action(
+    action,
+    *,
+    owner_player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str,
+) -> None:
+    actor_id = int(getattr(action, 'participant_id', owner_player.get('telegram_id', 0)) or 0)
+    if actor_id <= 0:
+        return
+    actor_player = _resolve_action_player(actor_id, owner_player)
+    action_type = str(getattr(action, 'action_type', '') or '')
+    action_skill_id = getattr(action, 'skill_id', None)
+
+    def _mark_terminal_flags() -> None:
+        battle_state['mob_dead'] = battle_state.get('mob_dead', battle_state.get('mob_hp', 1) <= 0)
+        battle_state['player_dead'] = battle_state.get('player_dead', battle_state.get('player_hp', 1) <= 0)
+
+    def _resolver():
+        if action_type == 'basic_attack':
+            updated_state = process_turn(
+                actor_player,
+                mob,
+                battle_state,
+                lang,
+                actor_id,
+                include_enemy_response=False,
+            )
+            if updated_state is not battle_state:
+                battle_state.clear()
+                battle_state.update(updated_state)
+            tick_cooldowns(actor_id)
+            _mark_terminal_flags()
+            return
+
+        if action_type == 'skill':
+            if not action_skill_id:
+                apply_timeout_fallback_guard(battle_state, lang=lang)
+                _mark_terminal_flags()
+                return
+            updated = process_skill_turn(
+                skill_id=str(action_skill_id),
+                player=actor_player,
+                mob=mob,
+                battle_state=battle_state,
+                user_id=actor_id,
+                lang=lang,
+                include_enemy_response=False,
+                tick_timed_trigger_buffs_now=False,
+            )['battle_state']
+            battle_state.update(updated)
+            weapon_id = battle_state.get('weapon_id', 'unarmed')
+            add_mastery_exp(actor_id, weapon_id, 5)
+            tick_cooldowns(actor_id)
+            _mark_terminal_flags()
+            return
+
+        if action_type == 'fallback_guard':
+            apply_timeout_fallback_guard(battle_state, lang=lang)
+            _mark_terminal_flags()
+            return
+
+        # Phase-1 explicit safe fallback for unsupported action envelopes.
         apply_timeout_fallback_guard(battle_state, lang=lang)
+        _mark_terminal_flags()
+
+    run_with_participant_projection(
+        battle_state=battle_state,
+        participant_id=actor_id,
+        resolver=_resolver,
+    )
 
 async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -673,23 +1032,34 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             return
 
     ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
+    sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
     timed_out = process_due_timeout_for_battle(
         player_id=user.id,
         battle_state=battle_state,
-        on_player_timeout_action=lambda action: _apply_timeout_fallback_action(action, battle_state, lang),
-        on_enemy_action=lambda _action: process_enemy_side_turn(
-            mob,
-            _build_enemy_response_player_state(p, battle_state),
-            battle_state,
+        on_player_timeout_action=lambda action: _dispatch_group_player_action(
+            action,
+            owner_player=p,
+            mob=mob,
+            battle_state=battle_state,
             lang=lang,
-            user_id=user.id,
-            include_pre_enemy_ticks=False,
-            tick_player_post_action_buffs=True,
-            tick_timed_trigger_buffs=True,
-            increment_turn=True,
+        ),
+        on_enemy_action=lambda _action: _run_group_enemy_side_action(
+            owner_player=p,
+            mob=mob,
+            battle_state=battle_state,
+            lang=lang,
         ),
     )
     if timed_out:
+        _reconcile_group_participant_outcomes(battle_state)
+        _process_group_participant_death_consequences(
+            battle_state=battle_state,
+            owner_player_id=user.id,
+            log=battle_state.get('log'),
+            lang=lang,
+        )
+        sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
         context.user_data['battle'] = battle_state
         handled = await _resolve_post_attack_combat_resolution(
             query=query,
@@ -821,31 +1191,41 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
             return
 
-        def _apply_player_skill_action(_action):
-            updated = process_skill_turn(
-                skill_id=skill_id,
+        resolved_player_side = resolve_current_side_if_ready(
+            player_id=user.id,
+            on_player_action=lambda action: _dispatch_group_player_action(
+                action,
+                owner_player=p,
+                mob=mob,
+                battle_state=battle_state,
+                lang=lang,
+            ),
+            on_enemy_action=lambda _action: None,
+        )
+        if not resolved_player_side:
+            context.user_data['battle'] = battle_state
+            await _handle_battle_continues_update(
+                query=query,
+                user_id=user.id,
                 player=p,
                 mob=mob,
                 battle_state=battle_state,
-                user_id=user.id,
-                lang=lang,
-                include_enemy_response=False,
-                tick_timed_trigger_buffs_now=False,
-            )['battle_state']
-            battle_state.update(updated)
-            battle_state['mob_dead'] = battle_state.get('mob_dead', battle_state.get('mob_hp', 1) <= 0)
-            battle_state['player_dead'] = battle_state.get('player_dead', battle_state.get('player_hp', 1) <= 0)
-            weapon_id = battle_state.get('weapon_id', 'unarmed')
-            add_mastery_exp(user.id, weapon_id, 5)
+            )
+            await query.answer()
+            return
 
-        resolve_current_side_if_ready(
-            player_id=user.id,
-            on_player_action=_apply_player_skill_action,
-            on_enemy_action=lambda _action: None,
+        # Важно для group PvE: batch может закончиться на другом участнике.
+        # Перед post-resolve ветвлением возвращаем projection владельца callback.
+        _reconcile_group_participant_outcomes(battle_state)
+        _process_group_participant_death_consequences(
+            battle_state=battle_state,
+            owner_player_id=user.id,
+            log=battle_state.get('log'),
+            lang=lang,
         )
-
-        tick_cooldowns(user.id)
+        sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
         context.user_data['battle'] = battle_state
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
 
         if battle_state.get('mob_dead'):
             await _handle_victory_cleanup(
@@ -861,18 +1241,15 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             run_enemy_instant_side(
                 player_id=user.id,
                 battle_state=battle_state,
-                on_enemy_action=lambda _action: process_enemy_side_turn(
-                    mob,
-                    _build_enemy_response_player_state(p, battle_state),
-                    battle_state,
+                on_enemy_action=lambda _action: _run_group_enemy_side_action(
+                    owner_player=p,
+                    mob=mob,
+                    battle_state=battle_state,
                     lang=lang,
-                    user_id=user.id,
                     include_pre_enemy_ticks=True,
-                    tick_player_post_action_buffs=True,
-                    tick_timed_trigger_buffs=True,
-                    increment_turn=True,
                 ),
             )
+            sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
 
         if battle_state.get('mob_dead'):
             await _handle_victory_cleanup(
@@ -910,27 +1287,39 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
             return
 
-        def _apply_player_basic_action(_action):
-            battle_state['_runtime_player_only'] = True
-            updated_state = process_turn(
-                p,
-                mob,
-                battle_state,
-                lang,
-                user.id,
-            )
-            if updated_state is not battle_state:
-                battle_state.clear()
-                battle_state.update(updated_state)
-
-        resolve_current_side_if_ready(
+        resolved_player_side = resolve_current_side_if_ready(
             player_id=user.id,
-            on_player_action=_apply_player_basic_action,
+            on_player_action=lambda action: _dispatch_group_player_action(
+                action,
+                owner_player=p,
+                mob=mob,
+                battle_state=battle_state,
+                lang=lang,
+            ),
             on_enemy_action=lambda _action: None,
         )
+        if not resolved_player_side:
+            context.user_data['battle'] = battle_state
+            await _handle_battle_continues_update(
+                query=query,
+                user_id=user.id,
+                player=p,
+                mob=mob,
+                battle_state=battle_state,
+            )
+            await query.answer()
+            return
 
-        tick_cooldowns(user.id)
-
+        # Важно для group PvE: batch может закончиться на другом участнике.
+        # Перед post-resolve ветвлением возвращаем projection владельца callback.
+        _reconcile_group_participant_outcomes(battle_state)
+        _process_group_participant_death_consequences(
+            battle_state=battle_state,
+            owner_player_id=user.id,
+            log=battle_state.get('log'),
+            lang=lang,
+        )
+        sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
         if (
             not battle_state.get('mob_dead')
             and not battle_state.get('player_dead')
@@ -938,19 +1327,16 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             run_enemy_instant_side(
                 player_id=user.id,
                 battle_state=battle_state,
-                on_enemy_action=lambda _action: process_enemy_side_turn(
-                    mob,
-                    _build_enemy_response_player_state(p, battle_state),
-                    battle_state,
+                on_enemy_action=lambda _action: _run_group_enemy_side_action(
+                    owner_player=p,
+                    mob=mob,
+                    battle_state=battle_state,
                     lang=lang,
-                    user_id=user.id,
-                    include_pre_enemy_ticks=False,
-                    tick_player_post_action_buffs=True,
-                    tick_timed_trigger_buffs=True,
-                    increment_turn=True,
                 ),
             )
+            sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
         context.user_data['battle'] = battle_state
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
 
         handled = await _resolve_post_attack_combat_resolution(
             query=query,

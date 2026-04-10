@@ -1421,8 +1421,7 @@ def process_turn(
     user_id: int | None = None,
     include_enemy_response: bool = True,
 ) -> dict:
-    runtime_player_only = bool(battle_state.pop('_runtime_player_only', False))
-    if runtime_player_only or not include_enemy_response:
+    if not include_enemy_response:
         return process_player_attack_side_turn(
             player,
             mob,
