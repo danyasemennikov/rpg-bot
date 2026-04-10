@@ -19,9 +19,12 @@ from game.combat import (
     process_enemy_side_turn, apply_timeout_fallback_guard, preview_skill_turn_precheck,
 )
 from game.pve_live import (
+    create_or_load_open_world_pve_encounter,
     choose_enemy_target_participant_id,
+    ensure_location_pve_spawn_instances,
     finish_solo_pve_encounter,
     ensure_runtime_for_battle,
+    list_location_available_spawn_instances,
     get_pve_encounter_player_ids,
     load_active_solo_pve_encounter,
     mark_group_participant_defeated,
@@ -76,6 +79,18 @@ def end_battle(telegram_id: int):
     )
     conn.commit()
     conn.close()
+
+
+def _rollback_prebattle_lock_if_needed(*, context, telegram_id: int, should_rollback: bool) -> None:
+    if not should_rollback:
+        return
+    conn = get_connection()
+    conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?', (telegram_id,))
+    conn.commit()
+    conn.close()
+    if context is not None:
+        app_state = context.application.user_data.setdefault(telegram_id, {})
+        app_state.pop('aggro_message_id', None)
 
 def add_to_inventory(telegram_id: int, item_id: str, quantity: int = 1):
     """Добавляет предмет в инвентарь."""
@@ -307,15 +322,29 @@ def build_battle_message(player, mob, battle_state, log):
 # НАЧАЛО БОЯ
 # ────────────────────────────────────────
 
-async def start_battle(update, context, mob_id: str, mob_first: bool = False):
+async def start_battle(update, context, mob_id: str, mob_first: bool = False, spawn_instance_id: str | None = None):
     """Запускает бой — вызывается из location.py."""
     query = update.callback_query
     user  = query.from_user
     p     = dict(get_player(user.id))
-    mob   = get_mob(mob_id)
     lang  = p.get('lang', 'ru')
+    aggro_prelock = bool(mob_first and int(p.get('in_battle', 0) or 0) == 1)
 
+    if spawn_instance_id:
+        location_id = str(p.get('location_id') or '')
+        ensure_location_pve_spawn_instances(location_id=location_id)
+        spawn_rows = list_location_available_spawn_instances(location_id=location_id)
+        spawn_by_id = {str(row.get('spawn_instance_id')): row for row in spawn_rows}
+        selected_spawn = spawn_by_id.get(str(spawn_instance_id))
+        if not selected_spawn:
+            _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
+            await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)
+            return
+        mob_id = str(selected_spawn.get('mob_id') or '')
+
+    mob = get_mob(mob_id)
     if not mob:
+        _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
         await query.answer(t('battle.mob_not_found', lang), show_alert=True)
         return
 
@@ -398,6 +427,7 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     battle_state['effective_vitality'] = p.get('vitality', 1)
     battle_state['effective_wisdom'] = p.get('wisdom', 1)
     battle_state['effective_luck'] = p.get('luck', 1)
+    battle_state['location_id'] = p.get('location_id')
 
     # Владение оружием
     actual_weapon_id = 'unarmed'
@@ -408,6 +438,24 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False):
     battle_state['weapon_id']     = actual_weapon_id
     battle_state['mastery_level'] = mastery['level']
     battle_state['mastery_exp']   = mastery['exp']
+    encounter_id, encounter_status = create_or_load_open_world_pve_encounter(
+        owner_player_id=user.id,
+        location_id=str(p.get('location_id') or ''),
+        mob_id=mob_id,
+        battle_state=battle_state,
+        mob=mob,
+        side_a_player_ids=[user.id],
+        spawn_instance_id=spawn_instance_id,
+    )
+    if not encounter_id:
+        _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
+        await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)
+        return
+    if encounter_status == 'spawn_busy':
+        _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
+        await query.answer(t('location.pve_spawn_engaged', lang), show_alert=True)
+        return
+    battle_state['pve_encounter_id'] = encounter_id
 
     # Если моб ходит первым — сразу обрабатываем его ход
     if mob_first:

@@ -15,6 +15,11 @@ from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
 from game.items_data import get_item
 from game.i18n import t, get_player_lang, get_mob_name, get_location_name, get_location_desc, get_item_name
+from game.pve_live import (
+    get_open_world_pve_encounter_detail,
+    list_location_active_pve_encounters,
+    list_location_available_spawn_instances,
+)
 from game.pvp_live import (
     advance_engagement_to_live_battle_if_ready,
     apply_illegal_aggression_penalties,
@@ -142,6 +147,23 @@ def build_pvp_encounter_detail_message(player: dict, encounter_id: int) -> tuple
     else:
         text += t('location.pvp_join_commitment_notice', lang) + '\n'
     return text, InlineKeyboardMarkup(keyboard_rows)
+
+
+def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    lang = player.get('lang', 'ru')
+    detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+    if not detail or detail.get('status') != 'active':
+        return t('location.pve_no_encounter', lang), InlineKeyboardMarkup([])
+
+    mob_name = get_mob_name(str(detail.get('mob_id') or ''), lang)
+    text = t(
+        'location.pve_detail_header',
+        lang,
+        id=detail['encounter_id'],
+        mob=mob_name,
+        players=int(detail.get('participant_count', 0)),
+    )
+    return text, InlineKeyboardMarkup([])
 
 
 def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
@@ -401,10 +423,30 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
             else:
                 text += t('location.pvp_reinforcement_commitment_released', lang) + '\n'
 
-    # ── Мобы ──
-    if location['mobs'] and not pvp_only_view:
-        text += t('location.mobs_nearby', lang) + '\n'
-        for mob_id in location['mobs']:
+    # ── Open-world PvE: active encounters + available spawns ──
+    if not pvp_only_view:
+        active_pve_encounters = list_location_active_pve_encounters(location_id=location['id'])
+        if active_pve_encounters:
+            text += t('location.pve_encounters_title', lang) + '\n'
+            for encounter in active_pve_encounters:
+                mob_id = str(encounter.get('mob_id') or '')
+                text += t(
+                    'location.pve_encounter_row',
+                    lang,
+                    id=encounter['encounter_id'],
+                    mob=get_mob_name(mob_id, lang),
+                ) + '\n'
+                keyboard.append([InlineKeyboardButton(
+                    t('location.pve_view_fight_btn', lang, id=encounter['encounter_id']),
+                    callback_data=f"pve_view_{encounter['encounter_id']}",
+                )])
+            text += '\n'
+
+        available_spawns = list_location_available_spawn_instances(location_id=location['id'])
+        if available_spawns:
+            text += t('location.mobs_nearby', lang) + '\n'
+        for spawn in available_spawns:
+            mob_id = str(spawn.get('mob_id') or '')
             mob = get_mob(mob_id)
             if not mob:
                 continue
@@ -425,9 +467,10 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
             text += f"{diff} {get_mob_name(mob_id, lang)}  {t('common.level_short', lang)}{mob['level']}{agr_tag}\n"
             keyboard.append([InlineKeyboardButton(
                 t('location.attack_mob_btn', lang, name=get_mob_name(mob_id, lang)),
-                callback_data=f"fight_{mob_id}"
+                callback_data=f"fight_spawn_{spawn['spawn_instance_id']}"
             )])
-        text += "\n"
+        if available_spawns:
+            text += "\n"
 
     # ── Ресурсы ──
     gather_profiles = build_location_gather_source_profiles(location['id'])
@@ -668,6 +711,13 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
     if data.startswith('pvp_view_'):
         engagement_id = int(data.replace('pvp_view_', '', 1))
         detail_text, detail_keyboard = build_pvp_encounter_detail_message(dict(p), engagement_id)
+        await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('pve_view_'):
+        encounter_id = data.replace('pve_view_', '', 1)
+        detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(p), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
         await query.answer()
         return
@@ -999,6 +1049,11 @@ async def handle_combat_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         mob_id = data.replace('fight_first_', '')
         from handlers.battle import start_battle
         await start_battle(update, context, mob_id, mob_first=True)
+
+    elif data.startswith('fight_spawn_'):
+        spawn_instance_id = data.replace('fight_spawn_', '')
+        from handlers.battle import start_battle
+        await start_battle(update, context, mob_id='', mob_first=False, spawn_instance_id=spawn_instance_id)
 
     elif data.startswith('fight_'):
         mob_id = data.replace('fight_', '')
