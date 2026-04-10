@@ -2506,11 +2506,18 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
         captured_turns = {}
 
-        def process_turn_side_effect(_p, _mob, state, _lang, user_id=None):
+        def process_turn_side_effect(_p, _mob, state, _lang, user_id=None, **_kwargs):
             captured_turns['value'] = state.get('guaranteed_crit_turns')
             return dict(state, mob_dead=False, player_dead=False, log=['hit'])
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 50, 'lang': 'ru'}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='basic_attack', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_turn', side_effect=process_turn_side_effect), \
              patch('handlers.battle.tick_cooldowns'), \
              patch('handlers.battle.build_battle_message', return_value=('msg', None)), \
@@ -2541,6 +2548,13 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         post_turn_state['player_dead'] = False
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 50, 'lang': 'ru'}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='basic_attack', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_turn', return_value=post_turn_state), \
              patch('handlers.battle.resolve_enemy_response') as response_mock, \
              patch('handlers.battle.tick_cooldowns'), \
@@ -2575,6 +2589,14 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, None)), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 5, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=45, player_hp=90, player_dead=False, mob_dead=False, log=['cast', 'enemy'])}) as skill_turn_mock, \
              patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
              patch('handlers.battle.tick_cooldowns'), \
@@ -2607,6 +2629,14 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, None)), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=0, mob_dead=True, player_dead=False, log=['cast', 'dot'])}) as skill_turn_mock, \
              patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
              patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}), \
@@ -2635,14 +2665,17 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         mob = {'id': 'wolf', 'defense': 0, 'hp': 100}
         context = _DummyContext(battle_state, mob)
 
-        def pre_ticks_side_effect(_mob, state, **_kwargs):
-            state['mob_hp'] = 0
-            return ['dot']
-
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
-             patch('game.combat.use_skill', return_value={'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}), \
-             patch('game.combat.apply_pre_enemy_response_ticks', side_effect=pre_ticks_side_effect), \
-             patch('game.combat.resolve_enemy_response') as response_mock, \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, None)), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
+             patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 0, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=0, mob_dead=True, player_dead=False, log=['cast', 'dot'], turn=5)}), \
+             patch('handlers.battle.resolve_enemy_response') as response_mock, \
              patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
              patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}) as rewards_mock, \
              patch('handlers.battle.end_battle') as end_battle_mock, \
@@ -2702,6 +2735,14 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, None)), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=0, mob_dead=True, player_dead=False, log=['cast'])}) as skill_turn_mock, \
              patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
              patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}), \
@@ -2730,6 +2771,12 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru', 'exp': 0, 'gold': 0, 'level': 1, 'stat_points': 0}), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 3, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, mob_hp=0, mob_dead=True, player_dead=False, log=['cast'])}) as skill_turn_mock, \
              patch('handlers.battle.calc_rewards', return_value={'exp': 0, 'gold': 0, 'loot': []}), \
              patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 1}) as rewards_mock, \
@@ -2762,6 +2809,14 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, None)), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, player_hp=0, player_dead=True, mob_dead=False, log=['cast', 'enemy'])}), \
              patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
              patch('handlers.battle.tick_cooldowns'), \
@@ -2804,6 +2859,14 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, None)), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, player_hp=0, player_dead=True, mob_dead=False, log=['cast', 'enemy'])}), \
              patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
              patch('handlers.battle.tick_cooldowns'), \
@@ -2846,6 +2909,14 @@ class BattleHandlerRegressionTests(unittest.IsolatedAsyncioTestCase):
         context = _DummyContext(battle_state, mob)
 
         with patch('handlers.battle.get_player', return_value={'telegram_id': 101, 'hp': 100, 'mana': 80, 'lang': 'ru'}), \
+             patch('handlers.battle.process_due_timeout_for_battle', return_value=False), \
+             patch('handlers.battle.submit_player_commit', return_value=(True, None)), \
+             patch(
+                 'handlers.battle.resolve_current_side_if_ready',
+                 side_effect=lambda **kwargs: kwargs['on_player_action'](
+                     SimpleNamespace(action_type='skill', skill_id='fireball', participant_id=101)
+                 ) or True,
+             ), \
              patch('handlers.battle.process_skill_turn', return_value={'success': True, 'skill_result': {'success': True, 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': []}, 'battle_state': dict(battle_state, player_hp=0, player_dead=True, mob_dead=False, log=['cast', 'enemy'])}), \
              patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
              patch('handlers.battle.tick_cooldowns'), \
