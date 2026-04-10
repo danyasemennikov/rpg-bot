@@ -71,6 +71,73 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
         update.callback_query.answer.assert_awaited_once()
         self.assertNotIn('aggro_message_id', context.application.user_data[88001])
 
+
+    async def test_fight_spawn_unavailable_rolls_back_aggro_prelock_via_normal_fight_path(self):
+        update = _DummyUpdate('fight_forest_wolf')
+        context = _DummyStartBattleContext()
+        conn = SimpleNamespace(execute=lambda *args, **kwargs: None, commit=lambda: None, close=lambda: None)
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
+             patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+             patch('handlers.battle.get_player_effective_stats', return_value={
+                 'strength': 5, 'agility': 5, 'intuition': 5, 'vitality': 5, 'wisdom': 5, 'luck': 5,
+                 'max_hp': 100, 'max_mana': 50, 'physical_defense_bonus': 0, 'magic_defense_bonus': 0,
+                 'accuracy_bonus': 0, 'evasion_bonus': 0, 'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+             }), \
+             patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+             patch('handlers.battle.init_battle', return_value={
+                 'mob_id': 'forest_wolf',
+                 'log': [],
+                 'player_hp': 100,
+                 'player_mana': 50,
+                 'player_max_hp': 100,
+                 'player_max_mana': 50,
+             }), \
+             patch('handlers.battle.create_or_load_open_world_pve_encounter', return_value=(None, 'spawn_unavailable')), \
+             patch('handlers.battle.get_connection', return_value=conn):
+            await battle_handler.start_battle(update, context, 'forest_wolf', mob_first=False)
+
+        update.callback_query.answer.assert_awaited_once()
+        self.assertNotIn('aggro_message_id', context.application.user_data[88001])
+
+    async def test_mob_first_opening_strike_death_finishes_created_encounter(self):
+        update = _DummyUpdate('fight_first_forest_wolf')
+        context = _DummyStartBattleContext()
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
+             patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+             patch('handlers.battle.get_player_effective_stats', return_value={
+                 'strength': 5, 'agility': 5, 'intuition': 5, 'vitality': 5, 'wisdom': 5, 'luck': 5,
+                 'max_hp': 100, 'max_mana': 50, 'physical_defense_bonus': 0, 'magic_defense_bonus': 0,
+                 'accuracy_bonus': 0, 'evasion_bonus': 0, 'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+             }), \
+             patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+             patch('handlers.battle.init_battle', return_value={
+                 'mob_id': 'forest_wolf',
+                 'log': [],
+                 'player_hp': 100,
+                 'player_mana': 50,
+                 'player_max_hp': 100,
+                 'player_max_mana': 50,
+             }), \
+             patch('handlers.battle.create_or_load_open_world_pve_encounter', return_value=('pve-enc-death123', 'created')), \
+             patch('game.combat.mob_attack', return_value={'player_hp': 0, 'damage': 999}), \
+             patch('handlers.battle.apply_death', return_value={'exp_loss': 10, 'gold_loss': 5}), \
+             patch('handlers.battle.finish_solo_pve_encounter') as finish_mock, \
+             patch('handlers.battle.save_battle') as save_mock, \
+             patch('handlers.battle.ensure_runtime_for_battle') as runtime_mock, \
+             patch('handlers.battle.persist_solo_pve_encounter_state') as persist_mock:
+            await battle_handler.start_battle(update, context, 'forest_wolf', mob_first=True)
+
+        finish_mock.assert_called_once_with(
+            player_id=88001,
+            encounter_id='pve-enc-death123',
+            status='death',
+        )
+        self.assertEqual(save_mock.call_count, 0)
+        self.assertEqual(runtime_mock.call_count, 0)
+        self.assertEqual(persist_mock.call_count, 0)
+
     async def test_attack_flow_uses_player_only_then_enemy_side(self):
         update = _DummyUpdate('battle_attack_forest_wolf')
         battle_state = {

@@ -328,7 +328,11 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False, sp
     user  = query.from_user
     p     = dict(get_player(user.id))
     lang  = p.get('lang', 'ru')
-    aggro_prelock = bool(mob_first and int(p.get('in_battle', 0) or 0) == 1)
+    app_state = context.application.user_data.setdefault(user.id, {}) if context is not None else {}
+    aggro_prelock = bool(
+        int(p.get('in_battle', 0) or 0) == 1
+        and app_state.get('aggro_message_id') is not None
+    )
 
     if spawn_instance_id:
         location_id = str(p.get('location_id') or '')
@@ -469,6 +473,13 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False, sp
 
         if p['hp'] <= 0:
             penalty = apply_death(user.id, p)
+            finish_solo_pve_encounter(
+                player_id=user.id,
+                encounter_id=battle_state.get('pve_encounter_id'),
+                status='death',
+            )
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
             await query.edit_message_text(
                 t('battle.death_first_strike', lang,
                   mob_name=get_mob_name(mob['id'], lang),
