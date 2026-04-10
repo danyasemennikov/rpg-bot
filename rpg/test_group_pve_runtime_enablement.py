@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from game.combat import apply_timeout_fallback_guard
 from handlers import battle as battle_handler
@@ -669,6 +670,48 @@ class GroupPveRuntimeEnablementTests(unittest.TestCase):
         self.assertEqual(self.battle_a['round_index'], 2)
         self.assertEqual(self.battle_a['ally_commit_status'][str(self.player_a)], 'eligible')
         self.assertEqual(self.battle_a['ally_commit_status'][str(self.player_b)], 'eligible')
+
+    def test_missing_participant_snapshots_are_seeded_per_participant(self):
+        seeded = {
+            self.player_a: {'player_hp': 101, 'player_mana': 11, 'player_max_hp': 120, 'player_max_mana': 30, 'weapon_id': 'iron_sword'},
+            self.player_b: {'player_hp': 77, 'player_mana': 25, 'player_max_hp': 90, 'player_max_mana': 40, 'weapon_id': 'oak_staff'},
+        }
+        with patch('game.pve_live._build_participant_bootstrap_snapshot_for_player', side_effect=lambda battle_state, participant_id: dict(seeded[participant_id])):
+            ensure_participant_combat_state(
+                battle_state=self.battle_a,
+                participant_ids=[self.player_a, self.player_b],
+                preferred_player_id=self.player_a,
+            )
+
+        state_a = self.battle_a['participant_states'][str(self.player_a)]
+        state_b = self.battle_a['participant_states'][str(self.player_b)]
+        self.assertEqual(state_a['weapon_id'], 'iron_sword')
+        self.assertEqual(state_b['weapon_id'], 'oak_staff')
+        self.assertNotEqual(state_a['weapon_id'], state_b['weapon_id'])
+        self.assertNotEqual(state_a['player_max_hp'], state_b['player_max_hp'])
+
+    def test_opening_from_second_participant_does_not_overwrite_first_snapshot(self):
+        seeded = {
+            self.player_a: {'player_hp': 101, 'player_mana': 11, 'player_max_hp': 120, 'player_max_mana': 30, 'weapon_id': 'iron_sword'},
+            self.player_b: {'player_hp': 77, 'player_mana': 25, 'player_max_hp': 90, 'player_max_mana': 40, 'weapon_id': 'oak_staff'},
+        }
+        with patch('game.pve_live._build_participant_bootstrap_snapshot_for_player', side_effect=lambda battle_state, participant_id: dict(seeded[participant_id])):
+            ensure_participant_combat_state(
+                battle_state=self.battle_a,
+                participant_ids=[self.player_a, self.player_b],
+                preferred_player_id=self.player_a,
+            )
+            self.battle_a.update({'weapon_id': 'oak_staff', 'player_hp': 77, 'player_mana': 25})
+            ensure_participant_combat_state(
+                battle_state=self.battle_a,
+                participant_ids=[self.player_a, self.player_b],
+                preferred_player_id=self.player_b,
+            )
+
+        state_a = self.battle_a['participant_states'][str(self.player_a)]
+        state_b = self.battle_a['participant_states'][str(self.player_b)]
+        self.assertEqual(state_a['weapon_id'], 'iron_sword')
+        self.assertEqual(state_b['weapon_id'], 'oak_staff')
 
     def test_solo_pve_still_works_with_shared_encounter_model(self):
         solo_battle = {'mob_id': 'forest_wolf', 'log': []}

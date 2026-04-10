@@ -6,6 +6,15 @@ import zlib
 from datetime import datetime, timezone
 
 from database import get_connection
+from game.balance import (
+    normalize_armor_class,
+    normalize_encumbrance,
+    normalize_offhand_profile,
+    normalize_weapon_profile,
+)
+from game.equipment_stats import get_equipped_item_ids, get_player_effective_stats
+from game.itemization import get_item_archetype_metadata
+from game.items_data import get_item, get_item_encumbrance
 from game.live_combat_runtime import (
     DEFAULT_SIDE_TURN_TIMEOUT_SECONDS,
     EncounterRuntimeState,
@@ -332,10 +341,50 @@ def get_active_pve_encounter_id_for_player(*, player_id: int) -> str | None:
         ''',
         (player_id,),
     ).fetchone()
-    conn.close()
-    if not row:
+    if row:
+        conn.close()
+        return str(row['encounter_id'])
+
+    legacy_row = conn.execute(
+        '''
+        SELECT encounter_id
+        FROM pve_encounters
+        WHERE owner_player_id=? AND status='active'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM pve_encounter_participants p
+              WHERE p.encounter_id = pve_encounters.encounter_id
+          )
+        ORDER BY created_at DESC
+        LIMIT 1
+        ''',
+        (player_id,),
+    ).fetchone()
+    if not legacy_row:
+        conn.close()
         return None
-    return str(row['encounter_id'])
+
+    encounter_id = str(legacy_row['encounter_id'])
+    participant_row = conn.execute(
+        '''
+        SELECT 1
+        FROM pve_encounter_participants
+        WHERE encounter_id=? AND player_id=?
+        LIMIT 1
+        ''',
+        (encounter_id, int(player_id)),
+    ).fetchone()
+    if not participant_row:
+        conn.execute(
+            '''
+            INSERT OR IGNORE INTO pve_encounter_participants (encounter_id, player_id, side_id, status)
+            VALUES (?, ?, ?, 'active')
+            ''',
+            (encounter_id, int(player_id), SIDE_PLAYER),
+        )
+        conn.commit()
+    conn.close()
+    return encounter_id
 
 
 def get_active_solo_pve_encounter_id(*, player_id: int) -> str | None:
@@ -520,12 +569,14 @@ def ensure_participant_combat_state(
     participant_states = _deserialize_participant_state_map(battle_state.get('participant_states'))
     battle_state['participant_states'] = participant_states
 
-    fallback_snapshot = _build_projection_snapshot_from_battle_state(battle_state=battle_state)
-
     for participant_id in participant_ids:
         key = str(int(participant_id))
         current_raw = participant_states.get(key, {})
-        current = _normalize_projection_snapshot(current_raw, fallback_snapshot=fallback_snapshot)
+        participant_snapshot = _build_participant_bootstrap_snapshot_for_player(
+            battle_state=battle_state,
+            participant_id=int(participant_id),
+        )
+        current = _normalize_projection_snapshot(current_raw, fallback_snapshot=participant_snapshot)
         current['hp'] = current['player_hp']
         current['mana'] = current['player_mana']
         current['defeated'] = current['player_dead']
@@ -534,6 +585,59 @@ def ensure_participant_combat_state(
     if preferred_player_id is not None:
         sync_projection_for_participant(battle_state=battle_state, player_id=preferred_player_id)
     return participant_states
+
+
+def _build_participant_bootstrap_snapshot_for_player(*, battle_state: dict, participant_id: int) -> dict:
+    fallback = _build_projection_snapshot_from_battle_state(battle_state=battle_state)
+    conn = get_connection()
+    row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (int(participant_id),)).fetchone()
+    conn.close()
+    if not row:
+        return fallback
+
+    player = dict(row)
+    effective = get_player_effective_stats(int(participant_id), player)
+    equipped_ids = get_equipped_item_ids(int(participant_id))
+    weapon_item = get_item(equipped_ids.get('weapon') or 'unarmed') if equipped_ids.get('weapon') else None
+    offhand_item = get_item(equipped_ids.get('offhand')) if equipped_ids.get('offhand') else None
+    chest_item = get_item(equipped_ids.get('chest')) if equipped_ids.get('chest') else None
+
+    weapon_type = (weapon_item or {}).get('weapon_type', 'melee')
+    weapon_profile = normalize_weapon_profile((weapon_item or {}).get('weapon_profile'), weapon_type)
+    weapon_damage = int((weapon_item or {}).get('damage_min', (weapon_item or {}).get('damage', 10)) or 10)
+
+    chest_meta = get_item_archetype_metadata(chest_item)
+    offhand_meta = get_item_archetype_metadata(offhand_item)
+
+    snapshot = dict(fallback)
+    snapshot.update({
+        'player_hp': int(player.get('hp', fallback.get('player_hp', 0)) or 0),
+        'player_mana': int(player.get('mana', fallback.get('player_mana', 0)) or 0),
+        'player_max_hp': int(effective.get('max_hp', fallback.get('player_max_hp', 1)) or 1),
+        'player_max_mana': int(effective.get('max_mana', fallback.get('player_max_mana', 0)) or 0),
+        'weapon_id': equipped_ids.get('weapon', 'unarmed') or 'unarmed',
+        'weapon_type': weapon_type,
+        'weapon_profile': weapon_profile,
+        'weapon_damage': weapon_damage,
+        'armor_class': normalize_armor_class(chest_meta.get('armor_class')),
+        'offhand_profile': normalize_offhand_profile(offhand_meta.get('offhand_profile')),
+        'encumbrance': normalize_encumbrance(get_item_encumbrance(chest_item) or get_item_encumbrance(offhand_item)),
+        'effective_strength': int(effective.get('strength', player.get('strength', 1)) or 1),
+        'effective_agility': int(effective.get('agility', player.get('agility', 1)) or 1),
+        'effective_intuition': int(effective.get('intuition', player.get('intuition', 1)) or 1),
+        'effective_vitality': int(effective.get('vitality', player.get('vitality', 1)) or 1),
+        'effective_wisdom': int(effective.get('wisdom', player.get('wisdom', 1)) or 1),
+        'effective_luck': int(effective.get('luck', player.get('luck', 1)) or 1),
+        'equipment_physical_defense_bonus': int(effective.get('physical_defense_bonus', 0) or 0),
+        'equipment_magic_defense_bonus': int(effective.get('magic_defense_bonus', 0) or 0),
+        'equipment_accuracy_bonus': int(effective.get('accuracy_bonus', 0) or 0),
+        'equipment_evasion_bonus': int(effective.get('evasion_bonus', 0) or 0),
+        'equipment_block_chance_bonus': int(effective.get('block_chance_bonus', 0) or 0),
+        'equipment_magic_power_bonus': int(effective.get('magic_power_bonus', 0) or 0),
+        'equipment_healing_power_bonus': int(effective.get('healing_power_bonus', 0) or 0),
+    })
+    snapshot['player_dead'] = bool(snapshot.get('player_hp', 0) <= 0)
+    return snapshot
 
 
 def sync_projection_for_participant(*, battle_state: dict, player_id: int) -> None:

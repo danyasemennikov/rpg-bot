@@ -6,6 +6,7 @@ from game.pve_live import (
     SIDE_PLAYER,
     _SOLO_PVE_RUNTIME_STORE,
     finish_solo_pve_encounter,
+    get_active_pve_encounter_id_for_player,
     get_active_solo_pve_encounter_id,
     load_active_solo_pve_encounter,
     ensure_runtime_for_battle,
@@ -16,6 +17,7 @@ from game.pve_live import (
     run_enemy_instant_side,
     submit_player_commit,
 )
+from database import get_connection
 
 
 class SoloPveRuntimeAdapterTests(unittest.TestCase):
@@ -27,6 +29,11 @@ class SoloPveRuntimeAdapterTests(unittest.TestCase):
 
     def tearDown(self):
         finish_solo_pve_encounter(player_id=self.player_id, status='test_cleanup')
+        conn = get_connection()
+        conn.execute('DELETE FROM pve_encounter_participants WHERE player_id=?', (self.player_id,))
+        conn.execute('DELETE FROM pve_encounters WHERE owner_player_id=?', (self.player_id,))
+        conn.commit()
+        conn.close()
         _SOLO_PVE_RUNTIME_STORE.reset()
 
     def test_battle_start_creates_runtime_state_and_player_side_deadline(self):
@@ -206,6 +213,55 @@ class SoloPveRuntimeAdapterTests(unittest.TestCase):
         self.assertEqual(restored_battle_state['pve_encounter_id'], encounter_id)
         self.assertEqual(restored_battle_state['player_hp'], 77)
         self.assertEqual(restored_mob['id'], 'forest_wolf')
+
+    def test_legacy_active_encounter_lookup_fallback_and_backfill(self):
+        encounter_id = 'legacy-enc-001'
+        conn = get_connection()
+        conn.execute(
+            '''
+            INSERT OR REPLACE INTO pve_encounters
+            (encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json)
+            VALUES (?, ?, 'active', ?, ?, ?)
+            ''',
+            (encounter_id, self.player_id, 'forest_wolf', '{"mob_id":"forest_wolf"}', '{"id":"forest_wolf","hp":20}'),
+        )
+        conn.commit()
+        conn.close()
+
+        resolved = get_active_pve_encounter_id_for_player(player_id=self.player_id)
+        self.assertEqual(resolved, encounter_id)
+
+        conn = get_connection()
+        participant = conn.execute(
+            '''
+            SELECT status
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND player_id=?
+            ''',
+            (encounter_id, self.player_id),
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(participant)
+        self.assertEqual(participant['status'], 'active')
+
+    def test_legacy_active_encounter_can_be_loaded(self):
+        encounter_id = 'legacy-enc-002'
+        conn = get_connection()
+        conn.execute(
+            '''
+            INSERT OR REPLACE INTO pve_encounters
+            (encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json)
+            VALUES (?, ?, 'active', ?, ?, ?)
+            ''',
+            (encounter_id, self.player_id, 'forest_wolf', '{"mob_id":"forest_wolf","player_hp":55}', '{"id":"forest_wolf","hp":20}'),
+        )
+        conn.commit()
+        conn.close()
+
+        restored = load_active_solo_pve_encounter(player_id=self.player_id)
+        self.assertIsNotNone(restored)
+        battle_state, _mob = restored
+        self.assertEqual(battle_state.get('pve_encounter_id'), encounter_id)
 
 
 if __name__ == '__main__':
