@@ -1,10 +1,11 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from database import get_connection
 from game.pve_live import (
     create_or_load_open_world_pve_encounter,
     finish_solo_pve_encounter,
+    get_active_pve_encounter_id_for_player,
     get_open_world_pve_encounter_detail,
     list_location_active_pve_encounters,
     list_location_available_spawn_instances,
@@ -172,6 +173,41 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertIsNotNone(detail)
         self.assertEqual(detail['location_id'], self.location_id)
         self.assertTrue(str(detail['anchor_spawn_instance_id']).startswith('spawn-'))
+
+    def test_stale_active_detail_not_returned_when_anchor_is_no_longer_live(self):
+        battle_state = {'mob_id': 'forest_wolf', 'log': []}
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state=battle_state,
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET linked_encounter_id=NULL, state='respawning'
+            WHERE spawn_instance_id=?
+            ''',
+            (f'spawn-{self.location_id}-forest_wolf',),
+        )
+        conn.commit()
+        conn.close()
+
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        self.assertIsNone(detail)
+
+    def test_ensure_schema_false_does_not_swallow_generic_operational_error(self):
+        fake_conn = Mock()
+        fake_conn.execute.side_effect = RuntimeError('db locked during select')
+        fake_conn.close.return_value = None
+        with patch('game.pve_live.get_connection', return_value=fake_conn):
+            with self.assertRaises(RuntimeError):
+                get_active_pve_encounter_id_for_player(player_id=self.player_id, ensure_schema=False)
 
     def test_supersede_transitions_old_anchored_spawn_to_respawning_and_releases_link(self):
         first_battle = {'mob_id': 'forest_wolf', 'log': []}

@@ -262,12 +262,15 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
         '''
         SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id
         FROM pve_encounters e
+        JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
         WHERE e.status='active'
           AND e.location_id=?
           AND e.anchor_spawn_instance_id IS NOT NULL
+          AND s.linked_encounter_id = e.encounter_id
+          AND s.state IN (?, ?)
         ORDER BY e.created_at DESC
         ''',
-        (location_id,),
+        (location_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -277,15 +280,21 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     if not encounter_id:
         return None
     _ensure_pve_encounter_table()
+    _ensure_world_spawn_table()
     conn = get_connection()
     encounter_row = conn.execute(
         '''
-        SELECT encounter_id, status, mob_id, location_id, anchor_spawn_instance_id
-        FROM pve_encounters
-        WHERE encounter_id=?
+        SELECT e.encounter_id, e.status, e.mob_id, e.location_id, e.anchor_spawn_instance_id
+        FROM pve_encounters e
+        JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+        WHERE e.encounter_id=?
+          AND e.status='active'
+          AND e.anchor_spawn_instance_id IS NOT NULL
+          AND s.linked_encounter_id = e.encounter_id
+          AND s.state IN (?, ?)
         LIMIT 1
         ''',
-        (encounter_id,),
+        (encounter_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
     ).fetchone()
     if not encounter_row:
         conn.close()
@@ -381,7 +390,11 @@ def _transition_anchored_spawns_for_encounters(
 ) -> None:
     if not encounter_ids:
         return
-    _ensure_world_spawn_table()
+    spawn_table_row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pve_spawn_instances' LIMIT 1"
+    ).fetchone()
+    if not spawn_table_row:
+        return
     placeholders = ','.join('?' for _ in encounter_ids)
     available_at = None
     if clear_link and respawn_seconds and respawn_seconds > 0:
@@ -673,9 +686,21 @@ def create_or_load_open_world_pve_encounter(
     return encounter_id, 'created'
 
 
-def get_active_pve_encounter_id_for_player(*, player_id: int) -> str | None:
-    _ensure_pve_encounter_table()
+def get_active_pve_encounter_id_for_player(*, player_id: int, ensure_schema: bool = True) -> str | None:
+    if ensure_schema:
+        _ensure_pve_encounter_table()
     conn = get_connection()
+    if not ensure_schema:
+        tables = {
+            str(row['name'])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('pve_encounters', 'pve_encounter_participants')"
+            ).fetchall()
+        }
+        if 'pve_encounters' not in tables or 'pve_encounter_participants' not in tables:
+            conn.close()
+            return None
+
     row = conn.execute(
         '''
         SELECT e.encounter_id
@@ -788,55 +813,57 @@ def load_active_solo_pve_encounter(*, player_id: int) -> tuple[dict, dict] | Non
 def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, mob: dict | None = None) -> None:
     if not encounter_id:
         return
-    _ensure_pve_encounter_table()
     conn = get_connection()
-    conn.execute(
-        '''
-        UPDATE pve_encounters
-        SET battle_state_json=?, mob_json=?, mob_id=?, updated_at=CURRENT_TIMESTAMP
-        WHERE encounter_id=? AND status='active'
-        ''',
-        (
-            _serialize_payload(battle_state),
-            _serialize_payload(mob or {}),
-            str(battle_state.get('mob_id') or (mob or {}).get('id') or ''),
-            encounter_id,
-        ),
-    )
-    conn.commit()
-    conn.close()
-
-
-def finish_solo_pve_encounter(*, player_id: int, encounter_id: str | None = None, status: str = 'finished') -> None:
-    _ensure_pve_encounter_table()
-    resolved_encounter_id = encounter_id or get_active_pve_encounter_id_for_player(player_id=player_id)
-    if resolved_encounter_id:
-        conn = get_connection()
+    try:
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET status=?, updated_at=CURRENT_TIMESTAMP, finished_at=CURRENT_TIMESTAMP
-            WHERE encounter_id=?
-            ''',
-            (status, resolved_encounter_id),
-        )
-        conn.execute(
-            '''
-            UPDATE pve_encounter_participants
-            SET status=?, updated_at=CURRENT_TIMESTAMP
+            SET battle_state_json=?, mob_json=?, mob_id=?, updated_at=CURRENT_TIMESTAMP
             WHERE encounter_id=? AND status='active'
             ''',
-            (status, resolved_encounter_id),
-        )
-        _transition_anchored_spawns_for_encounters(
-            conn,
-            encounter_ids=[resolved_encounter_id],
-            state=SPAWN_STATE_RESPAWNING,
-            clear_link=True,
-            respawn_seconds=DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS,
+            (
+                _serialize_payload(battle_state),
+                _serialize_payload(mob or {}),
+                str(battle_state.get('mob_id') or (mob or {}).get('id') or ''),
+                encounter_id,
+            ),
         )
         conn.commit()
+    finally:
         conn.close()
+
+
+def finish_solo_pve_encounter(*, player_id: int, encounter_id: str | None = None, status: str = 'finished') -> None:
+    resolved_encounter_id = encounter_id or get_active_pve_encounter_id_for_player(player_id=player_id, ensure_schema=False)
+    if resolved_encounter_id:
+        conn = get_connection()
+        try:
+            conn.execute(
+                '''
+                UPDATE pve_encounters
+                SET status=?, updated_at=CURRENT_TIMESTAMP, finished_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=?
+                ''',
+                (status, resolved_encounter_id),
+            )
+            conn.execute(
+                '''
+                UPDATE pve_encounter_participants
+                SET status=?, updated_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=? AND status='active'
+                ''',
+                (status, resolved_encounter_id),
+            )
+            _transition_anchored_spawns_for_encounters(
+                conn,
+                encounter_ids=[resolved_encounter_id],
+                state=SPAWN_STATE_RESPAWNING,
+                clear_link=True,
+                respawn_seconds=DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS,
+            )
+            conn.commit()
+        finally:
+            conn.close()
     clear_solo_pve_runtime(player_id=player_id, encounter_id=resolved_encounter_id)
 
 
@@ -870,7 +897,6 @@ def mark_group_participant_defeated(
 ) -> None:
     if not encounter_id:
         return
-    _ensure_pve_encounter_table()
     conn = get_connection()
     conn.execute(
         '''
