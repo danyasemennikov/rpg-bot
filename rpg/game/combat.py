@@ -272,6 +272,14 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
     Тикает post-action длительности оставшихся player buffs в Combat Core.
     Регенерация и resurrection здесь не обрабатываются.
     """
+    def _safe_int(value, default: int = 0) -> int:
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     for key in (
         'defense_buff_turns',
         'berserk_turns',
@@ -286,13 +294,14 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
         'quick_channel_turns',
         'berserk_defense_penalty_turns',
     ):
-        if battle_state.get(key, 0) > 0:
-            battle_state[key] -= 1
+        turns = _safe_int(battle_state.get(key, 0))
+        if turns > 0:
+            battle_state[key] = turns - 1
 
     # Berserker cleanup: normalize naturally expired/desynced state
     # so stale values do not survive when timers are inactive.
-    berserk_turns = battle_state.get('berserk_turns', 0)
-    penalty_turns = battle_state.get('berserk_defense_penalty_turns', 0)
+    berserk_turns = _safe_int(battle_state.get('berserk_turns', 0))
+    penalty_turns = _safe_int(battle_state.get('berserk_defense_penalty_turns', 0))
     if berserk_turns <= 0:
         battle_state['berserk_turns'] = 0
         battle_state['berserk_damage'] = 0
@@ -307,15 +316,15 @@ def tick_post_action_player_buff_durations(battle_state: dict) -> None:
         or 'berserk_defense_penalty' in battle_state
     )
     if has_penalty_runtime and (
-        (battle_state.get('berserk_turns', 0) > 0 and battle_state.get('berserk_defense_penalty_turns', 0) <= 0)
-        or (battle_state.get('berserk_turns', 0) <= 0 and battle_state.get('berserk_defense_penalty_turns', 0) > 0)
+        (berserk_turns > 0 and penalty_turns <= 0)
+        or (berserk_turns <= 0 and penalty_turns > 0)
     ):
         battle_state['berserk_turns'] = 0
         battle_state['berserk_damage'] = 0
         battle_state['berserk_defense_penalty_turns'] = 0
         battle_state['berserk_defense_penalty'] = 0
 
-    if battle_state.get('defense_buff_turns', 0) <= 0:
+    if _safe_int(battle_state.get('defense_buff_turns', 0)) <= 0:
         battle_state['defense_buff_source'] = None
 
 
@@ -1607,8 +1616,16 @@ def apply_timeout_fallback_guard(
     Applies a minimal real fallback action for timeout-driven solo PvE:
     fallback_guard grants a short defensive window.
     """
-    current_turns = int(battle_state.get('defense_buff_turns', 0))
-    current_value = int(battle_state.get('defense_buff_value', 0))
+    def _safe_int(value, default: int = 0) -> int:
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    current_turns = _safe_int(battle_state.get('defense_buff_turns', 0))
+    current_value = _safe_int(battle_state.get('defense_buff_value', 0))
     battle_state['defense_buff_turns'] = max(current_turns, 1)
     battle_state['defense_buff_value'] = max(current_value, 15)
     battle_state['defense_buff_source'] = 'timeout_fallback_guard'

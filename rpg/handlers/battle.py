@@ -23,6 +23,7 @@ from game.pve_live import (
     choose_enemy_target_participant_id,
     ensure_location_pve_spawn_instances,
     finish_solo_pve_encounter,
+    get_active_pve_encounter_id_for_player,
     ensure_runtime_for_battle,
     list_location_available_spawn_instances,
     get_pve_encounter_player_ids,
@@ -89,8 +90,26 @@ def _rollback_prebattle_lock_if_needed(*, context, telegram_id: int, should_roll
     conn.commit()
     conn.close()
     if context is not None:
-        app_state = context.application.user_data.setdefault(telegram_id, {})
-        app_state.pop('aggro_message_id', None)
+        app_state = context.application.user_data.get(telegram_id)
+        if isinstance(app_state, dict):
+            app_state.pop('aggro_message_id', None)
+
+
+def _is_aggro_prelock_start(*, player_row: dict, app_state: dict | None) -> bool:
+    """
+    Real prelock signal for aggro-start flows:
+    player already marked in_battle before encounter/runtime is created.
+    """
+    if int(player_row.get('in_battle', 0) or 0) != 1:
+        return False
+
+    player_id = int(player_row.get('telegram_id', 0) or 0)
+    if player_id > 0 and get_active_pve_encounter_id_for_player(player_id=player_id, ensure_schema=False):
+        # Already inside a real active encounter lock; do not treat as aggro prelock.
+        return False
+
+    # Explicit marker can be missing after transient app-state loss/restart.
+    return True
 
 def add_to_inventory(telegram_id: int, item_id: str, quantity: int = 1):
     """Добавляет предмет в инвентарь."""
@@ -329,10 +348,7 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False, sp
     p     = dict(get_player(user.id))
     lang  = p.get('lang', 'ru')
     app_state = context.application.user_data.setdefault(user.id, {}) if context is not None else {}
-    aggro_prelock = bool(
-        int(p.get('in_battle', 0) or 0) == 1
-        and app_state.get('aggro_message_id') is not None
-    )
+    aggro_prelock = _is_aggro_prelock_start(player_row=p, app_state=app_state)
 
     if spawn_instance_id:
         location_id = str(p.get('location_id') or '')
