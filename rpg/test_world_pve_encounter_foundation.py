@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 from unittest.mock import Mock, patch
 
 from database import get_connection
@@ -208,6 +209,93 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         with patch('game.pve_live.get_connection', return_value=fake_conn):
             with self.assertRaises(RuntimeError):
                 get_active_pve_encounter_id_for_player(player_id=self.player_id, ensure_schema=False)
+
+    def test_partial_migration_owner_fallback_works_without_participants_table(self):
+        db_uri = 'file:pve_partial_migration?mode=memory&cache=shared'
+        keeper = sqlite3.connect(db_uri, uri=True)
+        keeper.row_factory = sqlite3.Row
+        keeper.execute(
+            '''
+            CREATE TABLE pve_encounters (
+                encounter_id      TEXT PRIMARY KEY,
+                owner_player_id   INTEGER NOT NULL,
+                status            TEXT NOT NULL,
+                mob_id            TEXT,
+                battle_state_json TEXT NOT NULL,
+                mob_json          TEXT NOT NULL,
+                created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                finished_at       TIMESTAMP
+            )
+            '''
+        )
+        keeper.execute(
+            '''
+            CREATE TABLE pve_spawn_instances (
+                spawn_instance_id     TEXT PRIMARY KEY,
+                location_id           TEXT NOT NULL,
+                mob_id                TEXT NOT NULL,
+                state                 TEXT NOT NULL,
+                linked_encounter_id   TEXT,
+                respawn_available_at  TIMESTAMP,
+                created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            '''
+        )
+        keeper.execute(
+            '''
+            INSERT INTO pve_encounters (
+                encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json
+            ) VALUES (?, ?, 'active', 'forest_wolf', '{}', '{}')
+            ''',
+            ('legacy-enc-1', self.player_id),
+        )
+        keeper.execute(
+            '''
+            INSERT INTO pve_spawn_instances (
+                spawn_instance_id, location_id, mob_id, state, linked_encounter_id
+            ) VALUES (?, ?, ?, 'active', ?)
+            ''',
+            ('spawn-dark_forest-forest_wolf', self.location_id, 'forest_wolf', 'legacy-enc-1'),
+        )
+        keeper.commit()
+
+        def _partial_conn():
+            conn = sqlite3.connect(db_uri, uri=True)
+            conn.row_factory = sqlite3.Row
+            return conn
+
+        with patch('game.pve_live.get_connection', side_effect=_partial_conn):
+            encounter_id = get_active_pve_encounter_id_for_player(
+                player_id=self.player_id,
+                ensure_schema=False,
+            )
+            self.assertEqual(encounter_id, 'legacy-enc-1')
+
+            finish_solo_pve_encounter(
+                player_id=self.player_id,
+                encounter_id=None,
+                status='finished',
+            )
+
+            verify = _partial_conn()
+            row = verify.execute(
+                'SELECT status, finished_at FROM pve_encounters WHERE encounter_id=?',
+                ('legacy-enc-1',),
+            ).fetchone()
+            spawn_row = verify.execute(
+                'SELECT state, linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id=?',
+                ('spawn-dark_forest-forest_wolf',),
+            ).fetchone()
+            verify.close()
+
+        keeper.close()
+
+        self.assertEqual(row['status'], 'finished')
+        self.assertIsNotNone(row['finished_at'])
+        self.assertEqual(spawn_row['state'], 'respawning')
+        self.assertIsNone(spawn_row['linked_encounter_id'])
 
     def test_supersede_transitions_old_anchored_spawn_to_respawning_and_releases_link(self):
         first_battle = {'mob_id': 'forest_wolf', 'log': []}

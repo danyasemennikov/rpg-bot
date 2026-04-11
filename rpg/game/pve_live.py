@@ -390,10 +390,7 @@ def _transition_anchored_spawns_for_encounters(
 ) -> None:
     if not encounter_ids:
         return
-    spawn_table_row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pve_spawn_instances' LIMIT 1"
-    ).fetchone()
-    if not spawn_table_row:
+    if not _table_exists(conn, 'pve_spawn_instances'):
         return
     placeholders = ','.join('?' for _ in encounter_ids)
     available_at = None
@@ -419,6 +416,14 @@ def _transition_anchored_spawns_for_encounters(
         ''',
         (state, *encounter_ids),
     )
+
+
+def _table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (table_name,),
+    ).fetchone()
+    return row is not None
 
 
 def _serialize_payload(payload: dict | None) -> str:
@@ -690,70 +695,82 @@ def get_active_pve_encounter_id_for_player(*, player_id: int, ensure_schema: boo
     if ensure_schema:
         _ensure_pve_encounter_table()
     conn = get_connection()
+    has_encounters = True
+    has_participants = True
     if not ensure_schema:
-        tables = {
-            str(row['name'])
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('pve_encounters', 'pve_encounter_participants')"
-            ).fetchall()
-        }
-        if 'pve_encounters' not in tables or 'pve_encounter_participants' not in tables:
+        has_encounters = _table_exists(conn, 'pve_encounters')
+        has_participants = _table_exists(conn, 'pve_encounter_participants')
+        if not has_encounters:
             conn.close()
             return None
 
-    row = conn.execute(
-        '''
-        SELECT e.encounter_id
-        FROM pve_encounters e
-        JOIN pve_encounter_participants p ON p.encounter_id = e.encounter_id
-        WHERE p.player_id=? AND p.status='active' AND e.status='active'
-        ORDER BY e.created_at DESC
-        LIMIT 1
-        ''',
-        (player_id,),
-    ).fetchone()
-    if row:
-        conn.close()
-        return str(row['encounter_id'])
+    if has_participants:
+        row = conn.execute(
+            '''
+            SELECT e.encounter_id
+            FROM pve_encounters e
+            JOIN pve_encounter_participants p ON p.encounter_id = e.encounter_id
+            WHERE p.player_id=? AND p.status='active' AND e.status='active'
+            ORDER BY e.created_at DESC
+            LIMIT 1
+            ''',
+            (player_id,),
+        ).fetchone()
+        if row:
+            conn.close()
+            return str(row['encounter_id'])
 
-    legacy_row = conn.execute(
-        '''
-        SELECT encounter_id
-        FROM pve_encounters
-        WHERE owner_player_id=? AND status='active'
-          AND NOT EXISTS (
-              SELECT 1
-              FROM pve_encounter_participants p
-              WHERE p.encounter_id = pve_encounters.encounter_id
-          )
-        ORDER BY created_at DESC
-        LIMIT 1
-        ''',
-        (player_id,),
-    ).fetchone()
+        legacy_row = conn.execute(
+            '''
+            SELECT encounter_id
+            FROM pve_encounters
+            WHERE owner_player_id=? AND status='active'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pve_encounter_participants p
+                  WHERE p.encounter_id = pve_encounters.encounter_id
+              )
+            ORDER BY created_at DESC
+            LIMIT 1
+            ''',
+            (player_id,),
+        ).fetchone()
+    else:
+        legacy_row = conn.execute(
+            '''
+            SELECT encounter_id
+            FROM pve_encounters
+            WHERE owner_player_id=? AND status='active'
+            ORDER BY created_at DESC
+            LIMIT 1
+            ''',
+            (player_id,),
+        ).fetchone()
+
     if not legacy_row:
         conn.close()
         return None
 
     encounter_id = str(legacy_row['encounter_id'])
-    participant_row = conn.execute(
-        '''
-        SELECT 1
-        FROM pve_encounter_participants
-        WHERE encounter_id=? AND player_id=?
-        LIMIT 1
-        ''',
-        (encounter_id, int(player_id)),
-    ).fetchone()
-    if not participant_row:
-        conn.execute(
+    if has_participants:
+        participant_row = conn.execute(
             '''
-            INSERT OR IGNORE INTO pve_encounter_participants (encounter_id, player_id, side_id, status)
-            VALUES (?, ?, ?, 'active')
+            SELECT 1
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND player_id=?
+            LIMIT 1
             ''',
-            (encounter_id, int(player_id), SIDE_PLAYER),
-        )
-        conn.commit()
+            (encounter_id, int(player_id)),
+        ).fetchone()
+        if not participant_row:
+            conn.execute(
+                '''
+                INSERT OR IGNORE INTO pve_encounter_participants (encounter_id, player_id, side_id, status)
+                VALUES (?, ?, ?, 'active')
+                ''',
+                (encounter_id, int(player_id), SIDE_PLAYER),
+            )
+            conn.commit()
     conn.close()
     return encounter_id
 
@@ -846,14 +863,15 @@ def finish_solo_pve_encounter(*, player_id: int, encounter_id: str | None = None
                 ''',
                 (status, resolved_encounter_id),
             )
-            conn.execute(
-                '''
-                UPDATE pve_encounter_participants
-                SET status=?, updated_at=CURRENT_TIMESTAMP
-                WHERE encounter_id=? AND status='active'
-                ''',
-                (status, resolved_encounter_id),
-            )
+            if _table_exists(conn, 'pve_encounter_participants'):
+                conn.execute(
+                    '''
+                    UPDATE pve_encounter_participants
+                    SET status=?, updated_at=CURRENT_TIMESTAMP
+                    WHERE encounter_id=? AND status='active'
+                    ''',
+                    (status, resolved_encounter_id),
+                )
             _transition_anchored_spawns_for_encounters(
                 conn,
                 encounter_ids=[resolved_encounter_id],
