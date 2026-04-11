@@ -112,7 +112,7 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         conn = SimpleNamespace(execute=_execute, commit=lambda: None, close=lambda: None)
         with patch('handlers.battle.get_player', return_value=self._player_row()), \
-             patch('handlers.battle.get_active_solo_pve_encounter_id', return_value=None), \
+             patch('handlers.battle.get_active_pve_encounter_id_for_player', return_value=None), \
              patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
              patch('handlers.battle.get_equipped_combat_items', return_value={}), \
              patch('handlers.battle.get_player_effective_stats', return_value={
@@ -135,7 +135,7 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any('UPDATE players SET in_battle=0' in sql for sql in executed_queries))
 
-    async def test_stale_start_does_not_rollback_when_real_active_encounter_exists(self):
+    async def test_stale_start_does_not_rollback_when_real_active_solo_encounter_exists(self):
         update = _DummyUpdate('fight_forest_wolf')
         context = _DummyStartBattleContext(with_aggro_marker=False)
         executed_queries: list[str] = []
@@ -146,7 +146,41 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         conn = SimpleNamespace(execute=_execute, commit=lambda: None, close=lambda: None)
         with patch('handlers.battle.get_player', return_value=self._player_row()), \
-             patch('handlers.battle.get_active_solo_pve_encounter_id', return_value='pve-enc-active123'), \
+             patch('handlers.battle.get_active_pve_encounter_id_for_player', return_value='pve-enc-active123'), \
+             patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
+             patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+             patch('handlers.battle.get_player_effective_stats', return_value={
+                 'strength': 5, 'agility': 5, 'intuition': 5, 'vitality': 5, 'wisdom': 5, 'luck': 5,
+                 'max_hp': 100, 'max_mana': 50, 'physical_defense_bonus': 0, 'magic_defense_bonus': 0,
+                 'accuracy_bonus': 0, 'evasion_bonus': 0, 'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+             }), \
+             patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+             patch('handlers.battle.init_battle', return_value={
+                 'mob_id': 'forest_wolf',
+                 'log': [],
+                 'player_hp': 100,
+                 'player_mana': 50,
+                 'player_max_hp': 100,
+                 'player_max_mana': 50,
+             }), \
+             patch('handlers.battle.create_or_load_open_world_pve_encounter', return_value=(None, 'spawn_unavailable')), \
+             patch('handlers.battle.get_connection', return_value=conn):
+            await battle_handler.start_battle(update, context, 'forest_wolf', mob_first=False)
+
+        self.assertFalse(any('UPDATE players SET in_battle=0' in sql for sql in executed_queries))
+
+    async def test_stale_start_does_not_rollback_when_real_active_group_encounter_exists(self):
+        update = _DummyUpdate('fight_forest_wolf')
+        context = _DummyStartBattleContext(with_aggro_marker=False)
+        executed_queries: list[str] = []
+
+        def _execute(sql: str, *args, **kwargs):
+            executed_queries.append(sql)
+            return None
+
+        conn = SimpleNamespace(execute=_execute, commit=lambda: None, close=lambda: None)
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.get_active_pve_encounter_id_for_player', return_value='pve-enc-group456'), \
              patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
              patch('handlers.battle.get_equipped_combat_items', return_value={}), \
              patch('handlers.battle.get_player_effective_stats', return_value={

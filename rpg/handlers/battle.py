@@ -23,7 +23,7 @@ from game.pve_live import (
     choose_enemy_target_participant_id,
     ensure_location_pve_spawn_instances,
     finish_solo_pve_encounter,
-    get_active_solo_pve_encounter_id,
+    get_active_pve_encounter_id_for_player,
     ensure_runtime_for_battle,
     list_location_available_spawn_instances,
     get_pve_encounter_player_ids,
@@ -104,7 +104,7 @@ def _is_aggro_prelock_start(*, player_row: dict, app_state: dict | None) -> bool
         return False
 
     player_id = int(player_row.get('telegram_id', 0) or 0)
-    if player_id > 0 and get_active_solo_pve_encounter_id(player_id=player_id):
+    if player_id > 0 and get_active_pve_encounter_id_for_player(player_id=player_id, ensure_schema=False):
         # Already inside a real active encounter lock; do not treat as aggro prelock.
         return False
 
