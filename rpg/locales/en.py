@@ -176,6 +176,7 @@ STRINGS = {
         'pve_join_already': 'ℹ️ You are already in this encounter.',
         'pve_join_locked': '⛔ This encounter is already locked.',
         'pve_join_wrong_location': '⛔ You must be in the same location to join.',
+        'pve_enter_wrong_location': '⛔ You must return to this location before entering the battle.',
         'pve_join_busy': '⛔ You are already busy in another encounter.',
         'pve_join_blocked': '⛔ Cannot join this encounter.',
         'pve_spawn_unavailable': '⛔ This world spawn is currently unavailable.',

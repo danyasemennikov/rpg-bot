@@ -187,6 +187,31 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('battle', context.user_data)
         self.assertNotIn('battle_mob', context.user_data)
 
+    async def test_enter_path_blocks_when_player_moved_to_other_location(self):
+        update = _DummyUpdate('pve_enter_pve-enc-live')
+        context = _DummyStartBattleContext()
+        moved_player = self._player_row()
+        moved_player['location_id'] = 'village'
+        battle_state = {'pve_encounter_id': 'pve-enc-live', 'log': [], 'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50}
+        mob = {'id': 'forest_wolf', 'hp': 20}
+        with patch('handlers.battle.get_player', return_value=moved_player), \
+             patch('handlers.battle.get_open_world_pve_encounter_detail', return_value={
+                 'encounter_id': 'pve-enc-live',
+                 'status': 'active',
+                 'joinable': True,
+                 'location_id': 'dark_forest',
+             }), \
+             patch('handlers.battle.load_active_pve_encounter', return_value=(battle_state, mob)), \
+             patch('handlers.battle.get_pve_encounter_player_ids', return_value=[88001]), \
+             patch('handlers.battle.ensure_runtime_for_battle') as runtime_mock:
+            await battle_handler.enter_open_world_pve_battle(update, context, 'pve-enc-live')
+
+        self.assertEqual(runtime_mock.call_count, 0)
+        self.assertNotIn('battle', context.user_data)
+        self.assertNotIn('battle_mob', context.user_data)
+        update.callback_query.answer.assert_awaited_once()
+        self.assertEqual(update.callback_query.edit_message_text.await_count, 0)
+
     async def test_start_battle_clears_local_cache_when_runtime_start_blocked(self):
         update = _DummyUpdate('fight_forest_wolf')
         context = _DummyStartBattleContext()

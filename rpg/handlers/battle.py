@@ -565,6 +565,13 @@ async def enter_open_world_pve_battle(update, context, encounter_id: str) -> Non
     if int(user.id) not in roster:
         await query.answer(t('location.pve_join_blocked', lang), show_alert=True)
         return
+    encounter_location_id = str(detail.get('location_id') or '')
+    player_location_id = str(p.get('location_id') or '')
+    if encounter_location_id and player_location_id and encounter_location_id != player_location_id:
+        context.user_data.pop('battle', None)
+        context.user_data.pop('battle_mob', None)
+        await query.answer(t('location.pve_enter_wrong_location', lang), show_alert=True)
+        return
 
     battle_state['pve_encounter_id'] = str(encounter_id)
     context.user_data['battle'] = battle_state
