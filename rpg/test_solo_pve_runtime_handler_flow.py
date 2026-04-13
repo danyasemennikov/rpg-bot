@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from handlers import battle as battle_handler
+from game.pve_live import OpenWorldRuntimeStartBlocked
 
 
 class _DummyQuery:
@@ -28,6 +29,11 @@ class _DummyStartBattleContext:
         self.user_data = {}
         app_user_data = {88001: {'aggro_message_id': 999}} if with_aggro_marker else {88001: {}}
         self.application = SimpleNamespace(user_data=app_user_data)
+
+
+class _DummyCombatContext:
+    def __init__(self):
+        self.application = SimpleNamespace(user_data={})
 
 
 class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
@@ -71,6 +77,172 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         update.callback_query.answer.assert_awaited_once()
         self.assertNotIn('aggro_message_id', context.application.user_data[88001])
+
+    async def test_fight_spawn_callback_opens_forming_view_before_runtime_lock(self):
+        update = _DummyUpdate('fight_spawn_spawn-dark_forest-forest_wolf')
+        context = _DummyCombatContext()
+        with patch('handlers.location.get_player', return_value={'lang': 'en'}), \
+             patch('handlers.location.has_active_live_pvp_engagement', return_value=False), \
+             patch('handlers.battle.start_battle', new=AsyncMock()) as start_mock:
+            from handlers.location import handle_combat_buttons
+            await handle_combat_buttons(update, context)
+
+        start_mock.assert_awaited_once()
+        kwargs = start_mock.await_args.kwargs
+        self.assertEqual(kwargs.get('spawn_instance_id'), 'spawn-dark_forest-forest_wolf')
+        self.assertIs(kwargs.get('open_runtime_now'), False)
+
+    async def test_start_battle_spawn_prepare_mode_does_not_open_runtime(self):
+        update = _DummyUpdate('fight_spawn_spawn-dark_forest-forest_wolf')
+        context = _DummyStartBattleContext()
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.ensure_location_pve_spawn_instances'), \
+             patch('handlers.battle.list_location_available_spawn_instances', return_value=[{
+                 'spawn_instance_id': 'spawn-dark_forest-forest_wolf',
+                 'mob_id': 'forest_wolf',
+             }]), \
+             patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
+             patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+             patch('handlers.battle.get_player_effective_stats', return_value={
+                 'strength': 5, 'agility': 5, 'intuition': 5, 'vitality': 5, 'wisdom': 5, 'luck': 5,
+                 'max_hp': 100, 'max_mana': 50, 'physical_defense_bonus': 0, 'magic_defense_bonus': 0,
+                 'accuracy_bonus': 0, 'evasion_bonus': 0, 'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+             }), \
+             patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+             patch('handlers.battle.init_battle', return_value={'mob_id': 'forest_wolf', 'log': [], 'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50}), \
+             patch('handlers.battle.create_or_load_open_world_pve_encounter', return_value=('pve-enc-prep1', 'created')), \
+             patch('handlers.location.build_pve_encounter_detail_message', return_value=('detail', None)), \
+             patch('handlers.battle.ensure_runtime_for_battle') as runtime_mock, \
+             patch('handlers.battle.persist_solo_pve_encounter_state') as persist_mock, \
+             patch('handlers.battle.save_battle') as save_mock:
+            await battle_handler.start_battle(
+                update,
+                context,
+                mob_id='',
+                mob_first=False,
+                spawn_instance_id='spawn-dark_forest-forest_wolf',
+                open_runtime_now=False,
+            )
+
+        self.assertEqual(runtime_mock.call_count, 0)
+        self.assertEqual(persist_mock.call_count, 0)
+        self.assertEqual(save_mock.call_count, 0)
+        update.callback_query.edit_message_text.assert_awaited_once()
+
+    async def test_enter_path_blocks_stale_non_live_anchored_encounter(self):
+        update = _DummyUpdate('pve_enter_pve-enc-stale')
+        context = _DummyStartBattleContext()
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.get_open_world_pve_encounter_detail', return_value=None), \
+             patch('handlers.battle.ensure_runtime_for_battle') as runtime_mock:
+            await battle_handler.enter_open_world_pve_battle(update, context, 'pve-enc-stale')
+
+        self.assertEqual(runtime_mock.call_count, 0)
+        update.callback_query.answer.assert_awaited_once()
+        self.assertEqual(update.callback_query.edit_message_text.await_count, 0)
+
+    async def test_enter_path_still_works_for_valid_live_anchor_encounter(self):
+        update = _DummyUpdate('pve_enter_pve-enc-live')
+        context = _DummyStartBattleContext()
+        battle_state = {'pve_encounter_id': 'pve-enc-live', 'log': [], 'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50}
+        mob = {'id': 'forest_wolf', 'hp': 20}
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.get_open_world_pve_encounter_detail', return_value={
+                 'encounter_id': 'pve-enc-live',
+                 'status': 'active',
+                 'joinable': True,
+             }), \
+             patch('handlers.battle.load_active_pve_encounter', return_value=(battle_state, mob)), \
+             patch('handlers.battle.get_pve_encounter_player_ids', return_value=[88001]), \
+             patch('handlers.battle.ensure_runtime_for_battle') as runtime_mock, \
+             patch('handlers.battle.sync_projection_for_participant'), \
+             patch('handlers.battle.persist_solo_pve_encounter_state'), \
+             patch('handlers.battle.save_battle'), \
+             patch('handlers.battle.build_battle_message', return_value=('battle', None)):
+            await battle_handler.enter_open_world_pve_battle(update, context, 'pve-enc-live')
+
+        runtime_mock.assert_called_once()
+        update.callback_query.edit_message_text.assert_awaited_once()
+
+    async def test_enter_path_reports_no_encounter_if_runtime_lock_boundary_fails(self):
+        update = _DummyUpdate('pve_enter_pve-enc-live')
+        context = _DummyStartBattleContext()
+        battle_state = {'pve_encounter_id': 'pve-enc-live', 'log': [], 'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50}
+        mob = {'id': 'forest_wolf', 'hp': 20}
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.get_open_world_pve_encounter_detail', return_value={
+                 'encounter_id': 'pve-enc-live',
+                 'status': 'active',
+                 'joinable': True,
+             }), \
+             patch('handlers.battle.load_active_pve_encounter', return_value=(battle_state, mob)), \
+             patch('handlers.battle.get_pve_encounter_player_ids', return_value=[88001]), \
+             patch('handlers.battle.ensure_runtime_for_battle', side_effect=OpenWorldRuntimeStartBlocked('open_world_anchor_lock_failed')), \
+             patch('handlers.battle.save_battle') as save_mock:
+            await battle_handler.enter_open_world_pve_battle(update, context, 'pve-enc-live')
+
+        self.assertEqual(save_mock.call_count, 0)
+        update.callback_query.answer.assert_awaited_once()
+        self.assertEqual(update.callback_query.edit_message_text.await_count, 0)
+        self.assertNotIn('battle', context.user_data)
+        self.assertNotIn('battle_mob', context.user_data)
+
+    async def test_enter_path_blocks_when_player_moved_to_other_location(self):
+        update = _DummyUpdate('pve_enter_pve-enc-live')
+        context = _DummyStartBattleContext()
+        moved_player = self._player_row()
+        moved_player['location_id'] = 'village'
+        battle_state = {'pve_encounter_id': 'pve-enc-live', 'log': [], 'player_hp': 100, 'player_mana': 50, 'player_max_hp': 100, 'player_max_mana': 50}
+        mob = {'id': 'forest_wolf', 'hp': 20}
+        with patch('handlers.battle.get_player', return_value=moved_player), \
+             patch('handlers.battle.get_open_world_pve_encounter_detail', return_value={
+                 'encounter_id': 'pve-enc-live',
+                 'status': 'active',
+                 'joinable': True,
+                 'location_id': 'dark_forest',
+             }), \
+             patch('handlers.battle.load_active_pve_encounter', return_value=(battle_state, mob)), \
+             patch('handlers.battle.get_pve_encounter_player_ids', return_value=[88001]), \
+             patch('handlers.battle.ensure_runtime_for_battle') as runtime_mock:
+            await battle_handler.enter_open_world_pve_battle(update, context, 'pve-enc-live')
+
+        self.assertEqual(runtime_mock.call_count, 0)
+        self.assertNotIn('battle', context.user_data)
+        self.assertNotIn('battle_mob', context.user_data)
+        update.callback_query.answer.assert_awaited_once()
+        self.assertEqual(update.callback_query.edit_message_text.await_count, 0)
+
+    async def test_start_battle_clears_local_cache_when_runtime_start_blocked(self):
+        update = _DummyUpdate('fight_forest_wolf')
+        context = _DummyStartBattleContext()
+        with patch('handlers.battle.get_player', return_value=self._player_row()), \
+             patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
+             patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+             patch('handlers.battle.get_player_effective_stats', return_value={
+                 'strength': 5, 'agility': 5, 'intuition': 5, 'vitality': 5, 'wisdom': 5, 'luck': 5,
+                 'max_hp': 100, 'max_mana': 50, 'physical_defense_bonus': 0, 'magic_defense_bonus': 0,
+                 'accuracy_bonus': 0, 'evasion_bonus': 0, 'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+             }), \
+             patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+             patch('handlers.battle.init_battle', return_value={
+                 'mob_id': 'forest_wolf',
+                 'log': [],
+                 'player_hp': 100,
+                 'player_mana': 50,
+                 'player_max_hp': 100,
+                 'player_max_mana': 50,
+             }), \
+             patch('handlers.battle.create_or_load_open_world_pve_encounter', return_value=('pve-enc-live', 'created')), \
+             patch('handlers.battle.ensure_runtime_for_battle', side_effect=OpenWorldRuntimeStartBlocked('open_world_anchor_lock_failed')), \
+             patch('handlers.battle.persist_solo_pve_encounter_state') as persist_mock, \
+             patch('handlers.battle.save_battle') as save_mock:
+            await battle_handler.start_battle(update, context, 'forest_wolf', mob_first=False)
+
+        self.assertEqual(save_mock.call_count, 0)
+        self.assertEqual(persist_mock.call_count, 0)
+        self.assertNotIn('battle', context.user_data)
+        self.assertNotIn('battle_mob', context.user_data)
+        update.callback_query.answer.assert_awaited_once()
 
 
     async def test_fight_spawn_unavailable_rolls_back_aggro_prelock_via_normal_fight_path(self):

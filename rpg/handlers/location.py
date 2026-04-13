@@ -16,7 +16,9 @@ from game.gear_instances import grant_item_to_player
 from game.items_data import get_item
 from game.i18n import t, get_player_lang, get_mob_name, get_location_name, get_location_desc, get_item_name
 from game.pve_live import (
+    can_join_open_world_pve_encounter,
     get_open_world_pve_encounter_detail,
+    join_open_world_pve_encounter,
     list_location_active_pve_encounters,
     list_location_available_spawn_instances,
 )
@@ -156,14 +158,48 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         return t('location.pve_no_encounter', lang), InlineKeyboardMarkup([])
 
     mob_name = get_mob_name(str(detail.get('mob_id') or ''), lang)
+    status_key = 'location.pve_status_locked'
+    can_join, _ = can_join_open_world_pve_encounter(
+        encounter_id=encounter_id,
+        player_id=int(player['telegram_id']),
+    )
+    if bool(detail.get('joinable')):
+        status_key = 'location.pve_status_joinable' if can_join else 'location.pve_status_unavailable'
+    elif not bool(detail.get('joinable')):
+        status_key = 'location.pve_status_locked'
+
+    if not can_join:
+        is_participant = int(player['telegram_id']) in {
+            int(pid) for pid in detail.get('participant_player_ids', [])
+        } if isinstance(detail.get('participant_player_ids'), list) else False
+        if is_participant:
+            status_key = 'location.pve_status_already_joined'
+
     text = t(
         'location.pve_detail_header',
         lang,
         id=detail['encounter_id'],
         mob=mob_name,
         players=int(detail.get('participant_count', 0)),
+        join_state=t(status_key, lang),
     )
-    return text, InlineKeyboardMarkup([])
+    keyboard_rows: list[list[InlineKeyboardButton]] = []
+    participant_ids = {
+        int(pid) for pid in detail.get('participant_player_ids', [])
+    } if isinstance(detail.get('participant_player_ids'), list) else set()
+    is_participant = int(player['telegram_id']) in participant_ids
+
+    if can_join:
+        keyboard_rows.append([InlineKeyboardButton(
+            t('location.pve_join_btn', lang),
+            callback_data=f"pve_join_{detail['encounter_id']}",
+        )])
+    if is_participant:
+        keyboard_rows.append([InlineKeyboardButton(
+            t('location.pve_enter_btn', lang),
+            callback_data=f"pve_enter_{detail['encounter_id']}",
+        )])
+    return text, InlineKeyboardMarkup(keyboard_rows)
 
 
 def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
@@ -430,16 +466,31 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
             text += t('location.pve_encounters_title', lang) + '\n'
             for encounter in active_pve_encounters:
                 mob_id = str(encounter.get('mob_id') or '')
+                row_state_key = 'location.pve_status_locked'
+                if bool(encounter.get('joinable')):
+                    row_state_key = 'location.pve_status_joinable'
                 text += t(
                     'location.pve_encounter_row',
                     lang,
                     id=encounter['encounter_id'],
                     mob=get_mob_name(mob_id, lang),
+                    players=int(encounter.get('participant_count', 0)),
+                    join_state=t(row_state_key, lang),
                 ) + '\n'
-                keyboard.append([InlineKeyboardButton(
+                row_buttons = [InlineKeyboardButton(
                     t('location.pve_view_fight_btn', lang, id=encounter['encounter_id']),
                     callback_data=f"pve_view_{encounter['encounter_id']}",
-                )])
+                )]
+                can_join, _ = can_join_open_world_pve_encounter(
+                    encounter_id=str(encounter['encounter_id']),
+                    player_id=int(player['telegram_id']),
+                )
+                if can_join:
+                    row_buttons.append(InlineKeyboardButton(
+                        t('location.pve_join_btn', lang),
+                        callback_data=f"pve_join_{encounter['encounter_id']}",
+                    ))
+                keyboard.append(row_buttons)
             text += '\n'
 
         available_spawns = list_location_available_spawn_instances(location_id=location['id'])
@@ -720,6 +771,29 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(p), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
         await query.answer()
+        return
+
+    if data.startswith('pve_join_'):
+        encounter_id = data.replace('pve_join_', '', 1)
+        ok, reason = join_open_world_pve_encounter(encounter_id=encounter_id, player_id=int(user.id))
+        if ok:
+            await query.answer(t('location.pve_join_success', lang), show_alert=True)
+        else:
+            key_by_reason = {
+                'already_joined': 'location.pve_join_already',
+                'locked': 'location.pve_join_locked',
+                'wrong_location': 'location.pve_join_wrong_location',
+                'busy': 'location.pve_join_busy',
+            }
+            await query.answer(t(key_by_reason.get(reason, 'location.pve_join_blocked'), lang), show_alert=True)
+        detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(get_player(user.id)), encounter_id)
+        await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('pve_enter_'):
+        encounter_id = data.replace('pve_enter_', '', 1)
+        from handlers.battle import enter_open_world_pve_battle
+        await enter_open_world_pve_battle(update, context, encounter_id)
         return
 
     if data.startswith('pvp_join_'):
@@ -1053,7 +1127,14 @@ async def handle_combat_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     elif data.startswith('fight_spawn_'):
         spawn_instance_id = data.replace('fight_spawn_', '')
         from handlers.battle import start_battle
-        await start_battle(update, context, mob_id='', mob_first=False, spawn_instance_id=spawn_instance_id)
+        await start_battle(
+            update,
+            context,
+            mob_id='',
+            mob_first=False,
+            spawn_instance_id=spawn_instance_id,
+            open_runtime_now=False,
+        )
 
     elif data.startswith('fight_'):
         mob_id = data.replace('fight_', '')
