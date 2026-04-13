@@ -591,9 +591,6 @@ def open_world_runtime_start_mode(*, encounter_id: str) -> str:
     if not _table_exists(conn, 'pve_encounters'):
         conn.close()
         return 'non_anchored'
-    if not _table_exists(conn, 'pve_spawn_instances'):
-        conn.close()
-        return 'anchor_unavailable'
     encounter_row = conn.execute(
         '''
         SELECT anchor_spawn_instance_id
@@ -605,11 +602,17 @@ def open_world_runtime_start_mode(*, encounter_id: str) -> str:
     ).fetchone()
     if not encounter_row:
         conn.close()
-        return 'anchor_unavailable'
+        # Legacy/non-anchored handler paths can carry synthetic encounter ids
+        # that do not map to a real anchored world row. Treat these as normal
+        # fallback runtime starts instead of blocking open-world contract.
+        return 'non_anchored'
     anchor_spawn_instance_id = str(encounter_row['anchor_spawn_instance_id'] or '')
     if not anchor_spawn_instance_id:
         conn.close()
         return 'non_anchored'
+    if not _table_exists(conn, 'pve_spawn_instances'):
+        conn.close()
+        return 'anchor_unavailable'
 
     anchor_row = conn.execute(
         '''
