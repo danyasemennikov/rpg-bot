@@ -24,8 +24,11 @@ from game.pve_live import (
     ensure_location_pve_spawn_instances,
     finish_solo_pve_encounter,
     get_active_pve_encounter_id_for_player,
+    get_open_world_pve_encounter_detail,
+    OpenWorldRuntimeStartBlocked,
     ensure_runtime_for_battle,
     list_location_available_spawn_instances,
+    load_active_pve_encounter,
     get_pve_encounter_player_ids,
     load_active_solo_pve_encounter,
     mark_group_participant_defeated,
@@ -341,7 +344,14 @@ def build_battle_message(player, mob, battle_state, log):
 # НАЧАЛО БОЯ
 # ────────────────────────────────────────
 
-async def start_battle(update, context, mob_id: str, mob_first: bool = False, spawn_instance_id: str | None = None):
+async def start_battle(
+    update,
+    context,
+    mob_id: str,
+    mob_first: bool = False,
+    spawn_instance_id: str | None = None,
+    open_runtime_now: bool = True,
+):
     """Запускает бой — вызывается из location.py."""
     query = update.callback_query
     user  = query.from_user
@@ -505,10 +515,23 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False, sp
             )
             return
 
+    if not open_runtime_now:
+        from handlers.location import build_pve_encounter_detail_message
+        detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(p), str(encounter_id))
+        await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
     # Сохраняем состояние в context
     context.user_data['battle']     = battle_state
     context.user_data['battle_mob'] = mob
-    ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
+    try:
+        ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
+    except OpenWorldRuntimeStartBlocked:
+        context.user_data.pop('battle', None)
+        context.user_data.pop('battle_mob', None)
+        await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
+        return
     persist_solo_pve_encounter_state(
         encounter_id=str(battle_state.get('pve_encounter_id', '')),
         battle_state=battle_state,
@@ -519,6 +542,58 @@ async def start_battle(update, context, mob_id: str, mob_first: bool = False, sp
 
     text, keyboard = build_battle_message(p, mob, battle_state, battle_state.get('log', []))
     await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+
+
+async def enter_open_world_pve_battle(update, context, encounter_id: str) -> None:
+    query = update.callback_query
+    user = query.from_user
+    p = dict(get_player(user.id))
+    lang = p.get('lang', 'ru')
+
+    detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+    if not detail:
+        await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
+        return
+
+    restored = load_active_pve_encounter(encounter_id=encounter_id)
+    if not restored:
+        await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
+        return
+    battle_state, mob = restored
+
+    roster = get_pve_encounter_player_ids(encounter_id=encounter_id)
+    if int(user.id) not in roster:
+        await query.answer(t('location.pve_join_blocked', lang), show_alert=True)
+        return
+    encounter_location_id = str(detail.get('location_id') or '')
+    player_location_id = str(p.get('location_id') or '')
+    if encounter_location_id and player_location_id and encounter_location_id != player_location_id:
+        context.user_data.pop('battle', None)
+        context.user_data.pop('battle_mob', None)
+        await query.answer(t('location.pve_enter_wrong_location', lang), show_alert=True)
+        return
+
+    battle_state['pve_encounter_id'] = str(encounter_id)
+    context.user_data['battle'] = battle_state
+    context.user_data['battle_mob'] = mob
+    try:
+        ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
+    except OpenWorldRuntimeStartBlocked:
+        context.user_data.pop('battle', None)
+        context.user_data.pop('battle_mob', None)
+        await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
+        return
+    sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+    persist_solo_pve_encounter_state(
+        encounter_id=str(battle_state.get('pve_encounter_id', '')),
+        battle_state=battle_state,
+        mob=mob,
+    )
+    save_battle(user.id)
+
+    text, keyboard = build_battle_message(p, mob, battle_state, battle_state.get('log', []))
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await query.answer()
 
 # ────────────────────────────────────────
 # КНОПКИ В БОЮ

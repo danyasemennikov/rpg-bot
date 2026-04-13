@@ -34,6 +34,10 @@ DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS = 30
 _SOLO_PVE_RUNTIME_STORE = LiveCombatRuntimeStore()
 _SOLO_PVE_RUNTIME = LiveCombatRuntime(_SOLO_PVE_RUNTIME_STORE)
 
+
+class OpenWorldRuntimeStartBlocked(RuntimeError):
+    """First anchored open-world runtime start cannot proceed without atomic lock."""
+
 PARTICIPANT_COMBAT_SNAPSHOT_FIELDS = (
     'player_hp',
     'player_mana',
@@ -260,7 +264,7 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
     conn = get_connection()
     rows = conn.execute(
         '''
-        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id
+        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state
         FROM pve_encounters e
         JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
         WHERE e.status='active'
@@ -272,19 +276,37 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
         ''',
         (location_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
     ).fetchall()
+    encounters: list[dict] = []
+    for row in rows:
+        encounter = dict(row)
+        participant_count = conn.execute(
+            '''
+            SELECT COUNT(*) AS total
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND status='active' AND side_id=?
+            ''',
+            (encounter['encounter_id'], SIDE_PLAYER),
+        ).fetchone()
+        encounter['participant_count'] = int(participant_count['total']) if participant_count else 0
+        encounter['joinable'] = str(encounter.get('spawn_state') or '') == SPAWN_STATE_FORMING
+        encounters.append(encounter)
     conn.close()
-    return [dict(row) for row in rows]
+    return encounters
 
 
 def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     if not encounter_id:
         return None
-    _ensure_pve_encounter_table()
-    _ensure_world_spawn_table()
     conn = get_connection()
+    if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
+        conn.close()
+        return None
+    if not _table_exists(conn, 'pve_encounter_participants'):
+        conn.close()
+        return None
     encounter_row = conn.execute(
         '''
-        SELECT e.encounter_id, e.status, e.mob_id, e.location_id, e.anchor_spawn_instance_id
+        SELECT e.encounter_id, e.status, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state
         FROM pve_encounters e
         JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
         WHERE e.encounter_id=?
@@ -307,10 +329,309 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
         ''',
         (encounter_id, SIDE_PLAYER),
     ).fetchone()
+    participant_rows = conn.execute(
+        '''
+        SELECT player_id
+        FROM pve_encounter_participants
+        WHERE encounter_id=? AND status='active' AND side_id=?
+        ORDER BY joined_at ASC, player_id ASC
+        ''',
+        (encounter_id, SIDE_PLAYER),
+    ).fetchall()
     conn.close()
     detail = dict(encounter_row)
     detail['participant_count'] = int(participant_count['total']) if participant_count else 0
+    detail['participant_player_ids'] = [int(row['player_id']) for row in participant_rows]
+    detail['joinable'] = str(detail.get('spawn_state') or '') == SPAWN_STATE_FORMING
     return detail
+
+
+def can_join_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tuple[bool, str]:
+    if not encounter_id:
+        return False, 'not_found'
+
+    conn = get_connection()
+    if not _table_exists(conn, 'players'):
+        conn.close()
+        return False, 'not_found'
+    if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
+        conn.close()
+        return False, 'not_found'
+    if not _table_exists(conn, 'pve_encounter_participants'):
+        conn.close()
+        return False, 'not_found'
+    player_row = conn.execute(
+        'SELECT telegram_id, location_id, in_battle FROM players WHERE telegram_id=? LIMIT 1',
+        (int(player_id),),
+    ).fetchone()
+    if not player_row:
+        conn.close()
+        return False, 'not_found'
+
+    encounter_row = conn.execute(
+        '''
+        SELECT e.encounter_id, e.location_id, s.state AS spawn_state
+        FROM pve_encounters e
+        JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+        WHERE e.encounter_id=?
+          AND e.status='active'
+          AND e.anchor_spawn_instance_id IS NOT NULL
+          AND s.linked_encounter_id = e.encounter_id
+          AND s.state IN (?, ?)
+        LIMIT 1
+        ''',
+        (encounter_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
+    ).fetchone()
+    if not encounter_row:
+        conn.close()
+        return False, 'not_found'
+
+    if str(encounter_row['spawn_state']) != SPAWN_STATE_FORMING:
+        conn.close()
+        return False, 'locked'
+
+    if str(player_row['location_id'] or '') != str(encounter_row['location_id'] or ''):
+        conn.close()
+        return False, 'wrong_location'
+
+    already_joined = conn.execute(
+        '''
+        SELECT 1
+        FROM pve_encounter_participants
+        WHERE encounter_id=? AND player_id=? AND status='active'
+        LIMIT 1
+        ''',
+        (encounter_id, int(player_id)),
+    ).fetchone()
+    if already_joined:
+        conn.close()
+        return False, 'already_joined'
+
+    active_row = conn.execute(
+        '''
+        SELECT e.encounter_id
+        FROM pve_encounters e
+        JOIN pve_encounter_participants p ON p.encounter_id = e.encounter_id
+        WHERE p.player_id=? AND p.status='active' AND e.status='active'
+        ORDER BY e.created_at DESC
+        LIMIT 1
+        ''',
+        (int(player_id),),
+    ).fetchone()
+    active_encounter = str(active_row['encounter_id']) if active_row else None
+    if active_encounter and str(active_encounter) != str(encounter_id):
+        conn.close()
+        return False, 'busy'
+
+    if int(player_row['in_battle'] or 0) == 1 and not active_encounter:
+        conn.close()
+        return False, 'busy'
+
+    conn.close()
+    return True, 'ok'
+
+
+def join_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tuple[bool, str]:
+    conn = get_connection()
+    try:
+        if not _table_exists(conn, 'players'):
+            return False, 'not_found'
+        if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
+            return False, 'not_found'
+        if not _table_exists(conn, 'pve_encounter_participants'):
+            return False, 'not_found'
+        conn.execute('BEGIN IMMEDIATE')
+        player_row = conn.execute(
+            'SELECT telegram_id, location_id, in_battle FROM players WHERE telegram_id=? LIMIT 1',
+            (int(player_id),),
+        ).fetchone()
+        if not player_row:
+            conn.rollback()
+            return False, 'not_found'
+
+        encounter_row = conn.execute(
+            '''
+            SELECT e.encounter_id, e.location_id, s.state AS spawn_state
+            FROM pve_encounters e
+            JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+            WHERE e.encounter_id=?
+              AND e.status='active'
+              AND e.anchor_spawn_instance_id IS NOT NULL
+              AND s.linked_encounter_id = e.encounter_id
+              AND s.state IN (?, ?)
+            LIMIT 1
+            ''',
+            (encounter_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
+        ).fetchone()
+        if not encounter_row:
+            conn.rollback()
+            return False, 'not_found'
+        if str(encounter_row['spawn_state']) != SPAWN_STATE_FORMING:
+            conn.rollback()
+            return False, 'locked'
+        if str(player_row['location_id'] or '') != str(encounter_row['location_id'] or ''):
+            conn.rollback()
+            return False, 'wrong_location'
+
+        already_joined = conn.execute(
+            '''
+            SELECT 1
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND player_id=? AND status='active'
+            LIMIT 1
+            ''',
+            (encounter_id, int(player_id)),
+        ).fetchone()
+        if already_joined:
+            conn.rollback()
+            return False, 'already_joined'
+
+        active_row = conn.execute(
+            '''
+            SELECT e.encounter_id
+            FROM pve_encounters e
+            JOIN pve_encounter_participants p ON p.encounter_id = e.encounter_id
+            WHERE p.player_id=? AND p.status='active' AND e.status='active'
+            ORDER BY e.created_at DESC
+            LIMIT 1
+            ''',
+            (int(player_id),),
+        ).fetchone()
+        active_encounter = str(active_row['encounter_id']) if active_row else None
+        if active_encounter and str(active_encounter) != str(encounter_id):
+            conn.rollback()
+            return False, 'busy'
+
+        if int(player_row['in_battle'] or 0) == 1 and not active_encounter:
+            conn.rollback()
+            return False, 'busy'
+
+        conn.execute(
+            '''
+            INSERT INTO pve_encounter_participants (encounter_id, player_id, side_id, status)
+            VALUES (?, ?, ?, 'active')
+            ''',
+            (encounter_id, int(player_id), SIDE_PLAYER),
+        )
+        conn.commit()
+        return True, 'joined'
+    finally:
+        conn.close()
+
+
+def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[int] | None:
+    """
+    Atomically finalize forming open-world encounter roster and lock spawn state.
+    Returns locked final roster when FORMING->ACTIVE transition is performed.
+    Returns None when encounter is not in joinable FORMING anchor-live state.
+    """
+    if not encounter_id:
+        return None
+    conn = get_connection()
+    try:
+        if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
+            return None
+        conn.execute('BEGIN IMMEDIATE')
+        if not _table_exists(conn, 'pve_encounter_participants'):
+            conn.rollback()
+            return None
+        anchor_row = conn.execute(
+            '''
+            SELECT s.spawn_instance_id
+            FROM pve_encounters e
+            JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+            WHERE e.encounter_id=?
+              AND e.status='active'
+              AND e.anchor_spawn_instance_id IS NOT NULL
+              AND s.linked_encounter_id = e.encounter_id
+              AND s.state=?
+            LIMIT 1
+            ''',
+            (encounter_id, SPAWN_STATE_FORMING),
+        ).fetchone()
+        if not anchor_row:
+            conn.rollback()
+            return None
+
+        roster_rows = conn.execute(
+            '''
+            SELECT player_id
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND status='active' AND side_id=?
+            ORDER BY joined_at ASC, player_id ASC
+            ''',
+            (encounter_id, SIDE_PLAYER),
+        ).fetchall()
+        final_roster = [int(row['player_id']) for row in roster_rows]
+
+        updated = conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET state=?, updated_at=CURRENT_TIMESTAMP
+            WHERE spawn_instance_id=?
+              AND linked_encounter_id=?
+              AND state=?
+            ''',
+            (SPAWN_STATE_ACTIVE, str(anchor_row['spawn_instance_id']), encounter_id, SPAWN_STATE_FORMING),
+        ).rowcount
+        if updated <= 0:
+            conn.rollback()
+            return None
+
+        conn.commit()
+        return final_roster
+    finally:
+        conn.close()
+
+
+def open_world_runtime_start_mode(*, encounter_id: str) -> str:
+    if not encounter_id:
+        return 'non_anchored'
+    conn = get_connection()
+    if not _table_exists(conn, 'pve_encounters'):
+        conn.close()
+        return 'non_anchored'
+    if not _table_exists(conn, 'pve_spawn_instances'):
+        conn.close()
+        return 'anchor_unavailable'
+    encounter_row = conn.execute(
+        '''
+        SELECT anchor_spawn_instance_id
+        FROM pve_encounters
+        WHERE encounter_id=? AND status='active'
+        LIMIT 1
+        ''',
+        (encounter_id,),
+    ).fetchone()
+    if not encounter_row:
+        conn.close()
+        return 'anchor_unavailable'
+    anchor_spawn_instance_id = str(encounter_row['anchor_spawn_instance_id'] or '')
+    if not anchor_spawn_instance_id:
+        conn.close()
+        return 'non_anchored'
+
+    anchor_row = conn.execute(
+        '''
+        SELECT state, linked_encounter_id
+        FROM pve_spawn_instances
+        WHERE spawn_instance_id=?
+        LIMIT 1
+        ''',
+        (anchor_spawn_instance_id,),
+    ).fetchone()
+    conn.close()
+    if not anchor_row:
+        return 'anchor_unavailable'
+    if str(anchor_row['linked_encounter_id'] or '') != str(encounter_id):
+        return 'anchor_unavailable'
+
+    spawn_state = str(anchor_row['state'] or '')
+    if spawn_state == SPAWN_STATE_FORMING:
+        return 'forming_lock_required'
+    if spawn_state == SPAWN_STATE_ACTIVE:
+        return 'active_resume'
+    return 'anchor_unavailable'
 
 
 def _claim_spawn_instance_for_encounter(
@@ -687,7 +1008,6 @@ def create_or_load_open_world_pve_encounter(
         )
         raise
 
-    _set_spawn_instance_state_for_encounter(encounter_id=encounter_id, state=SPAWN_STATE_ACTIVE)
     return encounter_id, 'created'
 
 
@@ -1176,6 +1496,16 @@ def ensure_runtime_for_battle(
         runtime_state = None
 
     if runtime_state is None:
+        start_mode = open_world_runtime_start_mode(encounter_id=encounter_id)
+        if start_mode == 'forming_lock_required':
+            locked_roster = lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
+            if locked_roster is None:
+                raise OpenWorldRuntimeStartBlocked('open_world_anchor_lock_failed')
+            side_a_players = locked_roster
+        elif start_mode == 'anchor_unavailable':
+            raise OpenWorldRuntimeStartBlocked('open_world_anchor_unavailable')
+        # start_mode == active_resume | non_anchored: no extra lock step required.
+
         runtime_state = _SOLO_PVE_RUNTIME.create_encounter(
             encounter_id=encounter_id,
             side_a_participants=side_a_players,
