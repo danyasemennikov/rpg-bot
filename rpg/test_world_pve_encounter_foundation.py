@@ -405,6 +405,24 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             runtime = ensure_runtime_for_battle(player_id=self.player_id, battle_state=battle_state, mob={'id': 'forest_wolf', 'hp': 20})
         self.assertIsNotNone(runtime)
 
+    def test_missing_active_encounter_row_with_local_encounter_id_falls_back_to_non_anchored_runtime(self):
+        battle_state = {
+            'pve_encounter_id': 'local-test-encounter',
+            'mob_id': 'forest_wolf',
+            'log': [],
+            'player_hp': 120,
+            'player_mana': 50,
+            'player_max_hp': 120,
+            'player_max_mana': 50,
+        }
+        runtime = ensure_runtime_for_battle(
+            player_id=self.player_id,
+            battle_state=battle_state,
+            mob={'id': 'forest_wolf', 'hp': 20},
+        )
+        self.assertIsNotNone(runtime)
+        self.assertEqual(runtime.encounter_id, 'local-test-encounter')
+
     def test_anchored_active_resume_allows_runtime_recreation_without_lock_step(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
             owner_player_id=self.player_id,
