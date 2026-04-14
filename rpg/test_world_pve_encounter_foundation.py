@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from database import get_connection
 import game.pve_live as pve_live_module
 from game.pve_live import (
+    FORMING_ENCOUNTER_TTL_SECONDS,
     OpenWorldRuntimeStartBlocked,
     can_join_open_world_pve_encounter,
     create_or_load_open_world_pve_encounter,
@@ -299,6 +300,296 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertEqual(status, 'created')
         self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (True, 'joined'))
         self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'already_joined'))
+
+    def test_forming_encounter_expires_and_disappears_from_location_projection(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
+        )
+        conn.commit()
+        conn.close()
+
+        active_rows = list_location_active_pve_encounters(location_id=self.location_id)
+        self.assertFalse(any(row['encounter_id'] == encounter_id for row in active_rows))
+        self.assertIsNone(get_open_world_pve_encounter_detail(encounter_id=encounter_id))
+
+    def test_expired_forming_encounter_releases_spawn_and_marks_terminal_status(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
+        )
+        conn.commit()
+        conn.close()
+
+        self.assertEqual(can_join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'not_found'))
+
+        conn = get_connection()
+        encounter_row = conn.execute(
+            'SELECT status, finished_at FROM pve_encounters WHERE encounter_id=?',
+            (encounter_id,),
+        ).fetchone()
+        spawn_row = conn.execute(
+            '''
+            SELECT state, linked_encounter_id, respawn_available_at
+            FROM pve_spawn_instances
+            WHERE spawn_instance_id=?
+            ''',
+            (f'spawn-{self.location_id}-forest_wolf',),
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(encounter_row)
+        self.assertEqual(encounter_row['status'], 'expired')
+        self.assertIsNotNone(encounter_row['finished_at'])
+        self.assertIsNotNone(spawn_row)
+        self.assertEqual(spawn_row['state'], 'idle')
+        self.assertIsNone(spawn_row['linked_encounter_id'])
+        self.assertIsNone(spawn_row['respawn_available_at'])
+        available = list_location_available_spawn_instances(location_id=self.location_id)
+        self.assertTrue(any(spawn['mob_id'] == 'forest_wolf' for spawn in available))
+
+    def test_join_leave_enter_are_honestly_blocked_for_expired_forming_encounter(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (True, 'joined'))
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
+        )
+        conn.commit()
+        conn.close()
+
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player3_id), (False, 'not_found'))
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'not_found'))
+        self.assertEqual(open_world_runtime_start_mode(encounter_id=encounter_id), 'non_anchored')
+        self.assertIsNone(lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id))
+
+    def test_expired_forming_encounter_is_pruned_even_when_joiner_moved_to_other_location(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
+        )
+        conn.execute(
+            'UPDATE players SET location_id=? WHERE telegram_id=?',
+            ('village', self.player2_id),
+        )
+        conn.commit()
+        conn.close()
+
+        self.assertEqual(can_join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'not_found'))
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'not_found'))
+
+        conn = get_connection()
+        encounter_row = conn.execute(
+            'SELECT status FROM pve_encounters WHERE encounter_id=?',
+            (encounter_id,),
+        ).fetchone()
+        spawn_row = conn.execute(
+            'SELECT state, linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id=?',
+            (f'spawn-{self.location_id}-forest_wolf',),
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(encounter_row)
+        self.assertEqual(encounter_row['status'], 'expired')
+        self.assertIsNotNone(spawn_row)
+        self.assertEqual(spawn_row['state'], 'idle')
+        self.assertIsNone(spawn_row['linked_encounter_id'])
+
+    def test_non_expired_forming_wrong_location_still_returns_wrong_location(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            'UPDATE players SET location_id=? WHERE telegram_id=?',
+            ('village', self.player2_id),
+        )
+        conn.commit()
+        conn.close()
+
+        self.assertEqual(can_join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'wrong_location'))
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'wrong_location'))
+
+    def test_direct_join_path_persists_expiry_cleanup_after_not_found(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
+        )
+        conn.commit()
+        conn.close()
+
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'not_found'))
+
+        conn = get_connection()
+        encounter_row = conn.execute(
+            'SELECT status FROM pve_encounters WHERE encounter_id=?',
+            (encounter_id,),
+        ).fetchone()
+        spawn_row = conn.execute(
+            'SELECT state, linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id=?',
+            (f'spawn-{self.location_id}-forest_wolf',),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(encounter_row['status'], 'expired')
+        self.assertEqual(spawn_row['state'], 'idle')
+        self.assertIsNone(spawn_row['linked_encounter_id'])
+
+    def test_direct_leave_path_persists_expiry_cleanup_after_not_found(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
+        )
+        conn.commit()
+        conn.close()
+
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player_id), (False, 'not_found'))
+
+        conn = get_connection()
+        encounter_row = conn.execute(
+            'SELECT status FROM pve_encounters WHERE encounter_id=?',
+            (encounter_id,),
+        ).fetchone()
+        spawn_row = conn.execute(
+            'SELECT state, linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id=?',
+            (f'spawn-{self.location_id}-forest_wolf',),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(encounter_row['status'], 'expired')
+        self.assertEqual(spawn_row['state'], 'idle')
+        self.assertIsNone(spawn_row['linked_encounter_id'])
+
+    def test_direct_lock_path_persists_expiry_cleanup_after_none(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
+        )
+        conn.commit()
+        conn.close()
+
+        self.assertIsNone(lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id))
+
+        conn = get_connection()
+        encounter_row = conn.execute(
+            'SELECT status FROM pve_encounters WHERE encounter_id=?',
+            (encounter_id,),
+        ).fetchone()
+        spawn_row = conn.execute(
+            'SELECT state, linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id=?',
+            (f'spawn-{self.location_id}-forest_wolf',),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(encounter_row['status'], 'expired')
+        self.assertEqual(spawn_row['state'], 'idle')
+        self.assertIsNone(spawn_row['linked_encounter_id'])
 
     def test_joined_player_can_leave_before_lock(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
