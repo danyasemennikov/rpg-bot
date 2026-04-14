@@ -12,6 +12,7 @@ from game.pve_live import (
     get_active_pve_encounter_id_for_player,
     get_open_world_pve_encounter_detail,
     join_open_world_pve_encounter,
+    leave_open_world_pve_encounter,
     lock_open_world_pve_roster_for_runtime_start,
     list_location_active_pve_encounters,
     list_location_available_spawn_instances,
@@ -255,6 +256,15 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         detail_callbacks = [btn.callback_data for row in detail_keyboard.inline_keyboard for btn in row]
         self.assertIn(f'pve_join_{encounter_id}', detail_callbacks)
         self.assertIn('State: joinable', detail_text)
+        self.assertIn('Any joined participant can press', detail_text)
+
+        joined_player = dict(player)
+        joined_player['telegram_id'] = self.player_id
+        owner_detail_text, owner_detail_keyboard = build_pve_encounter_detail_message(joined_player, encounter_id)
+        owner_callbacks = [btn.callback_data for row in owner_detail_keyboard.inline_keyboard for btn in row]
+        self.assertIn(f'pve_leave_{encounter_id}', owner_callbacks)
+        self.assertIn(f'pve_enter_{encounter_id}', owner_callbacks)
+        self.assertIn('already joined', owner_detail_text)
 
     def test_second_player_can_join_before_lock_and_roster_reaches_runtime(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
@@ -289,6 +299,111 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertEqual(status, 'created')
         self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (True, 'joined'))
         self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'already_joined'))
+
+    def test_joined_player_can_leave_before_lock(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (True, 'joined'))
+
+        left, reason = leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id)
+        self.assertTrue(left)
+        self.assertEqual(reason, 'left')
+        self.assertEqual(get_pve_encounter_player_ids(encounter_id=encounter_id), [self.player_id])
+
+    def test_same_player_cannot_leave_twice(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (True, 'joined'))
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (True, 'left'))
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (False, 'not_joined'))
+
+    def test_creator_can_leave_while_other_participants_keep_forming_encounter_alive(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+        self.assertEqual(join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id), (True, 'joined'))
+
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player_id), (True, 'left'))
+        self.assertEqual(get_pve_encounter_player_ids(encounter_id=encounter_id), [self.player2_id])
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        self.assertIsNotNone(detail)
+        self.assertTrue(detail['joinable'])
+
+    def test_last_participant_leave_collapses_forming_encounter_and_releases_spawn(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+        left, reason = leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player_id)
+        self.assertTrue(left)
+        self.assertEqual(reason, 'left_collapsed')
+
+        self.assertIsNone(get_open_world_pve_encounter_detail(encounter_id=encounter_id))
+        active_rows = list_location_active_pve_encounters(location_id=self.location_id)
+        self.assertFalse(any(row['encounter_id'] == encounter_id for row in active_rows))
+        available = list_location_available_spawn_instances(location_id=self.location_id)
+        self.assertTrue(any(spawn['mob_id'] == 'forest_wolf' for spawn in available))
+
+    def test_leave_is_blocked_after_lock_or_start(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': [], 'player_hp': 120, 'player_mana': 50, 'player_max_hp': 120, 'player_max_mana': 50},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+        self.assertEqual(lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id), [self.player_id])
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player_id), (False, 'locked'))
+
+    def test_stale_leave_on_missing_or_non_live_anchor_is_blocked(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+        )
+        self.assertEqual(status, 'created')
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET linked_encounter_id=NULL, state='respawning'
+            WHERE spawn_instance_id=?
+            ''',
+            (f'spawn-{self.location_id}-forest_wolf',),
+        )
+        conn.commit()
+        conn.close()
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player_id), (False, 'not_found'))
 
     def test_player_cannot_join_after_lock_start(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
