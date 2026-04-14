@@ -12,7 +12,13 @@ from telegram.ext import (
 from database import init_db
 from handlers.start    import start_command, handle_name_input, handle_stat_buttons
 from handlers.profile  import help_command, profile_command, stats_command, handle_stats_buttons, unstuck_command, main_keyboard
-from handlers.location import location_command, pvp_command, handle_location_buttons, handle_combat_buttons
+from handlers.location import (
+    location_command,
+    pvp_command,
+    handle_location_buttons,
+    handle_combat_buttons,
+    handle_location_action_text,
+)
 from handlers.battle   import handle_battle_buttons
 from handlers.inventory import inventory_command, handle_inventory_buttons, handle_transfer_input
 from handlers.skills_ui import skills_command, handle_skills_buttons
@@ -46,6 +52,8 @@ async def pvp_tick(context):
 
 async def handle_text(update, context):
     """Роутер текстовых сообщений."""
+    if await handle_location_action_text(update, context):
+        return
     if await handle_transfer_input(update, context):
         return
     await handle_name_input(update, context)
