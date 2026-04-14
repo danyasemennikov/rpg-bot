@@ -195,7 +195,8 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertIn('Active PvE encounters', text)
         self.assertIn(encounter_id, text)
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertIn(f'pve_view_{encounter_id}', callbacks)
+        self.assertEqual(callbacks, ['gather'])
+        self.assertIn('pe1 view', text)
         self.assertNotIn(f'fight_spawn_spawn-{self.location_id}-forest_wolf', callbacks)
 
     def test_encounter_detail_round_trip_contains_anchor(self):
@@ -250,7 +251,8 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             text, keyboard = build_location_message(player, location, pvp_only_view=False)
 
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertIn(f'pve_join_{encounter_id}', callbacks)
+        self.assertEqual(callbacks, ['gather'])
+        self.assertIn('pe1 join', text)
         self.assertIn('joinable', text)
 
         detail_text, detail_keyboard = build_pve_encounter_detail_message(player, encounter_id)
@@ -287,6 +289,36 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         battle_state = {'pve_encounter_id': encounter_id, 'mob_id': 'forest_wolf', 'log': [], 'player_hp': 120, 'player_mana': 50, 'player_max_hp': 120, 'player_max_mana': 50}
         runtime = ensure_runtime_for_battle(player_id=self.player_id, battle_state=battle_state, mob={'id': 'forest_wolf', 'hp': 20})
         self.assertEqual(runtime.sides['side_a'].participant_order, [self.player_id, self.player2_id])
+
+    def test_location_keyboard_keeps_only_gather_and_navigation(self):
+        player = {
+            'telegram_id': self.player_id,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {'id': self.location_id, 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': ['forest_wolf'], 'services': ['shop']}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[{'id': 'village', 'safe': True, 'level_min': 1}]),
+            patch('handlers.location.get_location_name', side_effect=lambda loc_id, _lang: loc_id.title()),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[Mock(item_id='herb_common')]),
+            patch('handlers.location.get_item_name', return_value='Herb'),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            _text, keyboard = build_location_message(player, location, pvp_only_view=False)
+
+        callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
+        self.assertEqual(callbacks, ['gather', 'goto_village'])
 
     def test_same_player_cannot_join_twice(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
