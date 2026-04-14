@@ -30,6 +30,7 @@ SPAWN_STATE_FORMING = 'forming'
 SPAWN_STATE_ACTIVE = 'active'
 SPAWN_STATE_RESPAWNING = 'respawning'
 DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS = 30
+FORMING_ENCOUNTER_TTL_SECONDS = 90
 
 _SOLO_PVE_RUNTIME_STORE = LiveCombatRuntimeStore()
 _SOLO_PVE_RUNTIME = LiveCombatRuntime(_SOLO_PVE_RUNTIME_STORE)
@@ -258,10 +259,85 @@ def list_location_available_spawn_instances(*, location_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def _prune_expired_forming_encounters(
+    conn,
+    *,
+    location_id: str | None = None,
+    encounter_id: str | None = None,
+) -> list[str]:
+    if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
+        return []
+
+    filters = [
+        "e.status='active'",
+        "e.anchor_spawn_instance_id IS NOT NULL",
+        "s.linked_encounter_id = e.encounter_id",
+        "s.state=?",
+        "e.created_at <= datetime('now', ?)",
+    ]
+    params: list[object] = [
+        SPAWN_STATE_FORMING,
+        f'-{FORMING_ENCOUNTER_TTL_SECONDS} seconds',
+    ]
+    if location_id:
+        filters.append('e.location_id=?')
+        params.append(str(location_id))
+    if encounter_id:
+        filters.append('e.encounter_id=?')
+        params.append(str(encounter_id))
+
+    rows = conn.execute(
+        f'''
+        SELECT e.encounter_id
+        FROM pve_encounters e
+        JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+        WHERE {' AND '.join(filters)}
+        ''',
+        tuple(params),
+    ).fetchall()
+    expired_ids = [str(row['encounter_id']) for row in rows]
+    if not expired_ids:
+        return []
+
+    placeholders = ','.join('?' for _ in expired_ids)
+    conn.execute(
+        f'''
+        UPDATE pve_encounters
+        SET status='expired', updated_at=CURRENT_TIMESTAMP, finished_at=CURRENT_TIMESTAMP
+        WHERE encounter_id IN ({placeholders})
+          AND status='active'
+        ''',
+        tuple(expired_ids),
+    )
+    if _table_exists(conn, 'pve_encounter_participants'):
+        conn.execute(
+            f'''
+            UPDATE pve_encounter_participants
+            SET status='expired', updated_at=CURRENT_TIMESTAMP
+            WHERE encounter_id IN ({placeholders})
+              AND status='active'
+            ''',
+            tuple(expired_ids),
+        )
+    conn.execute(
+        f'''
+        UPDATE pve_spawn_instances
+        SET state=?, linked_encounter_id=NULL, respawn_available_at=NULL, updated_at=CURRENT_TIMESTAMP
+        WHERE linked_encounter_id IN ({placeholders})
+          AND state=?
+        ''',
+        (SPAWN_STATE_IDLE, *expired_ids, SPAWN_STATE_FORMING),
+    )
+    return expired_ids
+
+
 def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
     _ensure_pve_encounter_table()
     ensure_location_pve_spawn_instances(location_id=location_id)
     conn = get_connection()
+    expired_ids = _prune_expired_forming_encounters(conn, location_id=location_id)
+    if expired_ids:
+        conn.commit()
     rows = conn.execute(
         '''
         SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state
@@ -314,6 +390,9 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     if not _table_exists(conn, 'pve_encounter_participants'):
         conn.close()
         return None
+    expired_ids = _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
+    if expired_ids:
+        conn.commit()
     encounter_row = conn.execute(
         '''
         SELECT e.encounter_id, e.status, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state
@@ -377,6 +456,12 @@ def can_join_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> t
     if not player_row:
         conn.close()
         return False, 'not_found'
+    expired_ids = _prune_expired_forming_encounters(
+        conn,
+        encounter_id=encounter_id,
+    )
+    if expired_ids:
+        conn.commit()
 
     encounter_row = conn.execute(
         '''
@@ -457,6 +542,10 @@ def join_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tuple
         ).fetchone()
         if not player_row:
             conn.rollback()
+            return False, 'not_found'
+        expired_ids = _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
+        if expired_ids:
+            conn.commit()
             return False, 'not_found'
 
         encounter_row = conn.execute(
@@ -540,6 +629,10 @@ def leave_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tupl
         if not _table_exists(conn, 'pve_encounter_participants'):
             return False, 'not_found'
         conn.execute('BEGIN IMMEDIATE')
+        expired_ids = _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
+        if expired_ids:
+            conn.commit()
+            return False, 'not_found'
         encounter_row = conn.execute(
             '''
             SELECT e.encounter_id, s.state AS spawn_state
@@ -634,6 +727,10 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
         if not _table_exists(conn, 'pve_encounter_participants'):
             conn.rollback()
             return None
+        expired_ids = _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
+        if expired_ids:
+            conn.commit()
+            return None
         anchor_row = conn.execute(
             '''
             SELECT s.spawn_instance_id
@@ -690,6 +787,9 @@ def open_world_runtime_start_mode(*, encounter_id: str) -> str:
     if not _table_exists(conn, 'pve_encounters'):
         conn.close()
         return 'non_anchored'
+    expired_ids = _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
+    if expired_ids:
+        conn.commit()
     encounter_row = conn.execute(
         '''
         SELECT anchor_spawn_instance_id
