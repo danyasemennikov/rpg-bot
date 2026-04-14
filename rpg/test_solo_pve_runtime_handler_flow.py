@@ -212,6 +212,20 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
         update.callback_query.answer.assert_awaited_once()
         self.assertEqual(update.callback_query.edit_message_text.await_count, 0)
 
+    async def test_leave_callback_uses_leave_flow_and_refreshes_detail(self):
+        update = _DummyUpdate('pve_leave_pve-enc-live')
+        context = _DummyStartBattleContext()
+        with patch('handlers.location.get_player', return_value={'telegram_id': 88001, 'lang': 'en', 'in_battle': 0}), \
+             patch('handlers.location.has_active_live_pvp_engagement', return_value=False), \
+             patch('handlers.location.leave_open_world_pve_encounter', return_value=(True, 'left_collapsed')) as leave_mock, \
+             patch('handlers.location.build_pve_encounter_detail_message', return_value=('detail', None)):
+            from handlers.location import handle_location_buttons
+            await handle_location_buttons(update, context)
+
+        leave_mock.assert_called_once_with(encounter_id='pve-enc-live', player_id=88001)
+        update.callback_query.answer.assert_awaited_once()
+        update.callback_query.edit_message_text.assert_awaited_once()
+
     async def test_start_battle_clears_local_cache_when_runtime_start_blocked(self):
         update = _DummyUpdate('fight_forest_wolf')
         context = _DummyStartBattleContext()

@@ -287,7 +287,17 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
             ''',
             (encounter['encounter_id'], SIDE_PLAYER),
         ).fetchone()
+        participant_rows = conn.execute(
+            '''
+            SELECT player_id
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND status='active' AND side_id=?
+            ORDER BY joined_at ASC, player_id ASC
+            ''',
+            (encounter['encounter_id'], SIDE_PLAYER),
+        ).fetchall()
         encounter['participant_count'] = int(participant_count['total']) if participant_count else 0
+        encounter['participant_player_ids'] = [int(participant['player_id']) for participant in participant_rows]
         encounter['joinable'] = str(encounter.get('spawn_state') or '') == SPAWN_STATE_FORMING
         encounters.append(encounter)
     conn.close()
@@ -515,6 +525,95 @@ def join_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tuple
         )
         conn.commit()
         return True, 'joined'
+    finally:
+        conn.close()
+
+
+def leave_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tuple[bool, str]:
+    if not encounter_id:
+        return False, 'not_found'
+
+    conn = get_connection()
+    try:
+        if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
+            return False, 'not_found'
+        if not _table_exists(conn, 'pve_encounter_participants'):
+            return False, 'not_found'
+        conn.execute('BEGIN IMMEDIATE')
+        encounter_row = conn.execute(
+            '''
+            SELECT e.encounter_id, s.state AS spawn_state
+            FROM pve_encounters e
+            JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+            WHERE e.encounter_id=?
+              AND e.status='active'
+              AND e.anchor_spawn_instance_id IS NOT NULL
+              AND s.linked_encounter_id = e.encounter_id
+              AND s.state IN (?, ?)
+            LIMIT 1
+            ''',
+            (encounter_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
+        ).fetchone()
+        if not encounter_row:
+            conn.rollback()
+            return False, 'not_found'
+        if str(encounter_row['spawn_state']) != SPAWN_STATE_FORMING:
+            conn.rollback()
+            return False, 'locked'
+
+        active_participant = conn.execute(
+            '''
+            SELECT 1
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND player_id=? AND side_id=? AND status='active'
+            LIMIT 1
+            ''',
+            (encounter_id, int(player_id), SIDE_PLAYER),
+        ).fetchone()
+        if not active_participant:
+            conn.rollback()
+            return False, 'not_joined'
+
+        conn.execute(
+            '''
+            UPDATE pve_encounter_participants
+            SET status='left', updated_at=CURRENT_TIMESTAMP
+            WHERE encounter_id=? AND player_id=? AND side_id=? AND status='active'
+            ''',
+            (encounter_id, int(player_id), SIDE_PLAYER),
+        )
+
+        remaining_row = conn.execute(
+            '''
+            SELECT COUNT(*) AS total
+            FROM pve_encounter_participants
+            WHERE encounter_id=? AND side_id=? AND status='active'
+            ''',
+            (encounter_id, SIDE_PLAYER),
+        ).fetchone()
+        remaining_players = int(remaining_row['total']) if remaining_row else 0
+        if remaining_players <= 0:
+            conn.execute(
+                '''
+                UPDATE pve_encounters
+                SET status='abandoned', updated_at=CURRENT_TIMESTAMP, finished_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=?
+                ''',
+                (encounter_id,),
+            )
+            conn.execute(
+                '''
+                UPDATE pve_spawn_instances
+                SET state=?, linked_encounter_id=NULL, respawn_available_at=NULL, updated_at=CURRENT_TIMESTAMP
+                WHERE linked_encounter_id=? AND state=?
+                ''',
+                (SPAWN_STATE_IDLE, encounter_id, SPAWN_STATE_FORMING),
+            )
+            conn.commit()
+            return True, 'left_collapsed'
+
+        conn.commit()
+        return True, 'left'
     finally:
         conn.close()
 

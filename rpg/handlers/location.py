@@ -19,6 +19,7 @@ from game.pve_live import (
     can_join_open_world_pve_encounter,
     get_open_world_pve_encounter_detail,
     join_open_world_pve_encounter,
+    leave_open_world_pve_encounter,
     list_location_active_pve_encounters,
     list_location_available_spawn_instances,
 )
@@ -163,17 +164,19 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         encounter_id=encounter_id,
         player_id=int(player['telegram_id']),
     )
+    participant_ids = {
+        int(pid) for pid in detail.get('participant_player_ids', [])
+    } if isinstance(detail.get('participant_player_ids'), list) else set()
+    is_participant = int(player['telegram_id']) in participant_ids
     if bool(detail.get('joinable')):
-        status_key = 'location.pve_status_joinable' if can_join else 'location.pve_status_unavailable'
-    elif not bool(detail.get('joinable')):
-        status_key = 'location.pve_status_locked'
-
-    if not can_join:
-        is_participant = int(player['telegram_id']) in {
-            int(pid) for pid in detail.get('participant_player_ids', [])
-        } if isinstance(detail.get('participant_player_ids'), list) else False
         if is_participant:
             status_key = 'location.pve_status_already_joined'
+        elif can_join:
+            status_key = 'location.pve_status_joinable'
+        else:
+            status_key = 'location.pve_status_unavailable'
+    else:
+        status_key = 'location.pve_status_locked'
 
     text = t(
         'location.pve_detail_header',
@@ -183,16 +186,21 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         players=int(detail.get('participant_count', 0)),
         join_state=t(status_key, lang),
     )
+    text += '\n' + t(
+        'location.pve_start_policy_open' if bool(detail.get('joinable')) else 'location.pve_start_policy_locked',
+        lang,
+    )
     keyboard_rows: list[list[InlineKeyboardButton]] = []
-    participant_ids = {
-        int(pid) for pid in detail.get('participant_player_ids', [])
-    } if isinstance(detail.get('participant_player_ids'), list) else set()
-    is_participant = int(player['telegram_id']) in participant_ids
 
     if can_join:
         keyboard_rows.append([InlineKeyboardButton(
             t('location.pve_join_btn', lang),
             callback_data=f"pve_join_{detail['encounter_id']}",
+        )])
+    if is_participant and bool(detail.get('joinable')):
+        keyboard_rows.append([InlineKeyboardButton(
+            t('location.pve_leave_btn', lang),
+            callback_data=f"pve_leave_{detail['encounter_id']}",
         )])
     if is_participant:
         keyboard_rows.append([InlineKeyboardButton(
@@ -466,16 +474,24 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
             text += t('location.pve_encounters_title', lang) + '\n'
             for encounter in active_pve_encounters:
                 mob_id = str(encounter.get('mob_id') or '')
-                row_state_key = 'location.pve_status_locked'
-                if bool(encounter.get('joinable')):
-                    row_state_key = 'location.pve_status_joinable'
+                participant_ids = {
+                    int(pid) for pid in encounter.get('participant_player_ids', [])
+                } if isinstance(encounter.get('participant_player_ids'), list) else set()
+                is_participant = int(player['telegram_id']) in participant_ids
                 text += t(
                     'location.pve_encounter_row',
                     lang,
                     id=encounter['encounter_id'],
                     mob=get_mob_name(mob_id, lang),
                     players=int(encounter.get('participant_count', 0)),
-                    join_state=t(row_state_key, lang),
+                    join_state=t(
+                        (
+                            'location.pve_status_already_joined'
+                            if is_participant
+                            else 'location.pve_status_joinable'
+                        ) if bool(encounter.get('joinable')) else 'location.pve_status_locked',
+                        lang,
+                    ),
                 ) + '\n'
                 row_buttons = [InlineKeyboardButton(
                     t('location.pve_view_fight_btn', lang, id=encounter['encounter_id']),
@@ -489,6 +505,11 @@ def build_location_message(player: dict, location: dict, *, pvp_only_view: bool 
                     row_buttons.append(InlineKeyboardButton(
                         t('location.pve_join_btn', lang),
                         callback_data=f"pve_join_{encounter['encounter_id']}",
+                    ))
+                if is_participant:
+                    row_buttons.append(InlineKeyboardButton(
+                        t('location.pve_enter_btn', lang),
+                        callback_data=f"pve_enter_{encounter['encounter_id']}",
                     ))
                 keyboard.append(row_buttons)
             text += '\n'
@@ -794,6 +815,24 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         encounter_id = data.replace('pve_enter_', '', 1)
         from handlers.battle import enter_open_world_pve_battle
         await enter_open_world_pve_battle(update, context, encounter_id)
+        return
+
+    if data.startswith('pve_leave_'):
+        encounter_id = data.replace('pve_leave_', '', 1)
+        ok, reason = leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=int(user.id))
+        if ok:
+            message_key = 'location.pve_leave_success'
+            if reason == 'left_collapsed':
+                message_key = 'location.pve_leave_collapsed'
+            await query.answer(t(message_key, lang), show_alert=True)
+        else:
+            key_by_reason = {
+                'not_joined': 'location.pve_leave_not_joined',
+                'locked': 'location.pve_leave_locked',
+            }
+            await query.answer(t(key_by_reason.get(reason, 'location.pve_leave_blocked'), lang), show_alert=True)
+        detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(get_player(user.id)), encounter_id)
+        await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
         return
 
     if data.startswith('pvp_join_'):
