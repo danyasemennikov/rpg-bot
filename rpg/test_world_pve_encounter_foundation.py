@@ -1128,6 +1128,235 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         active = list_location_active_pve_encounters(location_id=self.location_id)
         self.assertFalse(any(row['encounter_id'] == first_encounter_id for row in active))
 
+    def test_bootstrap_supports_multiple_spawn_instances_for_same_mob(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 2},
+        }):
+            spawns = list_location_available_spawn_instances(location_id=self.location_id)
+        wolf_spawns = [spawn for spawn in spawns if spawn['mob_id'] == 'forest_wolf']
+        self.assertEqual(len(wolf_spawns), 2)
+        self.assertEqual(
+            [spawn['spawn_instance_id'] for spawn in wolf_spawns],
+            ['spawn-dark_forest-forest_wolf', 'spawn-dark_forest-forest_wolf-2'],
+        )
+
+    def test_spawn_count_defaults_to_one_without_explicit_contract(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+        }):
+            spawns = list_location_available_spawn_instances(location_id=self.location_id)
+        wolf_spawns = [spawn for spawn in spawns if spawn['mob_id'] == 'forest_wolf']
+        self.assertEqual(len(wolf_spawns), 1)
+        self.assertEqual(wolf_spawns[0]['spawn_instance_id'], 'spawn-dark_forest-forest_wolf')
+
+    def test_engaging_one_same_mob_spawn_keeps_sibling_spawn_idle(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 2},
+        }):
+            spawns = list_location_available_spawn_instances(location_id=self.location_id)
+            second_spawn_id = 'spawn-dark_forest-forest_wolf-2'
+            self.assertTrue(any(spawn['spawn_instance_id'] == second_spawn_id for spawn in spawns))
+            encounter_id, status = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf',
+            )
+            self.assertEqual(status, 'created')
+            self.assertIsNotNone(encounter_id)
+
+            available_after = list_location_available_spawn_instances(location_id=self.location_id)
+        self.assertTrue(any(spawn['spawn_instance_id'] == second_spawn_id for spawn in available_after))
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        self.assertEqual(detail['anchor_spawn_instance_id'], 'spawn-dark_forest-forest_wolf')
+
+    def test_respawn_and_expiry_are_scoped_to_single_spawn_instance(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 2},
+        }):
+            encounter_a, status_a = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf',
+            )
+            self.assertEqual(status_a, 'created')
+
+            encounter_b, status_b = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player2_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player2_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf-2',
+            )
+            self.assertEqual(status_b, 'created')
+
+        finish_solo_pve_encounter(player_id=self.player_id, encounter_id=encounter_a, status='victory')
+        conn = get_connection()
+        state_a = conn.execute(
+            "SELECT state, linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id='spawn-dark_forest-forest_wolf'"
+        ).fetchone()
+        state_b = conn.execute(
+            "SELECT state, linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id='spawn-dark_forest-forest_wolf-2'"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(str(state_a['state']), 'respawning')
+        self.assertEqual(str(state_b['state']), 'forming')
+        self.assertEqual(str(state_b['linked_encounter_id']), encounter_b)
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_encounters
+            SET created_at=datetime('now', ?)
+            WHERE encounter_id=?
+            ''',
+            (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 5} seconds', encounter_b),
+        )
+        conn.commit()
+        conn.close()
+
+        active = list_location_active_pve_encounters(location_id=self.location_id)
+        self.assertFalse(any(row['encounter_id'] == encounter_b for row in active))
+
+        conn = get_connection()
+        post_a = conn.execute(
+            "SELECT state FROM pve_spawn_instances WHERE spawn_instance_id='spawn-dark_forest-forest_wolf'"
+        ).fetchone()
+        post_b = conn.execute(
+            "SELECT state FROM pve_spawn_instances WHERE spawn_instance_id='spawn-dark_forest-forest_wolf-2'"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(str(post_a['state']), 'respawning')
+        self.assertEqual(str(post_b['state']), 'idle')
+
+    def test_explicit_spawn_fallback_does_not_report_busy_from_sibling_instance(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 2},
+        }):
+            encounter_b, status_b = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player2_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player2_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf-2',
+            )
+            self.assertEqual(status_b, 'created')
+            self.assertIsNotNone(encounter_b)
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=NULL, respawn_available_at=datetime('now', '+60 seconds')
+            WHERE spawn_instance_id=?
+            ''',
+            ('respawning', 'spawn-dark_forest-forest_wolf'),
+        )
+        conn.commit()
+        conn.close()
+
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player_id],
+            spawn_instance_id='spawn-dark_forest-forest_wolf',
+        )
+        self.assertIsNone(encounter_id)
+        self.assertEqual(status, 'spawn_unavailable')
+
+    def test_explicit_spawn_fallback_reports_busy_only_for_that_same_instance(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 2},
+        }):
+            encounter_a, status_a = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf',
+            )
+            self.assertEqual(status_a, 'created')
+
+        retry_id, retry_status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player2_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player2_id],
+            spawn_instance_id='spawn-dark_forest-forest_wolf',
+        )
+        self.assertEqual(retry_status, 'spawn_busy')
+        self.assertEqual(retry_id, encounter_a)
+
+    def test_non_explicit_fallback_keeps_mob_level_busy_resolution(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 2},
+        }):
+            encounter_a, status_a = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf',
+            )
+            self.assertEqual(status_a, 'created')
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=NULL, respawn_available_at=datetime('now', '+60 seconds')
+            WHERE spawn_instance_id=?
+            ''',
+            ('respawning', 'spawn-dark_forest-forest_wolf-2'),
+        )
+        conn.commit()
+        conn.close()
+
+        retry_id, retry_status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player2_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player2_id],
+            spawn_instance_id=None,
+        )
+        self.assertEqual(retry_status, 'spawn_busy')
+        self.assertEqual(retry_id, encounter_a)
+
 
 if __name__ == '__main__':
     unittest.main()
