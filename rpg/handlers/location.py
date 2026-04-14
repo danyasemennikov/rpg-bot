@@ -108,17 +108,25 @@ def _format_seconds_short(total_seconds: int) -> str:
 
 LOCATION_ACTION_SNAPSHOT_KEY = 'location_action_snapshot'
 _TOKEN_COMMAND_RE = re.compile(
-    r'^(?P<snapshot>s\d+)\s+(?P<token>(?:p|m|pv|pe)\d+)\s+(?P<action>[a-z_]+)$'
+    r'^(?P<snapshot>s\d+)\s+(?P<token>(?:p|m|pv|pe|sv)\d+)\s+(?P<action>[a-z_]+)$'
 )
+_SUPPORTED_LOCATION_SERVICE_ACTIONS = {
+    'shop': ('shop', 'shop'),
+}
 
 
-def _make_location_snapshot_id(player_id: int, location_id: str) -> str:
-    return f"{player_id}:{location_id}:{random.randint(100000, 999999)}"
+def _ensure_location_context_user_data(context: ContextTypes.DEFAULT_TYPE) -> dict:
+    user_data = getattr(context, 'user_data', None)
+    if user_data is None:
+        user_data = {}
+        setattr(context, 'user_data', user_data)
+    return user_data
 
 
 def _next_snapshot_tag(context: ContextTypes.DEFAULT_TYPE) -> str:
-    next_seq = int(context.user_data.get('location_action_snapshot_seq', 0) or 0) + 1
-    context.user_data['location_action_snapshot_seq'] = next_seq
+    user_data = _ensure_location_context_user_data(context)
+    next_seq = int(user_data.get('location_action_snapshot_seq', 0) or 0) + 1
+    user_data['location_action_snapshot_seq'] = next_seq
     return f"s{next_seq}"
 
 
@@ -361,12 +369,24 @@ def build_location_message(
     pve_encounter_cmds: list[str] = []
     mob_lines: list[str] = []
     mob_cmds: list[str] = []
+    service_cmds: list[str] = []
     snapshot_tag = (snapshot_tag or 's1').lower()
 
     def _register_action(command_suffix: str, callback_data: str, command_lines: list[str]) -> None:
         full_command = f'{snapshot_tag} {command_suffix}'
         token_actions[full_command] = callback_data
         command_lines.append(full_command)
+
+    if not pvp_only_view:
+        service_token_index = 1
+        for service_id in location.get('services', []) or []:
+            service_action = _SUPPORTED_LOCATION_SERVICE_ACTIONS.get(str(service_id))
+            if not service_action:
+                continue
+            action_word, callback_data = service_action
+            token = f"sv{service_token_index}"
+            _register_action(f'{token} {action_word}', callback_data, service_cmds)
+            service_token_index += 1
 
     # ── PvP nearby players ──
     conn = get_connection()
@@ -616,7 +636,7 @@ def build_location_message(
     if mob_lines:
         text += t('location.mobs_nearby', lang) + '\n'
         text += '\n'.join(mob_lines) + '\n\n'
-    action_lines = players_nearby_cmds + pvp_encounter_cmds + pve_encounter_cmds + mob_cmds
+    action_lines = service_cmds + players_nearby_cmds + pvp_encounter_cmds + pve_encounter_cmds + mob_cmds
     if action_lines:
         text += t('location.actions_title', lang) + '\n'
         text += '\n'.join(f"• {line}" for line in action_lines[:20]) + '\n'
@@ -639,7 +659,6 @@ def build_location_message(
         return text, keyboard_markup
 
     snapshot = {
-        'snapshot_id': _make_location_snapshot_id(int(player['telegram_id']), str(location['id'])),
         'snapshot_tag': snapshot_tag,
         'player_id': int(player['telegram_id']),
         'location_id': str(location['id']),
@@ -699,7 +718,8 @@ def _build_location_message_with_snapshot(
         include_action_map=True,
         snapshot_tag=snapshot_tag,
     )
-    context.user_data[LOCATION_ACTION_SNAPSHOT_KEY] = snapshot
+    user_data = _ensure_location_context_user_data(context)
+    user_data[LOCATION_ACTION_SNAPSHOT_KEY] = snapshot
     return text, keyboard
 
 
@@ -767,7 +787,8 @@ async def handle_location_action_text(update: Update, context: ContextTypes.DEFA
         await update.message.reply_text(t('common.no_character', lang))
         return True
 
-    snapshot = context.user_data.get(LOCATION_ACTION_SNAPSHOT_KEY) or {}
+    user_data = _ensure_location_context_user_data(context)
+    snapshot = user_data.get(LOCATION_ACTION_SNAPSHOT_KEY) or {}
     if int(snapshot.get('player_id', 0) or 0) != int(update.effective_user.id):
         await update.message.reply_text(t('location.action_stale', lang))
         return True
