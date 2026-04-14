@@ -194,8 +194,23 @@ def _ensure_world_spawn_table() -> None:
     conn.close()
 
 
-def _spawn_instance_id(*, location_id: str, mob_id: str) -> str:
-    return f'spawn-{location_id}-{mob_id}'
+def _spawn_instance_id(*, location_id: str, mob_id: str, instance_index: int = 1) -> str:
+    # Keep index=1 backward-compatible with legacy spawn ids used by existing callbacks/tests.
+    if int(instance_index) <= 1:
+        return f'spawn-{location_id}-{mob_id}'
+    return f'spawn-{location_id}-{mob_id}-{int(instance_index)}'
+
+
+def _resolve_world_spawn_count(*, location: dict, mob_id: str) -> int:
+    raw_map = location.get('world_spawn_counts')
+    if not isinstance(raw_map, dict):
+        return 1
+    raw_value = raw_map.get(mob_id)
+    try:
+        count = int(raw_value)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, count)
 
 
 def _refresh_respawning_spawns_for_location(*, location_id: str) -> None:
@@ -230,14 +245,21 @@ def ensure_location_pve_spawn_instances(*, location_id: str) -> None:
 
     conn = get_connection()
     for mob_id in mob_ids:
-        conn.execute(
-            '''
-            INSERT OR IGNORE INTO pve_spawn_instances (
-                spawn_instance_id, location_id, mob_id, state, linked_encounter_id, respawn_available_at
-            ) VALUES (?, ?, ?, ?, NULL, NULL)
-            ''',
-            (_spawn_instance_id(location_id=location_id, mob_id=mob_id), location_id, mob_id, SPAWN_STATE_IDLE),
-        )
+        spawn_count = _resolve_world_spawn_count(location=location, mob_id=mob_id)
+        for index in range(1, spawn_count + 1):
+            conn.execute(
+                '''
+                INSERT OR IGNORE INTO pve_spawn_instances (
+                    spawn_instance_id, location_id, mob_id, state, linked_encounter_id, respawn_available_at
+                ) VALUES (?, ?, ?, ?, NULL, NULL)
+                ''',
+                (
+                    _spawn_instance_id(location_id=location_id, mob_id=mob_id, instance_index=index),
+                    location_id,
+                    mob_id,
+                    SPAWN_STATE_IDLE,
+                ),
+            )
     conn.commit()
     conn.close()
     _refresh_respawning_spawns_for_location(location_id=location_id)
@@ -251,7 +273,7 @@ def list_location_available_spawn_instances(*, location_id: str) -> list[dict]:
         SELECT spawn_instance_id, location_id, mob_id, state
         FROM pve_spawn_instances
         WHERE location_id=? AND state=?
-        ORDER BY mob_id ASC
+        ORDER BY mob_id ASC, spawn_instance_id ASC
         ''',
         (location_id, SPAWN_STATE_IDLE),
     ).fetchall()
@@ -845,21 +867,51 @@ def _claim_spawn_instance_for_encounter(
 ) -> str | None:
     _ensure_world_spawn_table()
     ensure_location_pve_spawn_instances(location_id=location_id)
-    resolved_spawn_id = spawn_instance_id or _spawn_instance_id(location_id=location_id, mob_id=mob_id)
     conn = get_connection()
     conn.execute('BEGIN IMMEDIATE')
-    updated = conn.execute(
-        '''
-        UPDATE pve_spawn_instances
-        SET state=?, linked_encounter_id=?, updated_at=CURRENT_TIMESTAMP
-        WHERE spawn_instance_id=?
-          AND location_id=?
-          AND mob_id=?
-          AND state=?
-          AND linked_encounter_id IS NULL
-        ''',
-        (SPAWN_STATE_FORMING, encounter_id, resolved_spawn_id, location_id, mob_id, SPAWN_STATE_IDLE),
-    ).rowcount
+    resolved_spawn_id = spawn_instance_id
+    if resolved_spawn_id:
+        updated = conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=?, updated_at=CURRENT_TIMESTAMP
+            WHERE spawn_instance_id=?
+              AND location_id=?
+              AND mob_id=?
+              AND state=?
+              AND linked_encounter_id IS NULL
+            ''',
+            (SPAWN_STATE_FORMING, encounter_id, resolved_spawn_id, location_id, mob_id, SPAWN_STATE_IDLE),
+        ).rowcount
+    else:
+        candidate = conn.execute(
+            '''
+            SELECT spawn_instance_id
+            FROM pve_spawn_instances
+            WHERE location_id=?
+              AND mob_id=?
+              AND state=?
+              AND linked_encounter_id IS NULL
+            ORDER BY spawn_instance_id ASC
+            LIMIT 1
+            ''',
+            (location_id, mob_id, SPAWN_STATE_IDLE),
+        ).fetchone()
+        resolved_spawn_id = str(candidate['spawn_instance_id']) if candidate else ''
+        updated = 0
+        if resolved_spawn_id:
+            updated = conn.execute(
+                '''
+                UPDATE pve_spawn_instances
+                SET state=?, linked_encounter_id=?, updated_at=CURRENT_TIMESTAMP
+                WHERE spawn_instance_id=?
+                  AND location_id=?
+                  AND mob_id=?
+                  AND state=?
+                  AND linked_encounter_id IS NULL
+                ''',
+                (SPAWN_STATE_FORMING, encounter_id, resolved_spawn_id, location_id, mob_id, SPAWN_STATE_IDLE),
+            ).rowcount
     if updated <= 0:
         conn.rollback()
         conn.close()
@@ -1167,22 +1219,39 @@ def create_or_load_open_world_pve_encounter(
     )
     if not claimed_spawn_id:
         conn = get_connection()
-        active_row = conn.execute(
-            '''
-            SELECT linked_encounter_id
-            FROM pve_spawn_instances
-            WHERE spawn_instance_id=?
-              AND location_id=?
-              AND mob_id=?
-              AND linked_encounter_id IS NOT NULL
-            LIMIT 1
-            ''',
-            (
-                spawn_instance_id or _spawn_instance_id(location_id=location_id, mob_id=mob_id),
-                location_id,
-                mob_id,
-            ),
-        ).fetchone()
+        if spawn_instance_id:
+            active_row = conn.execute(
+                '''
+                SELECT linked_encounter_id
+                FROM pve_spawn_instances
+                WHERE spawn_instance_id=?
+                  AND location_id=?
+                  AND mob_id=?
+                  AND linked_encounter_id IS NOT NULL
+                LIMIT 1
+                ''',
+                (
+                    str(spawn_instance_id),
+                    location_id,
+                    mob_id,
+                ),
+            ).fetchone()
+        else:
+            active_row = conn.execute(
+                '''
+                SELECT linked_encounter_id
+                FROM pve_spawn_instances
+                WHERE location_id=?
+                  AND mob_id=?
+                  AND linked_encounter_id IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT 1
+                ''',
+                (
+                    location_id,
+                    mob_id,
+                ),
+            ).fetchone()
         conn.close()
         if active_row and active_row['linked_encounter_id']:
             return str(active_row['linked_encounter_id']), 'spawn_busy'
