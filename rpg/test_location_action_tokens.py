@@ -24,6 +24,146 @@ class _DummyUpdate:
 
 
 class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
+    def test_shop_service_action_is_exposed_via_snapshot_text_command(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {'id': 'village', 'safe': True, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': ['shop']}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Village'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
+
+        self.assertIn('sv1 shop', text)
+        self.assertEqual(snapshot['actions'].get('s1 sv1 shop'), 'shop')
+        self.assertNotIn('snapshot_id', snapshot)
+
+    def test_unsupported_services_are_not_exposed_via_sv_commands(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {
+            'id': 'village',
+            'safe': True,
+            'level_min': 1,
+            'level_max': 30,
+            'mobs': [],
+            'services': ['shop', 'inn', 'quest_board'],
+        }
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Village'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            _text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
+
+        service_commands = [cmd for cmd in snapshot['actions'] if re.search(r'\ssv\d+\s', cmd)]
+        self.assertEqual(service_commands, ['s1 sv1 shop'])
+        self.assertEqual(snapshot['actions']['s1 sv1 shop'], 'shop')
+        self.assertNotIn('s1 sv2 inn', snapshot['actions'])
+        self.assertNotIn('s1 sv3 quests', snapshot['actions'])
+
+    def test_bottom_keyboard_keeps_only_gather_and_travel_buttons(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {'id': 'village', 'safe': True, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': ['shop']}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[{'id': 'dark_forest', 'safe': False, 'level_min': 1}]),
+            patch('handlers.location.get_location_name', side_effect=lambda location_id, _lang: location_id),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[SimpleNamespace(item_id='herb_common')]),
+            patch('handlers.location.get_item_name', return_value='Herb'),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            _text, keyboard, _snapshot = build_location_message(player, location, include_action_map=True)
+
+        callback_rows = [[button.callback_data for button in row] for row in keyboard.inline_keyboard]
+        flat_callbacks = [callback for row in callback_rows for callback in row]
+        self.assertIn('gather', flat_callbacks)
+        self.assertIn('goto_dark_forest', flat_callbacks)
+        self.assertNotIn('shop', flat_callbacks)
+
+    def test_snapshot_builder_initializes_missing_context_user_data(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': ['forest_wolf'], 'services': []}
+        context = SimpleNamespace()
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            _build_location_message_with_snapshot(context, player, location, pvp_only_view=False)
+
+        self.assertIsInstance(context.user_data, dict)
+        self.assertIn(LOCATION_ACTION_SNAPSHOT_KEY, context.user_data)
+
     def test_snapshot_tags_are_monotonic_per_user_context(self):
         player = {
             'telegram_id': 5001,
@@ -117,6 +257,23 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(handled)
         query_answer.assert_awaited()
 
+    async def test_service_text_command_routes_to_location_callback_handler(self):
+        update = _DummyUpdate('s44 sv1 shop')
+        context = SimpleNamespace(user_data={
+            LOCATION_ACTION_SNAPSHOT_KEY: {
+                'player_id': 5001,
+                'location_id': 'village',
+                'snapshot_tag': 's44',
+                'actions': {'s44 sv1 shop': 'shop'},
+            },
+        })
+        with patch('handlers.location.get_player', return_value={'telegram_id': 5001, 'lang': 'en', 'location_id': 'village'}), \
+             patch('handlers.location.handle_location_buttons', new=AsyncMock()) as location_mock:
+            handled = await handle_location_action_text(update, context)
+
+        self.assertTrue(handled)
+        location_mock.assert_awaited_once()
+
     def test_namespace_tokens_are_unique_between_entity_types(self):
         player = {
             'telegram_id': 5001,
@@ -128,7 +285,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             'max_mana': 50,
             'gold': 0,
         }
-        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': ['forest_wolf'], 'services': []}
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': ['forest_wolf'], 'services': ['shop']}
         with (
             patch('handlers.location.get_connection') as conn_mock,
             patch('handlers.location.get_connected_locations', return_value=[]),
@@ -166,6 +323,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
 
         commands = list(snapshot['actions'].keys())
         self.assertTrue(any(re.search(r'\sp1 attack$', cmd) for cmd in commands))
+        self.assertTrue(any(re.search(r'\ssv1 shop$', cmd) for cmd in commands))
         self.assertTrue(any(re.search(r'\sm1 fight$', cmd) for cmd in commands))
         self.assertTrue(any(re.search(r'\spv1 view$', cmd) for cmd in commands))
         self.assertTrue(any(re.search(r'\spe1 view$', cmd) for cmd in commands))

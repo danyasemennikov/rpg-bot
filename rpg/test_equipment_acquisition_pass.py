@@ -350,12 +350,21 @@ class ShopBackNavigationTests(unittest.IsolatedAsyncioTestCase):
 
         with patch('handlers.location.get_player', return_value=player), \
              patch('handlers.location.get_location', return_value=location), \
-             patch('handlers.location.build_location_message', return_value=('LOCATION_VIEW', 'LOCATION_KB')) as location_view_mock, \
+             patch(
+                 'handlers.location.build_location_message',
+                 return_value=('LOCATION_VIEW', 'LOCATION_KB', {'snapshot_tag': 's1', 'actions': {}}),
+             ) as location_view_mock, \
              patch('handlers.location.build_shop_message', return_value=('SHOP_VIEW', 'SHOP_KB')) as shop_view_mock:
             from handlers.location import handle_location_buttons
             await handle_location_buttons(update, context)
 
-        location_view_mock.assert_called_once_with(player, location)
+        location_view_mock.assert_called_once_with(
+            player,
+            location,
+            pvp_only_view=False,
+            include_action_map=True,
+            snapshot_tag='s1',
+        )
         shop_view_mock.assert_not_called()
         query.edit_message_text.assert_awaited_once_with('LOCATION_VIEW', reply_markup='LOCATION_KB', parse_mode='HTML')
 
