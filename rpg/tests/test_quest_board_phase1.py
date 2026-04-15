@@ -7,11 +7,16 @@ from unittest.mock import AsyncMock, patch
 import database
 from database import get_connection, init_db
 from game.quest_board import (
+    _ensure_player_hunt_contract_table,
     accept_hunt_contract,
+    abandon_hunt_contract,
     claim_completed_hunt_contract,
+    build_hunt_contract_progress_line,
     get_player_hunt_contract_state,
+    list_hunt_contracts_for_location,
     register_hunt_kill_progress,
 )
+from handlers.location import build_quest_board_message
 from handlers.location import handle_location_buttons
 
 
@@ -30,6 +35,16 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'en')
             ''',
             (8101, 'quester', 'Quester', 10, 0, 120, 120, 50, 50, 100, 5, 5, 5, 5, 5, 5, 0, 'village'),
+        )
+        conn.execute(
+            '''
+            INSERT OR REPLACE INTO items (
+                item_id, name, item_type, rarity, req_level,
+                req_strength, req_agility, req_intuition, req_wisdom,
+                buy_price, stat_bonus_json
+            ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, '{}')
+            ''',
+            ('wolf_fang', 'Wolf Fang', 'material', 'common', 1),
         )
         conn.commit()
         conn.close()
@@ -59,6 +74,41 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         query.answer.assert_awaited()
         query.edit_message_text.assert_awaited()
 
+    async def test_player_can_abandon_active_contract_from_board_callback(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        query = SimpleNamespace(
+            data='quest_board_abandon',
+            from_user=SimpleNamespace(id=8101),
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(callback_query=query)
+        context = SimpleNamespace(user_data={})
+
+        with patch('handlers.location.get_location', return_value={'id': 'village', 'services': ['shop', 'quest_board']}):
+            await handle_location_buttons(update, context)
+
+        self.assertIsNone(get_player_hunt_contract_state(8101))
+        query.answer.assert_awaited()
+        query.edit_message_text.assert_awaited()
+
+    def test_board_renders_claim_and_abandon_buttons_truthfully(self):
+        player = {'telegram_id': 8101, 'lang': 'en'}
+        location = {'id': 'village'}
+
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        _text_active, keyboard_active = build_quest_board_message(player, location)
+        active_callbacks = {btn.callback_data for row in keyboard_active.inline_keyboard for btn in row}
+        self.assertIn('quest_board_abandon', active_callbacks)
+        self.assertNotIn('quest_board_claim', active_callbacks)
+
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+        _text_ready, keyboard_ready = build_quest_board_message(player, location)
+        ready_callbacks = {btn.callback_data for row in keyboard_ready.inline_keyboard for btn in row}
+        self.assertIn('quest_board_claim', ready_callbacks)
+        self.assertNotIn('quest_board_abandon', ready_callbacks)
+
     def test_single_slot_policy_rejects_second_active_contract(self):
         ok, reason = accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         self.assertTrue(ok)
@@ -67,6 +117,24 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         ok2, reason2 = accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_elite_boars')
         self.assertFalse(ok2)
         self.assertEqual(reason2, 'already_active')
+
+    def test_accept_uses_connection_local_gate_without_global_state_read_call(self):
+        with patch('game.quest_board.get_player_hunt_contract_state') as state_mock:
+            ok, reason = accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'accepted')
+        state_mock.assert_not_called()
+
+    def test_curated_contract_set_is_broader_than_phase1_baseline(self):
+        contracts = list_hunt_contracts_for_location('village')
+        keys = {contract.contract_key for contract in contracts}
+        self.assertGreaterEqual(len(contracts), 6)
+        self.assertIn('hunt_forest_wolves', keys)
+        self.assertIn('hunt_elite_boars', keys)
+        self.assertIn('hunt_greyfang', keys)
+        self.assertIn('hunt_forest_spiders', keys)
+        self.assertIn('hunt_mine_goblins', keys)
+        self.assertIn('hunt_amber_golem', keys)
 
     def test_matching_and_non_matching_kills_update_progress_correctly(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
@@ -86,6 +154,56 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         state = get_player_hunt_contract_state(8101)
         self.assertEqual(state['progress_kills'], 5)
         self.assertEqual(state['status'], 'completed')
+
+    def test_register_progress_hot_path_does_not_invoke_schema_ensure(self):
+        _ensure_player_hunt_contract_table()
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        with patch('game.quest_board._ensure_player_hunt_contract_table') as ensure_mock:
+            result = register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+        ensure_mock.assert_not_called()
+        self.assertTrue(result['updated'])
+
+    def test_state_read_and_location_line_are_safe_without_schema_init(self):
+        with patch('game.quest_board._ensure_player_hunt_contract_table') as ensure_mock:
+            state = get_player_hunt_contract_state(8101)
+            line = build_hunt_contract_progress_line(player_id=8101, lang='en')
+        ensure_mock.assert_not_called()
+        self.assertIsNone(state)
+        self.assertIsNone(line)
+
+    def test_player_can_abandon_active_contract_and_accept_new_one(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+
+        ok, reason = abandon_hunt_contract(player_id=8101)
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'abandoned')
+        self.assertIsNone(get_player_hunt_contract_state(8101))
+
+        ok2, reason2 = accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_spiders')
+        self.assertTrue(ok2)
+        self.assertEqual(reason2, 'accepted')
+        state = get_player_hunt_contract_state(8101)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state['contract_key'], 'hunt_forest_spiders')
+
+    def test_completed_contract_cannot_be_abandoned_until_claimed(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+
+        ok, reason = abandon_hunt_contract(player_id=8101)
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'completed_must_claim')
+
+    def test_abandon_uses_connection_local_gate_without_global_state_read_call(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        with patch('game.quest_board.get_player_hunt_contract_state') as state_mock:
+            ok, reason = abandon_hunt_contract(player_id=8101)
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'abandoned')
+        state_mock.assert_not_called()
 
     def test_elite_and_special_filters_match_truthfully(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_elite_boars')
@@ -115,14 +233,21 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(correct_named['completed_now'])
 
     def test_claim_is_one_time_and_keeps_state_claimed(self):
-        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
-        for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_greyfang')
+        register_hunt_kill_progress(
+            player_id=8101,
+            mob_id='forest_wolf',
+            spawn_profile='rare',
+            special_spawn_key='greyfang',
+        )
 
         ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
         self.assertTrue(ok)
         self.assertEqual(reason, 'claimed')
         self.assertIsNotNone(reward)
+        assert reward is not None
+        self.assertEqual(reward.get('bonus_item', {}).get('item_id'), 'wolf_fang')
+        self.assertEqual(reward.get('bonus_item', {}).get('quantity'), 2)
 
         ok2, reason2, _ = claim_completed_hunt_contract(player_id=8101, location_id='village')
         self.assertFalse(ok2)
@@ -133,6 +258,71 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
 
         conn = get_connection()
         player = conn.execute('SELECT exp, gold FROM players WHERE telegram_id=?', (8101,)).fetchone()
+        item_qty = conn.execute(
+            'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+            (8101, 'wolf_fang'),
+        ).fetchone()
         conn.close()
-        self.assertGreaterEqual(int(player['exp']), 70)
-        self.assertGreaterEqual(int(player['gold']), 130)
+        self.assertGreaterEqual(int(player['exp']), 120)
+        self.assertGreaterEqual(int(player['gold']), 170)
+        self.assertIsNotNone(item_qty)
+        assert item_qty is not None
+        self.assertEqual(int(item_qty['quantity']), 2)
+
+    def test_bonus_item_failure_rolls_back_claim_and_keeps_contract_completed(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_greyfang')
+        register_hunt_kill_progress(
+            player_id=8101,
+            mob_id='forest_wolf',
+            spawn_profile='rare',
+            special_spawn_key='greyfang',
+        )
+
+        with (
+            patch('game.quest_board.grant_item_to_player', side_effect=RuntimeError('grant failed')),
+            patch('game.quest_board.logger.exception') as log_exception_mock,
+        ):
+            ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
+
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'reward_delivery_failed')
+        self.assertIsNone(reward)
+        log_exception_mock.assert_called_once()
+        state = get_player_hunt_contract_state(8101)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state['status'], 'completed')
+
+    def test_claim_starts_transaction_before_completed_state_read(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+
+        base_conn = get_connection()
+        sql_log: list[str] = []
+
+        class _LoggedConn:
+            def execute(self, sql, params=()):
+                sql_log.append(str(sql).strip().upper())
+                return base_conn.execute(sql, params)
+
+            def commit(self):
+                return base_conn.commit()
+
+            def rollback(self):
+                return base_conn.rollback()
+
+            def close(self):
+                return base_conn.close()
+
+        with (
+            patch('game.quest_board._ensure_player_hunt_contract_table'),
+            patch('game.quest_board.get_connection', return_value=_LoggedConn()),
+        ):
+            ok, reason, _reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
+
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'claimed')
+        begin_index = next(i for i, sql in enumerate(sql_log) if sql.startswith('BEGIN IMMEDIATE'))
+        state_read_index = next(i for i, sql in enumerate(sql_log) if 'FROM PLAYER_HUNT_CONTRACTS' in sql)
+        self.assertLess(begin_index, state_read_index)

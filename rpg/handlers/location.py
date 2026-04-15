@@ -26,6 +26,8 @@ from game.pve_live import (
 )
 from game.quest_board import (
     accept_hunt_contract,
+    abandon_hunt_contract,
+    build_hunt_contract_progress_line,
     build_contract_row,
     build_contract_title,
     claim_completed_hunt_contract,
@@ -405,6 +407,11 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
                 t('location.quest_board_claim_btn', lang),
                 callback_data='quest_board_claim',
             )])
+        else:
+            keyboard.append([InlineKeyboardButton(
+                t('location.quest_board_abandon_btn', lang),
+                callback_data='quest_board_abandon',
+            )])
     else:
         text += '\n' + t('location.quest_board_no_active', lang) + '\n'
 
@@ -467,6 +474,10 @@ def build_location_message(
 
     text  = f"📍 <b>{get_location_name(location['id'], lang)}</b>  |  {lvl_range}\n"
     text += f"<i>{get_location_desc(location['id'], lang)}</i>\n\n"
+    if not pvp_only_view:
+        active_contract_line = build_hunt_contract_progress_line(player_id=int(player['telegram_id']), lang=lang)
+        if active_contract_line:
+            text += active_contract_line + '\n\n'
 
     keyboard = []
     token_actions: dict[str, str] = {}
@@ -1371,19 +1382,50 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                 'not_completed': 'location.quest_board_claim_not_ready',
                 'already_claimed': 'location.quest_board_claim_already',
                 'wrong_board': 'location.quest_board_not_available',
+                'reward_delivery_failed': 'location.quest_board_claim_reward_failed',
             }
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_claim_not_ready'), lang), show_alert=True)
         else:
             reward_data = reward_result or {}
-            await query.answer(
-                t(
-                    'location.quest_board_claim_ok',
-                    lang,
-                    exp=int(reward_data.get('reward_exp', 0)),
-                    gold=int(reward_data.get('reward_gold', 0)),
-                ),
-                show_alert=True,
+            claim_text = t(
+                'location.quest_board_claim_ok',
+                lang,
+                exp=int(reward_data.get('reward_exp', 0)),
+                gold=int(reward_data.get('reward_gold', 0)),
             )
+            bonus_item = reward_data.get('bonus_item') if isinstance(reward_data, dict) else None
+            if isinstance(bonus_item, dict) and bonus_item.get('item_id') and bool(bonus_item.get('granted')):
+                claim_text += '\n' + t(
+                    'location.quest_board_claim_bonus_item',
+                    lang,
+                    qty=int(bonus_item.get('quantity', 1) or 1),
+                    item=get_item_name(str(bonus_item['item_id']), lang),
+                )
+            await query.answer(claim_text, show_alert=True)
+
+        text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data == 'quest_board_abandon':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'quest_board' not in location.get('services', []):
+            await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
+            return
+
+        ok, reason = abandon_hunt_contract(player_id=int(user.id))
+        if not ok:
+            key_by_reason = {
+                'no_contract': 'location.quest_board_abandon_no_active',
+                'not_active': 'location.quest_board_abandon_no_active',
+                'completed_must_claim': 'location.quest_board_abandon_completed_locked',
+            }
+            await query.answer(t(key_by_reason.get(reason, 'location.quest_board_abandon_no_active'), lang), show_alert=True)
+        else:
+            await query.answer(t('location.quest_board_abandon_ok', lang), show_alert=True)
 
         text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
