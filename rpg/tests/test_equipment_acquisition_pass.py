@@ -322,6 +322,62 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         self.assertEqual(source_meta.open_world_region_identity, 'ember_valley')
         self.assertEqual(source_meta.open_world_zone_identity, 'ember_village')
 
+    def test_live_reward_flow_maps_spawn_profile_to_better_open_world_reward_identity(self):
+        conn = get_connection()
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
+        conn.close()
+
+        base_rewards = {
+            'exp': 0,
+            'gold': 0,
+            'loot': ['wolf_pelt'],
+            'mob_level': 2,
+            'mob_id': 'forest_wolf',
+            'source_category': 'open_world_normal',
+            'creature_taxonomy': get_mob('forest_wolf').get('creature_taxonomy'),
+        }
+
+        normal_rewards = dict(base_rewards, spawn_profile='normal')
+        elite_rewards = dict(base_rewards, spawn_profile='elite')
+        rare_rewards = dict(base_rewards, spawn_profile='rare')
+
+        with patch('handlers.battle.grant_item_to_player') as grant_mock:
+            apply_rewards(9001, player, normal_rewards)
+            normal_meta = grant_mock.call_args.kwargs['source_metadata']
+            apply_rewards(9001, player, elite_rewards)
+            elite_meta = grant_mock.call_args.kwargs['source_metadata']
+            apply_rewards(9001, player, rare_rewards)
+            rare_meta = grant_mock.call_args.kwargs['source_metadata']
+
+        self.assertEqual(normal_meta.source_category, 'open_world_normal')
+        self.assertEqual(elite_meta.source_category, 'open_world_elite')
+        self.assertEqual(rare_meta.source_category, 'open_world_rare_spawn')
+        self.assertEqual(normal_meta.quality_floor_rarity, 'common')
+        self.assertEqual(elite_meta.quality_floor_rarity, 'uncommon')
+        self.assertEqual(rare_meta.quality_floor_rarity, 'rare')
+
+    def test_live_reward_flow_unknown_spawn_profile_falls_back_to_normal(self):
+        rewards = {
+            'exp': 0,
+            'gold': 0,
+            'loot': ['wolf_pelt'],
+            'mob_level': 2,
+            'mob_id': 'forest_wolf',
+            'source_category': 'open_world_normal',
+            'spawn_profile': 'mystery_profile',
+            'creature_taxonomy': get_mob('forest_wolf').get('creature_taxonomy'),
+        }
+        conn = get_connection()
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
+        conn.close()
+
+        with patch('handlers.battle.grant_item_to_player') as grant_mock:
+            apply_rewards(9001, player, rewards)
+
+        source_meta = grant_mock.call_args.kwargs['source_metadata']
+        self.assertEqual(source_meta.source_category, 'open_world_normal')
+        self.assertEqual(source_meta.quality_floor_rarity, 'common')
+
 
 class ShopBackNavigationTests(unittest.IsolatedAsyncioTestCase):
     async def test_shop_back_returns_location_view_not_shop_view(self):

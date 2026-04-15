@@ -176,6 +176,7 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
         source_category=rewards.get('source_category'),
         creature_taxonomy=rewards.get('creature_taxonomy'),
         encounter_role=rewards.get('encounter_role'),
+        spawn_profile=rewards.get('spawn_profile'),
         location_id=get_mob_location_id(str(rewards.get('mob_id', ''))) or player.get('location_id'),
     )
     for item_id in rewards['loot']:
@@ -619,6 +620,7 @@ async def _handle_victory_cleanup(
 ):
     """Общий post-victory cleanup для обычной атаки и скиллов."""
     rewards = calc_rewards(mob)
+    rewards['spawn_profile'] = battle_state.get('spawn_profile', rewards.get('spawn_profile'))
     if _is_group_encounter(battle_state):
         participant_ids = get_pve_encounter_player_ids(encounter_id=str(battle_state.get('pve_encounter_id', '')))
         if not participant_ids:
