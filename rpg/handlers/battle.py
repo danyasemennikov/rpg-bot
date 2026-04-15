@@ -647,6 +647,7 @@ async def _handle_victory_cleanup(
             register_hunt_kill_progress(
                 player_id=participant_id,
                 mob_id=str(mob.get('id', '')),
+                location_id=str(battle_state.get('location_id') or participant_player.get('location_id') or ''),
                 spawn_profile=battle_state.get('spawn_profile'),
                 special_spawn_key=battle_state.get('special_spawn_key'),
             )

@@ -16,6 +16,7 @@ class QuestBoardBattleBridgeTests(unittest.IsolatedAsyncioTestCase):
             'special_spawn_key': 'greyfang',
             'pve_encounter_id': 'pve-test-1',
             'weapon_id': 'unarmed',
+            'location_id': 'dark_forest',
         }
 
         with (
@@ -44,6 +45,7 @@ class QuestBoardBattleBridgeTests(unittest.IsolatedAsyncioTestCase):
         progress_mock.assert_called_once_with(
             player_id=8101,
             mob_id='forest_wolf',
+            location_id='dark_forest',
             spawn_profile='elite',
             special_spawn_key='greyfang',
         )

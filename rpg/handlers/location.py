@@ -507,7 +507,11 @@ def build_location_message(
     text  = f"📍 <b>{get_location_name(location['id'], lang)}</b>  |  {lvl_range}\n"
     text += f"<i>{get_location_desc(location['id'], lang)}</i>\n\n"
     if not pvp_only_view:
-        active_contract_line = build_hunt_contract_progress_line(player_id=int(player['telegram_id']), lang=lang)
+        active_contract_line = build_hunt_contract_progress_line(
+            player_id=int(player['telegram_id']),
+            lang=lang,
+            current_location_id=str(location.get('id') or ''),
+        )
         if active_contract_line:
             text += active_contract_line + '\n\n'
 

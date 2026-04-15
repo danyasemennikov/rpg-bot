@@ -6,7 +6,7 @@ import logging
 from database import get_connection
 from game.balance import exp_to_next_level
 from game.gear_instances import grant_item_to_player
-from game.i18n import get_item_name, get_mob_name, t
+from game.i18n import get_item_name, get_location_name, get_mob_name, t
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class HuntContract:
     bonus_item_qty: int = 1
     hunter_points_reward: int = 20
     required_hunter_rank: str | None = None
+    target_location_ids: tuple[str, ...] = ()
 
 
 HUNTER_RANK_THRESHOLDS: tuple[tuple[str, int], ...] = (
@@ -48,6 +49,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=30,
         board_locations=('village',),
         hunter_points_reward=20,
+        target_location_ids=('dark_forest',),
     ),
     HuntContract(
         contract_key='hunt_elite_boars',
@@ -60,6 +62,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         spawn_profile='elite',
         hunter_points_reward=30,
         required_hunter_rank='tracker',
+        target_location_ids=('dark_forest',),
     ),
     HuntContract(
         contract_key='hunt_greyfang',
@@ -73,6 +76,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         bonus_item_id='wolf_fang',
         bonus_item_qty=2,
         hunter_points_reward=45,
+        target_location_ids=('dark_forest',),
     ),
     HuntContract(
         contract_key='hunt_forest_spiders',
@@ -83,6 +87,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=40,
         board_locations=('village',),
         hunter_points_reward=20,
+        target_location_ids=('dark_forest',),
     ),
     HuntContract(
         contract_key='hunt_mine_goblins',
@@ -94,6 +99,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         board_locations=('village',),
         hunter_points_reward=35,
         required_hunter_rank='hunter',
+        target_location_ids=('old_mines',),
     ),
     HuntContract(
         contract_key='hunt_amber_golem',
@@ -107,6 +113,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         bonus_item_id='enhancement_crystal',
         hunter_points_reward=60,
         required_hunter_rank='veteran',
+        target_location_ids=('old_mines',),
     ),
 )
 
@@ -376,6 +383,7 @@ def register_hunt_kill_progress(
     *,
     player_id: int,
     mob_id: str,
+    location_id: str | None = None,
     spawn_profile: str | None = None,
     special_spawn_key: str | None = None,
 ) -> dict:
@@ -387,6 +395,10 @@ def register_hunt_kill_progress(
 
         contract: HuntContract = state['contract']
         if str(mob_id or '') != contract.target_mob_id:
+            return {'updated': False, 'completed_now': False}
+
+        kill_location_id = str(location_id or '').strip()
+        if contract.target_location_ids and kill_location_id not in contract.target_location_ids:
             return {'updated': False, 'completed_now': False}
 
         actual_profile = _normalize_spawn_profile(spawn_profile)
@@ -569,6 +581,37 @@ def abandon_hunt_contract(*, player_id: int) -> tuple[bool, str]:
         conn.close()
 
 
+def _contract_target_location_names(contract: HuntContract, lang: str) -> list[str]:
+    names: list[str] = []
+    for location_id in contract.target_location_ids:
+        normalized_id = str(location_id or '').strip()
+        if not normalized_id:
+            continue
+        names.append(get_location_name(normalized_id, lang))
+    return names
+
+
+def _build_contract_location_line(contract: HuntContract, lang: str) -> str:
+    location_names = _contract_target_location_names(contract, lang)
+    if not location_names:
+        return t('location.quest_contract_location_any', lang)
+    return ' / '.join(location_names)
+
+
+def _build_contract_location_hint(*, contract: HuntContract, lang: str, current_location_id: str | None = None) -> str:
+    location_names = _contract_target_location_names(contract, lang)
+    if not location_names:
+        return t('location.quest_contract_hint_any', lang)
+
+    current_location = str(current_location_id or '').strip()
+    if current_location and current_location in contract.target_location_ids:
+        return t('location.quest_contract_hint_here', lang)
+
+    if len(location_names) == 1:
+        return t('location.quest_contract_hint_target', lang, target=location_names[0])
+    return t('location.quest_contract_hint_targets', lang, targets=' / '.join(location_names))
+
+
 def _build_contract_target_line(contract: HuntContract, lang: str) -> str:
     mob_name = get_mob_name(contract.target_mob_id, lang)
     requirement_chunks = [mob_name]
@@ -600,6 +643,7 @@ def build_contract_row(contract: HuntContract, lang: str) -> str:
         lang,
         title=build_contract_title(contract, lang),
         target=_build_contract_target_line(contract, lang),
+        location_hint=_build_contract_location_line(contract, lang),
         kills=contract.required_kills,
         exp=contract.reward_exp,
         gold=contract.reward_gold,
@@ -608,7 +652,7 @@ def build_contract_row(contract: HuntContract, lang: str) -> str:
     )
 
 
-def build_hunt_contract_progress_line(*, player_id: int, lang: str) -> str | None:
+def build_hunt_contract_progress_line(*, player_id: int, lang: str, current_location_id: str | None = None) -> str | None:
     state = get_player_hunt_contract_state(player_id)
     if not state or state.get('status') not in {'active', 'completed'}:
         return None
@@ -621,4 +665,9 @@ def build_hunt_contract_progress_line(*, player_id: int, lang: str) -> str | Non
         progress=int(state.get('progress_kills', 0) or 0),
         required=int(contract.required_kills),
         status=t(status_key, lang),
+        geography_hint=_build_contract_location_hint(
+            contract=contract,
+            lang=lang,
+            current_location_id=current_location_id,
+        ),
     )
