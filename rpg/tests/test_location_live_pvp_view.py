@@ -35,9 +35,22 @@ class _FakeCallbackUpdate:
         self.callback_query = _FakeCallbackQuery(user_id, data)
 
 
+class _FakeContext:
+    def __init__(self):
+        self.user_data = {}
+        self.application = type('A', (), {'create_task': lambda *args, **kwargs: None})()
+
+
 class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _location_message_stub(_player, _location, **kwargs):
+        if kwargs.get('include_action_map'):
+            return 'ok', None, {'snapshot_tag': 's1', 'actions': {}}
+        return 'ok', None
+
     async def test_location_command_allows_live_pvp_view_when_in_battle(self):
         update = _FakeUpdate(12345)
+        context = _FakeContext()
         player = {
             'telegram_id': 12345,
             'lang': 'en',
@@ -50,11 +63,11 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.is_player_busy_with_live_pvp', return_value=True),
             patch('handlers.location.is_in_battle', return_value=True),
             patch('handlers.location.get_location', return_value=location),
-            patch('handlers.location.build_location_message', return_value=('live-pvp', None)),
+            patch('handlers.location.build_location_message', side_effect=self._location_message_stub),
         ):
-            await location_command(update, context=None)
+            await location_command(update, context=context)
 
-        update.message.reply_text.assert_awaited_once_with('live-pvp', reply_markup=None, parse_mode='HTML')
+        update.message.reply_text.assert_awaited_once_with('ok', reply_markup=None, parse_mode='HTML')
 
     async def test_location_command_keeps_non_pvp_battle_block(self):
         update = _FakeUpdate(12345)
@@ -99,7 +112,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
         update = _FakeCallbackUpdate(1001, 'goto_village')
         player = {'telegram_id': 1001, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
         target_location = {'id': 'village', 'safe': True, 'level_min': 1, 'level_max': 10, 'mobs': [], 'services': []}
-        context = type('Ctx', (), {'application': type('A', (), {'create_task': lambda *args, **kwargs: None})()})()
+        context = _FakeContext()
         with (
             patch('handlers.location.get_player', return_value=player),
             patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
@@ -109,7 +122,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.get_location_desc', return_value='road'),
             patch('handlers.location.asyncio.sleep', new=AsyncMock()),
             patch('handlers.location.get_connection') as connection_mock,
-            patch('handlers.location.build_location_message', return_value=('ok', None)),
+            patch('handlers.location.build_location_message', side_effect=self._location_message_stub),
             patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
         ):
             connection_mock.return_value.execute.return_value = None
@@ -300,8 +313,9 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             conn_mock.return_value.close.return_value = None
             text, keyboard = build_location_message(player, location, pvp_only_view=False)
         self.assertIn('Active prep PvP encounters', text)
+        self.assertIn('s1 pv1 view', text)
         callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertIn('pvp_view_12', callback_ids)
+        self.assertNotIn('pvp_view_12', callback_ids)
 
     def test_invited_ally_sees_reinforcement_accept_decline_controls_in_location(self):
         player = {
@@ -373,6 +387,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invited_ally_accept_path_works_from_location_callback(self):
         update = _FakeCallbackUpdate(3003, 'pvp_reinf_accept_9')
+        context = _FakeContext()
         player = {'telegram_id': 3003, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
         with (
@@ -380,15 +395,16 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
             patch('handlers.location.respond_to_reinforcement_invite', return_value=(True, None)) as respond_mock,
             patch('handlers.location.get_location', return_value=location),
-            patch('handlers.location.build_location_message', return_value=('ok', None)),
+            patch('handlers.location.build_location_message', side_effect=self._location_message_stub),
             patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
         ):
-            await handle_location_buttons(update, context=None)
+            await handle_location_buttons(update, context=context)
         respond_mock.assert_called_once_with(engagement_id=9, ally_id=3003, accepted=True)
         update.callback_query.answer.assert_awaited_once_with('location.pvp_reinforcement_accept_done', show_alert=True)
 
     async def test_invited_ally_decline_path_works_from_location_callback(self):
         update = _FakeCallbackUpdate(3003, 'pvp_reinf_decline_9')
+        context = _FakeContext()
         player = {'telegram_id': 3003, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
         with (
@@ -396,10 +412,10 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
             patch('handlers.location.respond_to_reinforcement_invite', return_value=(True, None)) as respond_mock,
             patch('handlers.location.get_location', return_value=location),
-            patch('handlers.location.build_location_message', return_value=('ok', None)),
+            patch('handlers.location.build_location_message', side_effect=self._location_message_stub),
             patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
         ):
-            await handle_location_buttons(update, context=None)
+            await handle_location_buttons(update, context=context)
         respond_mock.assert_called_once_with(engagement_id=9, ally_id=3003, accepted=False)
         update.callback_query.answer.assert_awaited_once_with('location.pvp_reinforcement_decline_done', show_alert=True)
 
