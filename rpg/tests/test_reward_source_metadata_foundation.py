@@ -153,6 +153,63 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         self.assertIn('creature_loot', families)
         self.assertTrue(len(families) > 0)
 
+    def test_spawn_profile_maps_open_world_source_identity_when_source_is_baseline(self):
+        normal_meta = build_open_world_combat_source_metadata(
+            source_id='forest_wolf',
+            mob_level=2,
+            source_category='open_world_normal',
+            spawn_profile='normal',
+            creature_taxonomy={
+                'body_type': 'beast',
+                'special_trait': 'predator',
+                'encounter_class': 'normal',
+            },
+        )
+        elite_meta = build_open_world_combat_source_metadata(
+            source_id='forest_wolf',
+            mob_level=2,
+            source_category='open_world_normal',
+            spawn_profile='elite',
+            creature_taxonomy={
+                'body_type': 'beast',
+                'special_trait': 'predator',
+                'encounter_class': 'normal',
+            },
+        )
+        rare_meta = build_open_world_combat_source_metadata(
+            source_id='forest_wolf',
+            mob_level=2,
+            source_category='open_world_normal',
+            spawn_profile='rare',
+            creature_taxonomy={
+                'body_type': 'beast',
+                'special_trait': 'predator',
+                'encounter_class': 'normal',
+            },
+        )
+
+        self.assertEqual(normal_meta.source_category, 'open_world_normal')
+        self.assertEqual(elite_meta.source_category, 'open_world_elite')
+        self.assertEqual(rare_meta.source_category, 'open_world_rare_spawn')
+        self.assertEqual(normal_meta.quality_floor_rarity, 'common')
+        self.assertEqual(elite_meta.quality_floor_rarity, 'uncommon')
+        self.assertEqual(rare_meta.quality_floor_rarity, 'rare')
+
+    def test_spawn_profile_unknown_falls_back_to_normal_source_identity(self):
+        meta = build_open_world_combat_source_metadata(
+            source_id='forest_wolf',
+            mob_level=2,
+            source_category='open_world_normal',
+            spawn_profile='legacy_unknown',
+            creature_taxonomy={
+                'body_type': 'beast',
+                'special_trait': 'predator',
+                'encounter_class': 'normal',
+            },
+        )
+        self.assertEqual(meta.source_category, 'open_world_normal')
+        self.assertEqual(meta.quality_floor_rarity, 'common')
+
 
     def test_enhancement_material_tiers_are_explicitly_mapped(self):
         self.assertEqual(get_enhancement_material_tier('enhance_shard'), 1)

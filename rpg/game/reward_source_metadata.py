@@ -26,6 +26,12 @@ from game.reward_policies import (
     RewardSourceCategory,
     resolve_content_tier_band,
 )
+
+OPEN_WORLD_SOURCE_CATEGORY_BY_SPAWN_PROFILE: dict[str, RewardSourceCategory] = {
+    'normal': 'open_world_normal',
+    'elite': 'open_world_elite',
+    'rare': 'open_world_rare_spawn',
+}
 ENHANCEMENT_MATERIAL_IDS = {
     'enhance_shard',
     'enhancement_crystal',
@@ -136,11 +142,17 @@ def build_open_world_combat_source_metadata(
     creature_taxonomy: dict | None = None,
     location_id: str | None = None,
     encounter_role: str | None = None,
+    spawn_profile: str | None = None,
 ) -> RewardSourceMetadata:
     taxonomy = normalize_creature_taxonomy(creature_taxonomy)
+    normalized_spawn_profile = str(spawn_profile or 'normal').strip().lower()
+    spawn_profile_category = OPEN_WORLD_SOURCE_CATEGORY_BY_SPAWN_PROFILE.get(normalized_spawn_profile, DEFAULT_SOURCE_CATEGORY)
+
     resolved_source_category = source_category
     if resolved_source_category is None:
         resolved_source_category = encounter_class_to_source_category(taxonomy.encounter_class)
+    if resolved_source_category in (None, DEFAULT_SOURCE_CATEGORY):
+        resolved_source_category = spawn_profile_category
     normalized_category = normalize_reward_source_category(resolved_source_category)
     open_world_profile = build_open_world_reward_pool_profile(
         source_category=normalized_category,
