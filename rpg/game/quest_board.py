@@ -24,6 +24,18 @@ class HuntContract:
     special_spawn_key: str | None = None
     bonus_item_id: str | None = None
     bonus_item_qty: int = 1
+    hunter_points_reward: int = 20
+    required_hunter_rank: str | None = None
+
+
+HUNTER_RANK_THRESHOLDS: tuple[tuple[str, int], ...] = (
+    ('novice', 0),
+    ('tracker', 40),
+    ('hunter', 100),
+    ('slayer', 180),
+    ('veteran', 280),
+)
+HUNTER_RANK_ORDER = {rank_key: idx for idx, (rank_key, _min_points) in enumerate(HUNTER_RANK_THRESHOLDS)}
 
 
 HUNT_CONTRACTS: tuple[HuntContract, ...] = (
@@ -35,6 +47,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_exp=70,
         reward_gold=30,
         board_locations=('village',),
+        hunter_points_reward=20,
     ),
     HuntContract(
         contract_key='hunt_elite_boars',
@@ -45,6 +58,8 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=45,
         board_locations=('village',),
         spawn_profile='elite',
+        hunter_points_reward=30,
+        required_hunter_rank='tracker',
     ),
     HuntContract(
         contract_key='hunt_greyfang',
@@ -57,6 +72,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         special_spawn_key='greyfang',
         bonus_item_id='wolf_fang',
         bonus_item_qty=2,
+        hunter_points_reward=45,
     ),
     HuntContract(
         contract_key='hunt_forest_spiders',
@@ -66,6 +82,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_exp=85,
         reward_gold=40,
         board_locations=('village',),
+        hunter_points_reward=20,
     ),
     HuntContract(
         contract_key='hunt_mine_goblins',
@@ -75,6 +92,8 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_exp=110,
         reward_gold=55,
         board_locations=('village',),
+        hunter_points_reward=35,
+        required_hunter_rank='hunter',
     ),
     HuntContract(
         contract_key='hunt_amber_golem',
@@ -86,6 +105,8 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         board_locations=('village',),
         spawn_profile='elite',
         bonus_item_id='enhancement_crystal',
+        hunter_points_reward=60,
+        required_hunter_rank='veteran',
     ),
 )
 
@@ -111,6 +132,24 @@ def _ensure_player_hunt_contract_table() -> None:
     conn.close()
 
 
+def _ensure_player_hunter_progress_table(conn=None) -> None:
+    should_close = conn is None
+    if conn is None:
+        conn = get_connection()
+    conn.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS player_hunter_progress (
+            player_id       INTEGER PRIMARY KEY,
+            hunter_points   INTEGER NOT NULL DEFAULT 0,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        '''
+    )
+    if should_close:
+        conn.commit()
+        conn.close()
+
+
 def _normalize_spawn_profile(raw_profile: object) -> str:
     value = str(raw_profile or '').strip().lower()
     if value in {'elite', 'rare'}:
@@ -126,6 +165,94 @@ def _table_exists(conn, table_name: str) -> bool:
     return bool(row)
 
 
+def resolve_hunter_rank(hunter_points: int) -> str:
+    points = max(0, int(hunter_points))
+    current = HUNTER_RANK_THRESHOLDS[0][0]
+    for rank_key, min_points in HUNTER_RANK_THRESHOLDS:
+        if points >= min_points:
+            current = rank_key
+        else:
+            break
+    return current
+
+
+def get_next_hunter_rank_progress(hunter_points: int) -> dict:
+    points = max(0, int(hunter_points))
+    current_rank = resolve_hunter_rank(points)
+    current_idx = HUNTER_RANK_ORDER[current_rank]
+    current_floor = HUNTER_RANK_THRESHOLDS[current_idx][1]
+
+    next_rank = None
+    points_to_next = 0
+    current_span_total = 0
+    current_span_progress = points - current_floor
+
+    if current_idx + 1 < len(HUNTER_RANK_THRESHOLDS):
+        next_rank, next_threshold = HUNTER_RANK_THRESHOLDS[current_idx + 1]
+        points_to_next = max(0, next_threshold - points)
+        current_span_total = max(0, next_threshold - current_floor)
+
+    return {
+        'hunter_points': points,
+        'current_rank': current_rank,
+        'next_rank': next_rank,
+        'points_to_next': points_to_next,
+        'current_span_progress': max(0, current_span_progress),
+        'current_span_total': current_span_total,
+    }
+
+
+def _get_player_hunter_progress_with_conn(conn, player_id: int) -> dict:
+    points = 0
+    if _table_exists(conn, 'player_hunter_progress'):
+        row = conn.execute(
+            'SELECT hunter_points FROM player_hunter_progress WHERE player_id=? LIMIT 1',
+            (int(player_id),),
+        ).fetchone()
+        if row:
+            points = max(0, int(row['hunter_points'] or 0))
+    progress = get_next_hunter_rank_progress(points)
+    progress['rank_i18n_key'] = f"location.hunter_rank_{progress['current_rank']}"
+    return progress
+
+
+def get_player_hunter_progress(player_id: int) -> dict:
+    conn = get_connection()
+    try:
+        return _get_player_hunter_progress_with_conn(conn, player_id)
+    finally:
+        conn.close()
+
+
+def _grant_hunter_points_with_conn(conn, *, player_id: int, points_gained: int) -> dict:
+    points_delta = max(0, int(points_gained))
+    before = _get_player_hunter_progress_with_conn(conn, player_id)
+    before_points = int(before['hunter_points'])
+    after_points = before_points + points_delta
+    conn.execute(
+        '''
+        INSERT INTO player_hunter_progress (player_id, hunter_points, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(player_id) DO UPDATE SET
+            hunter_points=excluded.hunter_points,
+            updated_at=CURRENT_TIMESTAMP
+        ''',
+        (int(player_id), after_points),
+    )
+    after = get_next_hunter_rank_progress(after_points)
+    rank_up = HUNTER_RANK_ORDER[after['current_rank']] > HUNTER_RANK_ORDER[before['current_rank']]
+    after['rank_i18n_key'] = f"location.hunter_rank_{after['current_rank']}"
+    return {
+        'points_before': before_points,
+        'points_gained': points_delta,
+        'points_after': after_points,
+        'rank_before': before['current_rank'],
+        'rank_after': after['current_rank'],
+        'rank_up': rank_up,
+        'progress': after,
+    }
+
+
 def list_hunt_contracts_for_location(location_id: str) -> list[HuntContract]:
     location = str(location_id or '').strip()
     return [contract for contract in HUNT_CONTRACTS if location in contract.board_locations]
@@ -133,6 +260,43 @@ def list_hunt_contracts_for_location(location_id: str) -> list[HuntContract]:
 
 def get_hunt_contract(contract_key: str) -> HuntContract | None:
     return HUNT_CONTRACTS_BY_KEY.get(str(contract_key or '').strip())
+
+
+def _is_hunter_rank_requirement_met(*, hunter_rank: str, required_rank: str | None) -> bool:
+    if not required_rank:
+        return True
+    if required_rank not in HUNTER_RANK_ORDER:
+        return True
+    current_idx = HUNTER_RANK_ORDER.get(hunter_rank, 0)
+    required_idx = HUNTER_RANK_ORDER[required_rank]
+    return current_idx >= required_idx
+
+
+def get_contract_rank_lock_reason(*, contract: HuntContract, player_hunter_rank: str, lang: str) -> str | None:
+    required_rank = str(contract.required_hunter_rank or '').strip().lower()
+    if not required_rank:
+        return None
+    if _is_hunter_rank_requirement_met(hunter_rank=player_hunter_rank, required_rank=required_rank):
+        return None
+    return t('location.quest_board_locked_reason_rank', lang, rank=t(f'location.hunter_rank_{required_rank}', lang))
+
+
+def list_hunt_contracts_for_player(*, location_id: str, player_id: int, lang: str) -> dict:
+    progress = get_player_hunter_progress(player_id)
+    current_rank = str(progress['current_rank'])
+    available: list[HuntContract] = []
+    locked: list[dict] = []
+    for contract in list_hunt_contracts_for_location(location_id):
+        locked_reason = get_contract_rank_lock_reason(contract=contract, player_hunter_rank=current_rank, lang=lang)
+        if locked_reason:
+            locked.append({'contract': contract, 'reason': locked_reason})
+        else:
+            available.append(contract)
+    return {
+        'available': available,
+        'locked': locked,
+        'hunter_progress': progress,
+    }
 
 
 def _get_player_hunt_contract_state_with_conn(conn, player_id: int) -> dict | None:
@@ -179,6 +343,14 @@ def accept_hunt_contract(*, player_id: int, location_id: str, contract_key: str)
         if current and current.get('status') in {'active', 'completed'}:
             conn.rollback()
             return False, 'already_active'
+
+        player_progress = _get_player_hunter_progress_with_conn(conn, player_id)
+        if not _is_hunter_rank_requirement_met(
+            hunter_rank=str(player_progress['current_rank']),
+            required_rank=contract.required_hunter_rank,
+        ):
+            conn.rollback()
+            return False, 'rank_locked'
 
         conn.execute(
             '''
@@ -255,6 +427,7 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        _ensure_player_hunter_progress_table(conn)
         state = _get_player_hunt_contract_state_with_conn(conn, player_id)
         if not state:
             conn.rollback()
@@ -331,6 +504,12 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[
                 'granted': True,
             }
 
+        hunter_progress = _grant_hunter_points_with_conn(
+            conn,
+            player_id=int(player_id),
+            points_gained=int(contract.hunter_points_reward),
+        )
+
         conn.execute(
             '''
             UPDATE player_hunt_contracts
@@ -347,6 +526,7 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[
             'leveled_up': leveled_up,
             'new_level': level,
             'bonus_item': bonus_item_result,
+            'hunter_progress': hunter_progress,
         }
     except Exception:
         conn.rollback()
@@ -424,6 +604,7 @@ def build_contract_row(contract: HuntContract, lang: str) -> str:
         exp=contract.reward_exp,
         gold=contract.reward_gold,
         bonus=bonus_reward,
+        hunter_points=max(0, int(contract.hunter_points_reward)),
     )
 
 
