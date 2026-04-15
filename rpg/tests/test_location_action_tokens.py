@@ -47,6 +47,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
             patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
@@ -86,6 +87,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
             patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
@@ -127,6 +129,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
             patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
@@ -160,6 +163,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[SimpleNamespace(item_id='herb_common')]),
             patch('handlers.location.get_item_name', return_value='Herb'),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
@@ -195,6 +199,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
             patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
@@ -227,6 +232,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
             patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
@@ -237,6 +243,74 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(first_snapshot['snapshot_tag'], 's1')
         self.assertEqual(second_snapshot['snapshot_tag'], 's2')
+
+    def test_location_message_shows_compact_active_contract_progress_line(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {'id': 'village', 'safe': True, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': ['shop']}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Village'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value='📌 Contract: Hunt Wolves (2/5, in progress)'),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, _keyboard, _snapshot = build_location_message(player, location, include_action_map=True)
+
+        self.assertIn('📌 Contract: Hunt Wolves (2/5, in progress)', text)
+
+    def test_pvp_only_view_hides_active_contract_progress_line(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {'id': 'village', 'safe': True, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': ['shop']}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Village'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value='📌 Contract: Hunt Wolves (2/5, in progress)') as progress_mock,
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, _keyboard, _snapshot = build_location_message(
+                player,
+                location,
+                include_action_map=True,
+                pvp_only_view=True,
+            )
+
+        progress_mock.assert_not_called()
+        self.assertNotIn('📌 Contract: Hunt Wolves (2/5, in progress)', text)
 
     async def test_current_snapshot_command_routes_to_existing_handler(self):
         update = _DummyUpdate('s1234 m1 fight')

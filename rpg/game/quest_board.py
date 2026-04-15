@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 from database import get_connection
 from game.balance import exp_to_next_level
-from game.i18n import get_mob_name, t
+from game.gear_instances import grant_item_to_player
+from game.i18n import get_item_name, get_mob_name, t
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -18,6 +22,8 @@ class HuntContract:
     board_locations: tuple[str, ...]
     spawn_profile: str | None = None
     special_spawn_key: str | None = None
+    bonus_item_id: str | None = None
+    bonus_item_qty: int = 1
 
 
 HUNT_CONTRACTS: tuple[HuntContract, ...] = (
@@ -49,6 +55,37 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=70,
         board_locations=('village',),
         special_spawn_key='greyfang',
+        bonus_item_id='wolf_fang',
+        bonus_item_qty=2,
+    ),
+    HuntContract(
+        contract_key='hunt_forest_spiders',
+        title_i18n_key='location.quest_contract_spiders_title',
+        target_mob_id='forest_spider',
+        required_kills=4,
+        reward_exp=85,
+        reward_gold=40,
+        board_locations=('village',),
+    ),
+    HuntContract(
+        contract_key='hunt_mine_goblins',
+        title_i18n_key='location.quest_contract_mine_goblins_title',
+        target_mob_id='goblin_miner',
+        required_kills=3,
+        reward_exp=110,
+        reward_gold=55,
+        board_locations=('village',),
+    ),
+    HuntContract(
+        contract_key='hunt_amber_golem',
+        title_i18n_key='location.quest_contract_amber_golem_title',
+        target_mob_id='stone_golem',
+        required_kills=1,
+        reward_exp=140,
+        reward_gold=80,
+        board_locations=('village',),
+        spawn_profile='elite',
+        bonus_item_id='enhancement_crystal',
     ),
 )
 
@@ -81,6 +118,14 @@ def _normalize_spawn_profile(raw_profile: object) -> str:
     return 'normal'
 
 
+def _table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (str(table_name),),
+    ).fetchone()
+    return bool(row)
+
+
 def list_hunt_contracts_for_location(location_id: str) -> list[HuntContract]:
     location = str(location_id or '').strip()
     return [contract for contract in HUNT_CONTRACTS if location in contract.board_locations]
@@ -90,9 +135,9 @@ def get_hunt_contract(contract_key: str) -> HuntContract | None:
     return HUNT_CONTRACTS_BY_KEY.get(str(contract_key or '').strip())
 
 
-def get_player_hunt_contract_state(player_id: int) -> dict | None:
-    _ensure_player_hunt_contract_table()
-    conn = get_connection()
+def _get_player_hunt_contract_state_with_conn(conn, player_id: int) -> dict | None:
+    if not _table_exists(conn, 'player_hunt_contracts'):
+        return None
     row = conn.execute(
         '''
         SELECT player_id, contract_key, progress_kills, status, completed_at, claimed_at
@@ -102,7 +147,6 @@ def get_player_hunt_contract_state(player_id: int) -> dict | None:
         ''',
         (int(player_id),),
     ).fetchone()
-    conn.close()
     if not row:
         return None
     state = dict(row)
@@ -113,6 +157,14 @@ def get_player_hunt_contract_state(player_id: int) -> dict | None:
     return state
 
 
+def get_player_hunt_contract_state(player_id: int) -> dict | None:
+    conn = get_connection()
+    try:
+        return _get_player_hunt_contract_state_with_conn(conn, player_id)
+    finally:
+        conn.close()
+
+
 def accept_hunt_contract(*, player_id: int, location_id: str, contract_key: str) -> tuple[bool, str]:
     _ensure_player_hunt_contract_table()
     contract = get_hunt_contract(contract_key)
@@ -120,29 +172,32 @@ def accept_hunt_contract(*, player_id: int, location_id: str, contract_key: str)
         return False, 'not_found'
     if str(location_id) not in contract.board_locations:
         return False, 'wrong_board'
-
-    current = get_player_hunt_contract_state(player_id)
-    if current and current.get('status') in {'active', 'completed'}:
-        return False, 'already_active'
-
     conn = get_connection()
-    conn.execute(
-        '''
-        INSERT INTO player_hunt_contracts (player_id, contract_key, progress_kills, status, completed_at, claimed_at, updated_at)
-        VALUES (?, ?, 0, 'active', NULL, NULL, CURRENT_TIMESTAMP)
-        ON CONFLICT(player_id) DO UPDATE SET
-            contract_key=excluded.contract_key,
-            progress_kills=0,
-            status='active',
-            completed_at=NULL,
-            claimed_at=NULL,
-            updated_at=CURRENT_TIMESTAMP
-        ''',
-        (int(player_id), contract.contract_key),
-    )
-    conn.commit()
-    conn.close()
-    return True, 'accepted'
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        current = _get_player_hunt_contract_state_with_conn(conn, player_id)
+        if current and current.get('status') in {'active', 'completed'}:
+            conn.rollback()
+            return False, 'already_active'
+
+        conn.execute(
+            '''
+            INSERT INTO player_hunt_contracts (player_id, contract_key, progress_kills, status, completed_at, claimed_at, updated_at)
+            VALUES (?, ?, 0, 'active', NULL, NULL, CURRENT_TIMESTAMP)
+            ON CONFLICT(player_id) DO UPDATE SET
+                contract_key=excluded.contract_key,
+                progress_kills=0,
+                status='active',
+                completed_at=NULL,
+                claimed_at=NULL,
+                updated_at=CURRENT_TIMESTAMP
+            ''',
+            (int(player_id), contract.contract_key),
+        )
+        conn.commit()
+        return True, 'accepted'
+    finally:
+        conn.close()
 
 
 def register_hunt_kill_progress(
@@ -152,111 +207,186 @@ def register_hunt_kill_progress(
     spawn_profile: str | None = None,
     special_spawn_key: str | None = None,
 ) -> dict:
-    _ensure_player_hunt_contract_table()
-    state = get_player_hunt_contract_state(player_id)
-    if not state or state.get('status') != 'active':
-        return {'updated': False, 'completed_now': False}
-
-    contract: HuntContract = state['contract']
-    if str(mob_id or '') != contract.target_mob_id:
-        return {'updated': False, 'completed_now': False}
-
-    actual_profile = _normalize_spawn_profile(spawn_profile)
-    if contract.spawn_profile and actual_profile != _normalize_spawn_profile(contract.spawn_profile):
-        return {'updated': False, 'completed_now': False}
-
-    actual_special_key = str(special_spawn_key or '').strip().lower()
-    required_special_key = str(contract.special_spawn_key or '').strip().lower()
-    if required_special_key and actual_special_key != required_special_key:
-        return {'updated': False, 'completed_now': False}
-
-    current_progress = int(state.get('progress_kills', 0) or 0)
-    next_progress = min(contract.required_kills, current_progress + 1)
-    completed_now = next_progress >= contract.required_kills and current_progress < contract.required_kills
-    next_status = 'completed' if next_progress >= contract.required_kills else 'active'
-
     conn = get_connection()
-    conn.execute(
-        '''
-        UPDATE player_hunt_contracts
-        SET progress_kills=?, status=?, completed_at=CASE WHEN ?='completed' THEN CURRENT_TIMESTAMP ELSE completed_at END, updated_at=CURRENT_TIMESTAMP
-        WHERE player_id=?
-        ''',
-        (next_progress, next_status, next_status, int(player_id)),
-    )
-    conn.commit()
-    conn.close()
-    return {
-        'updated': next_progress != current_progress,
-        'completed_now': completed_now,
-        'progress_kills': next_progress,
-        'required_kills': contract.required_kills,
-    }
+    try:
+        state = _get_player_hunt_contract_state_with_conn(conn, player_id)
+        if not state or state.get('status') != 'active':
+            return {'updated': False, 'completed_now': False}
+
+        contract: HuntContract = state['contract']
+        if str(mob_id or '') != contract.target_mob_id:
+            return {'updated': False, 'completed_now': False}
+
+        actual_profile = _normalize_spawn_profile(spawn_profile)
+        if contract.spawn_profile and actual_profile != _normalize_spawn_profile(contract.spawn_profile):
+            return {'updated': False, 'completed_now': False}
+
+        actual_special_key = str(special_spawn_key or '').strip().lower()
+        required_special_key = str(contract.special_spawn_key or '').strip().lower()
+        if required_special_key and actual_special_key != required_special_key:
+            return {'updated': False, 'completed_now': False}
+
+        current_progress = int(state.get('progress_kills', 0) or 0)
+        next_progress = min(contract.required_kills, current_progress + 1)
+        completed_now = next_progress >= contract.required_kills and current_progress < contract.required_kills
+        next_status = 'completed' if next_progress >= contract.required_kills else 'active'
+
+        conn.execute(
+            '''
+            UPDATE player_hunt_contracts
+            SET progress_kills=?, status=?, completed_at=CASE WHEN ?='completed' THEN CURRENT_TIMESTAMP ELSE completed_at END, updated_at=CURRENT_TIMESTAMP
+            WHERE player_id=?
+            ''',
+            (next_progress, next_status, next_status, int(player_id)),
+        )
+        conn.commit()
+        return {
+            'updated': next_progress != current_progress,
+            'completed_now': completed_now,
+            'progress_kills': next_progress,
+            'required_kills': contract.required_kills,
+        }
+    finally:
+        conn.close()
 
 
 def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[bool, str, dict | None]:
     _ensure_player_hunt_contract_table()
-    state = get_player_hunt_contract_state(player_id)
-    if not state:
-        return False, 'no_contract', None
-    if state.get('status') == 'claimed':
-        return False, 'already_claimed', None
-    if state.get('status') != 'completed':
-        return False, 'not_completed', None
-
-    contract: HuntContract = state['contract']
-    if str(location_id) not in contract.board_locations:
-        return False, 'wrong_board', None
-
     conn = get_connection()
-    player = conn.execute(
-        'SELECT level, exp, gold, stat_points FROM players WHERE telegram_id=?',
-        (int(player_id),),
-    ).fetchone()
-    if not player:
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        state = _get_player_hunt_contract_state_with_conn(conn, player_id)
+        if not state:
+            conn.rollback()
+            return False, 'no_contract', None
+        if state.get('status') == 'claimed':
+            conn.rollback()
+            return False, 'already_claimed', None
+        if state.get('status') != 'completed':
+            conn.rollback()
+            return False, 'not_completed', None
+
+        contract: HuntContract = state['contract']
+        if str(location_id) not in contract.board_locations:
+            conn.rollback()
+            return False, 'wrong_board', None
+
+        player = conn.execute(
+            'SELECT level, exp, gold, stat_points FROM players WHERE telegram_id=?',
+            (int(player_id),),
+        ).fetchone()
+        if not player:
+            conn.rollback()
+            return False, 'player_not_found', None
+
+        level = int(player['level'])
+        exp_value = int(player['exp'])
+        reward_exp = int(contract.reward_exp)
+        reward_gold = int(contract.reward_gold)
+        exp_value += reward_exp
+        leveled_up = False
+        while exp_value >= exp_to_next_level(level):
+            exp_value -= exp_to_next_level(level)
+            level += 1
+            leveled_up = True
+        levels_gained = max(0, level - int(player['level']))
+        stat_points = int(player['stat_points']) + (levels_gained * 3)
+        gold_value = int(player['gold']) + reward_gold
+
+        bonus_item_result = None
+        conn.execute(
+            '''
+            UPDATE players
+            SET exp=?, gold=?, level=?, stat_points=?
+            WHERE telegram_id=?
+            ''',
+            (exp_value, gold_value, level, stat_points, int(player_id)),
+        )
+
+        if contract.bonus_item_id:
+            bonus_qty = max(1, int(contract.bonus_item_qty))
+            grant_result = grant_item_to_player(
+                int(player_id),
+                contract.bonus_item_id,
+                quantity=bonus_qty,
+                source='quest_contract_reward',
+                source_level=level,
+                conn=conn,
+            )
+            delivered_qty = int(grant_result.get('stackable_added', 0)) + int(grant_result.get('gear_instances_created', 0))
+            if delivered_qty < bonus_qty:
+                logger.warning(
+                    'Hunt claim bonus item delivery mismatch: player_id=%s contract=%s item=%s expected_qty=%s delivered_qty=%s',
+                    int(player_id),
+                    contract.contract_key,
+                    contract.bonus_item_id,
+                    bonus_qty,
+                    delivered_qty,
+                )
+                raise RuntimeError('bonus_item_reward_not_delivered')
+            bonus_item_result = {
+                'item_id': contract.bonus_item_id,
+                'quantity': bonus_qty,
+                'grant_result': grant_result,
+                'granted': True,
+            }
+
+        conn.execute(
+            '''
+            UPDATE player_hunt_contracts
+            SET status='claimed', claimed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+            WHERE player_id=?
+            ''',
+            (int(player_id),),
+        )
+        conn.commit()
+        return True, 'claimed', {
+            'contract': contract,
+            'reward_exp': reward_exp,
+            'reward_gold': reward_gold,
+            'leveled_up': leveled_up,
+            'new_level': level,
+            'bonus_item': bonus_item_result,
+        }
+    except Exception:
+        conn.rollback()
+        logger.exception(
+            'Hunt claim transaction failed: player_id=%s location_id=%s',
+            int(player_id),
+            str(location_id),
+        )
+        return False, 'reward_delivery_failed', None
+    finally:
         conn.close()
-        return False, 'player_not_found', None
 
-    level = int(player['level'])
-    exp_value = int(player['exp'])
-    reward_exp = int(contract.reward_exp)
-    reward_gold = int(contract.reward_gold)
-    exp_value += reward_exp
-    leveled_up = False
-    while exp_value >= exp_to_next_level(level):
-        exp_value -= exp_to_next_level(level)
-        level += 1
-        leveled_up = True
-    levels_gained = max(0, level - int(player['level']))
-    stat_points = int(player['stat_points']) + (levels_gained * 3)
-    gold_value = int(player['gold']) + reward_gold
 
-    conn.execute(
-        '''
-        UPDATE players
-        SET exp=?, gold=?, level=?, stat_points=?
-        WHERE telegram_id=?
-        ''',
-        (exp_value, gold_value, level, stat_points, int(player_id)),
-    )
-    conn.execute(
-        '''
-        UPDATE player_hunt_contracts
-        SET status='claimed', claimed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
-        WHERE player_id=?
-        ''',
-        (int(player_id),),
-    )
-    conn.commit()
-    conn.close()
+def abandon_hunt_contract(*, player_id: int) -> tuple[bool, str]:
+    _ensure_player_hunt_contract_table()
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        state = _get_player_hunt_contract_state_with_conn(conn, player_id)
+        if not state:
+            conn.rollback()
+            return False, 'no_contract'
+        if state.get('status') == 'completed':
+            conn.rollback()
+            return False, 'completed_must_claim'
+        if state.get('status') != 'active':
+            conn.rollback()
+            return False, 'not_active'
 
-    return True, 'claimed', {
-        'contract': contract,
-        'reward_exp': reward_exp,
-        'reward_gold': reward_gold,
-        'leveled_up': leveled_up,
-        'new_level': level,
-    }
+        conn.execute(
+            '''
+            DELETE FROM player_hunt_contracts
+            WHERE player_id=?
+            ''',
+            (int(player_id),),
+        )
+        conn.commit()
+        return True, 'abandoned'
+    finally:
+        conn.close()
 
 
 def _build_contract_target_line(contract: HuntContract, lang: str) -> str:
@@ -277,6 +407,14 @@ def build_contract_title(contract: HuntContract, lang: str) -> str:
 
 
 def build_contract_row(contract: HuntContract, lang: str) -> str:
+    bonus_reward = ''
+    if contract.bonus_item_id:
+        bonus_reward = t(
+            'location.quest_contract_bonus_item',
+            lang,
+            qty=max(1, int(contract.bonus_item_qty)),
+            item=get_item_name(contract.bonus_item_id, lang),
+        )
     return t(
         'location.quest_contract_row',
         lang,
@@ -285,4 +423,21 @@ def build_contract_row(contract: HuntContract, lang: str) -> str:
         kills=contract.required_kills,
         exp=contract.reward_exp,
         gold=contract.reward_gold,
+        bonus=bonus_reward,
+    )
+
+
+def build_hunt_contract_progress_line(*, player_id: int, lang: str) -> str | None:
+    state = get_player_hunt_contract_state(player_id)
+    if not state or state.get('status') not in {'active', 'completed'}:
+        return None
+    contract: HuntContract = state['contract']
+    status_key = 'location.quest_board_status_ready' if state.get('status') == 'completed' else 'location.quest_board_status_active'
+    return t(
+        'location.location_active_contract_line',
+        lang,
+        title=build_contract_title(contract, lang),
+        progress=int(state.get('progress_kills', 0) or 0),
+        required=int(contract.required_kills),
+        status=t(status_key, lang),
     )
