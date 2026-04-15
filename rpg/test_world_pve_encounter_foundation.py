@@ -1073,7 +1073,93 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertEqual(row['status'], 'finished')
         self.assertIsNotNone(row['finished_at'])
         self.assertEqual(spawn_row['state'], 'respawning')
-        self.assertIsNone(spawn_row['linked_encounter_id'])
+
+    def test_partial_migration_detail_falls_back_to_normal_without_spawn_profile_column(self):
+        db_uri = 'file:pve_partial_detail_spawn_profile_missing?mode=memory&cache=shared'
+        keeper = sqlite3.connect(db_uri, uri=True)
+        keeper.row_factory = sqlite3.Row
+        keeper.execute(
+            '''
+            CREATE TABLE pve_encounters (
+                encounter_id      TEXT PRIMARY KEY,
+                owner_player_id   INTEGER NOT NULL,
+                status            TEXT NOT NULL,
+                mob_id            TEXT,
+                battle_state_json TEXT NOT NULL,
+                mob_json          TEXT NOT NULL,
+                location_id       TEXT,
+                anchor_spawn_instance_id TEXT,
+                created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                finished_at       TIMESTAMP
+            )
+            '''
+        )
+        keeper.execute(
+            '''
+            CREATE TABLE pve_spawn_instances (
+                spawn_instance_id     TEXT PRIMARY KEY,
+                location_id           TEXT NOT NULL,
+                mob_id                TEXT NOT NULL,
+                state                 TEXT NOT NULL,
+                linked_encounter_id   TEXT,
+                respawn_available_at  TIMESTAMP,
+                created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            '''
+        )
+        keeper.execute(
+            '''
+            CREATE TABLE pve_encounter_participants (
+                encounter_id  TEXT NOT NULL,
+                player_id     INTEGER NOT NULL,
+                side_id       TEXT NOT NULL DEFAULT 'side_a',
+                status        TEXT NOT NULL DEFAULT 'active',
+                joined_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (encounter_id, player_id)
+            )
+            '''
+        )
+        keeper.execute(
+            '''
+            INSERT INTO pve_encounters (
+                encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id, anchor_spawn_instance_id
+            ) VALUES (?, ?, 'active', 'forest_wolf', '{}', '{}', ?, ?)
+            ''',
+            ('legacy-detail-1', self.player_id, self.location_id, 'spawn-dark_forest-forest_wolf'),
+        )
+        keeper.execute(
+            '''
+            INSERT INTO pve_spawn_instances (
+                spawn_instance_id, location_id, mob_id, state, linked_encounter_id
+            ) VALUES (?, ?, ?, 'forming', ?)
+            ''',
+            ('spawn-dark_forest-forest_wolf', self.location_id, 'forest_wolf', 'legacy-detail-1'),
+        )
+        keeper.execute(
+            '''
+            INSERT INTO pve_encounter_participants (
+                encounter_id, player_id, side_id, status
+            ) VALUES (?, ?, 'side_a', 'active')
+            ''',
+            ('legacy-detail-1', self.player_id),
+        )
+        keeper.commit()
+
+        def _partial_conn():
+            conn = sqlite3.connect(db_uri, uri=True)
+            conn.row_factory = sqlite3.Row
+            return conn
+
+        with patch('game.pve_live.get_connection', side_effect=_partial_conn):
+            detail = get_open_world_pve_encounter_detail(encounter_id='legacy-detail-1')
+
+        keeper.close()
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail['encounter_id'], 'legacy-detail-1')
+        self.assertEqual(detail['spawn_profile'], 'normal')
 
     def test_supersede_transitions_old_anchored_spawn_to_respawning_and_releases_link(self):
         first_battle = {'mob_id': 'forest_wolf', 'log': []}
@@ -1183,6 +1269,51 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         wolf_spawns = [spawn for spawn in spawns if spawn['mob_id'] == 'forest_wolf']
         self.assertEqual(len(wolf_spawns), 1)
         self.assertEqual(wolf_spawns[0]['spawn_instance_id'], 'spawn-dark_forest-forest_wolf')
+        self.assertEqual(wolf_spawns[0]['spawn_profile'], 'normal')
+
+    def test_profiled_bootstrap_creates_normal_elite_rare_instances(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 1},
+            'world_spawn_profiles': {
+                'forest_wolf': {'normal': 1, 'elite': 1, 'rare': 1},
+            },
+        }):
+            spawns = list_location_available_spawn_instances(location_id=self.location_id)
+        by_profile = {str(spawn['spawn_profile']): spawn for spawn in spawns}
+        self.assertIn('normal', by_profile)
+        self.assertIn('elite', by_profile)
+        self.assertIn('rare', by_profile)
+        self.assertEqual(by_profile['normal']['spawn_instance_id'], 'spawn-dark_forest-forest_wolf')
+        self.assertEqual(by_profile['elite']['spawn_instance_id'], 'spawn-dark_forest-forest_wolf-elite')
+        self.assertEqual(by_profile['rare']['spawn_instance_id'], 'spawn-dark_forest-forest_wolf-rare')
+
+    def test_active_encounter_detail_preserves_spawn_profile_identity(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_profiles': {
+                'forest_wolf': {'normal': 1, 'elite': 1},
+            },
+        }):
+            encounter_id, status = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf-elite',
+            )
+            self.assertEqual(status, 'created')
+
+            active = list_location_active_pve_encounters(location_id=self.location_id)
+        active_row = next(row for row in active if row['encounter_id'] == encounter_id)
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        self.assertEqual(active_row['spawn_profile'], 'elite')
+        self.assertEqual(detail['spawn_profile'], 'elite')
+        self.assertEqual(detail['anchor_spawn_instance_id'], 'spawn-dark_forest-forest_wolf-elite')
 
     def test_engaging_one_same_mob_spawn_keeps_sibling_spawn_idle(self):
         with patch('game.pve_live.get_location', return_value={

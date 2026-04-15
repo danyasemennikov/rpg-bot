@@ -115,6 +115,15 @@ _SUPPORTED_LOCATION_SERVICE_ACTIONS = {
 }
 
 
+def _format_spawn_profile_marker(profile: str | None, lang: str) -> str:
+    normalized = str(profile or 'normal').strip().lower()
+    if normalized == 'elite':
+        return t('location.spawn_profile_elite', lang)
+    if normalized == 'rare':
+        return t('location.spawn_profile_rare', lang)
+    return ''
+
+
 def _ensure_location_context_user_data(context: ContextTypes.DEFAULT_TYPE) -> dict:
     user_data = getattr(context, 'user_data', None)
     if user_data is None:
@@ -183,7 +192,8 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
     if not detail or detail.get('status') != 'active':
         return t('location.pve_no_encounter', lang), InlineKeyboardMarkup([])
 
-    mob_name = get_mob_name(str(detail.get('mob_id') or ''), lang)
+    profile_marker = _format_spawn_profile_marker(str(detail.get('spawn_profile') or 'normal'), lang)
+    mob_name = f"{profile_marker} {get_mob_name(str(detail.get('mob_id') or ''), lang)}".strip()
     status_key = 'location.pve_status_locked'
     can_join, _ = can_join_open_world_pve_encounter(
         encounter_id=encounter_id,
@@ -530,6 +540,7 @@ def build_location_message(
             pve_token_index = 1
             for encounter in active_pve_encounters:
                 mob_id = str(encounter.get('mob_id') or '')
+                profile_marker = _format_spawn_profile_marker(str(encounter.get('spawn_profile') or 'normal'), lang)
                 participant_ids = {
                     int(pid) for pid in encounter.get('participant_player_ids', [])
                 } if isinstance(encounter.get('participant_player_ids'), list) else set()
@@ -540,7 +551,7 @@ def build_location_message(
                     'location.pve_encounter_row',
                     lang,
                     id=encounter['encounter_id'],
-                    mob=get_mob_name(mob_id, lang),
+                    mob=f"{profile_marker} {get_mob_name(mob_id, lang)}".strip(),
                     players=int(encounter.get('participant_count', 0)),
                     join_state=t(
                         (
@@ -567,9 +578,10 @@ def build_location_message(
         available_spawns = list_location_available_spawn_instances(location_id=location['id'])
         if available_spawns:
             mob_token_index = 1
-            mob_counter: dict[str, int] = {}
+            mob_counter: dict[tuple[str, str], int] = {}
         for spawn in available_spawns:
             mob_id = str(spawn.get('mob_id') or '')
+            spawn_profile = str(spawn.get('spawn_profile') or 'normal')
             mob = get_mob(mob_id)
             if not mob:
                 continue
@@ -588,10 +600,13 @@ def build_location_message(
                 diff = t('location.diff_unknown', lang)
 
             token = f"m{mob_token_index}"
-            mob_counter[mob_id] = mob_counter.get(mob_id, 0) + 1
-            dup_suffix = f" #{mob_counter[mob_id]}" if mob_counter[mob_id] > 1 else ""
+            mob_key = (mob_id, spawn_profile)
+            mob_counter[mob_key] = mob_counter.get(mob_key, 0) + 1
+            dup_suffix = f" #{mob_counter[mob_key]}" if mob_counter[mob_key] > 1 else ""
+            profile_marker = _format_spawn_profile_marker(spawn_profile, lang)
+            mob_label = f"{profile_marker} {get_mob_name(mob_id, lang)}".strip()
             mob_lines.append(
-                f"{token} — {diff} {get_mob_name(mob_id, lang)}{dup_suffix}  "
+                f"{token} — {diff} {mob_label}{dup_suffix}  "
                 f"{t('common.level_short', lang)}{mob['level']}{agr_tag}"
             )
             _register_action(f'{token} fight', f"fight_spawn_{spawn['spawn_instance_id']}", mob_cmds)

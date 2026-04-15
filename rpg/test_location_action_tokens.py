@@ -330,6 +330,53 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('pv1', text)
         self.assertIn('pe1', text)
 
+    def test_location_text_marks_elite_and_rare_spawn_profiles(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': ['forest_wolf'], 'services': []}
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[{
+                'encounter_id': 'pve-elite',
+                'mob_id': 'forest_wolf',
+                'spawn_profile': 'elite',
+                'participant_player_ids': [],
+                'participant_count': 1,
+                'joinable': True,
+            }]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[
+                {'spawn_instance_id': 'spawn-dark_forest-forest_wolf-elite', 'mob_id': 'forest_wolf', 'spawn_profile': 'elite'},
+                {'spawn_instance_id': 'spawn-dark_forest-forest_wolf-rare', 'mob_id': 'forest_wolf', 'spawn_profile': 'rare'},
+            ]),
+            patch('handlers.location.get_mob', return_value={'id': 'forest_wolf', 'level': 2, 'aggressive': False}),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.can_join_open_world_pve_encounter', return_value=(True, None)),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
+
+        self.assertIn('[Elite]', text)
+        self.assertIn('[Rare]', text)
+        self.assertIn('m1', text)
+        self.assertIn('m2', text)
+        self.assertTrue(any(cmd.endswith('m1 fight') for cmd in snapshot['actions']))
+        self.assertTrue(any(cmd.endswith('m2 fight') for cmd in snapshot['actions']))
+
 
 if __name__ == '__main__':
     unittest.main()
