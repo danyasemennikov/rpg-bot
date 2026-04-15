@@ -120,8 +120,17 @@ _TOKEN_COMMAND_RE = re.compile(
 )
 _SUPPORTED_LOCATION_SERVICE_ACTIONS = {
     'shop': ('shop', 'shop'),
+    'inn': ('inn', 'inn'),
     'quest_board': ('quests', 'quest_board'),
 }
+INN_REST_COST_GOLD = 12
+
+
+def _can_open_inn(location: dict | None) -> bool:
+    if not location:
+        return False
+    services = location.get('services', []) or []
+    return bool(location.get('safe')) and ('inn' in services)
 
 
 def _format_spawn_profile_marker(profile: str | None, lang: str) -> str:
@@ -414,6 +423,26 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
     keyboard.append([InlineKeyboardButton(t('location.quest_board_back_btn', lang), callback_data='quest_board_back')])
     return text, InlineKeyboardMarkup(keyboard)
 
+
+def build_inn_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
+    lang = player.get('lang', 'ru')
+    rest_cost = INN_REST_COST_GOLD
+    text = t('location.inn_title', lang) + '\n\n'
+    text += t(
+        'location.inn_stats',
+        lang,
+        hp=player['hp'],
+        max_hp=player['max_hp'],
+        mana=player['mana'],
+        max_mana=player['max_mana'],
+        cost=rest_cost,
+    )
+    keyboard = [
+        [InlineKeyboardButton(t('location.inn_rest_btn', lang, cost=rest_cost), callback_data='inn_rest')],
+        [InlineKeyboardButton(t('location.inn_back_btn', lang), callback_data='inn_back')],
+    ]
+    return text, InlineKeyboardMarkup(keyboard)
+
 # ────────────────────────────────────────
 # ОТОБРАЖЕНИЕ ЛОКАЦИИ
 # ────────────────────────────────────────
@@ -460,6 +489,9 @@ def build_location_message(
     if not pvp_only_view:
         service_token_index = 1
         for service_id in location.get('services', []) or []:
+            if service_id == 'inn' and not bool(location.get('safe')):
+                # Truthful contract: tavern is safe-hub only even if service is listed by mistake.
+                continue
             service_action = _SUPPORTED_LOCATION_SERVICE_ACTIONS.get(str(service_id))
             if not service_action:
                 continue
@@ -1211,6 +1243,70 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         text, keyboard = build_quest_board_message(dict(p), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
+        return
+
+    if data == 'inn':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if not _can_open_inn(location):
+            await query.answer(t('location.inn_not_available', lang), show_alert=True)
+            return
+
+        text, keyboard = build_inn_message(dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data == 'inn_back':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if not _can_open_inn(location):
+            await query.answer(t('location.inn_not_available', lang), show_alert=True)
+            return
+
+        text, keyboard = _build_location_message_with_snapshot(context, dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data == 'inn_rest':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if not _can_open_inn(location):
+            await query.answer(t('location.inn_not_available', lang), show_alert=True)
+            return
+
+        hp_now = int(p['hp'] or 0)
+        hp_max = int(p['max_hp'] or 0)
+        mana_now = int(p['mana'] or 0)
+        mana_max = int(p['max_mana'] or 0)
+        if hp_now >= hp_max and mana_now >= mana_max:
+            await query.answer(t('location.inn_rest_not_needed', lang), show_alert=True)
+            return
+
+        rest_cost = INN_REST_COST_GOLD
+        if int(p['gold'] or 0) < rest_cost:
+            await query.answer(t('location.inn_no_gold', lang, cost=rest_cost), show_alert=True)
+            return
+
+        conn = get_connection()
+        conn.execute(
+            'UPDATE players SET hp=max_hp, mana=max_mana, gold=gold-? WHERE telegram_id=?',
+            (rest_cost, user.id),
+        )
+        conn.commit()
+        conn.close()
+
+        player_after = dict(get_player(user.id))
+        text, keyboard = build_inn_message(player_after, location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer(t('location.inn_rest_ok', lang, cost=rest_cost))
         return
 
     if data == 'quest_board_back':
