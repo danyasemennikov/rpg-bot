@@ -92,10 +92,49 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             _text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
 
         service_commands = [cmd for cmd in snapshot['actions'] if re.search(r'\ssv\d+\s', cmd)]
-        self.assertEqual(service_commands, ['s1 sv1 shop', 's1 sv2 quests'])
+        self.assertEqual(service_commands, ['s1 sv1 shop', 's1 sv2 inn', 's1 sv3 quests'])
         self.assertEqual(snapshot['actions']['s1 sv1 shop'], 'shop')
-        self.assertEqual(snapshot['actions']['s1 sv2 quests'], 'quest_board')
-        self.assertNotIn('s1 sv2 inn', snapshot['actions'])
+        self.assertEqual(snapshot['actions']['s1 sv2 inn'], 'inn')
+        self.assertEqual(snapshot['actions']['s1 sv3 quests'], 'quest_board')
+
+    def test_inn_service_is_hidden_in_unsafe_location_even_if_listed(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = {
+            'id': 'dark_forest',
+            'safe': False,
+            'level_min': 1,
+            'level_max': 30,
+            'mobs': [],
+            'services': ['shop', 'inn', 'quest_board'],
+        }
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            _text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
+
+        self.assertIn('s1 sv1 shop', snapshot['actions'])
+        self.assertIn('s1 sv2 quests', snapshot['actions'])
+        self.assertNotIn('inn', ' '.join(snapshot['actions'].keys()))
 
     def test_bottom_keyboard_keeps_only_gather_and_travel_buttons(self):
         player = {
