@@ -7,14 +7,18 @@ from unittest.mock import AsyncMock, patch
 import database
 from database import get_connection, init_db
 from game.quest_board import (
+    HUNTER_RANK_THRESHOLDS,
     _ensure_player_hunt_contract_table,
     accept_hunt_contract,
     abandon_hunt_contract,
-    claim_completed_hunt_contract,
     build_hunt_contract_progress_line,
+    claim_completed_hunt_contract,
     get_player_hunt_contract_state,
+    get_player_hunter_progress,
     list_hunt_contracts_for_location,
+    list_hunt_contracts_for_player,
     register_hunt_kill_progress,
+    resolve_hunter_rank,
 )
 from handlers.location import build_quest_board_message
 from handlers.location import handle_location_buttons
@@ -136,6 +140,89 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('hunt_mine_goblins', keys)
         self.assertIn('hunt_amber_golem', keys)
 
+    def test_new_player_has_baseline_hunter_rank(self):
+        progress = get_player_hunter_progress(8101)
+        self.assertEqual(progress['hunter_points'], 0)
+        self.assertEqual(progress['current_rank'], 'novice')
+        self.assertEqual(resolve_hunter_rank(0), 'novice')
+        self.assertEqual(HUNTER_RANK_THRESHOLDS[0][0], 'novice')
+
+    def test_hunter_progression_increases_on_successful_claim(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+
+        before = get_player_hunter_progress(8101)
+        ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'claimed')
+        self.assertIsNotNone(reward)
+        assert reward is not None
+        hunter_result = reward['hunter_progress']
+        self.assertEqual(hunter_result['points_gained'], 20)
+
+        after = get_player_hunter_progress(8101)
+        self.assertEqual(after['hunter_points'], before['hunter_points'] + 20)
+
+    def test_rank_threshold_crossing_happens_after_points_gain(self):
+        for _ in range(2):
+            accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+            for _ in range(5):
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+            ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
+            self.assertTrue(ok)
+            self.assertEqual(reason, 'claimed')
+            self.assertIsNotNone(reward)
+
+        progress = get_player_hunter_progress(8101)
+        self.assertEqual(progress['hunter_points'], 40)
+        self.assertEqual(progress['current_rank'], 'tracker')
+
+    def test_locked_contracts_cannot_be_accepted_before_rank_unlock(self):
+        ok, reason = accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_elite_boars')
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'rank_locked')
+
+    def test_locked_contract_becomes_available_after_progression(self):
+        for _ in range(2):
+            accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+            for _ in range(5):
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+            claim_completed_hunt_contract(player_id=8101, location_id='village')
+
+        split = list_hunt_contracts_for_player(location_id='village', player_id=8101, lang='en')
+        available_keys = {contract.contract_key for contract in split['available']}
+        locked_keys = {row['contract'].contract_key for row in split['locked']}
+        self.assertIn('hunt_elite_boars', available_keys)
+        self.assertNotIn('hunt_elite_boars', locked_keys)
+
+    def test_board_ui_shows_hunter_progress_and_locked_reason(self):
+        player = {'telegram_id': 8101, 'lang': 'en'}
+        location = {'id': 'village'}
+        text, _keyboard = build_quest_board_message(player, location)
+        self.assertIn('Hunter rank:', text)
+        self.assertIn('Locked contracts:', text)
+        self.assertIn('requires rank Tracker', text)
+
+    def test_claim_atomicity_keeps_hunter_progress_unchanged_on_failure(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_greyfang')
+        register_hunt_kill_progress(
+            player_id=8101,
+            mob_id='forest_wolf',
+            spawn_profile='rare',
+            special_spawn_key='greyfang',
+        )
+        with patch('game.quest_board.grant_item_to_player', side_effect=RuntimeError('boom')):
+            ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'reward_delivery_failed')
+        self.assertIsNone(reward)
+        self.assertEqual(get_player_hunter_progress(8101)['hunter_points'], 0)
+        state = get_player_hunt_contract_state(8101)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state['status'], 'completed')
+
     def test_matching_and_non_matching_kills_update_progress_correctly(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
 
@@ -206,6 +293,12 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         state_mock.assert_not_called()
 
     def test_elite_and_special_filters_match_truthfully(self):
+        for _ in range(2):
+            accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+            for _ in range(5):
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf')
+            claim_completed_hunt_contract(player_id=8101, location_id='village')
+
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_elite_boars')
 
         normal_kill = register_hunt_kill_progress(player_id=8101, mob_id='forest_boar', spawn_profile='normal')

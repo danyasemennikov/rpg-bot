@@ -31,8 +31,8 @@ from game.quest_board import (
     build_contract_row,
     build_contract_title,
     claim_completed_hunt_contract,
+    list_hunt_contracts_for_player,
     get_player_hunt_contract_state,
-    list_hunt_contracts_for_location,
 )
 from game.pvp_live import (
     advance_engagement_to_live_battle_if_ready,
@@ -380,10 +380,35 @@ def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboar
 def build_quest_board_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
     lang = player.get('lang', 'ru')
     location_id = str(location.get('id') or '')
-    contracts = list_hunt_contracts_for_location(location_id)
+    contract_split = list_hunt_contracts_for_player(
+        location_id=location_id,
+        player_id=int(player['telegram_id']),
+        lang=lang,
+    )
+    contracts = contract_split['available']
+    locked_contracts = contract_split['locked']
+    hunter_progress = contract_split['hunter_progress']
     state = get_player_hunt_contract_state(int(player['telegram_id']))
 
     text = t('location.quest_board_title', lang) + '\n'
+    current_rank_label = t(f"location.hunter_rank_{hunter_progress['current_rank']}", lang)
+    text += '\n' + t(
+        'location.quest_board_hunter_rank_line',
+        lang,
+        rank=current_rank_label,
+        points=int(hunter_progress['hunter_points']),
+    ) + '\n'
+    if hunter_progress.get('next_rank'):
+        text += t(
+            'location.quest_board_hunter_progress_line',
+            lang,
+            current=int(hunter_progress.get('current_span_progress', 0) or 0),
+            total=int(hunter_progress.get('current_span_total', 0) or 0),
+            points_left=int(hunter_progress.get('points_to_next', 0) or 0),
+            next_rank=t(f"location.hunter_rank_{hunter_progress['next_rank']}", lang),
+        ) + '\n'
+    else:
+        text += t('location.quest_board_hunter_max_rank_line', lang) + '\n'
     keyboard: list[list[InlineKeyboardButton]] = []
 
     active_contract = None
@@ -426,6 +451,13 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
                 )])
     else:
         text += t('location.quest_board_empty', lang) + '\n'
+
+    if locked_contracts:
+        text += '\n' + t('location.quest_board_locked_title', lang) + '\n'
+        for locked_row in locked_contracts:
+            contract = locked_row['contract']
+            text += '🔒 ' + build_contract_row(contract, lang) + '\n'
+            text += t('location.quest_board_locked_requirement', lang, reason=str(locked_row['reason'])) + '\n'
 
     keyboard.append([InlineKeyboardButton(t('location.quest_board_back_btn', lang), callback_data='quest_board_back')])
     return text, InlineKeyboardMarkup(keyboard)
@@ -1354,6 +1386,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                 'already_active': 'location.quest_board_already_active',
                 'not_found': 'location.quest_board_contract_missing',
                 'wrong_board': 'location.quest_board_contract_missing',
+                'rank_locked': 'location.quest_board_contract_rank_locked',
             }
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_accept_failed'), lang), show_alert=True)
         else:
@@ -1401,6 +1434,19 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                     qty=int(bonus_item.get('quantity', 1) or 1),
                     item=get_item_name(str(bonus_item['item_id']), lang),
                 )
+            hunter_progress = reward_data.get('hunter_progress') if isinstance(reward_data, dict) else None
+            if isinstance(hunter_progress, dict):
+                claim_text += '\n' + t(
+                    'location.quest_board_claim_hunter_points',
+                    lang,
+                    points=int(hunter_progress.get('points_gained', 0) or 0),
+                )
+                if bool(hunter_progress.get('rank_up')):
+                    claim_text += '\n' + t(
+                        'location.quest_board_claim_rank_up',
+                        lang,
+                        rank=t(f"location.hunter_rank_{hunter_progress.get('rank_after', 'novice')}", lang),
+                    )
             await query.answer(claim_text, show_alert=True)
 
         text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
