@@ -210,6 +210,16 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         self.assertEqual(meta.source_category, 'open_world_normal')
         self.assertEqual(meta.quality_floor_rarity, 'common')
 
+    def test_open_world_metadata_carries_optional_spawn_identity(self):
+        meta = build_open_world_combat_source_metadata(
+            source_id='forest_wolf',
+            mob_level=2,
+            source_category='open_world_normal',
+            spawn_profile='rare',
+            spawn_identity='dark_forest:forest_wolf:greyfang',
+        )
+        self.assertEqual(meta.open_world_spawn_identity, 'dark_forest:forest_wolf:greyfang')
+
 
     def test_enhancement_material_tiers_are_explicitly_mapped(self):
         self.assertEqual(get_enhancement_material_tier('enhance_shard'), 1)

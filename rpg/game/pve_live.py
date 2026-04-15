@@ -213,6 +213,10 @@ def _ensure_world_spawn_table() -> None:
     }
     if 'spawn_profile' not in columns:
         conn.execute("ALTER TABLE pve_spawn_instances ADD COLUMN spawn_profile TEXT NOT NULL DEFAULT 'normal'")
+    if 'special_spawn_key' not in columns:
+        conn.execute("ALTER TABLE pve_spawn_instances ADD COLUMN special_spawn_key TEXT")
+    if 'special_spawn_name' not in columns:
+        conn.execute("ALTER TABLE pve_spawn_instances ADD COLUMN special_spawn_name TEXT")
     conn.commit()
     conn.close()
 
@@ -349,6 +353,55 @@ def _resolve_world_spawn_profile_counts(*, location: dict, mob_id: str) -> list[
     return resolved or [(DEFAULT_WORLD_SPAWN_PROFILE, base_normal_count)]
 
 
+def _normalize_special_spawn_variants(*, location: dict, mob_id: str) -> list[dict[str, object]]:
+    raw_variants = location.get('world_special_spawns')
+    if not isinstance(raw_variants, list):
+        return []
+
+    normalized: list[dict[str, object]] = []
+    for raw_variant in raw_variants:
+        if not isinstance(raw_variant, dict):
+            continue
+        if str(raw_variant.get('mob_id') or '') != mob_id:
+            continue
+
+        raw_name = str(raw_variant.get('name') or '').strip()
+        raw_key = str(raw_variant.get('key') or '').strip().lower()
+        if not raw_name or not raw_key:
+            continue
+
+        sanitized_key = ''.join(ch if ch.isalnum() or ch in ('_', '-') else '_' for ch in raw_key).strip('_-')
+        if not sanitized_key:
+            continue
+
+        try:
+            count = int(raw_variant.get('count', 1))
+        except (TypeError, ValueError):
+            count = 1
+        count = max(1, count)
+
+        normalized.append({
+            'key': sanitized_key,
+            'name': raw_name,
+            'spawn_profile': _normalize_spawn_profile(raw_variant.get('spawn_profile')),
+            'count': count,
+        })
+    return normalized
+
+
+def _special_spawn_instance_id(
+    *,
+    location_id: str,
+    mob_id: str,
+    special_key: str,
+    instance_index: int = 1,
+) -> str:
+    key = str(special_key).strip()
+    if int(instance_index) <= 1:
+        return f'spawn-{location_id}-{mob_id}-special-{key}'
+    return f'spawn-{location_id}-{mob_id}-special-{key}-{int(instance_index)}'
+
+
 def _refresh_respawning_spawns_for_location(*, location_id: str) -> None:
     if not location_id:
         return
@@ -387,8 +440,9 @@ def ensure_location_pve_spawn_instances(*, location_id: str) -> None:
                 conn.execute(
                     '''
                     INSERT OR IGNORE INTO pve_spawn_instances (
-                        spawn_instance_id, location_id, mob_id, spawn_profile, state, linked_encounter_id, respawn_available_at
-                    ) VALUES (?, ?, ?, ?, ?, NULL, NULL)
+                        spawn_instance_id, location_id, mob_id, spawn_profile, special_spawn_key, special_spawn_name,
+                        state, linked_encounter_id, respawn_available_at
+                    ) VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL, NULL)
                     ''',
                     (
                         _spawn_instance_id(
@@ -403,6 +457,36 @@ def ensure_location_pve_spawn_instances(*, location_id: str) -> None:
                         SPAWN_STATE_IDLE,
                     ),
                 )
+
+        for special_variant in _normalize_special_spawn_variants(location=location, mob_id=mob_id):
+            special_key = str(special_variant['key'])
+            special_name = str(special_variant['name'])
+            special_profile = str(special_variant['spawn_profile'])
+            special_count = int(special_variant['count'])
+            for index in range(1, special_count + 1):
+                special_spawn_id = _special_spawn_instance_id(
+                    location_id=location_id,
+                    mob_id=mob_id,
+                    special_key=special_key,
+                    instance_index=index,
+                )
+                conn.execute(
+                    '''
+                    INSERT OR IGNORE INTO pve_spawn_instances (
+                        spawn_instance_id, location_id, mob_id, spawn_profile, special_spawn_key, special_spawn_name,
+                        state, linked_encounter_id, respawn_available_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+                    ''',
+                    (
+                        special_spawn_id,
+                        location_id,
+                        mob_id,
+                        special_profile,
+                        special_key,
+                        special_name,
+                        SPAWN_STATE_IDLE,
+                    ),
+                )
     conn.commit()
     conn.close()
     _refresh_respawning_spawns_for_location(location_id=location_id)
@@ -413,7 +497,7 @@ def list_location_available_spawn_instances(*, location_id: str) -> list[dict]:
     conn = get_connection()
     rows = conn.execute(
         '''
-        SELECT spawn_instance_id, location_id, mob_id, spawn_profile, state
+        SELECT spawn_instance_id, location_id, mob_id, spawn_profile, special_spawn_key, special_spawn_name, state
         FROM pve_spawn_instances
         WHERE location_id=? AND state=?
         ORDER BY mob_id ASC, spawn_instance_id ASC
@@ -505,7 +589,8 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
         conn.commit()
     rows = conn.execute(
         '''
-        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state, s.spawn_profile
+        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state,
+               s.spawn_profile, s.special_spawn_key, s.special_spawn_name
         FROM pve_encounters e
         JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
         WHERE e.status='active'
@@ -559,36 +644,36 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     if expired_ids:
         conn.commit()
     has_spawn_profile_column = _table_has_column(conn, 'pve_spawn_instances', 'spawn_profile')
+    has_special_key_column = _table_has_column(conn, 'pve_spawn_instances', 'special_spawn_key')
+    has_special_name_column = _table_has_column(conn, 'pve_spawn_instances', 'special_spawn_name')
+    select_fields = [
+        'e.encounter_id',
+        'e.status',
+        'e.mob_id',
+        'e.location_id',
+        'e.anchor_spawn_instance_id',
+        's.state AS spawn_state',
+    ]
     if has_spawn_profile_column:
-        encounter_row = conn.execute(
-            '''
-            SELECT e.encounter_id, e.status, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state, s.spawn_profile
-            FROM pve_encounters e
-            JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
-            WHERE e.encounter_id=?
-              AND e.status='active'
-              AND e.anchor_spawn_instance_id IS NOT NULL
-              AND s.linked_encounter_id = e.encounter_id
-              AND s.state IN (?, ?)
-            LIMIT 1
-            ''',
-            (encounter_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
-        ).fetchone()
-    else:
-        encounter_row = conn.execute(
-            '''
-            SELECT e.encounter_id, e.status, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state
-            FROM pve_encounters e
-            JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
-            WHERE e.encounter_id=?
-              AND e.status='active'
-              AND e.anchor_spawn_instance_id IS NOT NULL
-              AND s.linked_encounter_id = e.encounter_id
-              AND s.state IN (?, ?)
-            LIMIT 1
-            ''',
-            (encounter_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
-        ).fetchone()
+        select_fields.append('s.spawn_profile')
+    if has_special_key_column:
+        select_fields.append('s.special_spawn_key')
+    if has_special_name_column:
+        select_fields.append('s.special_spawn_name')
+    encounter_row = conn.execute(
+        f'''
+        SELECT {", ".join(select_fields)}
+        FROM pve_encounters e
+        JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+        WHERE e.encounter_id=?
+          AND e.status='active'
+          AND e.anchor_spawn_instance_id IS NOT NULL
+          AND s.linked_encounter_id = e.encounter_id
+          AND s.state IN (?, ?)
+        LIMIT 1
+        ''',
+        (encounter_id, SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE),
+    ).fetchone()
     if not encounter_row:
         conn.close()
         return None
@@ -613,6 +698,10 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     detail = dict(encounter_row)
     if 'spawn_profile' not in detail:
         detail['spawn_profile'] = DEFAULT_WORLD_SPAWN_PROFILE
+    if 'special_spawn_key' not in detail:
+        detail['special_spawn_key'] = None
+    if 'special_spawn_name' not in detail:
+        detail['special_spawn_name'] = None
     detail['participant_count'] = int(participant_count['total']) if participant_count else 0
     detail['participant_player_ids'] = [int(row['player_id']) for row in participant_rows]
     detail['joinable'] = str(detail.get('spawn_state') or '') == SPAWN_STATE_FORMING
@@ -1057,7 +1146,12 @@ def _claim_spawn_instance_for_encounter(
               AND (? = '' OR spawn_profile=?)
               AND state=?
               AND linked_encounter_id IS NULL
-            ORDER BY spawn_instance_id ASC
+            ORDER BY
+              CASE
+                WHEN special_spawn_key IS NULL OR TRIM(special_spawn_key) = '' THEN 0
+                ELSE 1
+              END ASC,
+              spawn_instance_id ASC
             LIMIT 1
             ''',
             (location_id, mob_id, profile_filter, profile_filter, SPAWN_STATE_IDLE),
@@ -1395,7 +1489,7 @@ def create_or_load_open_world_pve_encounter(
         conn = get_connection()
         spawn_row = conn.execute(
             '''
-            SELECT spawn_profile
+            SELECT spawn_profile, special_spawn_key, special_spawn_name
             FROM pve_spawn_instances
             WHERE spawn_instance_id=?
               AND location_id=?
@@ -1456,7 +1550,7 @@ def create_or_load_open_world_pve_encounter(
     conn = get_connection()
     claimed_spawn_row = conn.execute(
         '''
-        SELECT spawn_profile
+        SELECT spawn_profile, special_spawn_key, special_spawn_name
         FROM pve_spawn_instances
         WHERE spawn_instance_id=?
         LIMIT 1
@@ -1466,10 +1560,18 @@ def create_or_load_open_world_pve_encounter(
     conn.close()
     if claimed_spawn_row:
         selected_spawn_profile = _normalize_spawn_profile(claimed_spawn_row['spawn_profile'])
+    special_spawn_key = str(claimed_spawn_row['special_spawn_key'] or '').strip() if claimed_spawn_row else ''
+    special_spawn_name = str(claimed_spawn_row['special_spawn_name'] or '').strip() if claimed_spawn_row else ''
 
     battle_state['location_id'] = location_id
     battle_state['anchor_spawn_instance_id'] = claimed_spawn_id
     battle_state['encounter_kind'] = 'pve'
+    if special_spawn_key:
+        battle_state['special_spawn_key'] = special_spawn_key
+    if special_spawn_name:
+        battle_state['special_spawn_name'] = special_spawn_name
+    if special_spawn_key:
+        battle_state['spawn_identity'] = f'{location_id}:{mob_id}:{special_spawn_key}'
     apply_world_spawn_profile_combat_scaling(
         battle_state=battle_state,
         mob=mob or {},

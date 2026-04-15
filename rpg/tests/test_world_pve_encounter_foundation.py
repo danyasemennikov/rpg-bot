@@ -1,5 +1,6 @@
 import unittest
 import sqlite3
+import tempfile
 from unittest.mock import Mock, patch
 
 from database import get_connection
@@ -87,6 +88,177 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
     def test_location_renders_idle_spawn_as_available_content(self):
         spawns = list_location_available_spawn_instances(location_id=self.location_id)
         self.assertTrue(any(spawn['mob_id'] == 'forest_wolf' for spawn in spawns))
+
+    def test_location_without_special_spawn_contract_keeps_legacy_spawn_shape(self):
+        spawns = list_location_available_spawn_instances(location_id=self.location_id)
+        wolf_spawns = [spawn for spawn in spawns if spawn['mob_id'] == 'forest_wolf']
+        self.assertTrue(wolf_spawns)
+        self.assertTrue(all(not spawn.get('special_spawn_key') for spawn in wolf_spawns))
+        self.assertTrue(all(not spawn.get('special_spawn_name') for spawn in wolf_spawns))
+
+    def test_special_spawn_contract_creates_named_instance_and_projects_to_detail(self):
+        special_location = {
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_profiles': {
+                'forest_wolf': {'normal': 1},
+            },
+            'world_special_spawns': [
+                {
+                    'key': 'greyfang',
+                    'mob_id': 'forest_wolf',
+                    'spawn_profile': 'rare',
+                    'name': 'Greyfang',
+                    'count': 1,
+                },
+            ],
+        }
+        with patch('game.pve_live.get_location', return_value=special_location):
+            spawns = list_location_available_spawn_instances(location_id=self.location_id)
+        special_spawns = [spawn for spawn in spawns if spawn.get('special_spawn_key') == 'greyfang']
+        self.assertEqual(len(special_spawns), 1)
+        special_spawn = special_spawns[0]
+        self.assertEqual(special_spawn.get('special_spawn_name'), 'Greyfang')
+        self.assertEqual(special_spawn.get('spawn_profile'), 'rare')
+
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20, 'level': 2, 'aggressive': False},
+            side_a_player_ids=[self.player_id],
+            spawn_instance_id=str(special_spawn['spawn_instance_id']),
+        )
+        self.assertEqual(status, 'created')
+
+        active_rows = list_location_active_pve_encounters(location_id=self.location_id)
+        active_special = next(row for row in active_rows if row['encounter_id'] == encounter_id)
+        self.assertEqual(active_special.get('special_spawn_key'), 'greyfang')
+        self.assertEqual(active_special.get('special_spawn_name'), 'Greyfang')
+        self.assertEqual(active_special.get('spawn_profile'), 'rare')
+
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        self.assertEqual(detail.get('special_spawn_key'), 'greyfang')
+        self.assertEqual(detail.get('special_spawn_name'), 'Greyfang')
+
+        viewer = {
+            'telegram_id': self.player2_id,
+            'lang': 'en',
+        }
+        detail_text, _ = build_pve_encounter_detail_message(viewer, encounter_id)
+        self.assertIn('Greyfang', detail_text)
+        self.assertIn('[Rare]', detail_text)
+
+    def test_special_spawn_instance_ids_use_dedicated_namespace_and_avoid_profile_collisions(self):
+        special_location = {
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_profiles': {
+                'forest_wolf': {'normal': 2, 'elite': 1, 'rare': 1},
+            },
+            'world_special_spawns': [
+                {'key': 'elite', 'mob_id': 'forest_wolf', 'spawn_profile': 'rare', 'name': 'Greyfang Elite'},
+                {'key': '2', 'mob_id': 'forest_wolf', 'spawn_profile': 'elite', 'name': 'Second Fang'},
+            ],
+        }
+        with patch('game.pve_live.get_location', return_value=special_location):
+            spawns = list_location_available_spawn_instances(location_id=self.location_id)
+
+        spawn_ids = {str(spawn['spawn_instance_id']) for spawn in spawns if spawn['mob_id'] == 'forest_wolf'}
+        self.assertIn('spawn-dark_forest-forest_wolf-elite', spawn_ids)
+        self.assertIn('spawn-dark_forest-forest_wolf-2', spawn_ids)
+        self.assertIn('spawn-dark_forest-forest_wolf-special-elite', spawn_ids)
+        self.assertIn('spawn-dark_forest-forest_wolf-special-2', spawn_ids)
+
+        special_rows = [spawn for spawn in spawns if str(spawn.get('special_spawn_key') or '') in {'elite', '2'}]
+        self.assertEqual(len(special_rows), 2)
+
+    def test_detail_read_is_safe_when_spawn_profile_exists_but_special_columns_are_missing(self):
+        with tempfile.NamedTemporaryFile(suffix='.db') as tmp_db:
+            def _legacy_conn():
+                conn = sqlite3.connect(tmp_db.name)
+                conn.row_factory = sqlite3.Row
+                return conn
+
+            conn = _legacy_conn()
+            conn.execute(
+                '''
+                CREATE TABLE pve_encounters (
+                    encounter_id TEXT PRIMARY KEY,
+                    owner_player_id INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    mob_id TEXT,
+                    battle_state_json TEXT NOT NULL,
+                    mob_json TEXT NOT NULL,
+                    location_id TEXT,
+                    anchor_spawn_instance_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                '''
+            )
+            conn.execute(
+                '''
+                CREATE TABLE pve_spawn_instances (
+                    spawn_instance_id TEXT PRIMARY KEY,
+                    location_id TEXT NOT NULL,
+                    mob_id TEXT NOT NULL,
+                    spawn_profile TEXT NOT NULL DEFAULT 'normal',
+                    state TEXT NOT NULL,
+                    linked_encounter_id TEXT,
+                    respawn_available_at TIMESTAMP
+                )
+                '''
+            )
+            conn.execute(
+                '''
+                CREATE TABLE pve_encounter_participants (
+                    encounter_id TEXT NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    side_id TEXT NOT NULL DEFAULT 'side_a',
+                    status TEXT NOT NULL DEFAULT 'active',
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (encounter_id, player_id)
+                )
+                '''
+            )
+            conn.execute(
+                '''
+                INSERT INTO pve_encounters (
+                    encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id, anchor_spawn_instance_id
+                ) VALUES (?, ?, 'active', ?, '{}', '{}', ?, ?)
+                ''',
+                ('legacy-detail-2', self.player_id, 'forest_wolf', self.location_id, 'spawn-dark_forest-forest_wolf-elite'),
+            )
+            conn.execute(
+                '''
+                INSERT INTO pve_spawn_instances (
+                    spawn_instance_id, location_id, mob_id, spawn_profile, state, linked_encounter_id
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ''',
+                ('spawn-dark_forest-forest_wolf-elite', self.location_id, 'forest_wolf', 'elite', 'forming', 'legacy-detail-2'),
+            )
+            conn.execute(
+                '''
+                INSERT INTO pve_encounter_participants (encounter_id, player_id, side_id, status)
+                VALUES (?, ?, 'side_a', 'active')
+                ''',
+                ('legacy-detail-2', self.player_id),
+            )
+            conn.commit()
+            conn.close()
+
+            with patch('game.pve_live.get_connection', side_effect=_legacy_conn):
+                detail = get_open_world_pve_encounter_detail(encounter_id='legacy-detail-2')
+
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        self.assertEqual(detail['spawn_profile'], 'elite')
+        self.assertIsNone(detail.get('special_spawn_key'))
+        self.assertIsNone(detail.get('special_spawn_name'))
 
     def test_profile_modifier_contract_is_centralized_and_ordered(self):
         normal = resolve_world_spawn_profile_modifiers('normal')

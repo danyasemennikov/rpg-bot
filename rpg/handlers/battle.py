@@ -170,13 +170,15 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     conn2.close()
 
     mob_level = rewards.get('mob_level', 1)
+    source_identity = str(rewards.get('content_identity') or rewards.get('mob_id') or 'unknown_mob')
     source_metadata = build_open_world_combat_source_metadata(
-        source_id=str(rewards.get('mob_id', 'unknown_mob')),
+        source_id=source_identity,
         mob_level=mob_level,
         source_category=rewards.get('source_category'),
         creature_taxonomy=rewards.get('creature_taxonomy'),
         encounter_role=rewards.get('encounter_role'),
         spawn_profile=rewards.get('spawn_profile'),
+        spawn_identity=rewards.get('spawn_identity'),
         location_id=get_mob_location_id(str(rewards.get('mob_id', ''))) or player.get('location_id'),
     )
     for item_id in rewards['loot']:
@@ -621,6 +623,8 @@ async def _handle_victory_cleanup(
     """Общий post-victory cleanup для обычной атаки и скиллов."""
     rewards = calc_rewards(mob)
     rewards['spawn_profile'] = battle_state.get('spawn_profile', rewards.get('spawn_profile'))
+    rewards['content_identity'] = battle_state.get('reward_content_identity', rewards.get('content_identity'))
+    rewards['spawn_identity'] = battle_state.get('spawn_identity', rewards.get('spawn_identity'))
     if _is_group_encounter(battle_state):
         participant_ids = get_pve_encounter_player_ids(encounter_id=str(battle_state.get('pve_encounter_id', '')))
         if not participant_ids:
