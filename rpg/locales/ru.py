@@ -187,6 +187,8 @@ STRINGS = {
         'pve_status_already_joined': 'вы уже внутри',
         'pve_status_unavailable': 'присоединение недоступно',
         'actions_title': '🧭 <b>Быстрые действия:</b>',
+        'spawn_profile_elite': '[Элита]',
+        'spawn_profile_rare': '[Редкий]',
         'actions_hint': 'Отправь команду со snapshot-маркером {snapshot} (пример: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ Это действие локации устарело. Обнови /location.',
         'pve_join_success': '✅ Вы присоединились к схватке.',

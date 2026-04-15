@@ -175,6 +175,8 @@ STRINGS = {
         'pve_status_already_joined': 'ya estás dentro',
         'pve_status_unavailable': 'unión no disponible',
         'actions_title': '🧭 <b>Acciones rápidas:</b>',
+        'spawn_profile_elite': '[Élite]',
+        'spawn_profile_rare': '[Raro]',
         'actions_hint': 'Envía un comando con marcador de snapshot {snapshot} (ejemplo: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ Esta acción de ubicación está desactualizada. Actualiza con /location.',
         'pve_join_success': '✅ Te uniste al encuentro.',
