@@ -57,6 +57,7 @@ class RewardSourceMetadata:
     open_world_zone_identity: str | None = None
     open_world_zone_role: str | None = None
     open_world_encounter_role: str | None = None
+    open_world_spawn_identity: str | None = None
     open_world_region_flavor_tags: tuple[str, ...] = ()
     future_dungeon_link_id: str | None = None
     future_world_boss_governance_id: str | None = None
@@ -143,6 +144,7 @@ def build_open_world_combat_source_metadata(
     location_id: str | None = None,
     encounter_role: str | None = None,
     spawn_profile: str | None = None,
+    spawn_identity: str | None = None,
 ) -> RewardSourceMetadata:
     taxonomy = normalize_creature_taxonomy(creature_taxonomy)
     normalized_spawn_profile = str(spawn_profile or 'normal').strip().lower()
@@ -178,6 +180,7 @@ def build_open_world_combat_source_metadata(
         open_world_zone_identity=open_world_profile.zone_identity if open_world_profile else None,
         open_world_zone_role=open_world_profile.zone_role if open_world_profile else None,
         open_world_encounter_role=open_world_profile.encounter_role if open_world_profile else None,
+        open_world_spawn_identity=str(spawn_identity or '').strip() or None,
         open_world_region_flavor_tags=open_world_profile.region_flavor_tags if open_world_profile else (),
         future_dungeon_link_id=open_world_profile.linked_dungeon_id if open_world_profile else None,
         future_world_boss_governance_id=open_world_profile.world_boss_governance_id if open_world_profile else None,
