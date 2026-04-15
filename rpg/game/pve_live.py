@@ -33,6 +33,20 @@ DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS = 30
 FORMING_ENCOUNTER_TTL_SECONDS = 90
 DEFAULT_WORLD_SPAWN_PROFILE = 'normal'
 WORLD_SPAWN_PROFILES = ('normal', 'elite', 'rare')
+WORLD_SPAWN_PROFILE_COMBAT_MODIFIERS = {
+    'normal': {
+        'hp_multiplier': 1.00,
+        'damage_multiplier': 1.00,
+    },
+    'elite': {
+        'hp_multiplier': 1.40,
+        'damage_multiplier': 1.15,
+    },
+    'rare': {
+        'hp_multiplier': 1.75,
+        'damage_multiplier': 1.25,
+    },
+}
 
 _SOLO_PVE_RUNTIME_STORE = LiveCombatRuntimeStore()
 _SOLO_PVE_RUNTIME = LiveCombatRuntime(_SOLO_PVE_RUNTIME_STORE)
@@ -208,6 +222,66 @@ def _normalize_spawn_profile(raw_profile: object) -> str:
     if profile not in WORLD_SPAWN_PROFILES:
         return DEFAULT_WORLD_SPAWN_PROFILE
     return profile
+
+
+def resolve_world_spawn_profile_modifiers(profile: object) -> dict[str, float]:
+    normalized_profile = _normalize_spawn_profile(profile)
+    baseline = WORLD_SPAWN_PROFILE_COMBAT_MODIFIERS[DEFAULT_WORLD_SPAWN_PROFILE]
+    resolved = WORLD_SPAWN_PROFILE_COMBAT_MODIFIERS.get(normalized_profile, baseline)
+    return {
+        'hp_multiplier': float(resolved.get('hp_multiplier', 1.0)),
+        'damage_multiplier': float(resolved.get('damage_multiplier', 1.0)),
+    }
+
+
+def _scale_positive_combat_value(value: object, *, multiplier: float) -> int:
+    try:
+        base = int(value)
+    except (TypeError, ValueError):
+        return 0
+    if base <= 0:
+        return 0
+    return max(1, int(round(base * float(multiplier))))
+
+
+def apply_world_spawn_profile_combat_scaling(*, battle_state: dict, mob: dict, spawn_profile: object) -> None:
+    if not isinstance(battle_state, dict):
+        return
+
+    normalized_profile = _normalize_spawn_profile(spawn_profile)
+    battle_state['spawn_profile'] = normalized_profile
+
+    modifiers = resolve_world_spawn_profile_modifiers(normalized_profile)
+    hp_multiplier = float(modifiers['hp_multiplier'])
+    damage_multiplier = float(modifiers['damage_multiplier'])
+    battle_state['spawn_profile_hp_multiplier'] = hp_multiplier
+    battle_state['spawn_profile_damage_multiplier'] = damage_multiplier
+
+    if battle_state.get('spawn_profile_scaling_applied'):
+        return
+
+    if isinstance(mob, dict):
+        mob_hp = _scale_positive_combat_value(mob.get('hp'), multiplier=hp_multiplier)
+        if mob_hp > 0:
+            mob['hp'] = mob_hp
+
+        mob_damage_min = _scale_positive_combat_value(mob.get('damage_min'), multiplier=damage_multiplier)
+        mob_damage_max = _scale_positive_combat_value(mob.get('damage_max'), multiplier=damage_multiplier)
+        if mob_damage_min > 0:
+            mob['damage_min'] = mob_damage_min
+        if mob_damage_max > 0:
+            mob['damage_max'] = max(mob_damage_min, mob_damage_max)
+
+    scaled_state_hp = _scale_positive_combat_value(battle_state.get('mob_hp'), multiplier=hp_multiplier)
+    if scaled_state_hp > 0:
+        battle_state['mob_hp'] = scaled_state_hp
+    scaled_state_max_hp = _scale_positive_combat_value(battle_state.get('mob_max_hp'), multiplier=hp_multiplier)
+    if scaled_state_max_hp > 0:
+        battle_state['mob_max_hp'] = scaled_state_max_hp
+    if battle_state.get('mob_hp', 0) > battle_state.get('mob_max_hp', 0) > 0:
+        battle_state['mob_hp'] = battle_state['mob_max_hp']
+
+    battle_state['spawn_profile_scaling_applied'] = True
 
 
 def _spawn_instance_id(
@@ -1395,8 +1469,12 @@ def create_or_load_open_world_pve_encounter(
 
     battle_state['location_id'] = location_id
     battle_state['anchor_spawn_instance_id'] = claimed_spawn_id
-    battle_state['spawn_profile'] = selected_spawn_profile
     battle_state['encounter_kind'] = 'pve'
+    apply_world_spawn_profile_combat_scaling(
+        battle_state=battle_state,
+        mob=mob or {},
+        spawn_profile=selected_spawn_profile,
+    )
     try:
         create_pve_encounter(
             owner_player_id=int(owner_player_id),

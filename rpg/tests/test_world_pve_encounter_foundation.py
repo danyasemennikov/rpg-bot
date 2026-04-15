@@ -7,6 +7,7 @@ import game.pve_live as pve_live_module
 from game.pve_live import (
     FORMING_ENCOUNTER_TTL_SECONDS,
     OpenWorldRuntimeStartBlocked,
+    apply_world_spawn_profile_combat_scaling,
     can_join_open_world_pve_encounter,
     create_or_load_open_world_pve_encounter,
     finish_solo_pve_encounter,
@@ -15,9 +16,11 @@ from game.pve_live import (
     join_open_world_pve_encounter,
     leave_open_world_pve_encounter,
     lock_open_world_pve_roster_for_runtime_start,
+    load_active_pve_encounter,
     list_location_active_pve_encounters,
     list_location_available_spawn_instances,
     open_world_runtime_start_mode,
+    resolve_world_spawn_profile_modifiers,
     ensure_runtime_for_battle,
     get_pve_encounter_player_ids,
 )
@@ -84,6 +87,87 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
     def test_location_renders_idle_spawn_as_available_content(self):
         spawns = list_location_available_spawn_instances(location_id=self.location_id)
         self.assertTrue(any(spawn['mob_id'] == 'forest_wolf' for spawn in spawns))
+
+    def test_profile_modifier_contract_is_centralized_and_ordered(self):
+        normal = resolve_world_spawn_profile_modifiers('normal')
+        elite = resolve_world_spawn_profile_modifiers('elite')
+        rare = resolve_world_spawn_profile_modifiers('rare')
+        fallback = resolve_world_spawn_profile_modifiers('legacy_unknown')
+
+        self.assertEqual(normal['hp_multiplier'], 1.0)
+        self.assertEqual(normal['damage_multiplier'], 1.0)
+        self.assertGreater(elite['hp_multiplier'], normal['hp_multiplier'])
+        self.assertGreater(rare['hp_multiplier'], elite['hp_multiplier'])
+        self.assertGreater(elite['damage_multiplier'], normal['damage_multiplier'])
+        self.assertGreater(rare['damage_multiplier'], elite['damage_multiplier'])
+        self.assertEqual(fallback, normal)
+
+    def test_profile_combat_scaling_is_idempotent_for_same_battle_state(self):
+        battle_state = {'spawn_profile': 'elite', 'mob_hp': 100, 'mob_max_hp': 100}
+        mob = {'id': 'forest_wolf', 'hp': 100, 'damage_min': 10, 'damage_max': 20}
+
+        apply_world_spawn_profile_combat_scaling(
+            battle_state=battle_state,
+            mob=mob,
+            spawn_profile='elite',
+        )
+        first_scaled = (
+            battle_state['mob_hp'],
+            battle_state['mob_max_hp'],
+            mob['hp'],
+            mob['damage_min'],
+            mob['damage_max'],
+        )
+        apply_world_spawn_profile_combat_scaling(
+            battle_state=battle_state,
+            mob=mob,
+            spawn_profile='elite',
+        )
+        second_scaled = (
+            battle_state['mob_hp'],
+            battle_state['mob_max_hp'],
+            mob['hp'],
+            mob['damage_min'],
+            mob['damage_max'],
+        )
+
+        self.assertEqual(first_scaled, second_scaled)
+
+    def test_created_open_world_encounter_persists_profile_scaled_combat_state(self):
+        battle_state = {'mob_id': 'forest_wolf', 'log': [], 'mob_hp': 100, 'mob_max_hp': 100}
+        mob = {'id': 'forest_wolf', 'hp': 100, 'damage_min': 10, 'damage_max': 20}
+
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_profiles': {
+                'forest_wolf': {'normal': 1, 'elite': 1},
+            },
+        }):
+            encounter_id, status = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state=battle_state,
+                mob=mob,
+                side_a_player_ids=[self.player_id],
+                spawn_instance_id='spawn-dark_forest-forest_wolf-elite',
+            )
+
+        self.assertEqual(status, 'created')
+        self.assertEqual(battle_state.get('spawn_profile'), 'elite')
+        self.assertGreater(battle_state.get('mob_hp', 0), 100)
+        self.assertGreater(mob.get('hp', 0), 100)
+        self.assertGreater(mob.get('damage_min', 0), 10)
+        self.assertGreater(mob.get('damage_max', 0), 20)
+
+        restored = load_active_pve_encounter(encounter_id=encounter_id)
+        self.assertIsNotNone(restored)
+        restored_state, restored_mob = restored
+        self.assertEqual(restored_state.get('spawn_profile'), 'elite')
+        self.assertEqual(restored_state.get('mob_hp'), battle_state.get('mob_hp'))
+        self.assertEqual(restored_mob.get('damage_min'), mob.get('damage_min'))
+        self.assertEqual(restored_mob.get('damage_max'), mob.get('damage_max'))
 
     def test_spawn_moves_from_available_to_active_encounter_projection(self):
         battle_state = {'mob_id': 'forest_wolf', 'log': []}
