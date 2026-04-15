@@ -56,7 +56,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot['actions'].get('s1 sv1 shop'), 'shop')
         self.assertNotIn('snapshot_id', snapshot)
 
-    def test_unsupported_services_are_not_exposed_via_sv_commands(self):
+    def test_supported_services_are_exposed_and_unsupported_are_skipped(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -92,10 +92,10 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             _text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
 
         service_commands = [cmd for cmd in snapshot['actions'] if re.search(r'\ssv\d+\s', cmd)]
-        self.assertEqual(service_commands, ['s1 sv1 shop'])
+        self.assertEqual(service_commands, ['s1 sv1 shop', 's1 sv2 quests'])
         self.assertEqual(snapshot['actions']['s1 sv1 shop'], 'shop')
+        self.assertEqual(snapshot['actions']['s1 sv2 quests'], 'quest_board')
         self.assertNotIn('s1 sv2 inn', snapshot['actions'])
-        self.assertNotIn('s1 sv3 quests', snapshot['actions'])
 
     def test_bottom_keyboard_keeps_only_gather_and_travel_buttons(self):
         player = {

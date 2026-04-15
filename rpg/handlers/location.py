@@ -24,6 +24,14 @@ from game.pve_live import (
     list_location_active_pve_encounters,
     list_location_available_spawn_instances,
 )
+from game.quest_board import (
+    accept_hunt_contract,
+    build_contract_row,
+    build_contract_title,
+    claim_completed_hunt_contract,
+    get_player_hunt_contract_state,
+    list_hunt_contracts_for_location,
+)
 from game.pvp_live import (
     advance_engagement_to_live_battle_if_ready,
     apply_illegal_aggression_penalties,
@@ -112,6 +120,7 @@ _TOKEN_COMMAND_RE = re.compile(
 )
 _SUPPORTED_LOCATION_SERVICE_ACTIONS = {
     'shop': ('shop', 'shop'),
+    'quest_board': ('quests', 'quest_board'),
 }
 
 
@@ -354,6 +363,55 @@ def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboar
                 )])
 
     keyboard.append([InlineKeyboardButton(t('location.shop_back_btn', lang), callback_data='shop_back')])
+    return text, InlineKeyboardMarkup(keyboard)
+
+
+def build_quest_board_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
+    lang = player.get('lang', 'ru')
+    location_id = str(location.get('id') or '')
+    contracts = list_hunt_contracts_for_location(location_id)
+    state = get_player_hunt_contract_state(int(player['telegram_id']))
+
+    text = t('location.quest_board_title', lang) + '\n'
+    keyboard: list[list[InlineKeyboardButton]] = []
+
+    active_contract = None
+    if state and state.get('status') in {'active', 'completed'}:
+        active_contract = state.get('contract')
+    if active_contract:
+        progress = int(state.get('progress_kills', 0) or 0)
+        required = int(active_contract.required_kills)
+        status_key = 'location.quest_board_status_ready' if state.get('status') == 'completed' else 'location.quest_board_status_active'
+        text += '\n' + t(
+            'location.quest_board_active_row',
+            lang,
+            title=build_contract_title(active_contract, lang),
+            progress=progress,
+            required=required,
+            status=t(status_key, lang),
+        ) + '\n'
+        text += t('location.quest_board_active_target', lang, target=build_contract_row(active_contract, lang)) + '\n'
+        if state.get('status') == 'completed':
+            keyboard.append([InlineKeyboardButton(
+                t('location.quest_board_claim_btn', lang),
+                callback_data='quest_board_claim',
+            )])
+    else:
+        text += '\n' + t('location.quest_board_no_active', lang) + '\n'
+
+    text += '\n' + t('location.quest_board_available_title', lang) + '\n'
+    if contracts:
+        for contract in contracts:
+            text += '• ' + build_contract_row(contract, lang) + '\n'
+            if active_contract is None:
+                keyboard.append([InlineKeyboardButton(
+                    t('location.quest_board_accept_btn', lang, title=build_contract_title(contract, lang)),
+                    callback_data=f'quest_board_accept_{contract.contract_key}',
+                )])
+    else:
+        text += t('location.quest_board_empty', lang) + '\n'
+
+    keyboard.append([InlineKeyboardButton(t('location.quest_board_back_btn', lang), callback_data='quest_board_back')])
     return text, InlineKeyboardMarkup(keyboard)
 
 # ────────────────────────────────────────
@@ -1138,6 +1196,100 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             location,
             pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
         )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data == 'quest_board':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'quest_board' not in location.get('services', []):
+            await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
+            return
+
+        text, keyboard = build_quest_board_message(dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data == 'quest_board_back':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'quest_board' not in location.get('services', []):
+            await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
+            return
+
+        text, keyboard = _build_location_message_with_snapshot(context, dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('quest_board_accept_'):
+        contract_key = data.replace('quest_board_accept_', '', 1)
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'quest_board' not in location.get('services', []):
+            await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
+            return
+
+        ok, reason = accept_hunt_contract(
+            player_id=int(user.id),
+            location_id=str(location['id']),
+            contract_key=contract_key,
+        )
+        if not ok:
+            key_by_reason = {
+                'already_active': 'location.quest_board_already_active',
+                'not_found': 'location.quest_board_contract_missing',
+                'wrong_board': 'location.quest_board_contract_missing',
+            }
+            await query.answer(t(key_by_reason.get(reason, 'location.quest_board_accept_failed'), lang), show_alert=True)
+        else:
+            await query.answer(t('location.quest_board_accept_ok', lang), show_alert=True)
+
+        text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data == 'quest_board_claim':
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if 'quest_board' not in location.get('services', []):
+            await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
+            return
+
+        ok, reason, reward_result = claim_completed_hunt_contract(
+            player_id=int(user.id),
+            location_id=str(location['id']),
+        )
+        if not ok:
+            key_by_reason = {
+                'no_contract': 'location.quest_board_claim_not_ready',
+                'not_completed': 'location.quest_board_claim_not_ready',
+                'already_claimed': 'location.quest_board_claim_already',
+                'wrong_board': 'location.quest_board_not_available',
+            }
+            await query.answer(t(key_by_reason.get(reason, 'location.quest_board_claim_not_ready'), lang), show_alert=True)
+        else:
+            reward_data = reward_result or {}
+            await query.answer(
+                t(
+                    'location.quest_board_claim_ok',
+                    lang,
+                    exp=int(reward_data.get('reward_exp', 0)),
+                    gold=int(reward_data.get('reward_gold', 0)),
+                ),
+                show_alert=True,
+            )
+
+        text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 

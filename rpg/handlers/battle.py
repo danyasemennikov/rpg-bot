@@ -58,6 +58,7 @@ from game.gear_instances import (
 from game.reward_source_metadata import build_open_world_combat_source_metadata
 from game.locations import get_mob_location_id
 from game.pvp_death_policy import resolve_death_respawn_hub
+from game.quest_board import register_hunt_kill_progress
 
 
 # ────────────────────────────────────────
@@ -643,6 +644,12 @@ async def _handle_victory_cleanup(
         if participant_player_row:
             participant_player = dict(participant_player_row)
             reward_result = apply_rewards(participant_id, participant_player, rewards)
+            register_hunt_kill_progress(
+                player_id=participant_id,
+                mob_id=str(mob.get('id', '')),
+                spawn_profile=battle_state.get('spawn_profile'),
+                special_spawn_key=battle_state.get('special_spawn_key'),
+            )
             rewarded_participants.append(participant_id)
             if participant_id == user_id:
                 result_reward = reward_result
