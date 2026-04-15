@@ -1,3 +1,4 @@
+import os
 import unittest
 import sqlite3
 import tempfile
@@ -177,9 +178,11 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertEqual(len(special_rows), 2)
 
     def test_detail_read_is_safe_when_spawn_profile_exists_but_special_columns_are_missing(self):
-        with tempfile.NamedTemporaryFile(suffix='.db') as tmp_db:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, 'legacy_partial.db')
+
             def _legacy_conn():
-                conn = sqlite3.connect(tmp_db.name)
+                conn = sqlite3.connect(db_path)
                 conn.row_factory = sqlite3.Row
                 return conn
 
