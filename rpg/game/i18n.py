@@ -154,6 +154,35 @@ def _fallback_mob(mob_id: str) -> str:
     mob = get_mob(mob_id)
     return mob['name'] if mob else mob_id
 
+
+def get_special_spawn_name(
+    special_spawn_key: str,
+    lang: str,
+    *,
+    fallback_name: str | None = None,
+) -> str:
+    normalized_key = str(special_spawn_key or '').strip().lower()
+    if not normalized_key:
+        return str(fallback_name or '').strip()
+    try:
+        if lang == 'ru':
+            from locales.locations_ru import SPECIAL_SPAWN_NAMES
+        elif lang == 'en':
+            from locales.locations_en import SPECIAL_SPAWN_NAMES
+        elif lang == 'es':
+            from locales.locations_es import SPECIAL_SPAWN_NAMES
+        else:
+            from locales.locations_ru import SPECIAL_SPAWN_NAMES
+        localized_name = str(SPECIAL_SPAWN_NAMES.get(normalized_key) or '').strip()
+        if localized_name:
+            return localized_name
+    except ImportError:
+        pass
+    fallback = str(fallback_name or '').strip()
+    if fallback:
+        return fallback
+    return normalized_key
+
 def get_skill_name(skill_id: str, lang: str) -> str:
     try:
         if lang == 'ru': from locales.skills_ru import SKILL_NAMES

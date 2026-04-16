@@ -106,7 +106,6 @@ LOCATIONS = {
                 'key': 'amber_colossus',
                 'mob_id': 'stone_golem',
                 'spawn_profile': 'elite',
-                'name': '🟠 Amber Colossus',
                 'count': 1,
             },
         ],

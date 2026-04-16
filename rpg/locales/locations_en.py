@@ -4,3 +4,7 @@ LOCATION_NAMES = {
     'dark_forest': {'name': '🌲 Dark Forest', 'description': 'A dense forest shrouded in darkness. Wolves prowl the ground and spiders lurk in the trees.'},
     'old_mines': {'name': '⛏️ Old Mines', 'description': 'Abandoned mines inhabited by goblins and creepy creatures. Rich in ore, but full of danger.'},
 }
+
+SPECIAL_SPAWN_NAMES = {
+    'amber_colossus': '🟠 Amber Colossus',
+}

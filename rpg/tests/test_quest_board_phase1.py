@@ -176,6 +176,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
             if row.get('mob_id') == 'stone_golem' and row.get('key') == 'amber_colossus'
         ]
         self.assertEqual(len(amber_special), 1)
+        self.assertNotIn('name', amber_special[0])
 
     def test_accept_from_wrong_board_is_rejected_truthfully(self):
         ok, reason = accept_hunt_contract(
