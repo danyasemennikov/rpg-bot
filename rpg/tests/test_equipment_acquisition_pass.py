@@ -43,6 +43,12 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             'acolyte_robe',
             'band_of_precision',
             'ring_of_quiet_mind',
+            'warden_kite_shield',
+            'azure_focus_prism',
+            'choir_censer',
+            'tracker_jacket',
+            'amulet_of_kindled_prayer',
+            'dual_path_loop',
         ):
             from game.items_data import get_item
             data = get_item(item_id)
@@ -76,13 +82,31 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
     def test_curated_shop_stock_is_gated_by_location_and_level(self):
         village_level_4 = {row['item_id'] for row in get_curated_shop_stock('village', 4)}
         village_level_5 = {row['item_id'] for row in get_curated_shop_stock('village', 5)}
+        outpost_level_6 = {row['item_id'] for row in get_curated_shop_stock('frontier_outpost', 6)}
+        outpost_level_7 = {row['item_id'] for row in get_curated_shop_stock('frontier_outpost', 7)}
         mines_level_8 = get_curated_shop_stock('old_mines', 8)
 
         self.assertIn('oak_guard_shield', village_level_4)
         self.assertIn('militia_cuirass', village_level_4)
         self.assertNotIn('band_of_precision', village_level_4)
         self.assertIn('band_of_precision', village_level_5)
+        self.assertIn('tracker_jacket', outpost_level_6)
+        self.assertNotIn('warden_kite_shield', outpost_level_6)
+        self.assertIn('warden_kite_shield', outpost_level_7)
+        self.assertIn('azure_focus_prism', outpost_level_7)
         self.assertEqual(mines_level_8, [])
+
+    def test_outpost_shop_stock_is_distinct_from_village_stock(self):
+        village_stock = {row['item_id'] for row in get_curated_shop_stock('village', 20)}
+        outpost_stock = {row['item_id'] for row in get_curated_shop_stock('frontier_outpost', 20)}
+        self.assertTrue(outpost_stock)
+        self.assertNotEqual(village_stock, outpost_stock)
+        self.assertTrue(
+            {'warden_kite_shield', 'azure_focus_prism', 'choir_censer'}.issubset(outpost_stock),
+        )
+        self.assertFalse(
+            {'oak_guard_shield', 'apprentice_focus_orb', 'novice_censer'}.intersection(outpost_stock),
+        )
 
     def test_shop_purchase_obtains_curated_item_and_deducts_gold(self):
         result = try_buy_curated_shop_item(9001, 'village', 4, 'apprentice_focus_orb')
@@ -110,6 +134,19 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         result = try_buy_curated_shop_item(9001, 'village', 4, 'band_of_precision')
         self.assertFalse(result['ok'])
         self.assertEqual(result['reason'], 'level_required')
+
+    def test_outpost_shop_purchase_respects_level_and_gold_rules(self):
+        low_level = try_buy_curated_shop_item(9001, 'frontier_outpost', 6, 'warden_kite_shield')
+        self.assertFalse(low_level['ok'])
+        self.assertEqual(low_level['reason'], 'level_required')
+
+        conn = get_connection()
+        conn.execute('UPDATE players SET gold=300 WHERE telegram_id=?', (9001,))
+        conn.commit()
+        conn.close()
+        not_enough_gold = try_buy_curated_shop_item(9001, 'frontier_outpost', 7, 'warden_kite_shield')
+        self.assertFalse(not_enough_gold['ok'])
+        self.assertEqual(not_enough_gold['reason'], 'not_enough_gold')
 
     def test_existing_loot_behavior_remains_intact(self):
         wolf = get_mob('forest_wolf')

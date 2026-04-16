@@ -3,10 +3,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from game.locations import get_location
 from handlers.location import (
     LOCATION_ACTION_SNAPSHOT_KEY,
     _build_location_message_with_snapshot,
     build_location_message,
+    build_shop_message,
     handle_location_action_text,
 )
 
@@ -24,6 +26,57 @@ class _DummyUpdate:
 
 
 class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
+    def test_shop_message_title_is_truthful_for_village(self):
+        player = {'telegram_id': 5001, 'lang': 'en', 'level': 10}
+        location = get_location('village')
+        assert location is not None
+        text, _keyboard = build_shop_message(player, location)
+        self.assertIn('Shop — 🏘️ Ashen Village', text)
+        self.assertNotIn('Frontier Outpost', text)
+
+    def test_shop_message_title_is_truthful_for_frontier_outpost(self):
+        player = {'telegram_id': 5001, 'lang': 'en', 'level': 10}
+        location = get_location('frontier_outpost')
+        assert location is not None
+        text, _keyboard = build_shop_message(player, location)
+        self.assertIn('Shop — 🏕️ Frontier Outpost', text)
+        self.assertNotIn('Village vendor', text)
+
+    def test_frontier_outpost_exposes_shop_in_compact_service_commands(self):
+        player = {
+            'telegram_id': 5001,
+            'lang': 'en',
+            'level': 10,
+            'hp': 120,
+            'max_hp': 120,
+            'mana': 50,
+            'max_mana': 50,
+            'gold': 0,
+        }
+        location = get_location('frontier_outpost')
+        assert location is not None
+        with (
+            patch('handlers.location.get_connection') as conn_mock,
+            patch('handlers.location.get_connected_locations', return_value=[]),
+            patch('handlers.location.get_location_name', return_value='Frontier Outpost'),
+            patch('handlers.location.get_location_desc', return_value='desc'),
+            patch('handlers.location.get_pending_player_engagement', return_value=None),
+            patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
+            patch('handlers.location.get_pending_location_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
+            patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
+        ):
+            conn_mock.return_value.execute.return_value.fetchall.return_value = []
+            conn_mock.return_value.close.return_value = None
+            text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
+
+        self.assertIn('sv1 shop', text)
+        self.assertIn('s1 sv1 shop', snapshot['actions'])
+        self.assertIn('s1 sv2 inn', snapshot['actions'])
+        self.assertIn('s1 sv3 quests', snapshot['actions'])
+
     def test_shop_service_action_is_exposed_via_snapshot_text_command(self):
         player = {
             'telegram_id': 5001,

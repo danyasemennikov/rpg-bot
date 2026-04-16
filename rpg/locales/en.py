@@ -111,6 +111,7 @@ STRINGS = {
         'gather_btn':       '🌿 Gather resources',
         'shop_btn':         '🏪 Shop',
         'shop_title':       '🏪 <b>Village vendor</b>\nCurated gear for early/mid progression:',
+        'shop_title_named': '🏪 <b>Shop — {place}</b>\nCurated gear for this hub progression:',
         'shop_empty':       'The vendor has nothing useful right now.',
         'shop_entry':       '• {name} — Lv.{level} — 💰 {price}',
         'shop_buy_btn':     '🛒 Buy {name} ({price}g)',

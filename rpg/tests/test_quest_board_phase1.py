@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 import database
 from database import get_connection, init_db
+from game.locations import get_location
+from game.pve_live import list_location_available_spawn_instances
 from game.quest_board import (
     HUNTER_RANK_THRESHOLDS,
     _ensure_player_hunt_contract_table,
@@ -148,6 +150,32 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('hunt_mine_goblins', outpost_keys)
         self.assertIn('hunt_amber_golem', outpost_keys)
         self.assertTrue(outpost_keys.isdisjoint(village_keys))
+
+    def test_frontier_contract_targets_match_old_mines_spawn_pool(self):
+        outpost_contracts = list_hunt_contracts_for_location('frontier_outpost')
+        old_mines_spawns = list_location_available_spawn_instances(location_id='old_mines')
+        spawn_pairs = {
+            (
+                str(spawn.get('mob_id') or ''),
+                str(spawn.get('special_spawn_key') or '').strip().lower(),
+            )
+            for spawn in old_mines_spawns
+        }
+        for contract in outpost_contracts:
+            self.assertEqual(contract.target_location_ids, ('old_mines',))
+            required_special = str(contract.special_spawn_key or '').strip().lower()
+            self.assertIn((contract.target_mob_id, required_special), spawn_pairs)
+
+    def test_old_mines_has_special_spawn_for_amber_golem_contract(self):
+        old_mines = get_location('old_mines')
+        self.assertIsNotNone(old_mines)
+        assert old_mines is not None
+        special_spawns = old_mines.get('world_special_spawns', [])
+        amber_special = [
+            row for row in special_spawns
+            if row.get('mob_id') == 'stone_golem' and row.get('key') == 'amber_colossus'
+        ]
+        self.assertEqual(len(amber_special), 1)
 
     def test_accept_from_wrong_board_is_rejected_truthfully(self):
         ok, reason = accept_hunt_contract(

@@ -108,6 +108,7 @@ STRINGS = {
         'gather_btn':       '🌿 Recolectar recursos',
         'shop_btn':         '🏪 Tienda',
         'shop_title':       '🏪 <b>Tienda del pueblo</b>\nEquipo curado para progresión temprana/media:',
+        'shop_title_named': '🏪 <b>Tienda — {place}</b>\nEquipo curado para la progresión de este enclave:',
         'shop_empty':       'La tienda no tiene nada útil ahora.',
         'shop_entry':       '• {name} — Nv.{level} — 💰 {price}',
         'shop_buy_btn':     '🛒 Comprar {name} ({price}o)',

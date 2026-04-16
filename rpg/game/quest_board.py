@@ -110,6 +110,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=80,
         board_locations=('frontier_outpost',),
         spawn_profile='elite',
+        special_spawn_key='amber_colossus',
         bonus_item_id='enhancement_crystal',
         hunter_points_reward=60,
         required_hunter_rank='veteran',
