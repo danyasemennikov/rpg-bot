@@ -511,7 +511,8 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
 def build_inn_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
     lang = player.get('lang', 'ru')
     rest_cost = INN_REST_COST_GOLD
-    text = t('location.inn_title', lang) + '\n\n'
+    location_name = get_location_name(str(location.get('id') or ''), lang)
+    text = t('location.inn_title_named', lang, place=location_name) + '\n\n'
     text += t(
         'location.inn_stats',
         lang,
@@ -1463,7 +1464,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                 'no_contract': 'location.quest_board_claim_not_ready',
                 'not_completed': 'location.quest_board_claim_not_ready',
                 'already_claimed': 'location.quest_board_claim_already',
-                'wrong_board': 'location.quest_board_not_available',
+                'wrong_board': 'location.quest_board_claim_wrong_board',
                 'reward_delivery_failed': 'location.quest_board_claim_reward_failed',
             }
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_claim_not_ready'), lang), show_alert=True)

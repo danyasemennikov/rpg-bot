@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, patch
 
 import database
 from database import get_connection, init_db
+from game.locations import get_location
 from handlers.location import INN_REST_COST_GOLD, handle_location_buttons
+from handlers.location import build_inn_message
 
 
 class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
@@ -124,3 +126,18 @@ class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
         update.callback_query.edit_message_text.assert_awaited_once()
         rendered = update.callback_query.edit_message_text.await_args.args[0]
         self.assertIn('Quick actions', rendered)
+
+    def test_inn_message_title_is_location_aware_for_outpost(self):
+        location = get_location('frontier_outpost')
+        self.assertIsNotNone(location)
+        assert location is not None
+        player = {
+            'telegram_id': 9101,
+            'lang': 'en',
+            'hp': 100,
+            'max_hp': 120,
+            'mana': 40,
+            'max_mana': 50,
+        }
+        text, _keyboard = build_inn_message(player, location)
+        self.assertIn('Tavern — 🏕️ Frontier Outpost', text)
