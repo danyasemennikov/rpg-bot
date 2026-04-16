@@ -96,7 +96,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         required_kills=3,
         reward_exp=110,
         reward_gold=55,
-        board_locations=('village',),
+        board_locations=('frontier_outpost',),
         hunter_points_reward=35,
         required_hunter_rank='hunter',
         target_location_ids=('old_mines',),
@@ -108,11 +108,35 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         required_kills=1,
         reward_exp=140,
         reward_gold=80,
-        board_locations=('village',),
+        board_locations=('frontier_outpost',),
         spawn_profile='elite',
         bonus_item_id='enhancement_crystal',
         hunter_points_reward=60,
         required_hunter_rank='veteran',
+        target_location_ids=('old_mines',),
+    ),
+    HuntContract(
+        contract_key='hunt_mine_rats',
+        title_i18n_key='location.quest_contract_mine_rats_title',
+        target_mob_id='mine_rat',
+        required_kills=5,
+        reward_exp=95,
+        reward_gold=46,
+        board_locations=('frontier_outpost',),
+        hunter_points_reward=25,
+        required_hunter_rank='tracker',
+        target_location_ids=('old_mines',),
+    ),
+    HuntContract(
+        contract_key='hunt_cave_bats',
+        title_i18n_key='location.quest_contract_cave_bats_title',
+        target_mob_id='cave_bat',
+        required_kills=4,
+        reward_exp=105,
+        reward_gold=50,
+        board_locations=('frontier_outpost',),
+        hunter_points_reward=30,
+        required_hunter_rank='hunter',
         target_location_ids=('old_mines',),
     ),
 )
@@ -598,6 +622,22 @@ def _build_contract_location_line(contract: HuntContract, lang: str) -> str:
     return ' / '.join(location_names)
 
 
+def _build_contract_board_locations_line(contract: HuntContract, lang: str) -> str:
+    board_names: list[str] = []
+    for board_location_id in contract.board_locations:
+        normalized_id = str(board_location_id or '').strip()
+        if not normalized_id:
+            continue
+        board_names.append(get_location_name(normalized_id, lang))
+    if not board_names:
+        return t('location.quest_board_label_unknown', lang)
+    return ' / '.join(board_names)
+
+
+def build_contract_board_locations_line(contract: HuntContract, lang: str) -> str:
+    return _build_contract_board_locations_line(contract, lang)
+
+
 def _build_contract_location_hint(*, contract: HuntContract, lang: str, current_location_id: str | None = None) -> str:
     location_names = _contract_target_location_names(contract, lang)
     if not location_names:
@@ -643,6 +683,7 @@ def build_contract_row(contract: HuntContract, lang: str) -> str:
         lang,
         title=build_contract_title(contract, lang),
         target=_build_contract_target_line(contract, lang),
+        board_hint=_build_contract_board_locations_line(contract, lang),
         location_hint=_build_contract_location_line(contract, lang),
         kills=contract.required_kills,
         exp=contract.reward_exp,
