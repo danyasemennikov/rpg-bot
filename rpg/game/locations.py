@@ -22,9 +22,32 @@ LOCATIONS = {
         'level_max':   999,  # безопасная зона
         'safe':        True,  # мобы не атакуют, нельзя умереть
         'mobs':        [],    # мобов нет
-        'connections': ['dark_forest', 'old_mines'],  # куда можно пойти
+        'connections': ['dark_forest', 'old_mines', 'frontier_outpost'],  # куда можно пойти
         'services':    ['shop', 'inn', 'quest_board'],
         'gather':      [],    # ресурсы для сбора
+    },
+
+    'frontier_outpost': {
+        'id':          'frontier_outpost',
+        'world_id':    'ashen_continent',
+        'region_id':   'iron_pass',
+        'zone_id':     'frontier_outpost',
+        'zone_role':   'normal',
+        'region_flavor_tags': ['mine_waystation', 'hunter_lodge'],
+        'linked_dungeon_id': None,
+        'world_boss_governance_id': 'iron_pass_world_boss',
+        'future_pvp_ruleset_id': 'open_world_frontier',
+        'security_tier': 'safe',
+        'is_regional_safe_hub': True,
+        'name':        '🏕️ Пограничная застава',
+        'description': 'Укреплённая застава у шахтного тракта. Здесь перевязывают раны, берут местные контракты и готовятся к вылазкам.',
+        'level_min':   1,
+        'level_max':   999,
+        'safe':        True,
+        'mobs':        [],
+        'connections': ['village', 'old_mines'],
+        'services':    ['inn', 'quest_board'],
+        'gather':      [],
     },
 
     'dark_forest': {
@@ -72,7 +95,7 @@ LOCATIONS = {
         'level_max':   8,
         'safe':        False,
         'mobs':        ['mine_rat', 'goblin_miner', 'cave_bat', 'stone_golem'],
-        'connections': ['village'],
+        'connections': ['village', 'frontier_outpost'],
         'services':    [],
         'gather':      [
             ('iron_ore',     0.55, '⛏️ Железная руда'),

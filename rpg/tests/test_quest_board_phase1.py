@@ -132,13 +132,31 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     def test_curated_contract_set_is_broader_than_phase1_baseline(self):
         contracts = list_hunt_contracts_for_location('village')
         keys = {contract.contract_key for contract in contracts}
-        self.assertGreaterEqual(len(contracts), 6)
+        self.assertGreaterEqual(len(contracts), 4)
         self.assertIn('hunt_forest_wolves', keys)
         self.assertIn('hunt_elite_boars', keys)
         self.assertIn('hunt_greyfang', keys)
         self.assertIn('hunt_forest_spiders', keys)
-        self.assertIn('hunt_mine_goblins', keys)
-        self.assertIn('hunt_amber_golem', keys)
+
+    def test_frontier_outpost_board_has_distinct_curated_contracts(self):
+        village_keys = {contract.contract_key for contract in list_hunt_contracts_for_location('village')}
+        outpost_contracts = list_hunt_contracts_for_location('frontier_outpost')
+        outpost_keys = {contract.contract_key for contract in outpost_contracts}
+        self.assertGreaterEqual(len(outpost_contracts), 4)
+        self.assertIn('hunt_mine_rats', outpost_keys)
+        self.assertIn('hunt_cave_bats', outpost_keys)
+        self.assertIn('hunt_mine_goblins', outpost_keys)
+        self.assertIn('hunt_amber_golem', outpost_keys)
+        self.assertTrue(outpost_keys.isdisjoint(village_keys))
+
+    def test_accept_from_wrong_board_is_rejected_truthfully(self):
+        ok, reason = accept_hunt_contract(
+            player_id=8101,
+            location_id='village',
+            contract_key='hunt_mine_rats',
+        )
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'wrong_board')
 
     def test_new_player_has_baseline_hunter_rank(self):
         progress = get_player_hunter_progress(8101)
@@ -196,14 +214,51 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('hunt_elite_boars', available_keys)
         self.assertNotIn('hunt_elite_boars', locked_keys)
 
+    def test_hunter_rank_unlocks_frontier_board_contracts(self):
+        split_before = list_hunt_contracts_for_player(location_id='frontier_outpost', player_id=8101, lang='en')
+        self.assertIn('hunt_mine_rats', {row['contract'].contract_key for row in split_before['locked']})
+
+        for _ in range(2):
+            accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+            for _ in range(5):
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            claim_completed_hunt_contract(player_id=8101, location_id='village')
+
+        split_after = list_hunt_contracts_for_player(location_id='frontier_outpost', player_id=8101, lang='en')
+        self.assertIn('hunt_mine_rats', {contract.contract_key for contract in split_after['available']})
+        self.assertNotIn('hunt_mine_rats', {row['contract'].contract_key for row in split_after['locked']})
+
     def test_board_ui_shows_hunter_progress_and_locked_reason(self):
         player = {'telegram_id': 8101, 'lang': 'en'}
         location = {'id': 'village'}
         text, _keyboard = build_quest_board_message(player, location)
         self.assertIn('Hunter rank:', text)
+        self.assertIn('Board: 🏘️ Ashen Village', text)
         self.assertIn('Locked contracts:', text)
         self.assertIn('requires rank Tracker', text)
+        self.assertIn('board: 🏘️ Ashen Village', text)
         self.assertIn('place: 🌲 Dark Forest', text)
+
+    def test_board_ui_shows_other_board_claim_hint_for_completed_contract(self):
+        player = {'telegram_id': 8101, 'lang': 'en'}
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+
+        text, keyboard = build_quest_board_message(player, {'id': 'frontier_outpost'})
+        callbacks = {btn.callback_data for row in keyboard.inline_keyboard for btn in row}
+        self.assertIn('Claim board(s): 🏘️ Ashen Village', text)
+        self.assertIn('Claim it at: 🏘️ Ashen Village', text)
+        self.assertNotIn('quest_board_claim', callbacks)
+
+    def test_completed_contract_claim_fails_on_wrong_board(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+        ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='frontier_outpost')
+        self.assertFalse(ok)
+        self.assertEqual(reason, 'wrong_board')
+        self.assertIsNone(reward)
 
     def test_claim_atomicity_keeps_hunter_progress_unchanged_on_failure(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_greyfang')

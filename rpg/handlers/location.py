@@ -27,6 +27,7 @@ from game.pve_live import (
 from game.quest_board import (
     accept_hunt_contract,
     abandon_hunt_contract,
+    build_contract_board_locations_line,
     build_hunt_contract_progress_line,
     build_contract_row,
     build_contract_title,
@@ -380,6 +381,7 @@ def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboar
 def build_quest_board_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
     lang = player.get('lang', 'ru')
     location_id = str(location.get('id') or '')
+    board_name = get_location_name(location_id, lang)
     contract_split = list_hunt_contracts_for_player(
         location_id=location_id,
         player_id=int(player['telegram_id']),
@@ -390,7 +392,7 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
     hunter_progress = contract_split['hunter_progress']
     state = get_player_hunt_contract_state(int(player['telegram_id']))
 
-    text = t('location.quest_board_title', lang) + '\n'
+    text = t('location.quest_board_title', lang, board_name=board_name) + '\n'
     current_rank_label = t(f"location.hunter_rank_{hunter_progress['current_rank']}", lang)
     text += '\n' + t(
         'location.quest_board_hunter_rank_line',
@@ -417,6 +419,7 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
     if active_contract:
         progress = int(state.get('progress_kills', 0) or 0)
         required = int(active_contract.required_kills)
+        can_claim_on_this_board = location_id in active_contract.board_locations
         status_key = 'location.quest_board_status_ready' if state.get('status') == 'completed' else 'location.quest_board_status_active'
         text += '\n' + t(
             'location.quest_board_active_row',
@@ -427,11 +430,22 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
             status=t(status_key, lang),
         ) + '\n'
         text += t('location.quest_board_active_target', lang, target=build_contract_row(active_contract, lang)) + '\n'
-        if state.get('status') == 'completed':
+        text += t(
+            'location.quest_board_active_claim_boards',
+            lang,
+            boards=build_contract_board_locations_line(active_contract, lang),
+        ) + '\n'
+        if state.get('status') == 'completed' and can_claim_on_this_board:
             keyboard.append([InlineKeyboardButton(
                 t('location.quest_board_claim_btn', lang),
                 callback_data='quest_board_claim',
             )])
+        elif state.get('status') == 'completed':
+            text += t(
+                'location.quest_board_claim_on_other_board',
+                lang,
+                boards=build_contract_board_locations_line(active_contract, lang),
+            ) + '\n'
         else:
             keyboard.append([InlineKeyboardButton(
                 t('location.quest_board_abandon_btn', lang),
