@@ -153,6 +153,29 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertIn('Greyfang', detail_text)
         self.assertIn('[Rare]', detail_text)
 
+    def test_pve_detail_localizes_special_spawn_name_from_key_for_supported_languages(self):
+        detail = {
+            'encounter_id': 'pve-amber',
+            'status': 'active',
+            'mob_id': 'stone_golem',
+            'spawn_profile': 'elite',
+            'special_spawn_key': 'amber_colossus',
+            'special_spawn_name': None,
+            'participant_player_ids': [],
+            'participant_count': 1,
+            'joinable': True,
+        }
+        with patch('handlers.location.get_open_world_pve_encounter_detail', return_value=detail), \
+             patch('handlers.location.can_join_open_world_pve_encounter', return_value=(True, None)):
+            ru_text, _ = build_pve_encounter_detail_message({'telegram_id': self.player_id, 'lang': 'ru'}, 'pve-amber')
+            en_text, _ = build_pve_encounter_detail_message({'telegram_id': self.player_id, 'lang': 'en'}, 'pve-amber')
+            es_text, _ = build_pve_encounter_detail_message({'telegram_id': self.player_id, 'lang': 'es'}, 'pve-amber')
+
+        self.assertIn('Янтарный колосс', ru_text)
+        self.assertIn('Amber Colossus', en_text)
+        self.assertIn('Coloso Ámbar', es_text)
+        self.assertIn('[Elite]', en_text)
+
     def test_special_spawn_instance_ids_use_dedicated_namespace_and_avoid_profile_collisions(self):
         special_location = {
             'id': self.location_id,

@@ -543,7 +543,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(cmd.endswith('m1 fight') for cmd in snapshot['actions']))
         self.assertTrue(any(cmd.endswith('m2 fight') for cmd in snapshot['actions']))
 
-    def test_location_text_uses_special_spawn_name_and_keeps_same_mob_targets_distinguishable(self):
+    def test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -554,30 +554,30 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             'max_mana': 50,
             'gold': 0,
         }
-        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': ['forest_wolf'], 'services': []}
+        location = {'id': 'old_mines', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': ['stone_golem'], 'services': []}
         with (
             patch('handlers.location.get_connection') as conn_mock,
             patch('handlers.location.get_connected_locations', return_value=[]),
-            patch('handlers.location.get_location_name', return_value='Forest'),
+            patch('handlers.location.get_location_name', return_value='Old Mines'),
             patch('handlers.location.get_location_desc', return_value='desc'),
             patch('handlers.location.get_pending_player_engagement', return_value=None),
             patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
             patch('handlers.location.get_pending_location_encounters', return_value=[]),
             patch('handlers.location.list_location_active_pve_encounters', return_value=[{
-                'encounter_id': 'pve-greyfang',
-                'mob_id': 'forest_wolf',
-                'spawn_profile': 'rare',
-                'special_spawn_key': 'greyfang',
-                'special_spawn_name': 'Greyfang',
+                'encounter_id': 'pve-amber',
+                'mob_id': 'stone_golem',
+                'spawn_profile': 'elite',
+                'special_spawn_key': 'amber_colossus',
+                'special_spawn_name': '',
                 'participant_player_ids': [],
                 'participant_count': 1,
                 'joinable': True,
             }]),
             patch('handlers.location.list_location_available_spawn_instances', return_value=[
-                {'spawn_instance_id': 'spawn-dark_forest-forest_wolf', 'mob_id': 'forest_wolf', 'spawn_profile': 'normal'},
-                {'spawn_instance_id': 'spawn-dark_forest-forest_wolf-greyfang', 'mob_id': 'forest_wolf', 'spawn_profile': 'rare', 'special_spawn_key': 'greyfang', 'special_spawn_name': 'Greyfang'},
+                {'spawn_instance_id': 'spawn-old_mines-stone_golem', 'mob_id': 'stone_golem', 'spawn_profile': 'normal'},
+                {'spawn_instance_id': 'spawn-old_mines-stone_golem-special-amber_colossus', 'mob_id': 'stone_golem', 'spawn_profile': 'elite', 'special_spawn_key': 'amber_colossus', 'special_spawn_name': None},
             ]),
-            patch('handlers.location.get_mob', return_value={'id': 'forest_wolf', 'level': 2, 'aggressive': False}),
+            patch('handlers.location.get_mob', return_value={'id': 'stone_golem', 'level': 8, 'aggressive': False}),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
             patch('handlers.location.can_join_open_world_pve_encounter', return_value=(True, None)),
         ):
@@ -585,8 +585,8 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             conn_mock.return_value.close.return_value = None
             text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
 
-        self.assertIn('[Rare] Greyfang', text)
-        self.assertIn('Forest Wolf', text)
+        self.assertIn('[Elite] 🟠 Amber Colossus', text)
+        self.assertIn('Stone Golem', text)
         self.assertIn('m1', text)
         self.assertIn('m2', text)
         self.assertNotEqual(snapshot['actions'].get('s1 m1 fight'), snapshot['actions'].get('s1 m2 fight'))

@@ -365,9 +365,8 @@ def _normalize_special_spawn_variants(*, location: dict, mob_id: str) -> list[di
         if str(raw_variant.get('mob_id') or '') != mob_id:
             continue
 
-        raw_name = str(raw_variant.get('name') or '').strip()
         raw_key = str(raw_variant.get('key') or '').strip().lower()
-        if not raw_name or not raw_key:
+        if not raw_key:
             continue
 
         sanitized_key = ''.join(ch if ch.isalnum() or ch in ('_', '-') else '_' for ch in raw_key).strip('_-')
@@ -380,9 +379,10 @@ def _normalize_special_spawn_variants(*, location: dict, mob_id: str) -> list[di
             count = 1
         count = max(1, count)
 
+        raw_name = str(raw_variant.get('name') or '').strip()
         normalized.append({
             'key': sanitized_key,
-            'name': raw_name,
+            'name': raw_name or None,
             'spawn_profile': _normalize_spawn_profile(raw_variant.get('spawn_profile')),
             'count': count,
         })
@@ -460,7 +460,7 @@ def ensure_location_pve_spawn_instances(*, location_id: str) -> None:
 
         for special_variant in _normalize_special_spawn_variants(location=location, mob_id=mob_id):
             special_key = str(special_variant['key'])
-            special_name = str(special_variant['name'])
+            special_name = str(special_variant.get('name') or '').strip()
             special_profile = str(special_variant['spawn_profile'])
             special_count = int(special_variant['count'])
             for index in range(1, special_count + 1):
@@ -483,7 +483,7 @@ def ensure_location_pve_spawn_instances(*, location_id: str) -> None:
                         mob_id,
                         special_profile,
                         special_key,
-                        special_name,
+                        special_name or None,
                         SPAWN_STATE_IDLE,
                     ),
                 )

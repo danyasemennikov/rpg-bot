@@ -15,7 +15,15 @@ from game.gathering_foundation import build_location_gather_source_profiles
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
 from game.items_data import get_item
-from game.i18n import t, get_player_lang, get_mob_name, get_location_name, get_location_desc, get_item_name
+from game.i18n import (
+    t,
+    get_player_lang,
+    get_mob_name,
+    get_location_name,
+    get_location_desc,
+    get_item_name,
+    get_special_spawn_name,
+)
 from game.pve_live import (
     can_join_open_world_pve_encounter,
     get_open_world_pve_encounter_detail,
@@ -153,7 +161,20 @@ def _format_spawn_profile_marker(profile: str | None, lang: str) -> str:
     return ''
 
 
-def _resolve_world_spawn_display_name(*, mob_id: str, lang: str, special_spawn_name: str | None = None) -> str:
+def _resolve_world_spawn_display_name(
+    *,
+    mob_id: str,
+    lang: str,
+    special_spawn_key: str | None = None,
+    special_spawn_name: str | None = None,
+) -> str:
+    special_key = str(special_spawn_key or '').strip()
+    if special_key:
+        return get_special_spawn_name(
+            special_key,
+            lang,
+            fallback_name=special_spawn_name,
+        )
     special_name = str(special_spawn_name or '').strip()
     if special_name:
         return special_name
@@ -232,6 +253,7 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
     display_name = _resolve_world_spawn_display_name(
         mob_id=str(detail.get('mob_id') or ''),
         lang=lang,
+        special_spawn_key=str(detail.get('special_spawn_key') or ''),
         special_spawn_name=str(detail.get('special_spawn_name') or ''),
     )
     mob_name = f"{profile_marker} {display_name}".strip()
@@ -723,7 +745,7 @@ def build_location_message(
                     'location.pve_encounter_row',
                     lang,
                     id=encounter['encounter_id'],
-                    mob=f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=mob_id, lang=lang, special_spawn_name=str(encounter.get('special_spawn_name') or ''))}".strip(),
+                    mob=f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=mob_id, lang=lang, special_spawn_key=str(encounter.get('special_spawn_key') or ''), special_spawn_name=str(encounter.get('special_spawn_name') or ''))}".strip(),
                     players=int(encounter.get('participant_count', 0)),
                     join_state=t(
                         (
@@ -778,7 +800,7 @@ def build_location_message(
             mob_counter[mob_key] = mob_counter.get(mob_key, 0) + 1
             dup_suffix = f" #{mob_counter[mob_key]}" if mob_counter[mob_key] > 1 else ""
             profile_marker = _format_spawn_profile_marker(spawn_profile, lang)
-            mob_label = f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=mob_id, lang=lang, special_spawn_name=special_spawn_name)}".strip()
+            mob_label = f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=mob_id, lang=lang, special_spawn_key=special_spawn_key, special_spawn_name=special_spawn_name)}".strip()
             mob_lines.append(
                 f"{token} — {diff} {mob_label}{dup_suffix}  "
                 f"{t('common.level_short', lang)}{mob['level']}{agr_tag}"
