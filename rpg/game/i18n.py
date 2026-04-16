@@ -209,5 +209,3 @@ def _fallback_skill(skill_id: str, field: str) -> str:
     from game.skills import get_skill
     skill = get_skill(skill_id)
     return skill.get(field, skill_id) if skill else skill_id
-
-print('✅ game/i18n.py создан!')
