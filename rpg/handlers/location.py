@@ -80,6 +80,14 @@ CURATED_EQUIPMENT_VENDOR_STOCK = {
         # Temporary bridge before full apex/world-boss rollout (Phase 3 routing).
         {'item_id': 'ashen_core', 'level_min': 12},
     ],
+    'frontier_outpost': [
+        {'item_id': 'warden_kite_shield', 'level_min': 7},
+        {'item_id': 'azure_focus_prism', 'level_min': 7},
+        {'item_id': 'choir_censer', 'level_min': 7},
+        {'item_id': 'tracker_jacket', 'level_min': 6},
+        {'item_id': 'amulet_of_kindled_prayer', 'level_min': 7},
+        {'item_id': 'dual_path_loop', 'level_min': 7},
+    ],
 }
 
 
@@ -348,7 +356,8 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
 def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
     lang = player.get('lang', 'ru')
     stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(location['id'], [])
-    text = t('location.shop_title', lang) + '\n\n'
+    location_name = get_location_name(location['id'], lang)
+    text = t('location.shop_title_named', lang, place=location_name) + '\n\n'
     keyboard = []
 
     if not stock_rows:

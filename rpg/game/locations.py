@@ -46,7 +46,7 @@ LOCATIONS = {
         'safe':        True,
         'mobs':        [],
         'connections': ['village', 'old_mines'],
-        'services':    ['inn', 'quest_board'],
+        'services':    ['shop', 'inn', 'quest_board'],
         'gather':      [],
     },
 
@@ -95,6 +95,21 @@ LOCATIONS = {
         'level_max':   8,
         'safe':        False,
         'mobs':        ['mine_rat', 'goblin_miner', 'cave_bat', 'stone_golem'],
+        'world_spawn_profiles': {
+            'mine_rat': {'normal': 2},
+            'goblin_miner': {'normal': 1, 'elite': 1},
+            'cave_bat': {'normal': 2, 'rare': 1},
+            'stone_golem': {'normal': 1, 'elite': 1},
+        },
+        'world_special_spawns': [
+            {
+                'key': 'amber_colossus',
+                'mob_id': 'stone_golem',
+                'spawn_profile': 'elite',
+                'name': '🟠 Amber Colossus',
+                'count': 1,
+            },
+        ],
         'connections': ['village', 'frontier_outpost'],
         'services':    [],
         'gather':      [
