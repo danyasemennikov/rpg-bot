@@ -98,6 +98,32 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         query.answer.assert_awaited()
         query.edit_message_text.assert_awaited()
 
+    async def test_claim_from_wrong_board_shows_truthful_board_message(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+
+        conn = get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('frontier_outpost', 8101))
+        conn.commit()
+        conn.close()
+
+        query = SimpleNamespace(
+            data='quest_board_claim',
+            from_user=SimpleNamespace(id=8101),
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(callback_query=query)
+        context = SimpleNamespace(user_data={})
+        await handle_location_buttons(update, context)
+
+        self.assertIn('board where it was posted', query.answer.await_args.args[0])
+        state = get_player_hunt_contract_state(8101)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state['status'], 'completed')
+
     def test_board_renders_claim_and_abandon_buttons_truthfully(self):
         player = {'telegram_id': 8101, 'lang': 'en'}
         location = {'id': 'village'}
