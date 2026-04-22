@@ -113,26 +113,42 @@ def get_item_name(item_id: str, lang: str) -> str:
     return item['name'] if item else item_id
 
 def get_location_name(location_id: str, lang: str) -> str:
+    from game.locations import WORLD_LEGACY_LOCATION_ALIASES, resolve_location_id
+    raw_location_id = str(location_id or '').strip()
+    resolved_location_id = resolve_location_id(raw_location_id)
     try:
         if lang == 'ru': from locales.locations_ru import LOCATION_NAMES
         elif lang == 'en': from locales.locations_en import LOCATION_NAMES
         elif lang == 'es': from locales.locations_es import LOCATION_NAMES
         else: from locales.locations_ru import LOCATION_NAMES
-        entry = LOCATION_NAMES.get(location_id, {})
-        return entry.get('name') or _fallback_location(location_id, 'name')
+        if raw_location_id in WORLD_LEGACY_LOCATION_ALIASES:
+            legacy_entry = LOCATION_NAMES.get(raw_location_id, {})
+            legacy_name = legacy_entry.get('name')
+            if legacy_name:
+                return legacy_name
+        entry = LOCATION_NAMES.get(resolved_location_id, {})
+        return entry.get('name') or _fallback_location(resolved_location_id, 'name')
     except ImportError:
-        return _fallback_location(location_id, 'name')
+        return _fallback_location(resolved_location_id, 'name')
 
 def get_location_desc(location_id: str, lang: str) -> str:
+    from game.locations import WORLD_LEGACY_LOCATION_ALIASES, resolve_location_id
+    raw_location_id = str(location_id or '').strip()
+    resolved_location_id = resolve_location_id(raw_location_id)
     try:
         if lang == 'ru': from locales.locations_ru import LOCATION_NAMES
         elif lang == 'en': from locales.locations_en import LOCATION_NAMES
         elif lang == 'es': from locales.locations_es import LOCATION_NAMES
         else: from locales.locations_ru import LOCATION_NAMES
-        entry = LOCATION_NAMES.get(location_id, {})
-        return entry.get('description') or _fallback_location(location_id, 'description')
+        if raw_location_id in WORLD_LEGACY_LOCATION_ALIASES:
+            legacy_entry = LOCATION_NAMES.get(raw_location_id, {})
+            legacy_description = legacy_entry.get('description')
+            if legacy_description:
+                return legacy_description
+        entry = LOCATION_NAMES.get(resolved_location_id, {})
+        return entry.get('description') or _fallback_location(resolved_location_id, 'description')
     except ImportError:
-        return _fallback_location(location_id, 'description')
+        return _fallback_location(resolved_location_id, 'description')
 
 def _fallback_location(location_id: str, field: str) -> str:
     from game.locations import LOCATIONS
