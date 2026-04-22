@@ -2,7 +2,13 @@ from datetime import datetime, timezone
 from database import get_connection
 
 REGEN_RATES = {
+    'capital_city': {'hp': 5.0, 'mana': 8.0},
     'village': {'hp': 5.0, 'mana': 8.0},
+    'hub_westwild': {'hp': 5.0, 'mana': 8.0},
+    'hub_frostspine': {'hp': 5.0, 'mana': 8.0},
+    'hub_ashen_ruins': {'hp': 5.0, 'mana': 8.0},
+    'hub_sunscar': {'hp': 5.0, 'mana': 8.0},
+    'hub_mireveil': {'hp': 5.0, 'mana': 8.0},
     'default': {'hp': 1.0, 'mana': 2.0},
 }
 

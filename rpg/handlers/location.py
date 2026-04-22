@@ -10,7 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from database import get_player, get_connection, is_in_battle
-from game.locations import get_location, get_connected_locations
+from game.locations import get_location, get_connected_locations, resolve_location_id
 from game.gathering_foundation import build_location_gather_source_profiles
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
@@ -77,7 +77,8 @@ from game.pvp_rules import (
 )
 
 CURATED_EQUIPMENT_VENDOR_STOCK = {
-    'village': [
+    'hub_westwild': [
+
         {'item_id': 'oak_guard_shield', 'level_min': 4},
         {'item_id': 'apprentice_focus_orb', 'level_min': 3},
         {'item_id': 'novice_censer', 'level_min': 3},
@@ -88,7 +89,7 @@ CURATED_EQUIPMENT_VENDOR_STOCK = {
         # Temporary bridge before full apex/world-boss rollout (Phase 3 routing).
         {'item_id': 'ashen_core', 'level_min': 12},
     ],
-    'frontier_outpost': [
+    'hub_frostspine': [
         {'item_id': 'warden_kite_shield', 'level_min': 7},
         {'item_id': 'azure_focus_prism', 'level_min': 7},
         {'item_id': 'choir_censer', 'level_min': 7},
@@ -310,7 +311,8 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
 
 def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
     """Возвращает доступный список витрины магазина для локации и уровня."""
-    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(location_id, [])
+    canonical_location_id = resolve_location_id(location_id)
+    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(canonical_location_id, [])
     available = []
     for row in stock_rows:
         item = get_item(row['item_id'])
@@ -333,7 +335,7 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
     """Покупка предмета из витрины магазина. Возвращает статус операции."""
     stock_by_id = {
         row['item_id']: row
-        for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(location_id, [])
+        for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location_id), [])
     }
     stock_row = stock_by_id.get(item_id)
     if not stock_row:
@@ -377,7 +379,7 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
 
 def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
     lang = player.get('lang', 'ru')
-    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(location['id'], [])
+    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location['id']), [])
     location_name = get_location_name(location['id'], lang)
     text = t('location.shop_title_named', lang, place=location_name) + '\n\n'
     keyboard = []
