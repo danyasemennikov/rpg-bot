@@ -146,6 +146,7 @@ def _world_node(
     teleport_enabled: bool = False,
     teleport_group: str | None = None,
     legacy_aliases: list[str] | None = None,
+    region_flavor_tags: list[str] | None = None,
 ) -> dict:
     return {
         'id': location_id,
@@ -175,6 +176,7 @@ def _world_node(
         'teleport_group': teleport_group,
         'return_hub_id': return_hub_id,
         'legacy_aliases': list(legacy_aliases or []),
+        'region_flavor_tags': list(region_flavor_tags or []),
         'is_regional_safe_hub': location_id.startswith('hub_'),
     }
 
@@ -407,6 +409,7 @@ WORLD_LOCATIONS['hub_westwild'].update({
     'zone_id': 'ember_village',
     'description': 'Мирные поля и деревня на краю тёмного леса. Здесь можно отдохнуть, закупиться и взять квесты.',
     'services': ['shop', 'inn', 'quest_board'],
+    'region_flavor_tags': ['civilized_frontier', 'ashen_farmland'],
 })
 WORLD_LOCATIONS['hub_frostspine'].update({
     'world_boss_governance_id': 'iron_pass_world_boss',
@@ -415,6 +418,7 @@ WORLD_LOCATIONS['hub_frostspine'].update({
     'zone_id': 'frontier_outpost',
     'description': 'Укреплённая застава у шахтного тракта. Здесь перевязывают раны и берут местные контракты.',
     'services': ['shop', 'inn', 'quest_board'],
+    'region_flavor_tags': ['mine_waystation', 'hunter_lodge'],
 })
 WORLD_LOCATIONS['westwild_n4'].update({
     'linked_dungeon_id': 'rootbound_hollow',
@@ -422,6 +426,7 @@ WORLD_LOCATIONS['westwild_n4'].update({
     'world_id': 'ashen_continent',
     'region_id': 'ember_valley',
     'zone_id': 'dark_forest',
+    'region_flavor_tags': ['beast_hunting', 'poison_herbs', 'dark_wood'],
     'description': 'Густой лес, пронизанный тьмой. Здесь рыщут волки, а на деревьях затаились пауки.',
     'level_max': 5,
     'mobs': ['forest_wolf', 'forest_boar', 'forest_spider', 'dark_treant'],
@@ -435,6 +440,7 @@ WORLD_LOCATIONS['old_mine_entrance'].update({
     'world_id': 'ashen_continent',
     'region_id': 'ember_valley',
     'zone_id': 'old_mines',
+    'region_flavor_tags': ['ore_veins', 'construct_ruins', 'goblin_camps'],
     'zone_role': 'elite',
     'world_boss_governance_id': 'ember_valley_world_boss',
     'linked_dungeon_id': 'amber_catacombs',

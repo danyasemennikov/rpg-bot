@@ -60,6 +60,42 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
         self.assertEqual(get_location_neighbors('village'), ['dark_forest', 'old_mines', 'frontier_outpost'])
         self.assertEqual(get_location_neighbors('hub_westwild'), ['westwild_n5'])
 
+    def test_mapped_canonical_locations_keep_region_flavor_tags(self):
+        self.assertEqual(
+            get_location('hub_westwild').get('region_flavor_tags'),
+            ['civilized_frontier', 'ashen_farmland'],
+        )
+        self.assertEqual(
+            get_location('hub_frostspine').get('region_flavor_tags'),
+            ['mine_waystation', 'hunter_lodge'],
+        )
+        self.assertEqual(
+            get_location('westwild_n4').get('region_flavor_tags'),
+            ['beast_hunting', 'poison_herbs', 'dark_wood'],
+        )
+        self.assertEqual(
+            get_location('old_mine_entrance').get('region_flavor_tags'),
+            ['ore_veins', 'construct_ruins', 'goblin_camps'],
+        )
+
+    def test_legacy_overlay_locations_keep_region_flavor_tags(self):
+        self.assertEqual(
+            get_location('village').get('region_flavor_tags'),
+            ['civilized_frontier', 'ashen_farmland'],
+        )
+        self.assertEqual(
+            get_location('frontier_outpost').get('region_flavor_tags'),
+            ['mine_waystation', 'hunter_lodge'],
+        )
+        self.assertEqual(
+            get_location('dark_forest').get('region_flavor_tags'),
+            ['beast_hunting', 'poison_herbs', 'dark_wood'],
+        )
+        self.assertEqual(
+            get_location('old_mines').get('region_flavor_tags'),
+            ['ore_veins', 'construct_ruins', 'goblin_camps'],
+        )
+
     def test_resolve_region_safe_hub_by_location(self):
         self.assertEqual(resolve_region_safe_hub(location_id='old_mines'), 'village')
         self.assertEqual(resolve_region_safe_hub(location_id='hub_sunscar'), 'hub_sunscar')
