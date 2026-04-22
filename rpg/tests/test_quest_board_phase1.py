@@ -177,6 +177,15 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('hunt_amber_golem', outpost_keys)
         self.assertTrue(outpost_keys.isdisjoint(village_keys))
 
+    def test_contract_list_accepts_legacy_and_canonical_board_ids(self):
+        village_legacy = {contract.contract_key for contract in list_hunt_contracts_for_location('village')}
+        village_canonical = {contract.contract_key for contract in list_hunt_contracts_for_location('hub_westwild')}
+        self.assertEqual(village_legacy, village_canonical)
+
+        outpost_legacy = {contract.contract_key for contract in list_hunt_contracts_for_location('frontier_outpost')}
+        outpost_canonical = {contract.contract_key for contract in list_hunt_contracts_for_location('hub_frostspine')}
+        self.assertEqual(outpost_legacy, outpost_canonical)
+
     def test_frontier_contract_targets_match_old_mines_spawn_pool(self):
         outpost_contracts = list_hunt_contracts_for_location('frontier_outpost')
         old_mines_spawns = list_location_available_spawn_instances(location_id='old_mines')
@@ -213,6 +222,35 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, 'wrong_board')
 
+    def test_accept_supports_legacy_and_canonical_board_ids(self):
+        ok_legacy, reason_legacy = accept_hunt_contract(
+            player_id=8101,
+            location_id='village',
+            contract_key='hunt_forest_wolves',
+        )
+        self.assertTrue(ok_legacy)
+        self.assertEqual(reason_legacy, 'accepted')
+
+        abandon_hunt_contract(player_id=8101)
+
+        ok_canonical, reason_canonical = accept_hunt_contract(
+            player_id=8101,
+            location_id='hub_westwild',
+            contract_key='hunt_forest_wolves',
+        )
+        self.assertTrue(ok_canonical)
+        self.assertEqual(reason_canonical, 'accepted')
+
+        abandon_hunt_contract(player_id=8101)
+
+        ok_frontier_canonical, reason_frontier_canonical = accept_hunt_contract(
+            player_id=8101,
+            location_id='hub_frostspine',
+            contract_key='hunt_mine_rats',
+        )
+        self.assertFalse(ok_frontier_canonical)
+        self.assertNotEqual(reason_frontier_canonical, 'wrong_board')
+
     def test_new_player_has_baseline_hunter_rank(self):
         progress = get_player_hunter_progress(8101)
         self.assertEqual(progress['hunter_points'], 0)
@@ -236,6 +274,16 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
 
         after = get_player_hunter_progress(8101)
         self.assertEqual(after['hunter_points'], before['hunter_points'] + 20)
+
+    def test_claim_supports_legacy_and_canonical_board_ids(self):
+        accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+
+        ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='hub_westwild')
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'claimed')
+        self.assertIsNotNone(reward)
 
     def test_rank_threshold_crossing_happens_after_points_gain(self):
         for _ in range(2):
@@ -353,6 +401,30 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         state = get_player_hunt_contract_state(8101)
         self.assertEqual(state['progress_kills'], 5)
         self.assertEqual(state['status'], 'completed')
+
+    def test_register_kill_progress_supports_legacy_and_canonical_target_ids(self):
+        accept_hunt_contract(player_id=8101, location_id='hub_westwild', contract_key='hunt_forest_wolves')
+        canonical_forest_kill = register_hunt_kill_progress(
+            player_id=8101,
+            mob_id='forest_wolf',
+            location_id='westwild_n4',
+        )
+        self.assertTrue(canonical_forest_kill['updated'])
+        abandon_hunt_contract(player_id=8101)
+
+        for _ in range(2):
+            accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
+            for _ in range(5):
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            claim_completed_hunt_contract(player_id=8101, location_id='village')
+
+        accept_hunt_contract(player_id=8101, location_id='frontier_outpost', contract_key='hunt_mine_rats')
+        canonical_mine_kill = register_hunt_kill_progress(
+            player_id=8101,
+            mob_id='mine_rat',
+            location_id='old_mine_entrance',
+        )
+        self.assertTrue(canonical_mine_kill['updated'])
 
 
     def test_wrong_location_kill_does_not_increment_progress(self):

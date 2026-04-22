@@ -300,6 +300,16 @@ def init_db():
         )
     ''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS player_location_discovery (
+            telegram_id     INTEGER NOT NULL,
+            location_id     TEXT NOT NULL,
+            discovered_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (telegram_id, location_id),
+            FOREIGN KEY (telegram_id) REFERENCES players(telegram_id)
+        )
+    ''')
+
     conn.commit()
     conn.close()
     print('✅ База данных создана!')
@@ -386,3 +396,66 @@ init_db()
 def is_in_battle(telegram_id: int) -> bool:
     p = get_player(telegram_id)
     return bool(p and p['in_battle'])
+
+
+def _resolve_discovery_location_id(location_id: str | None) -> str:
+    from game.locations import FALLBACK_SAFE_HUB_ID, resolve_location_id
+
+    resolved = resolve_location_id(location_id)
+    if resolved:
+        return resolved
+    return FALLBACK_SAFE_HUB_ID
+
+
+def ensure_player_location_discovered(telegram_id: int, location_id: str | None) -> None:
+    canonical_location_id = _resolve_discovery_location_id(location_id)
+    conn = get_connection()
+    conn.execute(
+        '''
+        INSERT OR IGNORE INTO player_location_discovery (telegram_id, location_id)
+        VALUES (?, ?)
+        ''',
+        (int(telegram_id), canonical_location_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_location_discovered(telegram_id: int, location_id: str | None) -> bool:
+    canonical_location_id = _resolve_discovery_location_id(location_id)
+    if canonical_location_id == 'capital_city':
+        return True
+
+    conn = get_connection()
+    row = conn.execute(
+        '''
+        SELECT 1
+        FROM player_location_discovery
+        WHERE telegram_id=? AND location_id=?
+        LIMIT 1
+        ''',
+        (int(telegram_id), canonical_location_id),
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def list_discovered_locations(telegram_id: int) -> list[str]:
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT location_id
+        FROM player_location_discovery
+        WHERE telegram_id=?
+        ORDER BY discovered_at ASC, location_id ASC
+        ''',
+        (int(telegram_id),),
+    ).fetchall()
+    conn.close()
+
+    discovered_ids = ['capital_city']
+    for row in rows:
+        location_id = str(row['location_id'] or '').strip()
+        if location_id and location_id not in discovered_ids:
+            discovered_ids.append(location_id)
+    return discovered_ids

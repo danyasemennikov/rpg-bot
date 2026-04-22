@@ -7,6 +7,7 @@ from database import get_connection
 from game.balance import exp_to_next_level
 from game.gear_instances import grant_item_to_player
 from game.i18n import get_item_name, get_location_name, get_mob_name, t
+from game.locations import resolve_location_id
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,26 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
 )
 
 HUNT_CONTRACTS_BY_KEY = {contract.contract_key: contract for contract in HUNT_CONTRACTS}
+
+
+def _normalize_location_id(location_id: str | None) -> str:
+    raw = str(location_id or '').strip()
+    if not raw:
+        return ''
+    return resolve_location_id(raw)
+
+
+def _location_matches_contract_scope(location_id: str | None, scope_location_ids: tuple[str, ...]) -> bool:
+    normalized_location = _normalize_location_id(location_id)
+    if not normalized_location:
+        return False
+
+    normalized_scope = {
+        normalized_scope_id
+        for normalized_scope_id in (_normalize_location_id(scope_id) for scope_id in scope_location_ids)
+        if normalized_scope_id
+    }
+    return normalized_location in normalized_scope
 
 
 def _ensure_player_hunt_contract_table() -> None:
@@ -286,8 +307,11 @@ def _grant_hunter_points_with_conn(conn, *, player_id: int, points_gained: int) 
 
 
 def list_hunt_contracts_for_location(location_id: str) -> list[HuntContract]:
-    location = str(location_id or '').strip()
-    return [contract for contract in HUNT_CONTRACTS if location in contract.board_locations]
+    return [
+        contract
+        for contract in HUNT_CONTRACTS
+        if _location_matches_contract_scope(location_id, contract.board_locations)
+    ]
 
 
 def get_hunt_contract(contract_key: str) -> HuntContract | None:
@@ -366,7 +390,7 @@ def accept_hunt_contract(*, player_id: int, location_id: str, contract_key: str)
     contract = get_hunt_contract(contract_key)
     if not contract:
         return False, 'not_found'
-    if str(location_id) not in contract.board_locations:
+    if not _location_matches_contract_scope(location_id, contract.board_locations):
         return False, 'wrong_board'
     conn = get_connection()
     try:
@@ -422,8 +446,7 @@ def register_hunt_kill_progress(
         if str(mob_id or '') != contract.target_mob_id:
             return {'updated': False, 'completed_now': False}
 
-        kill_location_id = str(location_id or '').strip()
-        if contract.target_location_ids and kill_location_id not in contract.target_location_ids:
+        if contract.target_location_ids and not _location_matches_contract_scope(location_id, contract.target_location_ids):
             return {'updated': False, 'completed_now': False}
 
         actual_profile = _normalize_spawn_profile(spawn_profile)
@@ -477,7 +500,7 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[
             return False, 'not_completed', None
 
         contract: HuntContract = state['contract']
-        if str(location_id) not in contract.board_locations:
+        if not _location_matches_contract_scope(location_id, contract.board_locations):
             conn.rollback()
             return False, 'wrong_board', None
 
@@ -644,8 +667,7 @@ def _build_contract_location_hint(*, contract: HuntContract, lang: str, current_
     if not location_names:
         return t('location.quest_contract_hint_any', lang)
 
-    current_location = str(current_location_id or '').strip()
-    if current_location and current_location in contract.target_location_ids:
+    if _location_matches_contract_scope(current_location_id, contract.target_location_ids):
         return t('location.quest_contract_hint_here', lang)
 
     if len(location_names) == 1:
