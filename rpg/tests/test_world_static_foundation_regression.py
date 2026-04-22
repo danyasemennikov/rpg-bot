@@ -57,7 +57,7 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
         self.assertEqual(canonical_location['id'], 'hub_westwild')
         self.assertNotIn('canonical_id', canonical_location)
 
-        self.assertEqual(get_location_neighbors('village'), ['dark_forest', 'old_mines', 'frontier_outpost'])
+        self.assertEqual(get_location_neighbors('village'), ['westwild_n5'])
         self.assertEqual(get_location_neighbors('hub_westwild'), ['westwild_n5'])
 
     def test_mapped_canonical_locations_keep_region_flavor_tags(self):

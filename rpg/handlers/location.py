@@ -9,8 +9,13 @@ sys.path.append('/content/rpg_bot')
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-from database import get_player, get_connection, is_in_battle
-from game.locations import get_location, get_connected_locations, resolve_location_id
+from database import (
+    ensure_player_location_discovered,
+    get_player,
+    get_connection,
+    is_in_battle,
+)
+from game.locations import get_location, get_connected_locations, get_location_neighbors, resolve_location_id
 from game.gathering_foundation import build_location_gather_source_profiles
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
@@ -1593,10 +1598,17 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         return
 
     if data.startswith('goto_'):
-        new_loc_id = data.replace('goto_', '')
-        new_loc    = get_location(new_loc_id)
+        raw_new_loc_id = data.replace('goto_', '')
+        new_loc = get_location(raw_new_loc_id)
 
         if not new_loc:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+
+        current_location_id = str(p['location_id'] or '')
+        allowed_neighbors = set(get_location_neighbors(current_location_id))
+        canonical_new_loc_id = resolve_location_id(raw_new_loc_id)
+        if canonical_new_loc_id not in allowed_neighbors:
             await query.answer(t('location.not_found', lang), show_alert=True)
             return
 
@@ -1612,9 +1624,9 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         # Сообщение о переходе
         await query.edit_message_text(
             t('location.traveling', lang,
-                name=get_location_name(new_loc_id, lang),
+                name=get_location_name(canonical_new_loc_id, lang),
                 seconds=15,
-                description=get_location_desc(new_loc_id, lang).lower()),
+                description=get_location_desc(canonical_new_loc_id, lang).lower()),
             parse_mode='HTML'
         )
 
@@ -1627,13 +1639,14 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         conn = get_connection()
         conn.execute(
             'UPDATE players SET location_id=? WHERE telegram_id=?',
-            (new_loc_id, user.id)
+            (canonical_new_loc_id, user.id)
         )
         conn.commit()
         conn.close()
+        ensure_player_location_discovered(user.id, canonical_new_loc_id)
         clear_respawn_protection_on_dangerous_reentry(
             player_id=int(user.id),
-            location_id=new_loc_id,
+            location_id=canonical_new_loc_id,
         )
 
         p = dict(get_player(user.id))

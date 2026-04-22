@@ -509,7 +509,8 @@ def get_location(location_id: str) -> dict | None:
 
 
 def get_location_neighbors(location_id: str) -> list[str]:
-    location = get_location(location_id)
+    canonical_location_id = resolve_location_id(location_id)
+    location = LOCATIONS.get(canonical_location_id)
     if not location:
         return []
     return list(location.get('neighbors', []))
