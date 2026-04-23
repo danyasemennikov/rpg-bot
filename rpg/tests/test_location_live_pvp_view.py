@@ -109,20 +109,24 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
         update.callback_query.answer.assert_awaited_once_with('location.pvp_context_block', show_alert=True)
 
     async def test_normal_player_can_still_move(self):
-        update = _FakeCallbackUpdate(1001, 'goto_village')
+        update = _FakeCallbackUpdate(1001, 'goto_westwild_n5')
         player = {'telegram_id': 1001, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
-        target_location = {'id': 'village', 'safe': True, 'level_min': 1, 'level_max': 10, 'mobs': [], 'services': []}
+        target_location = {'id': 'westwild_n5', 'safe': True, 'level_min': 1, 'level_max': 10, 'mobs': [], 'services': []}
         context = _FakeContext()
         with (
             patch('handlers.location.get_player', return_value=player),
             patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
             patch('handlers.location.is_in_battle', return_value=False),
+            patch('handlers.location.get_location_neighbors', return_value=['westwild_n5']),
+            patch('handlers.location.is_pvp_mobility_blocked', return_value=False),
             patch('handlers.location.get_location', return_value=target_location),
             patch('handlers.location.get_location_name', return_value='Village'),
             patch('handlers.location.get_location_desc', return_value='road'),
             patch('handlers.location.asyncio.sleep', new=AsyncMock()),
             patch('handlers.location.get_connection') as connection_mock,
             patch('handlers.location.build_location_message', side_effect=self._location_message_stub),
+            patch('handlers.location.clear_respawn_protection_on_dangerous_reentry'),
+            patch('handlers.location.ensure_player_location_discovered'),
             patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
         ):
             connection_mock.return_value.execute.return_value = None
@@ -130,6 +134,9 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             connection_mock.return_value.close.return_value = None
             await handle_location_buttons(update, context=context)
         self.assertGreaterEqual(update.callback_query.edit_message_text.await_count, 2)
+        answered_keys = {call.args[0] for call in update.callback_query.answer.await_args_list if call.args}
+        self.assertNotIn('location.not_found', answered_keys)
+        self.assertNotIn('location.in_battle_move', answered_keys)
 
     def test_pvp_only_view_hides_nearby_attack_buttons(self):
         player = {
