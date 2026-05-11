@@ -1608,7 +1608,8 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         current_location_id = str(p['location_id'] or '')
         allowed_neighbors = set(get_location_neighbors(current_location_id))
         canonical_new_loc_id = resolve_location_id(raw_new_loc_id)
-        if canonical_new_loc_id not in allowed_neighbors:
+        allowed_canonical_neighbors = {resolve_location_id(location_id) for location_id in allowed_neighbors}
+        if raw_new_loc_id not in allowed_neighbors and canonical_new_loc_id not in allowed_canonical_neighbors:
             await query.answer(t('location.not_found', lang), show_alert=True)
             return
 

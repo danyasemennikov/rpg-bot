@@ -57,8 +57,30 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
         self.assertEqual(canonical_location['id'], 'hub_westwild')
         self.assertNotIn('canonical_id', canonical_location)
 
-        self.assertEqual(get_location_neighbors('village'), ['westwild_n5'])
-        self.assertEqual(get_location_neighbors('hub_westwild'), ['westwild_n5'])
+        self.assertEqual(get_location_neighbors('village'), ['dark_forest', 'old_mines', 'frontier_outpost'])
+        self.assertEqual(get_location_neighbors('hub_westwild'), ['capital_city'])
+
+    def test_deep_canonical_nodes_remain_defined_but_only_get_escape_travel(self):
+        westwild_n1 = get_location('westwild_n1')
+        self.assertEqual(westwild_n1.get('canonical_neighbors'), ['capital_city', 'westwild_n2'])
+        self.assertEqual(get_location_neighbors('westwild_n1'), ['capital_city'])
+        self.assertIsNotNone(get_location('westwild_n2'))
+        self.assertEqual(get_location('westwild_n6').get('canonical_neighbors'), ['westwild_n5', 'westwild_n7', 'mireveil_n6', 'sunscar_n6'])
+
+        self.assertEqual(get_location_neighbors('westwild_n5'), ['hub_westwild'])
+        self.assertEqual(get_location_neighbors('westwild_n6'), ['hub_westwild'])
+        self.assertEqual(get_location_neighbors('frostspine_n2'), ['hub_frostspine'])
+        self.assertEqual(get_location_neighbors('ashen_n3b2'), ['hub_ashen_ruins'])
+        self.assertEqual(get_location_neighbors('sunscar_n8'), ['hub_sunscar'])
+        self.assertEqual(get_location_neighbors('mireveil_n8'), ['hub_mireveil'])
+
+    def test_migration_egress_does_not_open_full_old_slice_as_primary_topology(self):
+        self.assertEqual(get_location_neighbors('westwild_n4'), ['hub_westwild'])
+        self.assertEqual(get_location_neighbors('hub_frostspine'), ['frostspine_n1'])
+        self.assertNotIn('hub_westwild', get_location_neighbors('capital_city'))
+        self.assertNotIn('hub_frostspine', get_location_neighbors('frostspine_n1'))
+        self.assertNotIn('westwild_n7', get_location_neighbors('westwild_n6'))
+        self.assertNotIn('sunscar_n9', get_location_neighbors('sunscar_n8'))
 
     def test_mapped_canonical_locations_keep_region_flavor_tags(self):
         self.assertEqual(
@@ -118,6 +140,11 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
         frost_legacy = get_curated_shop_stock('frontier_outpost', 20)
         frost_canonical = get_curated_shop_stock('hub_frostspine', 20)
         self.assertEqual(frost_legacy, frost_canonical)
+
+    def test_teleport_metadata_disabled_for_wave_a(self):
+        self.assertFalse(get_location('capital_city').get('teleport_enabled'))
+        self.assertIsNone(get_location('capital_city').get('teleport_group'))
+        self.assertFalse(get_location('hub_westwild').get('teleport_enabled'))
 
     def test_safe_hub_regen_profile_parity(self):
         self.assertIn('capital_city', REGEN_RATES)
