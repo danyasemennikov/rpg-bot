@@ -251,6 +251,55 @@ _WORLD_GRAPH = {
     'mireveil_n10': ['mireveil_n9', 'ashen_n3b2b1'],
 }
 
+# Wave A live rollout: expose only the capital radial shell through ordinary travel.
+# The deeper canonical nodes stay defined for data compatibility, but they are not
+# offered as live travel destinations until later rollout waves.
+_LIVE_WORLD_GRAPH = {location_id: [] for location_id in _WORLD_GRAPH}
+_LIVE_WORLD_GRAPH.update({
+    'capital_city': ['westwild_n1', 'frostspine_n1', 'ashen_n1', 'sunscar_n1', 'mireveil_n1', 'south_coast_shore'],
+    'westwild_n1': ['capital_city'],
+    'frostspine_n1': ['capital_city', 'old_mine_entrance'],
+    'ashen_n1': ['capital_city'],
+    'sunscar_n1': ['capital_city'],
+    'mireveil_n1': ['capital_city'],
+    'south_coast_shore': ['capital_city'],
+    'old_mine_entrance': ['frostspine_n1'],
+})
+
+# Migration egress only: players may already have canonical deep ids stored from
+# the previous graph-travel rollout. These one-way exits prevent stranding without
+# reopening the deep graph as normal Wave A travel.
+_ROUTE_MIGRATION_ESCAPE_TARGETS = {
+    'westwild_': 'hub_westwild',
+    'frostspine_': 'hub_frostspine',
+    'ashen_': 'hub_ashen_ruins',
+    'sunscar_': 'hub_sunscar',
+    'mireveil_': 'hub_mireveil',
+}
+_HUB_MIGRATION_EGRESS_NEIGHBORS = {
+    'hub_westwild': ['capital_city'],
+    'hub_frostspine': ['frostspine_n1'],
+    'hub_ashen_ruins': ['ashen_n1'],
+    'hub_sunscar': ['sunscar_n1'],
+    'hub_mireveil': ['mireveil_n1'],
+}
+
+
+def _build_migration_egress_neighbors() -> dict[str, list[str]]:
+    egress = dict(_HUB_MIGRATION_EGRESS_NEIGHBORS)
+    for location_id in _WORLD_GRAPH:
+        if _LIVE_WORLD_GRAPH.get(location_id):
+            continue
+        for prefix, escape_target_id in _ROUTE_MIGRATION_ESCAPE_TARGETS.items():
+            if location_id.startswith(prefix):
+                egress[location_id] = [escape_target_id]
+                break
+    return egress
+
+
+_MIGRATION_EGRESS_NEIGHBORS = _build_migration_egress_neighbors()
+_LIVE_WORLD_GRAPH.update(_MIGRATION_EGRESS_NEIGHBORS)
+
 _LOCATION_NAMES = {
     'capital_city': '🏛️ Астер',
     'south_coast_shore': '🏖️ Южный берег',
@@ -332,7 +381,9 @@ if _MISSING_CANONICAL_LOCATION_NAMES:
 
 _GUARDED_IDS = {'westwild_n5', 'frostspine_n5', 'ashen_n3a2', 'sunscar_n5a1', 'mireveil_n5a1'}
 _SAFE_IDS = {'capital_city', 'hub_westwild', 'hub_frostspine', 'hub_ashen_ruins', 'hub_sunscar', 'hub_mireveil'}
-_TELEPORT_HUBS = _SAFE_IDS
+# Teleport metadata exists in the data model, but this rollout intentionally
+# keeps teleport disabled and exposes only ordinary graph travel.
+_TELEPORT_HUBS: set[str] = set()
 
 _RETURN_HUB_OVERRIDES = {
     'capital_city': 'capital_city',
@@ -355,7 +406,7 @@ _ROUTE_HUBS = {
 
 
 WORLD_LOCATIONS = {}
-for _location_id, _neighbors in _WORLD_GRAPH.items():
+for _location_id, _neighbors in _LIVE_WORLD_GRAPH.items():
     if _location_id == 'capital_city':
         _route_id = 'core'
     elif _location_id == 'south_coast_shore':
@@ -400,6 +451,7 @@ for _location_id, _neighbors in _WORLD_GRAPH.items():
         teleport_group='main_network' if _location_id in _TELEPORT_HUBS else None,
         legacy_aliases=_legacy_aliases,
     )
+    WORLD_LOCATIONS[_location_id]['canonical_neighbors'] = list(_WORLD_GRAPH.get(_location_id, []))
 
 # Keep existing battle/reward content on mapped nodes.
 WORLD_LOCATIONS['hub_westwild'].update({
@@ -509,7 +561,11 @@ def get_location(location_id: str) -> dict | None:
 
 
 def get_location_neighbors(location_id: str) -> list[str]:
-    canonical_location_id = resolve_location_id(location_id)
+    raw_location_id = str(location_id or '').strip()
+    if raw_location_id in LEGACY_LOCATION_RUNTIME_OVERRIDES:
+        return list(LEGACY_LOCATION_RUNTIME_OVERRIDES[raw_location_id].get('neighbors', []))
+
+    canonical_location_id = resolve_location_id(raw_location_id)
     location = LOCATIONS.get(canonical_location_id)
     if not location:
         return []

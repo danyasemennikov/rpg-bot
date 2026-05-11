@@ -62,7 +62,7 @@ def init_db():
             carry_weight    INTEGER DEFAULT 0,
 
             -- Локация
-            location_id     TEXT DEFAULT 'village',
+            location_id     TEXT DEFAULT 'capital_city',
 
             -- Состояние боя (NULL = не в бою)
             in_battle       INTEGER DEFAULT 0,
@@ -347,8 +347,8 @@ def create_player(telegram_id: int, username: str, name: str, stats: dict):
             strength, agility, intuition,
             vitality, wisdom, luck,
             hp, max_hp, mana, max_mana, carry_weight,
-            last_seen
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            location_id, last_seen
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'capital_city', datetime('now'))
     ''', (
         telegram_id, username, name,
         stats['strength'], stats['agility'], stats['intuition'],
@@ -361,6 +361,7 @@ def create_player(telegram_id: int, username: str, name: str, stats: dict):
 
     conn.commit()
     conn.close()
+    ensure_player_location_discovered(telegram_id, 'capital_city')
 
 def update_player_stats(telegram_id: int, stats: dict):
     """Обновить статы игрока (при левелапе или распределении очков)."""
