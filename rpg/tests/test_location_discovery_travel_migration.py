@@ -160,6 +160,41 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(location_id=location_id):
                 self.assertEqual(get_location_neighbors(location_id), neighbors)
 
+    def test_representative_route_nodes_expose_regional_identity_tags(self):
+        expected = {
+            'westwild_n1': {'ember_valley', 'forest_wilds', 'herb_growth'},
+            'westwild_n6': {'ember_valley', 'beast_hunting', 'dark_wood'},
+            'westwild_n11': {'ember_valley', 'forest_wilds', 'dark_wood'},
+            'frostspine_n1': {'iron_pass', 'mountain_travel', 'stone_outcrops'},
+            'frostspine_n6': {'iron_pass', 'ore_veins', 'cold_pass'},
+            'frostspine_n10': {'iron_pass', 'mountain_travel', 'ore_veins'},
+            'ashen_n3b2': {'ashen_ruins', 'ancient_ruins', 'construct_remnants', 'arcane_debris'},
+            'sunscar_n8': {'sunscar_badlands', 'desert_badlands', 'dry_scavenging', 'heat_scarred'},
+            'mireveil_n8a2': {'mireveil_marsh', 'swamp_mire', 'poison_wetlands', 'fungal_growth'},
+            'south_coast_shore': {'south_coast', 'coastal_shoreline', 'fishing_lite'},
+            'old_mine_entrance': {'ember_valley', 'ore_veins', 'construct_ruins', 'goblin_camps'},
+        }
+        for location_id, required_identity in expected.items():
+            with self.subTest(location_id=location_id):
+                location = get_location(location_id)
+                self.assertIsNotNone(location)
+                assert location is not None
+                identity = {location.get('region_id'), *location.get('region_flavor_tags', [])}
+                self.assertTrue(location.get('world_id'))
+                self.assertTrue(location.get('zone_id'))
+                self.assertGreaterEqual(identity, required_identity)
+
+    def test_preserved_legacy_mapped_flavor_tags_do_not_regress(self):
+        expected_tags = {
+            'hub_westwild': ['civilized_frontier', 'ashen_farmland'],
+            'hub_frostspine': ['mine_waystation', 'hunter_lodge'],
+            'westwild_n4': ['beast_hunting', 'poison_herbs', 'dark_wood'],
+            'old_mine_entrance': ['ore_veins', 'construct_ruins', 'goblin_camps'],
+        }
+        for location_id, tags in expected_tags.items():
+            with self.subTest(location_id=location_id):
+                self.assertEqual(get_location(location_id).get('region_flavor_tags'), tags)
+
     def test_capital_city_location_view_has_starter_services_and_travel_controls(self):
         player = dict(get_player(9101))
         player['location_id'] = 'capital_city'

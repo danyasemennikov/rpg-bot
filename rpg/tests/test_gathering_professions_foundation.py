@@ -7,6 +7,7 @@ from game.gathering_foundation import (
     resolve_gather_resource_identity,
 )
 from game.reward_policies import REWARD_FAMILIES_BY_SOURCE
+from game.world_scaffolding import resolve_open_world_region_identity
 
 
 class GatheringProfessionsFoundationTests(unittest.TestCase):
@@ -70,6 +71,19 @@ class GatheringProfessionsFoundationTests(unittest.TestCase):
             self.assertEqual(profile.world_boss_governance_id, 'ember_valley_world_boss')
             self.assertEqual(profile.future_pvp_ruleset_id, 'open_world_frontier')
             self.assertEqual(profile.zone_tier_band, 1)
+
+    def test_gathering_region_identity_hook_resolves_new_route_nodes(self):
+        ashen_identity = resolve_open_world_region_identity(location_id='ashen_n3b2')
+        self.assertEqual(ashen_identity.world_id, 'ashen_continent')
+        self.assertEqual(ashen_identity.region_identity, 'ashen_ruins')
+        self.assertEqual(ashen_identity.zone_identity, 'ashen_n3b2')
+        self.assertIn('ancient_ruins', ashen_identity.region_flavor_tags)
+        self.assertIn('arcane_debris', ashen_identity.region_flavor_tags)
+
+        coast_identity = resolve_open_world_region_identity(location_id='south_coast_shore')
+        self.assertEqual(coast_identity.region_identity, 'south_coast')
+        self.assertIn('coastal_shoreline', coast_identity.region_flavor_tags)
+        self.assertIn('fishing_lite', coast_identity.region_flavor_tags)
 
     def test_hunting_is_contractual_supplemental_layer_not_creature_loot_replacement(self):
         hunting = GATHERING_PROFESSION_CONTRACTS['hunting']

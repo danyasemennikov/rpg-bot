@@ -393,6 +393,36 @@ class RewardSourceMetadataFoundationTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row['rarity'], 'uncommon')
 
+    def test_open_world_pool_profile_resolves_new_route_identity(self):
+        profile = build_open_world_reward_pool_profile(
+            source_category='open_world_normal',
+            source_id='route_identity_probe',
+            mob_level=32,
+            location_id='sunscar_n8',
+        )
+        self.assertIsNotNone(profile)
+        assert profile is not None
+        self.assertEqual(profile.world_identity, 'ashen_continent')
+        self.assertEqual(profile.region_identity, 'sunscar_badlands')
+        self.assertEqual(profile.zone_identity, 'sunscar_n8')
+        self.assertIn('desert_badlands', profile.region_flavor_tags)
+        self.assertIn('dry_scavenging', profile.region_flavor_tags)
+        self.assertEqual(profile.future_pvp_ruleset_id, 'open_world_frontier')
+
+    def test_open_world_combat_metadata_resolves_new_route_identity(self):
+        source_meta = build_open_world_combat_source_metadata(
+            source_id='route_identity_probe',
+            mob_level=28,
+            source_category='open_world_elite',
+            location_id='mireveil_n8a2',
+        )
+        self.assertEqual(source_meta.open_world_world_identity, 'ashen_continent')
+        self.assertEqual(source_meta.open_world_region_identity, 'mireveil_marsh')
+        self.assertEqual(source_meta.open_world_zone_identity, 'mireveil_n8a2')
+        self.assertEqual(source_meta.open_world_zone_role, 'elite')
+        self.assertIn('swamp_mire', source_meta.open_world_region_flavor_tags)
+        self.assertIn('poison_wetlands', source_meta.open_world_region_flavor_tags)
+
     def test_open_world_metadata_exposes_region_zone_and_future_linkage_hooks(self):
         source_meta = build_open_world_combat_source_metadata(
             source_id='goblin_miner',

@@ -355,6 +355,45 @@ _RETURN_HUB_OVERRIDES = {
     'old_mine_entrance': 'hub_frostspine',
 }
 
+
+_ROUTE_CONTENT_IDENTITIES = {
+    'core': {
+        'world_id': 'ashen_continent',
+        'region_id': 'capital_region',
+        'region_flavor_tags': ['capital_services', 'starter_hub'],
+    },
+    'route_westwild': {
+        'world_id': 'ashen_continent',
+        'region_id': 'ember_valley',
+        'region_flavor_tags': ['forest_wilds', 'beast_hunting', 'herb_growth', 'dark_wood'],
+    },
+    'route_frostspine': {
+        'world_id': 'ashen_continent',
+        'region_id': 'iron_pass',
+        'region_flavor_tags': ['mountain_travel', 'stone_outcrops', 'ore_veins', 'cold_pass'],
+    },
+    'route_ashen_ruins': {
+        'world_id': 'ashen_continent',
+        'region_id': 'ashen_ruins',
+        'region_flavor_tags': ['ancient_ruins', 'construct_remnants', 'arcane_debris', 'excavation_site'],
+    },
+    'route_sunscar': {
+        'world_id': 'ashen_continent',
+        'region_id': 'sunscar_badlands',
+        'region_flavor_tags': ['desert_badlands', 'dry_scavenging', 'heat_scarred', 'venomous_wildlife'],
+    },
+    'route_mireveil': {
+        'world_id': 'ashen_continent',
+        'region_id': 'mireveil_marsh',
+        'region_flavor_tags': ['swamp_mire', 'poison_wetlands', 'fungal_growth', 'wetland_scavenging'],
+    },
+    'route_south_coast_stub': {
+        'world_id': 'ashen_continent',
+        'region_id': 'south_coast',
+        'region_flavor_tags': ['coastal_shoreline', 'fishing_lite', 'sea_wind'],
+    },
+}
+
 _ROUTE_HUBS = {
     'route_westwild': 'hub_westwild',
     'route_frostspine': 'hub_frostspine',
@@ -399,6 +438,7 @@ for _location_id, _neighbors in _LIVE_WORLD_GRAPH.items():
         if canonical_id == _location_id
     ]
 
+    _content_identity = _ROUTE_CONTENT_IDENTITIES.get(_route_id, {})
     WORLD_LOCATIONS[_location_id] = _world_node(
         location_id=_location_id,
         route_id=_route_id,
@@ -409,7 +449,12 @@ for _location_id, _neighbors in _LIVE_WORLD_GRAPH.items():
         teleport_enabled=_location_id in _TELEPORT_HUBS,
         teleport_group='main_network' if _location_id in _TELEPORT_HUBS else None,
         legacy_aliases=_legacy_aliases,
+        region_flavor_tags=_content_identity.get('region_flavor_tags'),
     )
+    WORLD_LOCATIONS[_location_id].update({
+        'world_id': _content_identity.get('world_id', 'radial_world_v1'),
+        'region_id': _content_identity.get('region_id', _route_id),
+    })
     WORLD_LOCATIONS[_location_id]['canonical_neighbors'] = list(_WORLD_GRAPH.get(_location_id, []))
 
 # Keep existing battle/reward content on mapped nodes.
