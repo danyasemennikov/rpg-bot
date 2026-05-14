@@ -82,6 +82,14 @@ from game.pvp_rules import (
 )
 
 CURATED_EQUIPMENT_VENDOR_STOCK = {
+    'capital_city': [
+        {'item_id': 'wooden_sword', 'level_min': 1},
+        {'item_id': 'dagger', 'level_min': 1},
+        {'item_id': 'short_bow', 'level_min': 1},
+        {'item_id': 'leather_armor', 'level_min': 1},
+        {'item_id': 'health_potion_small', 'level_min': 1},
+        {'item_id': 'mana_potion', 'level_min': 1},
+    ],
     'hub_westwild': [
 
         {'item_id': 'oak_guard_shield', 'level_min': 4},

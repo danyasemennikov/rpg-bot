@@ -14,7 +14,7 @@ from database import (
     is_location_discovered,
     list_discovered_locations,
 )
-from game.locations import get_connected_locations, get_location, get_location_neighbors
+from game.locations import _WORLD_GRAPH, get_connected_locations, get_location, get_location_neighbors
 from handlers.location import _build_location_message_with_snapshot, handle_location_buttons
 
 
@@ -114,7 +114,7 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(count, 1)
 
-    def test_capital_city_has_wave_a_radial_travel_options(self):
+    def test_capital_city_has_full_radial_travel_options(self):
         expected = [
             'westwild_n1',
             'frostspine_n1',
@@ -129,18 +129,38 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
             expected,
         )
 
-    def test_shell_nodes_return_to_capital_without_deep_route_rollout(self):
-        self.assertEqual(get_location_neighbors('westwild_n1'), ['capital_city'])
-        self.assertEqual(get_location_neighbors('ashen_n1'), ['capital_city'])
-        self.assertEqual(get_location_neighbors('sunscar_n1'), ['capital_city'])
-        self.assertEqual(get_location_neighbors('mireveil_n1'), ['capital_city'])
-        self.assertEqual(get_location_neighbors('south_coast_shore'), ['capital_city'])
+    def test_representative_route_chains_and_branches_are_live(self):
+        expected_neighbors = {
+            'westwild_n1': ['capital_city', 'westwild_n2'],
+            'westwild_n10': ['westwild_n9', 'westwild_n11', 'frostspine_n10'],
+            'westwild_n11': ['westwild_n10'],
+            'frostspine_n1': ['capital_city', 'frostspine_n2', 'old_mine_entrance'],
+            'frostspine_n9': ['frostspine_n8', 'frostspine_n10', 'mireveil_n9', 'ashen_n3b2a1'],
+            'frostspine_n10': ['frostspine_n9', 'westwild_n10'],
+            'old_mine_entrance': ['frostspine_n1'],
+            'ashen_n3': ['ashen_n2', 'ashen_n3a1', 'ashen_n3b1', 'ashen_n3c1'],
+            'ashen_n3a1': ['ashen_n3', 'ashen_n3a2'],
+            'ashen_n3a2': ['ashen_n3a1', 'hub_ashen_ruins'],
+            'ashen_n3b1': ['ashen_n3', 'ashen_n3b2', 'frostspine_n6', 'sunscar_n6'],
+            'ashen_n3b2': ['ashen_n3b1', 'ashen_n3b2a1', 'ashen_n3b2b1', 'frostspine_n8', 'sunscar_n8'],
+            'ashen_n3c1': ['ashen_n3', 'ashen_n3c2'],
+            'sunscar_n8': ['sunscar_n7', 'sunscar_n9', 'sunscar_n8a1', 'ashen_n3b2', 'westwild_n8'],
+            'sunscar_n8a1': ['sunscar_n8', 'sunscar_n8a2'],
+            'sunscar_n11': ['sunscar_n10'],
+            'mireveil_n8': ['mireveil_n7', 'mireveil_n9', 'mireveil_n8a1', 'westwild_n8', 'frostspine_n8'],
+            'mireveil_n8a1': ['mireveil_n8', 'mireveil_n8a2'],
+            'mireveil_n10': ['mireveil_n9', 'ashen_n3b2b1'],
+        }
+        for location_id, neighbors in expected_neighbors.items():
+            with self.subTest(location_id=location_id):
+                self.assertEqual(get_location_neighbors(location_id), neighbors)
 
-    def test_frostspine_n1_exposes_old_mine_stub(self):
-        self.assertEqual(get_location_neighbors('frostspine_n1'), ['capital_city', 'old_mine_entrance'])
-        self.assertEqual(get_location_neighbors('old_mine_entrance'), ['frostspine_n1'])
+    def test_every_canonical_location_uses_full_live_graph_neighbors(self):
+        for location_id, neighbors in _WORLD_GRAPH.items():
+            with self.subTest(location_id=location_id):
+                self.assertEqual(get_location_neighbors(location_id), neighbors)
 
-    def test_capital_city_location_buttons_use_shell_nodes(self):
+    def test_capital_city_location_view_has_starter_services_and_travel_controls(self):
         player = dict(get_player(9101))
         player['location_id'] = 'capital_city'
         location = get_location('capital_city')
@@ -154,10 +174,9 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
             button.callback_data
             for row in keyboard.inline_keyboard
             for button in row
-            if button.callback_data.startswith('goto_')
         ]
         self.assertEqual(
-            callbacks,
+            [callback for callback in callbacks if callback.startswith('goto_')],
             [
                 'goto_westwild_n1',
                 'goto_frostspine_n1',
@@ -167,18 +186,17 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
                 'goto_south_coast_shore',
             ],
         )
+        self.assertNotIn('teleport', ''.join(callbacks))
         self.assertIn('Travel to:', text)
+        self.assertIn('s1 sv1 shop', text)
+        self.assertIn('s1 sv2 inn', text)
+        self.assertIn('s1 sv3 quests', text)
 
-    def test_migrated_canonical_nodes_have_compatibility_egress(self):
-        self.assertEqual(get_location_neighbors('westwild_n4'), ['hub_westwild'])
-        self.assertEqual(get_location_neighbors('westwild_n5'), ['hub_westwild'])
-        self.assertEqual(get_location_neighbors('westwild_n6'), ['hub_westwild'])
-        self.assertEqual(get_location_neighbors('frostspine_n2'), ['hub_frostspine'])
-        self.assertEqual(get_location_neighbors('sunscar_n8'), ['hub_sunscar'])
-        self.assertEqual(get_location_neighbors('mireveil_n8'), ['hub_mireveil'])
-        self.assertEqual(get_location_neighbors('hub_westwild'), ['capital_city'])
-        self.assertEqual(get_location_neighbors('hub_frostspine'), ['frostspine_n1'])
-        self.assertEqual(get_location_neighbors('old_mine_entrance'), ['frostspine_n1'])
+    def test_capital_city_has_starter_services_and_teleport_disabled(self):
+        location = get_location('capital_city')
+        self.assertEqual(location.get('services'), ['shop', 'inn', 'quest_board'])
+        self.assertFalse(location.get('teleport_enabled'))
+        self.assertIsNone(location.get('teleport_group'))
 
     def test_legacy_travel_overlay_survives_for_existing_old_slice_ids(self):
         self.assertEqual(get_location_neighbors('village'), ['dark_forest', 'old_mines', 'frontier_outpost'])
@@ -199,16 +217,20 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(player['location_id'], 'capital_city')
         self.assertTrue(is_location_discovered(9102, 'capital_city'))
 
-    async def test_handle_location_buttons_accepts_compatibility_egress_moves(self):
+    async def test_handle_location_buttons_accepts_representative_full_graph_moves(self):
         moves = [
-            ('westwild_n5', 'hub_westwild'),
-            ('westwild_n6', 'hub_westwild'),
-            ('frostspine_n2', 'hub_frostspine'),
-            ('sunscar_n8', 'hub_sunscar'),
-            ('mireveil_n8', 'hub_mireveil'),
-            ('hub_westwild', 'capital_city'),
-            ('hub_frostspine', 'frostspine_n1'),
-            ('old_mine_entrance', 'frostspine_n1'),
+            ('capital_city', 'westwild_n1'),
+            ('westwild_n5', 'westwild_n6'),
+            ('westwild_n10', 'westwild_n11'),
+            ('frostspine_n1', 'old_mine_entrance'),
+            ('frostspine_n9', 'frostspine_n10'),
+            ('ashen_n3', 'ashen_n3a1'),
+            ('ashen_n3b1', 'sunscar_n6'),
+            ('ashen_n3c1', 'ashen_n3c2'),
+            ('sunscar_n8', 'sunscar_n8a1'),
+            ('sunscar_n10', 'sunscar_n11'),
+            ('mireveil_n8', 'mireveil_n8a1'),
+            ('mireveil_n10', 'ashen_n3b2b1'),
         ]
         for start_location_id, target_location_id in moves:
             with self.subTest(start=start_location_id, target=target_location_id):

@@ -251,54 +251,13 @@ _WORLD_GRAPH = {
     'mireveil_n10': ['mireveil_n9', 'ashen_n3b2b1'],
 }
 
-# Wave A live rollout: expose only the capital radial shell through ordinary travel.
-# The deeper canonical nodes stay defined for data compatibility, but they are not
-# offered as live travel destinations until later rollout waves.
-_LIVE_WORLD_GRAPH = {location_id: [] for location_id in _WORLD_GRAPH}
-_LIVE_WORLD_GRAPH.update({
-    'capital_city': ['westwild_n1', 'frostspine_n1', 'ashen_n1', 'sunscar_n1', 'mireveil_n1', 'south_coast_shore'],
-    'westwild_n1': ['capital_city'],
-    'frostspine_n1': ['capital_city', 'old_mine_entrance'],
-    'ashen_n1': ['capital_city'],
-    'sunscar_n1': ['capital_city'],
-    'mireveil_n1': ['capital_city'],
-    'south_coast_shore': ['capital_city'],
-    'old_mine_entrance': ['frostspine_n1'],
-})
-
-# Migration egress only: players may already have canonical deep ids stored from
-# the previous graph-travel rollout. These one-way exits prevent stranding without
-# reopening the deep graph as normal Wave A travel.
-_ROUTE_MIGRATION_ESCAPE_TARGETS = {
-    'westwild_': 'hub_westwild',
-    'frostspine_': 'hub_frostspine',
-    'ashen_': 'hub_ashen_ruins',
-    'sunscar_': 'hub_sunscar',
-    'mireveil_': 'hub_mireveil',
+# Full canonical rollout: ordinary live travel now uses the complete
+# WORLD_GRAPH topology. Teleport remains disabled below; these edges are
+# plain neighboring-location travel only.
+_LIVE_WORLD_GRAPH = {
+    location_id: list(neighbors)
+    for location_id, neighbors in _WORLD_GRAPH.items()
 }
-_HUB_MIGRATION_EGRESS_NEIGHBORS = {
-    'hub_westwild': ['capital_city'],
-    'hub_frostspine': ['frostspine_n1'],
-    'hub_ashen_ruins': ['ashen_n1'],
-    'hub_sunscar': ['sunscar_n1'],
-    'hub_mireveil': ['mireveil_n1'],
-}
-
-
-def _build_migration_egress_neighbors() -> dict[str, list[str]]:
-    egress = dict(_HUB_MIGRATION_EGRESS_NEIGHBORS)
-    for location_id in _WORLD_GRAPH:
-        if _LIVE_WORLD_GRAPH.get(location_id):
-            continue
-        for prefix, escape_target_id in _ROUTE_MIGRATION_ESCAPE_TARGETS.items():
-            if location_id.startswith(prefix):
-                egress[location_id] = [escape_target_id]
-                break
-    return egress
-
-
-_MIGRATION_EGRESS_NEIGHBORS = _build_migration_egress_neighbors()
-_LIVE_WORLD_GRAPH.update(_MIGRATION_EGRESS_NEIGHBORS)
 
 _LOCATION_NAMES = {
     'capital_city': '🏛️ Астер',
@@ -454,6 +413,11 @@ for _location_id, _neighbors in _LIVE_WORLD_GRAPH.items():
     WORLD_LOCATIONS[_location_id]['canonical_neighbors'] = list(_WORLD_GRAPH.get(_location_id, []))
 
 # Keep existing battle/reward content on mapped nodes.
+WORLD_LOCATIONS['capital_city'].update({
+    'description': 'Столица королевства и главный безопасный узел дорог. Здесь можно отдохнуть, закупиться и взять первые задания.',
+    'services': ['shop', 'inn', 'quest_board'],
+    'region_flavor_tags': ['capital_services', 'starter_hub'],
+})
 WORLD_LOCATIONS['hub_westwild'].update({
     'world_boss_governance_id': 'ember_valley_world_boss',
     'world_id': 'ashen_continent',
