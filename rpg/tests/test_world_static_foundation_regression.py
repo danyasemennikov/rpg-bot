@@ -2,6 +2,7 @@ import unittest
 
 from game.i18n import get_location_desc, get_location_name
 from game.locations import (
+    _WORLD_GRAPH,
     get_location,
     get_location_neighbors,
     resolve_location_id,
@@ -58,29 +59,56 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
         self.assertNotIn('canonical_id', canonical_location)
 
         self.assertEqual(get_location_neighbors('village'), ['dark_forest', 'old_mines', 'frontier_outpost'])
-        self.assertEqual(get_location_neighbors('hub_westwild'), ['capital_city'])
+        self.assertEqual(get_location_neighbors('hub_westwild'), ['westwild_n5'])
 
-    def test_deep_canonical_nodes_remain_defined_but_only_get_escape_travel(self):
-        westwild_n1 = get_location('westwild_n1')
-        self.assertEqual(westwild_n1.get('canonical_neighbors'), ['capital_city', 'westwild_n2'])
-        self.assertEqual(get_location_neighbors('westwild_n1'), ['capital_city'])
-        self.assertIsNotNone(get_location('westwild_n2'))
-        self.assertEqual(get_location('westwild_n6').get('canonical_neighbors'), ['westwild_n5', 'westwild_n7', 'mireveil_n6', 'sunscar_n6'])
+    def test_full_canonical_graph_is_live_topology(self):
+        for location_id, canonical_neighbors in _WORLD_GRAPH.items():
+            with self.subTest(location_id=location_id):
+                location = get_location(location_id)
+                self.assertIsNotNone(location)
+                self.assertEqual(location.get('canonical_neighbors'), canonical_neighbors)
+                self.assertEqual(get_location_neighbors(location_id), canonical_neighbors)
 
-        self.assertEqual(get_location_neighbors('westwild_n5'), ['hub_westwild'])
-        self.assertEqual(get_location_neighbors('westwild_n6'), ['hub_westwild'])
-        self.assertEqual(get_location_neighbors('frostspine_n2'), ['hub_frostspine'])
-        self.assertEqual(get_location_neighbors('ashen_n3b2'), ['hub_ashen_ruins'])
-        self.assertEqual(get_location_neighbors('sunscar_n8'), ['hub_sunscar'])
-        self.assertEqual(get_location_neighbors('mireveil_n8'), ['hub_mireveil'])
+    def test_all_canonical_locations_are_reachable_from_capital(self):
+        visited = set()
+        pending = ['capital_city']
+        while pending:
+            current = pending.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            pending.extend(
+                neighbor_id
+                for neighbor_id in get_location_neighbors(current)
+                if neighbor_id not in visited
+            )
 
-    def test_migration_egress_does_not_open_full_old_slice_as_primary_topology(self):
-        self.assertEqual(get_location_neighbors('westwild_n4'), ['hub_westwild'])
-        self.assertEqual(get_location_neighbors('hub_frostspine'), ['frostspine_n1'])
-        self.assertNotIn('hub_westwild', get_location_neighbors('capital_city'))
-        self.assertNotIn('hub_frostspine', get_location_neighbors('frostspine_n1'))
-        self.assertNotIn('westwild_n7', get_location_neighbors('westwild_n6'))
-        self.assertNotIn('sunscar_n9', get_location_neighbors('sunscar_n8'))
+        self.assertEqual(visited, set(_WORLD_GRAPH))
+
+    def test_full_graph_required_cross_links_are_live(self):
+        required_edges = [
+            ('westwild_n6', 'mireveil_n6'),
+            ('mireveil_n6', 'frostspine_n6'),
+            ('frostspine_n6', 'ashen_n3b1'),
+            ('ashen_n3b1', 'sunscar_n6'),
+            ('sunscar_n6', 'westwild_n6'),
+            ('westwild_n8', 'mireveil_n8'),
+            ('mireveil_n8', 'frostspine_n8'),
+            ('frostspine_n8', 'ashen_n3b2'),
+            ('ashen_n3b2', 'sunscar_n8'),
+            ('sunscar_n8', 'westwild_n8'),
+            ('westwild_n9', 'mireveil_n9'),
+            ('mireveil_n9', 'frostspine_n9'),
+            ('frostspine_n9', 'ashen_n3b2a1'),
+            ('ashen_n3b2a1', 'sunscar_n9'),
+            ('sunscar_n9', 'westwild_n9'),
+            ('westwild_n10', 'frostspine_n10'),
+            ('mireveil_n10', 'ashen_n3b2b1'),
+        ]
+        for left, right in required_edges:
+            with self.subTest(edge=f'{left}<->{right}'):
+                self.assertIn(right, get_location_neighbors(left))
+                self.assertIn(left, get_location_neighbors(right))
 
     def test_mapped_canonical_locations_keep_region_flavor_tags(self):
         self.assertEqual(
@@ -132,6 +160,17 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
             'hub_frostspine',
         )
 
+    def test_capital_city_shop_has_usable_starter_stock(self):
+        stock = get_curated_shop_stock('capital_city', 1)
+        item_ids = {row['item_id'] for row in stock}
+
+        self.assertGreaterEqual(len(stock), 4)
+        self.assertIn('wooden_sword', item_ids)
+        self.assertIn('health_potion_small', item_ids)
+        for row in stock:
+            self.assertEqual(row['level_min'], 1)
+            self.assertGreater(row['price'], 0)
+
     def test_curated_shop_stock_legacy_and_canonical_ids_match(self):
         westwild_legacy = get_curated_shop_stock('village', 20)
         westwild_canonical = get_curated_shop_stock('hub_westwild', 20)
@@ -141,7 +180,7 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
         frost_canonical = get_curated_shop_stock('hub_frostspine', 20)
         self.assertEqual(frost_legacy, frost_canonical)
 
-    def test_teleport_metadata_disabled_for_wave_a(self):
+    def test_teleport_metadata_remains_disabled_while_teleport_phase_is_skipped(self):
         self.assertFalse(get_location('capital_city').get('teleport_enabled'))
         self.assertIsNone(get_location('capital_city').get('teleport_group'))
         self.assertFalse(get_location('hub_westwild').get('teleport_enabled'))

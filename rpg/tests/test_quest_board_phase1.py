@@ -157,6 +157,51 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reason, 'accepted')
         state_mock.assert_not_called()
 
+    def test_capital_city_board_exposes_starter_contracts(self):
+        capital_contracts = list_hunt_contracts_for_location('capital_city')
+        capital_keys = {contract.contract_key for contract in capital_contracts}
+
+        self.assertGreaterEqual(len(capital_contracts), 4)
+        self.assertIn('hunt_forest_wolves', capital_keys)
+        self.assertIn('hunt_forest_spiders', capital_keys)
+
+        split = list_hunt_contracts_for_player(location_id='capital_city', player_id=8101, lang='en')
+        available_keys = {contract.contract_key for contract in split['available']}
+        locked_keys = {row['contract'].contract_key for row in split['locked']}
+        self.assertIn('hunt_forest_wolves', available_keys)
+        self.assertIn('hunt_forest_spiders', available_keys)
+        self.assertIn('hunt_elite_boars', locked_keys)
+
+    def test_capital_city_board_renders_accept_buttons_for_starter_contracts(self):
+        player = {'telegram_id': 8101, 'lang': 'en'}
+        text, keyboard = build_quest_board_message(player, {'id': 'capital_city'})
+        callbacks = {button.callback_data for row in keyboard.inline_keyboard for button in row}
+
+        self.assertIn('Board: 🏛️ Aster', text)
+        self.assertNotIn('No contracts available', text)
+        self.assertIn('quest_board_accept_hunt_forest_wolves', callbacks)
+        self.assertIn('quest_board_accept_hunt_forest_spiders', callbacks)
+
+    def test_capital_city_can_accept_and_claim_starter_contracts(self):
+        ok, reason = accept_hunt_contract(
+            player_id=8101,
+            location_id='capital_city',
+            contract_key='hunt_forest_wolves',
+        )
+        self.assertTrue(ok)
+        self.assertEqual(reason, 'accepted')
+
+        for _ in range(5):
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+
+        ok_claim, reason_claim, reward = claim_completed_hunt_contract(
+            player_id=8101,
+            location_id='capital_city',
+        )
+        self.assertTrue(ok_claim)
+        self.assertEqual(reason_claim, 'claimed')
+        self.assertIsNotNone(reward)
+
     def test_curated_contract_set_is_broader_than_phase1_baseline(self):
         contracts = list_hunt_contracts_for_location('village')
         keys = {contract.contract_key for contract in contracts}
