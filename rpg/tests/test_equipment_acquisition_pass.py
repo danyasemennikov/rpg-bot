@@ -224,7 +224,7 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             self.assertIn('encounter_class', taxonomy, msg=f'mob {mob["id"]} misses encounter_class')
 
     def test_live_rewards_flow_passes_taxonomy_and_tier_band_metadata(self):
-        mob = get_mob('stone_golem')
+        mob = get_mob('mountain_stone_golem')
         rewards = calc_rewards(mob)
         source_meta = build_open_world_combat_source_metadata(
             source_id=rewards['mob_id'],
@@ -235,19 +235,19 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         )
         self.assertEqual(source_meta.content_tier, 1)
         self.assertEqual(source_meta.creature_body_type, 'construct')
-        self.assertEqual(source_meta.creature_encounter_class, 'elite')
+        self.assertEqual(source_meta.creature_encounter_class, 'normal')
         self.assertIn('core', source_meta.creature_loot_identity)
-        self.assertEqual(source_meta.open_world_pool_profile, 'open_world_elite_surface')
+        self.assertEqual(source_meta.open_world_pool_profile, 'open_world_normal_surface')
         self.assertEqual(source_meta.open_world_world_identity, 'ashen_continent')
         self.assertIsNone(source_meta.open_world_macro_region_identity)
-        self.assertEqual(source_meta.open_world_region_identity, 'ember_valley')
-        self.assertEqual(source_meta.open_world_zone_identity, 'old_mines')
-        self.assertEqual(source_meta.open_world_zone_role, 'elite')
-        self.assertEqual(source_meta.open_world_encounter_role, 'elite')
-        self.assertEqual(source_meta.future_dungeon_link_id, 'amber_catacombs')
-        self.assertEqual(source_meta.future_world_boss_governance_id, 'ember_valley_world_boss')
+        self.assertEqual(source_meta.open_world_region_identity, 'iron_pass')
+        self.assertEqual(source_meta.open_world_zone_identity, 'frostspine_n6')
+        self.assertEqual(source_meta.open_world_zone_role, 'normal')
+        self.assertEqual(source_meta.open_world_encounter_role, 'normal')
+        self.assertIsNone(source_meta.future_dungeon_link_id)
+        self.assertIsNone(source_meta.future_world_boss_governance_id)
         self.assertEqual(source_meta.open_world_future_pvp_ruleset_id, 'open_world_frontier')
-        self.assertEqual(source_meta.quality_floor_rarity, 'uncommon')
+        self.assertEqual(source_meta.quality_floor_rarity, 'common')
 
     def test_live_flow_bridge_maps_elite_encounter_to_open_world_elite_when_source_missing(self):
         mob = {
@@ -322,10 +322,10 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             'exp': 0,
             'gold': 0,
             'loot': ['stone_core'],
-            'mob_level': 8,
-            'mob_id': 'stone_golem',
-            'source_category': 'open_world_elite',
-            'creature_taxonomy': get_mob('stone_golem').get('creature_taxonomy'),
+            'mob_level': 6,
+            'mob_id': 'mountain_stone_golem',
+            'source_category': 'open_world_normal',
+            'creature_taxonomy': get_mob('mountain_stone_golem').get('creature_taxonomy'),
         }
         conn = get_connection()
         player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
@@ -335,8 +335,8 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             apply_rewards(9001, player, rewards)
 
         source_meta = grant_mock.call_args.kwargs['source_metadata']
-        self.assertEqual(source_meta.open_world_region_identity, 'ember_valley')
-        self.assertEqual(source_meta.open_world_zone_identity, 'old_mines')
+        self.assertEqual(source_meta.open_world_region_identity, 'iron_pass')
+        self.assertEqual(source_meta.open_world_zone_identity, 'frostspine_n6')
 
     def test_live_reward_flow_falls_back_to_player_region_when_mob_region_unknown(self):
         rewards = {

@@ -101,7 +101,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     async def test_claim_from_wrong_board_shows_truthful_board_message(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         conn = get_connection()
         conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('frontier_outpost', 8101))
@@ -135,7 +135,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('quest_board_claim', active_callbacks)
 
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
         _text_ready, keyboard_ready = build_quest_board_message(player, location)
         ready_callbacks = {btn.callback_data for row in keyboard_ready.inline_keyboard for btn in row}
         self.assertIn('quest_board_claim', ready_callbacks)
@@ -192,7 +192,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reason, 'accepted')
 
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         ok_claim, reason_claim, reward = claim_completed_hunt_contract(
             player_id=8101,
@@ -215,11 +215,11 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         village_keys = {contract.contract_key for contract in list_hunt_contracts_for_location('village')}
         outpost_contracts = list_hunt_contracts_for_location('frontier_outpost')
         outpost_keys = {contract.contract_key for contract in outpost_contracts}
-        self.assertGreaterEqual(len(outpost_contracts), 4)
+        self.assertGreaterEqual(len(outpost_contracts), 2)
         self.assertIn('hunt_mine_rats', outpost_keys)
         self.assertIn('hunt_cave_bats', outpost_keys)
-        self.assertIn('hunt_mine_goblins', outpost_keys)
-        self.assertIn('hunt_amber_golem', outpost_keys)
+        self.assertNotIn('hunt_mine_goblins', outpost_keys)
+        self.assertNotIn('hunt_amber_golem', outpost_keys)
         self.assertTrue(outpost_keys.isdisjoint(village_keys))
 
     def test_contract_list_accepts_legacy_and_canonical_board_ids(self):
@@ -246,17 +246,12 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
             required_special = str(contract.special_spawn_key or '').strip().lower()
             self.assertIn((contract.target_mob_id, required_special), spawn_pairs)
 
-    def test_old_mines_has_special_spawn_for_amber_golem_contract(self):
+    def test_old_mines_remains_sparse_stub_without_elite_special_spawns(self):
         old_mines = get_location('old_mines')
         self.assertIsNotNone(old_mines)
         assert old_mines is not None
-        special_spawns = old_mines.get('world_special_spawns', [])
-        amber_special = [
-            row for row in special_spawns
-            if row.get('mob_id') == 'stone_golem' and row.get('key') == 'amber_colossus'
-        ]
-        self.assertEqual(len(amber_special), 1)
-        self.assertNotIn('name', amber_special[0])
+        self.assertEqual(old_mines.get('mobs'), ['mine_rat', 'cave_bat'])
+        self.assertEqual(old_mines.get('world_special_spawns'), [])
 
     def test_accept_from_wrong_board_is_rejected_truthfully(self):
         ok, reason = accept_hunt_contract(
@@ -306,7 +301,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     def test_hunter_progression_increases_on_successful_claim(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         before = get_player_hunter_progress(8101)
         ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
@@ -323,7 +318,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     def test_claim_supports_legacy_and_canonical_board_ids(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='hub_westwild')
         self.assertTrue(ok)
@@ -334,7 +329,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         for _ in range(2):
             accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
             for _ in range(5):
-                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
             ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='village')
             self.assertTrue(ok)
             self.assertEqual(reason, 'claimed')
@@ -353,7 +348,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         for _ in range(2):
             accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
             for _ in range(5):
-                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
             claim_completed_hunt_contract(player_id=8101, location_id='village')
 
         split = list_hunt_contracts_for_player(location_id='village', player_id=8101, lang='en')
@@ -369,7 +364,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         for _ in range(2):
             accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
             for _ in range(5):
-                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
             claim_completed_hunt_contract(player_id=8101, location_id='village')
 
         split_after = list_hunt_contracts_for_player(location_id='frontier_outpost', player_id=8101, lang='en')
@@ -391,7 +386,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         player = {'telegram_id': 8101, 'lang': 'en'}
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         text, keyboard = build_quest_board_message(player, {'id': 'frontier_outpost'})
         callbacks = {btn.callback_data for row in keyboard.inline_keyboard for btn in row}
@@ -402,7 +397,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     def test_completed_contract_claim_fails_on_wrong_board(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
         ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='frontier_outpost')
         self.assertFalse(ok)
         self.assertEqual(reason, 'wrong_board')
@@ -413,7 +408,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         register_hunt_kill_progress(
             player_id=8101,
             mob_id='forest_wolf',
-            location_id='dark_forest',
+            location_id='westwild_n3',
             spawn_profile='rare',
             special_spawn_key='greyfang',
         )
@@ -435,11 +430,11 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(non_match['updated'])
 
         for _ in range(4):
-            result = register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest', spawn_profile='normal')
+            result = register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3', spawn_profile='normal')
             self.assertTrue(result['updated'])
             self.assertFalse(result['completed_now'])
 
-        final = register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest', spawn_profile='normal')
+        final = register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3', spawn_profile='normal')
         self.assertTrue(final['updated'])
         self.assertTrue(final['completed_now'])
 
@@ -452,7 +447,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         canonical_forest_kill = register_hunt_kill_progress(
             player_id=8101,
             mob_id='forest_wolf',
-            location_id='westwild_n4',
+            location_id='westwild_n3',
         )
         self.assertTrue(canonical_forest_kill['updated'])
         abandon_hunt_contract(player_id=8101)
@@ -460,7 +455,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         for _ in range(2):
             accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
             for _ in range(5):
-                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
             claim_completed_hunt_contract(player_id=8101, location_id='village')
 
         accept_hunt_contract(player_id=8101, location_id='frontier_outpost', contract_key='hunt_mine_rats')
@@ -539,7 +534,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         _ensure_player_hunt_contract_table()
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         with patch('game.quest_board._ensure_player_hunt_contract_table') as ensure_mock:
-            result = register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            result = register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
         ensure_mock.assert_not_called()
         self.assertTrue(result['updated'])
 
@@ -549,7 +544,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         here_line = build_hunt_contract_progress_line(
             player_id=8101,
             lang='en',
-            current_location_id='dark_forest',
+            current_location_id='westwild_n3',
         )
         elsewhere_line = build_hunt_contract_progress_line(
             player_id=8101,
@@ -562,7 +557,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         assert here_line is not None
         assert elsewhere_line is not None
         self.assertIn('target here', here_line)
-        self.assertIn('target: 🌲 Dark Forest', elsewhere_line)
+        self.assertIn('target: ⛰️ Hills', elsewhere_line)
 
     def test_state_read_and_location_line_are_safe_without_schema_init(self):
         with patch('game.quest_board._ensure_player_hunt_contract_table') as ensure_mock:
@@ -574,7 +569,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
 
     def test_player_can_abandon_active_contract_and_accept_new_one(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
-        register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+        register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         ok, reason = abandon_hunt_contract(player_id=8101)
         self.assertTrue(ok)
@@ -592,7 +587,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     def test_completed_contract_cannot_be_abandoned_until_claimed(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         ok, reason = abandon_hunt_contract(player_id=8101)
         self.assertFalse(ok)
@@ -610,7 +605,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         for _ in range(2):
             accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
             for _ in range(5):
-                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+                register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
             claim_completed_hunt_contract(player_id=8101, location_id='village')
 
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_elite_boars')
@@ -626,7 +621,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         wrong_named = register_hunt_kill_progress(
             player_id=8101,
             mob_id='forest_wolf',
-            location_id='dark_forest',
+            location_id='westwild_n3',
             spawn_profile='rare',
             special_spawn_key='other_wolf',
         )
@@ -634,7 +629,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         correct_named = register_hunt_kill_progress(
             player_id=8101,
             mob_id='forest_wolf',
-            location_id='dark_forest',
+            location_id='westwild_n3',
             spawn_profile='rare',
             special_spawn_key='greyfang',
         )
@@ -646,7 +641,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         register_hunt_kill_progress(
             player_id=8101,
             mob_id='forest_wolf',
-            location_id='dark_forest',
+            location_id='westwild_n3',
             spawn_profile='rare',
             special_spawn_key='greyfang',
         )
@@ -684,7 +679,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         register_hunt_kill_progress(
             player_id=8101,
             mob_id='forest_wolf',
-            location_id='dark_forest',
+            location_id='westwild_n3',
             spawn_profile='rare',
             special_spawn_key='greyfang',
         )
@@ -707,7 +702,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     def test_claim_starts_transaction_before_completed_state_read(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
-            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='dark_forest')
+            register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
 
         base_conn = get_connection()
         sql_log: list[str] = []

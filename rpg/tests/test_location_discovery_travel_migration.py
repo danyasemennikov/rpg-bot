@@ -188,7 +188,7 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
         expected_tags = {
             'hub_westwild': ['civilized_frontier', 'ashen_farmland'],
             'hub_frostspine': ['mine_waystation', 'hunter_lodge'],
-            'westwild_n4': ['beast_hunting', 'poison_herbs', 'dark_wood'],
+            'westwild_n4': ['forest_wilds', 'beast_hunting', 'herb_growth', 'dark_wood'],
             'old_mine_entrance': ['ore_veins', 'construct_ruins', 'goblin_camps'],
         }
         for location_id, tags in expected_tags.items():

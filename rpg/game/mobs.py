@@ -228,6 +228,93 @@ MOBS = {
     },
 }
 
+
+# Phase 1 open-world rollout mobs.  These are intentionally simple baseline
+# stat blocks that reuse the existing open-world combat/reward rails.
+def _phase1_mob(
+    mob_id: str,
+    name: str,
+    level: int,
+    hp: int,
+    damage_min: int,
+    damage_max: int,
+    body_type: str,
+    special_trait: str,
+    *,
+    aggressive: bool = False,
+    loot_table: list[tuple[str, float]] | None = None,
+) -> dict:
+    return {
+        'id': mob_id,
+        'name': name,
+        'level': level,
+        'hp': hp,
+        'damage_min': damage_min,
+        'damage_max': damage_max,
+        'weapon_type': 'melee',
+        'exp_reward': max(8, level * 10),
+        'gold_min': max(0, level // 2),
+        'gold_max': max(2, level + 3),
+        'aggressive': aggressive,
+        'encounter_role': 'normal',
+        'creature_taxonomy': {
+            'body_type': body_type,
+            'special_trait': special_trait,
+            'encounter_class': 'normal',
+        },
+        'loot_table': loot_table or [('enhance_shard', 0.08)],
+    }
+
+
+MOBS.update({
+    'westwild_rabbit': _phase1_mob('westwild_rabbit', '🐇 Заяц', 1, 22, 2, 4, 'beast', 'small_game', aggressive=False),
+    'crow': _phase1_mob('crow', '🐦\u200d⬛ Ворон', 1, 18, 2, 5, 'avian', 'scavenger', aggressive=False),
+    'goblin_scout': _phase1_mob('goblin_scout', '👺 Гоблин-разведчик', 3, 42, 5, 9, 'humanoid', 'scout', aggressive=False),
+    'bear': _phase1_mob('bear', '🐻 Медведь', 5, 95, 10, 16, 'beast', 'predator', aggressive=False),
+    'goblin_hunter': _phase1_mob('goblin_hunter', '👺 Гоблин-охотник', 6, 70, 12, 18, 'humanoid', 'hunter', aggressive=False),
+    'goblin_shaman': _phase1_mob('goblin_shaman', '👺 Гоблин-шаман', 7, 62, 14, 21, 'humanoid', 'caster', aggressive=True),
+    'goblin_chief': _phase1_mob('goblin_chief', '👺 Гоблин-вожак', 9, 120, 18, 27, 'humanoid', 'leader', aggressive=True),
+    'mountain_rabbit': _phase1_mob('mountain_rabbit', '🐇 Горный заяц', 1, 24, 2, 4, 'beast', 'small_game', aggressive=False),
+    'rock_lizard': _phase1_mob('rock_lizard', '🦎 Скальный ящер', 2, 34, 4, 7, 'reptile', 'armored', aggressive=False),
+    'white_wolf': _phase1_mob('white_wolf', '🐺 Белый волк', 3, 52, 7, 11, 'beast', 'predator', aggressive=False),
+    'stone_beetle': _phase1_mob('stone_beetle', '🪲 Каменный жук', 4, 70, 7, 12, 'insect', 'armored', aggressive=False),
+    'mountain_stone_golem': _phase1_mob('mountain_stone_golem', '🗿 Каменный голем', 6, 115, 13, 20, 'construct', 'armored', aggressive=False),
+    'troll': _phase1_mob('troll', '🧌 Тролль', 7, 130, 16, 24, 'giant', 'brute', aggressive=True),
+    'ice_troll': _phase1_mob('ice_troll', '🧌 Ледяной тролль', 8, 150, 18, 27, 'giant', 'frost_touched', aggressive=True),
+    'troll_chief': _phase1_mob('troll_chief', '🧌 Тролль-вожак', 10, 185, 22, 32, 'giant', 'leader', aggressive=True),
+    'zombie': _phase1_mob('zombie', '🧟 Зомби', 3, 55, 6, 10, 'undead', 'rotting', aggressive=False),
+    'skeleton_warrior': _phase1_mob('skeleton_warrior', '💀 Скелет-воин', 4, 58, 8, 13, 'undead', 'armed', aggressive=False),
+    'skeleton_mage': _phase1_mob('skeleton_mage', '💀 Скелет-маг', 5, 48, 11, 17, 'undead', 'caster', aggressive=False),
+    'ghost': _phase1_mob('ghost', '👻 Призрак', 6, 60, 12, 18, 'undead', 'ethereal', aggressive=False),
+    'skeleton_guard': _phase1_mob('skeleton_guard', '💀 Скелет-страж', 7, 90, 14, 21, 'undead', 'armored', aggressive=True),
+    'cursed_knight': _phase1_mob('cursed_knight', '🛡️ Проклятый рыцарь', 8, 125, 17, 25, 'undead', 'cursed', aggressive=True),
+    'skeleton_priest': _phase1_mob('skeleton_priest', '💀 Скелет-жрец', 9, 95, 19, 28, 'undead', 'priest', aggressive=True),
+    'temple_guardian': _phase1_mob('temple_guardian', '🗿 Храмовый страж', 10, 170, 22, 32, 'construct', 'guardian', aggressive=True),
+    'desert_beetle': _phase1_mob('desert_beetle', '🪲 Пустынный жук', 2, 34, 4, 7, 'insect', 'armored', aggressive=False),
+    'desert_lizard': _phase1_mob('desert_lizard', '🦎 Ящерица', 3, 44, 6, 10, 'reptile', 'desert', aggressive=False),
+    'scavenger': _phase1_mob('scavenger', '🦅 Падальщик', 4, 48, 8, 13, 'avian', 'scavenger', aggressive=False),
+    'scorpion': _phase1_mob('scorpion', '🦂 Скорпион', 5, 58, 10, 16, 'arachnid', 'venomous', aggressive=False),
+    'snake': _phase1_mob('snake', '🐍 Змея', 5, 50, 10, 17, 'reptile', 'venomous', aggressive=False),
+    'crocodile': _phase1_mob('crocodile', '🐊 Крокодил', 6, 105, 14, 22, 'reptile', 'predator', aggressive=False),
+    'desert_elephant': _phase1_mob('desert_elephant', '🐘 Пустынный слон', 7, 160, 16, 24, 'beast', 'giant', aggressive=True),
+    'fire_elemental': _phase1_mob('fire_elemental', '🔥 Огненный элементаль', 8, 110, 20, 30, 'elemental', 'fire', aggressive=True),
+    'earth_elemental': _phase1_mob('earth_elemental', '🪨 Земляной элементаль', 9, 160, 21, 31, 'elemental', 'earth', aggressive=True),
+    'air_elemental': _phase1_mob('air_elemental', '🌪️ Воздушный элементаль', 10, 120, 23, 34, 'elemental', 'air', aggressive=True),
+    'swamp_toad': _phase1_mob('swamp_toad', '🐸 Болотная жаба', 2, 36, 4, 8, 'amphibian', 'swamp', aggressive=False),
+    'leech': _phase1_mob('leech', '🪱 Пиявка', 2, 30, 4, 7, 'vermin', 'bloodsucker', aggressive=False),
+    'water_snake': _phase1_mob('water_snake', '🐍 Водяная змея', 3, 45, 7, 11, 'reptile', 'venomous', aggressive=False),
+    'swamp_spider': _phase1_mob('swamp_spider', '🕷️ Болотный паук', 4, 46, 8, 13, 'arachnid', 'venomous', aggressive=False),
+    'giant_leech': _phase1_mob('giant_leech', '🪱 Гигантская пиявка', 6, 85, 13, 20, 'vermin', 'bloodsucker', aggressive=False),
+    'slug': _phase1_mob('slug', '🐌 Слизень', 6, 75, 12, 19, 'ooze', 'acidic', aggressive=False),
+    'drowned': _phase1_mob('drowned', '🧟 Утопленник', 7, 95, 15, 23, 'undead', 'drowned', aggressive=True),
+    'swamp_witch': _phase1_mob('swamp_witch', '🧙 Болотная ведьма', 8, 80, 18, 27, 'humanoid', 'caster', aggressive=True),
+    'toxic_slime': _phase1_mob('toxic_slime', '☣️ Ядовитая слизь', 9, 115, 18, 28, 'ooze', 'toxic', aggressive=True),
+    'old_witch': _phase1_mob('old_witch', '🧙 Старая ведьма', 10, 105, 22, 33, 'humanoid', 'elder_caster', aggressive=True),
+    'shore_crab': _phase1_mob('shore_crab', '🦀 Краб', 1, 24, 3, 5, 'crustacean', 'shoreline', aggressive=False),
+    'seagull': _phase1_mob('seagull', '🐦 Чайка', 1, 20, 2, 5, 'avian', 'shoreline', aggressive=False),
+    'shore_turtle': _phase1_mob('shore_turtle', '🐢 Береговая черепаха', 2, 55, 4, 7, 'reptile', 'armored', aggressive=False),
+})
+
 def get_mob(mob_id: str) -> dict:
     """Получить моба по ID. Возвращает копию чтобы не менять оригинал."""
     mob = MOBS.get(mob_id)
