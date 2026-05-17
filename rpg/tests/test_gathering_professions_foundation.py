@@ -48,13 +48,14 @@ class GatheringProfessionsFoundationTests(unittest.TestCase):
     def test_location_gather_entries_are_normalized_into_foundation_profiles(self):
         forest_profiles = build_location_gather_source_profiles('dark_forest')
         forest_by_item = {profile.item_id: profile for profile in forest_profiles}
-        self.assertEqual(set(forest_by_item), {'herb_common', 'herb_magic', 'wood_dark'})
+        self.assertEqual(set(forest_by_item), {'forest_mushroom', 'wood_dark'})
         self.assertEqual(forest_by_item['wood_dark'].profession_key, 'woodcutting')
+        self.assertEqual(forest_by_item['forest_mushroom'].profession_key, 'herbalism')
 
         mines_profiles = build_location_gather_source_profiles('old_mines')
         mines_by_item = {profile.item_id: profile for profile in mines_profiles}
-        self.assertEqual(set(mines_by_item), {'iron_ore', 'coal', 'gem_common'})
-        self.assertEqual(mines_by_item['gem_common'].profession_key, 'mining')
+        self.assertEqual(set(mines_by_item), {'iron_ore', 'coal'})
+        self.assertEqual(mines_by_item['iron_ore'].profession_key, 'mining')
 
     def test_location_profiles_use_existing_region_and_tier_hooks(self):
         forest_profiles = build_location_gather_source_profiles('dark_forest')

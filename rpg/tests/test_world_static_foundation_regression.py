@@ -43,7 +43,7 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
 
     def test_resolve_location_id_aliases(self):
         self.assertEqual(resolve_location_id('village'), 'hub_westwild')
-        self.assertEqual(resolve_location_id('dark_forest'), 'westwild_n4')
+        self.assertEqual(resolve_location_id('dark_forest'), 'westwild_n7')
 
     def test_get_location_and_neighbors_legacy_vs_canonical(self):
         legacy_location = get_location('village')
@@ -121,7 +121,7 @@ class WorldStaticFoundationRegressionTests(unittest.TestCase):
         )
         self.assertEqual(
             get_location('westwild_n4').get('region_flavor_tags'),
-            ['beast_hunting', 'poison_herbs', 'dark_wood'],
+            ['forest_wilds', 'beast_hunting', 'herb_growth', 'dark_wood'],
         )
         self.assertEqual(
             get_location('old_mine_entrance').get('region_flavor_tags'),

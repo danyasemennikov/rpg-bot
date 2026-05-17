@@ -306,11 +306,11 @@ Player-facing имя локации.
 
 ```python
 {
-    "location_id": "westwild_n4",
+    "location_id": "westwild_n7",
     "route_id": "route_westwild",
     "display_name": "Тёмный лес",
     "security_tier": "frontier",
-    "neighbors": ["westwild_n3", "westwild_n5"],
+    "neighbors": ["westwild_n6", "westwild_n8"],
     "resource_tags": ["wood", "mushrooms", "hides"],
     "combat_tags": ["deep_forest", "ambush", "predators"],
     "world_tags": [],
@@ -318,9 +318,9 @@ Player-facing имя локации.
     "teleport_enabled": False,
     "teleport_group": None,
     "discoverable": True,
-    "sort_order": 40,
+    "sort_order": 108,
     "legacy_aliases": ["dark_forest"],
-    "description_key": "location.desc.westwild_n4",
+    "description_key": "location.desc.westwild_n7",
     "travel_visible": True,
 }
 ```
@@ -347,7 +347,7 @@ Current live slice уже использует старые ids:
 ### Phase 1 canonical aliases
 
 - `village` -> `hub_westwild`
-- `dark_forest` -> `westwild_n4`
+- `dark_forest` -> `westwild_n7`
 - `frontier_outpost` -> `hub_frostspine`
 - `old_mines` -> `old_mine_entrance`
 
@@ -359,7 +359,7 @@ Current live slice уже использует старые ids:
 ```python
 WORLD_LEGACY_LOCATION_ALIASES = {
     "village": "hub_westwild",
-    "dark_forest": "westwild_n4",
+    "dark_forest": "westwild_n7",
     "frontier_outpost": "hub_frostspine",
     "old_mines": "old_mine_entrance",
 }

@@ -90,7 +90,7 @@ WORLD_ROUTES = {
 
 WORLD_LEGACY_LOCATION_ALIASES = {
     'village': 'hub_westwild',
-    'dark_forest': 'westwild_n4',
+    'dark_forest': 'westwild_n7',
     'frontier_outpost': 'hub_frostspine',
     'old_mines': 'old_mine_entrance',
 }
@@ -263,68 +263,68 @@ _LOCATION_NAMES = {
     'capital_city': '🏛️ Астер',
     'south_coast_shore': '🏖️ Южный берег',
     'old_mine_entrance': '⛏️ Старая шахта',
-    'westwild_n1': '🌿 Зелёный тракт',
-    'westwild_n2': '🌲 Лесная опушка',
-    'westwild_n3': '🌲 Перелесье',
-    'westwild_n4': '🌲 Тёмный лес',
-    'westwild_n5': '🦌 Олений дол',
+    'westwild_n1': '🌾 Пшеничные поля',
+    'westwild_n2': '🌿 Луга',
+    'westwild_n3': '⛰️ Холмы',
+    'westwild_n4': '🌳 Лиственная роща',
+    'westwild_n5': '🌲 Перелесок',
     'hub_westwild': '🏘️ Элмор',
-    'westwild_n6': '🌲 Высокий бор',
-    'westwild_n7': '🌲 Бурелом',
+    'westwild_n6': '🌲 Бор',
+    'westwild_n7': '🌲 Тёмный лес',
     'westwild_n8': '🪨 Каменный ручей',
     'westwild_n9': '🌲 Глухая чаща',
     'westwild_n10': '🪵 Мшистый яр',
     'westwild_n11': '🌲 Шепчущий бор',
-    'frostspine_n1': '🪨 Каменный путь',
-    'frostspine_n2': '🏔️ Предгорье',
-    'frostspine_n3': '🏔️ Узкий перевал',
-    'frostspine_n4': '❄️ Холодный склон',
-    'frostspine_n5': '⛰️ Серый кряж',
+    'frostspine_n1': '🪨 Каменная дорога',
+    'frostspine_n2': '🏔️ Предгорья',
+    'frostspine_n3': '🏔️ Перевал',
+    'frostspine_n4': '❄️ Склон',
+    'frostspine_n5': '⛰️ Каменная гряда',
     'hub_frostspine': '🏕️ Карн',
-    'frostspine_n6': '⛏️ Рудный ход',
+    'frostspine_n6': '⛏️ Рудники',
     'frostspine_n7': '❄️ Ледяной перевал',
     'frostspine_n8': '❄️ Белый уступ',
     'frostspine_n9': '❄️ Снежный склон',
-    'frostspine_n10': '❄️ Снежное плато',
+    'frostspine_n10': '❄️ Плато',
     'ashen_n1': '🛤️ Старая дорога',
     'ashen_n2': '🌉 Разбитый мост',
     'ashen_n3': '🪨 Каменный круг',
-    'ashen_n3a1': '🏚️ Пустой двор',
+    'ashen_n3a1': '🏚️ Каменный двор',
     'ashen_n3a2': '⛪ Старый храм',
     'hub_ashen_ruins': '🏛️ Эмбер',
-    'ashen_n3b1': '🏚️ Тихие руины',
+    'ashen_n3b1': '🏚️ Глухие руины',
     'ashen_n3b2': '🏛️ Реликтовый зал',
     'ashen_n3b2a1': '🔏 Зал печатей',
-    'ashen_n3b2b1': '🌑 Теневой ход',
+    'ashen_n3b2b1': '🌑 Скрытый ход',
     'ashen_n3c1': '🌿 Забытый сад',
     'ashen_n3c2': '⚰️ Старый склеп',
-    'sunscar_n1': '☀️ Южный тракт',
-    'sunscar_n2': '🪨 Красный склон',
-    'sunscar_n3': '🪨 Каменная балка',
-    'sunscar_n4': '🏜️ Узкий каньон',
-    'sunscar_n5': '🪨 Старый перевал',
+    'sunscar_n1': '🏜️ Пустошь',
+    'sunscar_n2': '🏜️ Песчаные склоны',
+    'sunscar_n3': '🏜️ Сухой овраг',
+    'sunscar_n4': '🏜️ Каньон',
+    'sunscar_n5': '🪨 Проход',
     'sunscar_n5a1': '💧 Оазис',
     'hub_sunscar': '🏜️ Мираж',
-    'sunscar_n6': '🏜️ Пески',
-    'sunscar_n7': '🧂 Соляное поле',
-    'sunscar_n8': '🏜️ Каменный каньон',
-    'sunscar_n8a1': '🏕️ Старый лагерь',
+    'sunscar_n6': '🏜️ Дюны',
+    'sunscar_n7': '🧂 Солончак',
+    'sunscar_n8': '🏜️ Ущелье',
+    'sunscar_n8a1': '🏕️ Брошенный лагерь',
     'sunscar_n8a2': '🪨 Каменные столбы',
     'sunscar_n9': '🏜️ Сухое русло',
-    'sunscar_n10': '⛰️ Высокая гряда',
-    'sunscar_n11': '⛰️ Высокое плато',
-    'mireveil_n1': '💧 Мокрый тракт',
+    'sunscar_n10': '⛰️ Соляная гряда',
+    'sunscar_n11': '⛰️ Плато',
+    'mireveil_n1': '💧 Топкая дорога',
     'mireveil_n2': '💧 Низина',
     'mireveil_n3': '🌾 Камыши',
-    'mireveil_n4': '💧 Сырой берег',
-    'mireveil_n5': '🌉 Старый брод',
-    'mireveil_n5a1': '🎣 Рыбачий мосток',
+    'mireveil_n4': '💧 Заводь',
+    'mireveil_n5': '🌉 Брод',
+    'mireveil_n5a1': '🎣 Мостки',
     'hub_mireveil': '🛶 Вельм',
-    'mireveil_n6': '☣️ Гнилая вода',
+    'mireveil_n6': '☣️ Мутная вода',
     'mireveil_n7': '🌿 Заросли',
-    'mireveil_n8': '🌿 Ивовый берег',
-    'mireveil_n8a1': '🍄 Грибной берег',
-    'mireveil_n8a2': '☣️ Ядовитый пруд',
+    'mireveil_n8': '🌿 Протока',
+    'mireveil_n8a1': '🍄 Грибная топь',
+    'mireveil_n8a2': '☣️ Омут',
     'mireveil_n9': '☣️ Трясина',
     'mireveil_n10': '☣️ Чёрная вода',
 }
@@ -458,6 +458,9 @@ for _location_id, _neighbors in _LIVE_WORLD_GRAPH.items():
     WORLD_LOCATIONS[_location_id]['canonical_neighbors'] = list(_WORLD_GRAPH.get(_location_id, []))
 
 # Keep existing battle/reward content on mapped nodes.
+WORLD_LOCATIONS['south_coast_shore'].update({
+    'description': 'Небольшая прибрежная полоса у столицы: лёгкая рыбалка, сбор береговых трав и пока без полноценной морской ветки.',
+})
 WORLD_LOCATIONS['capital_city'].update({
     'description': 'Столица королевства и главный безопасный узел дорог. Здесь можно отдохнуть, закупиться и взять первые задания.',
     'services': ['shop', 'inn', 'quest_board'],
@@ -482,52 +485,219 @@ WORLD_LOCATIONS['hub_frostspine'].update({
     'region_flavor_tags': ['mine_waystation', 'hunter_lodge'],
 })
 WORLD_LOCATIONS['westwild_n4'].update({
-    'linked_dungeon_id': 'rootbound_hollow',
-    'world_boss_governance_id': 'ember_valley_world_boss',
-    'world_id': 'ashen_continent',
-    'region_id': 'ember_valley',
-    'zone_id': 'dark_forest',
-    'region_flavor_tags': ['beast_hunting', 'poison_herbs', 'dark_wood'],
-    'description': 'Густой лес, пронизанный тьмой. Здесь рыщут волки, а на деревьях затаились пауки.',
-    'level_max': 5,
-    'mobs': ['forest_wolf', 'forest_boar', 'forest_spider', 'dark_treant'],
-    'gather': [
-        ('herb_common', 0.40, '🌿 Обычная трава'),
-        ('herb_magic', 0.10, '✨ Магическая трава'),
-        ('wood_dark', 0.50, '🪵 Тёмное дерево'),
-    ],
+    'description': 'Светлая лиственная роща на переходе от лугов к лесу. Здесь уже встречаются волки и первые пауки.',
+    'zone_id': 'westwild_n4',
+    'linked_dungeon_id': None,
+    'world_boss_governance_id': None,
 })
 WORLD_LOCATIONS['old_mine_entrance'].update({
     'world_id': 'ashen_continent',
     'region_id': 'ember_valley',
     'zone_id': 'old_mines',
     'region_flavor_tags': ['ore_veins', 'construct_ruins', 'goblin_camps'],
-    'zone_role': 'elite',
-    'world_boss_governance_id': 'ember_valley_world_boss',
-    'linked_dungeon_id': 'amber_catacombs',
-    'description': 'Заброшенные шахты, населённые гоблинами и жуткими тварями. Богаты рудой, но таят в себе опасности.',
-    'level_min': 3,
-    'level_max': 8,
-    'mobs': ['mine_rat', 'goblin_miner', 'cave_bat', 'stone_golem'],
-    'world_special_spawns': [
-        {
-            'key': 'amber_colossus',
-            'mob_id': 'stone_golem',
-            'spawn_profile': 'elite',
-            'count': 1,
-        },
-    ],
+    'zone_role': 'normal',
+    'world_boss_governance_id': None,
+    'linked_dungeon_id': None,
+    'description': 'Старый шахтный вход с редкими пещерными тварями и простыми рудными жилами.',
+    'level_min': 1,
+    'level_max': 4,
+    'mobs': ['mine_rat', 'cave_bat'],
+    'world_special_spawns': [],
     'world_spawn_profiles': {
-        'mine_rat': {'normal': 2},
-        'goblin_miner': {'normal': 1, 'elite': 1},
-        'cave_bat': {'normal': 2, 'rare': 1},
-        'stone_golem': {'normal': 1, 'elite': 1},
+        'mine_rat': {'normal': 1},
+        'cave_bat': {'normal': 1},
     },
     'gather': [
-        ('iron_ore', 0.55, '⛏️ Железная руда'),
-        ('coal', 0.35, '🪨 Уголь'),
-        ('gem_common', 0.08, '💎 Обычный драгоценный камень'),
+        ('iron_ore', 0.65, '⛏️ Железная руда'),
+        ('coal', 0.30, '🪨 Уголь'),
     ],
+})
+
+
+# Open World Gameplay Rollout Phase 1: baseline route-aware PvE and gathering.
+# The data below stays on the existing location-bound spawn/gather rails:
+# - `mobs` + `world_spawn_profiles` feed anchored open-world spawn instances;
+# - elite anchors are represented by elite spawn profiles only;
+# - `gather` entries are ordinary gathering foundation surfaces.
+_PHASE1_ELITE_ANCHOR_IDS = {
+    'westwild_n7', 'westwild_n8', 'westwild_n10', 'westwild_n11',
+    'frostspine_n6', 'frostspine_n8', 'frostspine_n10',
+    'ashen_n3b1', 'ashen_n3b2', 'ashen_n3b2a1', 'ashen_n3c2',
+    'sunscar_n6', 'sunscar_n8', 'sunscar_n8a2', 'sunscar_n10', 'sunscar_n11',
+    'mireveil_n6', 'mireveil_n8', 'mireveil_n8a2', 'mireveil_n10',
+}
+
+_PHASE1_LOCATION_MOBS = {
+    'south_coast_shore': ['shore_crab', 'seagull', 'shore_turtle'],
+    'old_mine_entrance': ['mine_rat', 'cave_bat'],
+    'westwild_n1': ['westwild_rabbit', 'crow'],
+    'westwild_n2': ['westwild_rabbit', 'crow', 'forest_boar'],
+    'westwild_n3': ['forest_boar', 'forest_wolf'],
+    'westwild_n4': ['forest_wolf', 'forest_spider'],
+    'westwild_n5': ['forest_boar', 'forest_spider', 'goblin_scout'],
+    'westwild_n6': ['forest_wolf', 'bear', 'goblin_scout'],
+    'westwild_n7': ['forest_wolf', 'forest_boar', 'forest_spider', 'bear', 'goblin_hunter'],
+    'westwild_n8': ['bear', 'goblin_hunter', 'goblin_shaman'],
+    'westwild_n9': ['goblin_hunter', 'goblin_shaman'],
+    'westwild_n10': ['goblin_hunter', 'goblin_shaman', 'goblin_chief'],
+    'westwild_n11': ['goblin_shaman', 'goblin_chief'],
+    'frostspine_n1': ['mountain_rabbit', 'rock_lizard'],
+    'frostspine_n2': ['mountain_rabbit', 'rock_lizard', 'white_wolf'],
+    'frostspine_n3': ['white_wolf', 'cave_bat'],
+    'frostspine_n4': ['cave_bat', 'stone_beetle'],
+    'frostspine_n5': ['white_wolf', 'stone_beetle'],
+    'frostspine_n6': ['stone_beetle', 'mountain_stone_golem'],
+    'frostspine_n7': ['troll'],
+    'frostspine_n8': ['troll', 'ice_troll'],
+    'frostspine_n9': ['ice_troll', 'troll_chief'],
+    'frostspine_n10': ['ice_troll', 'troll_chief'],
+    'ashen_n1': ['zombie', 'skeleton_warrior'],
+    'ashen_n2': ['zombie', 'skeleton_warrior'],
+    'ashen_n3': ['skeleton_warrior', 'skeleton_mage'],
+    'ashen_n3a1': ['skeleton_mage', 'ghost'],
+    'ashen_n3a2': ['ghost', 'skeleton_guard'],
+    'ashen_n3b1': ['skeleton_guard', 'cursed_knight'],
+    'ashen_n3b2': ['cursed_knight', 'skeleton_priest'],
+    'ashen_n3b2a1': ['skeleton_priest', 'temple_guardian'],
+    'ashen_n3b2b1': ['ghost', 'cursed_knight'],
+    'ashen_n3c1': ['zombie', 'ghost'],
+    'ashen_n3c2': ['cursed_knight', 'temple_guardian'],
+    'sunscar_n1': ['desert_beetle', 'desert_lizard'],
+    'sunscar_n2': ['desert_lizard', 'scavenger'],
+    'sunscar_n3': ['scavenger', 'scorpion'],
+    'sunscar_n4': ['scorpion', 'snake'],
+    'sunscar_n5': ['snake', 'scorpion'],
+    'sunscar_n5a1': ['crocodile', 'snake'],
+    'sunscar_n6': ['desert_elephant', 'scorpion'],
+    'sunscar_n7': ['desert_elephant', 'snake'],
+    'sunscar_n8': ['desert_elephant', 'fire_elemental'],
+    'sunscar_n8a1': ['scavenger', 'earth_elemental'],
+    'sunscar_n8a2': ['earth_elemental', 'air_elemental'],
+    'sunscar_n9': ['fire_elemental', 'earth_elemental'],
+    'sunscar_n10': ['earth_elemental', 'air_elemental'],
+    'sunscar_n11': ['fire_elemental', 'air_elemental'],
+    'mireveil_n1': ['swamp_toad', 'leech'],
+    'mireveil_n2': ['leech', 'water_snake'],
+    'mireveil_n3': ['water_snake', 'swamp_spider'],
+    'mireveil_n4': ['swamp_toad', 'swamp_spider'],
+    'mireveil_n5': ['leech', 'water_snake'],
+    'mireveil_n5a1': ['water_snake', 'swamp_toad'],
+    'mireveil_n6': ['giant_leech', 'slug'],
+    'mireveil_n7': ['slug', 'drowned'],
+    'mireveil_n8': ['giant_leech', 'drowned'],
+    'mireveil_n8a1': ['slug', 'toxic_slime'],
+    'mireveil_n8a2': ['toxic_slime', 'swamp_witch'],
+    'mireveil_n9': ['drowned', 'swamp_witch'],
+    'mireveil_n10': ['toxic_slime', 'old_witch'],
+}
+
+_PHASE1_GATHER = {
+    'south_coast_shore': [('shore_fish', 0.70, '🎣 Прибрежная рыба'), ('shore_herbs', 0.20, '🌿 Береговые травы')],
+    'old_mine_entrance': [('iron_ore', 0.65, '⛏️ Железная руда'), ('coal', 0.30, '🪨 Уголь')],
+    'westwild_n1': [('herb_common', 0.55, '🌾 Полевые травы')],
+    'westwild_n2': [('herb_common', 0.45, '🌿 Луговые травы'), ('wood_dark', 0.15, '🪵 Молодая древесина')],
+    'westwild_n3': [('herb_common', 0.35, '🌿 Холмовые травы'), ('wood_dark', 0.25, '🪵 Лесная древесина')],
+    'westwild_n4': [('herb_common', 0.35, '🌿 Лесные травы'), ('forest_mushroom', 0.25, '🍄 Лесные грибы'), ('wood_dark', 0.35, '🪵 Лиственная древесина')],
+    'westwild_n5': [('herb_common', 0.35, '🌿 Травы перелеска'), ('wood_dark', 0.40, '🪵 Древесина перелеска')],
+    'westwild_n6': [('forest_mushroom', 0.30, '🍄 Боровые грибы'), ('wood_dark', 0.45, '🪵 Боровая древесина')],
+    'westwild_n7': [('forest_mushroom', 0.35, '🍄 Тёмные грибы'), ('wood_dark', 0.50, '🪵 Тёмная древесина')],
+    'westwild_n8': [('herb_common', 0.25, '🌿 Ручейные травы'), ('stone_chunk', 0.30, '🪨 Ручейный камень'), ('wood_dark', 0.25, '🪵 Прибрежная древесина')],
+    'westwild_n9': [('forest_mushroom', 0.40, '🍄 Глухие грибы'), ('herb_magic', 0.10, '✨ Дикий реагент')],
+    'westwild_n10': [('forest_mushroom', 0.45, '🍄 Мшистые грибы'), ('herb_magic', 0.15, '✨ Мшистый реагент')],
+    'westwild_n11': [('forest_mushroom', 0.50, '🍄 Шепчущие грибы'), ('wood_dark', 0.35, '🪵 Старая древесина')],
+    'ashen_n3c1': [('herb_magic', 0.35, '✨ Садовый реагент'), ('herb_common', 0.30, '🌿 Дикие травы сада')],
+    'sunscar_n1': [('dry_reagent', 0.45, '🌵 Сухие реагенты')],
+    'sunscar_n2': [('dry_reagent', 0.35, '🌵 Сухие растения'), ('stone_chunk', 0.30, '🪨 Песчаник')],
+    'sunscar_n3': [('dry_reagent', 0.30, '🌵 Овражные реагенты'), ('stone_chunk', 0.35, '🪨 Камень оврага')],
+    'sunscar_n4': [('stone_chunk', 0.45, '🪨 Каньонный камень')],
+    'sunscar_n5': [('stone_chunk', 0.40, '🪨 Камень прохода'), ('dry_reagent', 0.20, '🌵 Сухая трава')],
+    'sunscar_n5a1': [('oasis_fish', 0.65, '🎣 Оазисная рыба'), ('desert_plant', 0.35, '🌵 Растения оазиса')],
+    'sunscar_n6': [('desert_plant', 0.30, '🌵 Пустынные растения')],
+    'sunscar_n7': [('salt_crystal', 0.55, '🧂 Соль солончака')],
+    'sunscar_n8': [('stone_chunk', 0.45, '🪨 Камень ущелья')],
+    'sunscar_n8a1': [('dry_reagent', 0.35, '🌵 Лагерные сухоцветы')],
+    'sunscar_n8a2': [('stone_chunk', 0.50, '🪨 Каменные обломки')],
+    'sunscar_n9': [('salt_crystal', 0.30, '🧂 Сухая соль'), ('stone_chunk', 0.30, '🪨 Русловой камень')],
+    'sunscar_n10': [('salt_crystal', 0.45, '🧂 Соляные наросты'), ('stone_chunk', 0.35, '🪨 Соляная порода')],
+    'sunscar_n11': [('dry_reagent', 0.30, '🌵 Платовые сухоцветы'), ('stone_chunk', 0.30, '🪨 Платовый камень')],
+    'mireveil_n1': [('marsh_herb', 0.50, '🌿 Болотные травы')],
+    'mireveil_n2': [('marsh_herb', 0.45, '🌿 Низинные травы')],
+    'mireveil_n3': [('reed_bundle', 0.55, '🌾 Камыш')],
+    'mireveil_n4': [('marsh_fish', 0.45, '🎣 Заводная рыба'), ('marsh_herb', 0.25, '🌿 Водные травы')],
+    'mireveil_n5': [('marsh_fish', 0.40, '🎣 Бродовая рыба'), ('reed_bundle', 0.30, '🌾 Камыш брода')],
+    'mireveil_n5a1': [('marsh_fish', 0.60, '🎣 Рыба у мостков')],
+    'mireveil_n6': [('marsh_herb', 0.35, '🌿 Мутные травы')],
+    'mireveil_n7': [('reed_bundle', 0.40, '🌾 Заросший камыш'), ('marsh_herb', 0.30, '🌿 Болотные растения')],
+    'mireveil_n8': [('marsh_fish', 0.45, '🎣 Рыба протоки'), ('marsh_herb', 0.25, '🌿 Травы протоки')],
+    'mireveil_n8a1': [('marsh_mushroom', 0.55, '🍄 Болотные грибы')],
+    'mireveil_n8a2': [('toxic_herb', 0.45, '☣️ Ядовитые травы')],
+    'mireveil_n9': [('marsh_mushroom', 0.35, '🍄 Грибы трясины'), ('toxic_herb', 0.25, '☣️ Токсичные травы')],
+    'mireveil_n10': [('toxic_herb', 0.50, '☣️ Травы чёрной воды')],
+}
+
+_PHASE1_LEVEL_MAX_BY_LOCATION = {
+    'south_coast_shore': 3,
+    'old_mine_entrance': 4,
+    'westwild_n1': 2, 'westwild_n2': 3, 'westwild_n3': 4, 'westwild_n4': 5, 'westwild_n5': 6,
+    'westwild_n6': 7, 'westwild_n7': 8, 'westwild_n8': 8, 'westwild_n9': 9, 'westwild_n10': 10, 'westwild_n11': 10,
+    'frostspine_n1': 2, 'frostspine_n2': 3, 'frostspine_n3': 4, 'frostspine_n4': 5, 'frostspine_n5': 6,
+    'frostspine_n6': 7, 'frostspine_n7': 8, 'frostspine_n8': 9, 'frostspine_n9': 10, 'frostspine_n10': 10,
+    'ashen_n1': 3, 'ashen_n2': 4, 'ashen_n3': 5, 'ashen_n3a1': 6, 'ashen_n3a2': 7,
+    'ashen_n3b1': 8, 'ashen_n3b2': 9, 'ashen_n3b2a1': 10, 'ashen_n3b2b1': 9, 'ashen_n3c1': 6, 'ashen_n3c2': 10,
+    'sunscar_n1': 3, 'sunscar_n2': 4, 'sunscar_n3': 5, 'sunscar_n4': 6, 'sunscar_n5': 6, 'sunscar_n5a1': 6,
+    'sunscar_n6': 7, 'sunscar_n7': 8, 'sunscar_n8': 9, 'sunscar_n8a1': 8, 'sunscar_n8a2': 9,
+    'sunscar_n9': 9, 'sunscar_n10': 10, 'sunscar_n11': 10,
+    'mireveil_n1': 3, 'mireveil_n2': 4, 'mireveil_n3': 5, 'mireveil_n4': 5, 'mireveil_n5': 6, 'mireveil_n5a1': 6,
+    'mireveil_n6': 7, 'mireveil_n7': 8, 'mireveil_n8': 8, 'mireveil_n8a1': 8, 'mireveil_n8a2': 9,
+    'mireveil_n9': 9, 'mireveil_n10': 10,
+}
+
+_PHASE1_ELITE_MOB_OVERRIDES = {
+    # Keep hunt_elite_boars truthfully backed by real spawn data after
+    # dark_forest moved to the deeper westwild_n7 canonical node.
+    'westwild_n7': 'forest_boar',
+    # Frostspine's legacy stone_golem is intrinsically elite, so Phase 1 uses
+    # the normal rollout golem for both normal and elite-anchor spawn profiles.
+    'frostspine_n6': 'mountain_stone_golem',
+}
+
+_PHASE1_ELITE_MOB_BY_LOCATION = {
+    location_id: _PHASE1_ELITE_MOB_OVERRIDES.get(location_id, _PHASE1_LOCATION_MOBS[location_id][-1])
+    for location_id in _PHASE1_ELITE_ANCHOR_IDS
+}
+
+for _phase1_location_id, _phase1_mobs in _PHASE1_LOCATION_MOBS.items():
+    WORLD_LOCATIONS[_phase1_location_id]['mobs'] = list(_phase1_mobs)
+    WORLD_LOCATIONS[_phase1_location_id]['level_max'] = _PHASE1_LEVEL_MAX_BY_LOCATION.get(_phase1_location_id, 10)
+    WORLD_LOCATIONS[_phase1_location_id]['world_spawn_profiles'] = {
+        mob_id: {'normal': 1}
+        for mob_id in _phase1_mobs
+    }
+    _elite_mob_id = _PHASE1_ELITE_MOB_BY_LOCATION.get(_phase1_location_id)
+    if _elite_mob_id:
+        WORLD_LOCATIONS[_phase1_location_id]['world_spawn_profiles'][_elite_mob_id] = {'normal': 1, 'elite': 1}
+
+for _phase1_location_id, _phase1_gather in _PHASE1_GATHER.items():
+    WORLD_LOCATIONS[_phase1_location_id]['gather'] = list(_phase1_gather)
+
+# The legacy dark_forest semantic layer now consistently belongs to the
+# deeper canonical node that carries the player-facing “Тёмный лес” name.
+WORLD_LOCATIONS['westwild_n7'].update({
+    'zone_id': 'dark_forest',
+    'linked_dungeon_id': 'rootbound_hollow',
+    'world_boss_governance_id': 'ember_valley_world_boss',
+    'region_flavor_tags': ['beast_hunting', 'poison_herbs', 'dark_wood'],
+    'description': 'Густой лес, пронизанный тьмой. Здесь рыщут волки, медведи и гоблинские охотники.',
+})
+
+# Old Mine remains a sparse stub, not an elite mini-dungeon or live boss anchor.
+WORLD_LOCATIONS['old_mine_entrance'].update({
+    'region_id': 'ember_valley',
+    'zone_role': 'normal',
+    'linked_dungeon_id': None,
+    'world_boss_governance_id': None,
+    'region_flavor_tags': ['ore_veins', 'construct_ruins', 'goblin_camps'],
+    'world_special_spawns': [],
 })
 
 # Backward-compatible name used across the codebase.

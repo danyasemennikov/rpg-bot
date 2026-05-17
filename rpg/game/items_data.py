@@ -369,6 +369,39 @@ ITEM_REWARD_TAGS = {
 }
 
 
+# Phase 1 route gathering resource stubs.
+_PHASE1_RESOURCE_ITEMS = {
+    'forest_mushroom': {'item_id': 'forest_mushroom', 'name': '🍄 Лесные грибы', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'stone_chunk': {'item_id': 'stone_chunk', 'name': '🪨 Камень', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'shore_fish': {'item_id': 'shore_fish', 'name': '🐟 Прибрежная рыба', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'shore_herbs': {'item_id': 'shore_herbs', 'name': '🌿 Береговые травы', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'dry_reagent': {'item_id': 'dry_reagent', 'name': '🌵 Сухой реагент', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'oasis_fish': {'item_id': 'oasis_fish', 'name': '🐟 Оазисная рыба', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'desert_plant': {'item_id': 'desert_plant', 'name': '🌵 Пустынное растение', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'salt_crystal': {'item_id': 'salt_crystal', 'name': '🧂 Соль', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'marsh_herb': {'item_id': 'marsh_herb', 'name': '🌿 Болотная трава', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'reed_bundle': {'item_id': 'reed_bundle', 'name': '🌾 Камыш', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'marsh_fish': {'item_id': 'marsh_fish', 'name': '🐟 Болотная рыба', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'marsh_mushroom': {'item_id': 'marsh_mushroom', 'name': '🍄 Болотные грибы', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+    'toxic_herb': {'item_id': 'toxic_herb', 'name': '☣️ Ядовитая трава', 'description': 'Материал для сбора в открытом мире.', 'item_type': 'material', 'weapon_type': None, 'rarity': 'common', 'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1, 'req_level': 1, 'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 4, 'skills_json': '[]', 'stat_bonus_json': '{}'},
+}
+ITEMS.update(_PHASE1_RESOURCE_ITEMS)
+ITEM_REWARD_TAGS.update({
+    'forest_mushroom': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+    'stone_chunk': {'reward_family': 'gathering_material', 'material_subtype': 'stone'},
+    'shore_fish': {'reward_family': 'gathering_material', 'material_subtype': 'fish'},
+    'shore_herbs': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+    'dry_reagent': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+    'oasis_fish': {'reward_family': 'gathering_material', 'material_subtype': 'fish'},
+    'desert_plant': {'reward_family': 'gathering_material', 'material_subtype': 'plant'},
+    'salt_crystal': {'reward_family': 'gathering_material', 'material_subtype': 'salt'},
+    'marsh_herb': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+    'reed_bundle': {'reward_family': 'gathering_material', 'material_subtype': 'reed'},
+    'marsh_fish': {'reward_family': 'gathering_material', 'material_subtype': 'fish'},
+    'marsh_mushroom': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+    'toxic_herb': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
+})
+
 def get_item(item_id: str) -> dict:
     return ITEMS.get(item_id)
 
