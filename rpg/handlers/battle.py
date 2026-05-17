@@ -138,6 +138,19 @@ def get_equipped_combat_items(telegram_id: int) -> dict[str, dict]:
 
     return equipped_items
 
+def _resolve_reward_location_id(player: dict, rewards: dict) -> str | None:
+    """Return the best location for this specific reward event."""
+    explicit_location_id = str(rewards.get('location_id') or '').strip()
+    if explicit_location_id:
+        return explicit_location_id
+
+    player_location_id = str(player.get('location_id') or '').strip()
+    if player_location_id:
+        return player_location_id
+
+    return get_mob_location_id(str(rewards.get('mob_id', '')))
+
+
 def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     new_exp  = player['exp'] + rewards['exp']
     new_gold = player['gold'] + rewards['gold']
@@ -180,7 +193,7 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
         encounter_role=rewards.get('encounter_role'),
         spawn_profile=rewards.get('spawn_profile'),
         spawn_identity=rewards.get('spawn_identity'),
-        location_id=get_mob_location_id(str(rewards.get('mob_id', ''))) or player.get('location_id'),
+        location_id=_resolve_reward_location_id(player=player, rewards=rewards),
     )
     for item_id in rewards['loot']:
         grant_item_to_player(
@@ -623,6 +636,7 @@ async def _handle_victory_cleanup(
 ):
     """Общий post-victory cleanup для обычной атаки и скиллов."""
     rewards = calc_rewards(mob)
+    rewards['location_id'] = battle_state.get('location_id', rewards.get('location_id'))
     rewards['spawn_profile'] = battle_state.get('spawn_profile', rewards.get('spawn_profile'))
     rewards['content_identity'] = battle_state.get('reward_content_identity', rewards.get('content_identity'))
     rewards['spawn_identity'] = battle_state.get('spawn_identity', rewards.get('spawn_identity'))

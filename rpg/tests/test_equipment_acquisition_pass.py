@@ -231,7 +231,7 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
             mob_level=rewards['mob_level'],
             source_category=rewards['source_category'],
             creature_taxonomy=rewards['creature_taxonomy'],
-            location_id=get_mob_location_id(rewards['mob_id']),
+            location_id='frostspine_n6',
         )
         self.assertEqual(source_meta.content_tier, 1)
         self.assertEqual(source_meta.creature_body_type, 'construct')
@@ -317,7 +317,56 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         )
         self.assertEqual(blocked, {'gear_instances_created': 0, 'stackable_added': 0})
 
-    def test_live_reward_flow_prefers_mob_region_over_player_region(self):
+    def test_live_reward_flow_uses_explicit_location_for_duplicated_mob(self):
+        conn = get_connection()
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
+        conn.close()
+
+        base_rewards = {
+            'exp': 0,
+            'gold': 0,
+            'loot': ['wolf_pelt'],
+            'mob_level': 2,
+            'mob_id': 'forest_wolf',
+            'source_category': 'open_world_normal',
+            'creature_taxonomy': get_mob('forest_wolf').get('creature_taxonomy'),
+        }
+
+        with patch('handlers.battle.grant_item_to_player') as grant_mock:
+            apply_rewards(9001, player, dict(base_rewards, location_id='westwild_n3'))
+            earlier_location_meta = grant_mock.call_args.kwargs['source_metadata']
+            apply_rewards(9001, player, dict(base_rewards, location_id='westwild_n7'))
+            later_location_meta = grant_mock.call_args.kwargs['source_metadata']
+
+        self.assertEqual(get_mob_location_id('forest_wolf'), 'westwild_n7')
+        self.assertEqual(earlier_location_meta.open_world_zone_identity, 'westwild_n3')
+        self.assertEqual(later_location_meta.open_world_zone_identity, 'dark_forest')
+        self.assertEqual(earlier_location_meta.open_world_region_identity, 'ember_valley')
+        self.assertEqual(later_location_meta.open_world_region_identity, 'ember_valley')
+
+    def test_live_reward_flow_uses_player_location_before_legacy_mob_fallback(self):
+        rewards = {
+            'exp': 0,
+            'gold': 0,
+            'loot': ['wolf_pelt'],
+            'mob_level': 2,
+            'mob_id': 'forest_wolf',
+            'source_category': 'open_world_normal',
+            'creature_taxonomy': get_mob('forest_wolf').get('creature_taxonomy'),
+        }
+        conn = get_connection()
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
+        conn.close()
+        player['location_id'] = 'westwild_n3'
+
+        with patch('handlers.battle.grant_item_to_player') as grant_mock:
+            apply_rewards(9001, player, rewards)
+
+        source_meta = grant_mock.call_args.kwargs['source_metadata']
+        self.assertEqual(get_mob_location_id('forest_wolf'), 'westwild_n7')
+        self.assertEqual(source_meta.open_world_zone_identity, 'westwild_n3')
+
+    def test_live_reward_flow_keeps_legacy_mob_location_as_final_fallback(self):
         rewards = {
             'exp': 0,
             'gold': 0,
@@ -330,6 +379,7 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         conn = get_connection()
         player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (9001,)).fetchone())
         conn.close()
+        player['location_id'] = None
 
         with patch('handlers.battle.grant_item_to_player') as grant_mock:
             apply_rewards(9001, player, rewards)
