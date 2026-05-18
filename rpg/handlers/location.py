@@ -14,6 +14,7 @@ from database import (
     get_player,
     get_connection,
     is_in_battle,
+    is_location_discovered,
 )
 from game.locations import get_location, get_connected_locations, get_location_neighbors, resolve_location_id
 from game.gathering_foundation import build_location_gather_source_profiles
@@ -157,6 +158,157 @@ _SUPPORTED_LOCATION_SERVICE_ACTIONS = {
     'quest_board': ('quests', 'quest_board'),
 }
 INN_REST_COST_GOLD = 12
+
+MAP_BRANCHES = [
+    ('westwild', '🌾'),
+    ('frostspine', '🏔️'),
+    ('ashen_ruins', '🏚️'),
+    ('sunscar', '🏜️'),
+    ('mireveil', '☣️'),
+]
+GO_TRAVEL_SECONDS = 15
+LONG_ROUTE_MULTIPLIER = 3
+
+ROUTE_DISPLAY_TREES = {
+    'westwild': {
+        'trunk': ['capital_city','westwild_n1','westwild_n2','westwild_n3','westwild_n4','westwild_n5','westwild_n6','westwild_n7','westwild_n8','westwild_n9','westwild_n10','westwild_n11'],
+        'branches': {'westwild_n5': ['hub_westwild']},
+    },
+    'frostspine': {
+        'trunk': ['capital_city','frostspine_n1','frostspine_n2','frostspine_n3','frostspine_n4','frostspine_n5','frostspine_n6','frostspine_n7','frostspine_n8','frostspine_n9','frostspine_n10'],
+        'branches': {'frostspine_n1': ['old_mine_entrance'], 'frostspine_n5': ['hub_frostspine']},
+    },
+    'ashen_ruins': {
+        'trunk': ['capital_city','ashen_n1','ashen_n2','ashen_n3'],
+        'branches': {
+            'ashen_n3': [
+                ['ashen_n3a1','ashen_n3a2','hub_ashen_ruins'],
+                ['ashen_n3b1','ashen_n3b2','ashen_n3b2a1'],
+                ['ashen_n3c1','ashen_n3c2'],
+            ],
+            'ashen_n3b2': [['ashen_n3b2b1']],
+        },
+    },
+    'sunscar': {
+        'trunk': ['capital_city','sunscar_n1','sunscar_n2','sunscar_n3','sunscar_n4','sunscar_n5','sunscar_n6','sunscar_n7','sunscar_n8','sunscar_n9','sunscar_n10','sunscar_n11'],
+        'branches': {'sunscar_n5': ['sunscar_n5a1','hub_sunscar'], 'sunscar_n8': ['sunscar_n8a1','sunscar_n8a2']},
+    },
+    'mireveil': {
+        'trunk': ['capital_city','mireveil_n1','mireveil_n2','mireveil_n3','mireveil_n4','mireveil_n5','mireveil_n6','mireveil_n7','mireveil_n8','mireveil_n9','mireveil_n10'],
+        'branches': {'mireveil_n5': ['mireveil_n5a1','hub_mireveil'], 'mireveil_n8': ['mireveil_n8a1','mireveil_n8a2']},
+    },
+}
+
+
+def _strip_command_bot_suffix(value: str | None) -> str | None:
+    token = str(value or '').strip().lower()
+    if not token:
+        return None
+    if '@' in token:
+        token = token.split('@', 1)[0].strip()
+    return token or None
+
+
+def _parse_map_route_arg(raw_text: str) -> str | None:
+    text = (raw_text or '').strip().lower()
+    if text.startswith('/map_'):
+        return _strip_command_bot_suffix(text[5:])
+    if text.startswith('/map'):
+        parts = text.split(maxsplit=1)
+        return _strip_command_bot_suffix(parts[1]) if len(parts) > 1 else None
+    return None
+
+
+def _parse_go_location_arg(raw_text: str) -> str | None:
+    text = (raw_text or '').strip().lower()
+    if text.startswith('/go_'):
+        return _strip_command_bot_suffix(text[4:])
+    if text.startswith('/go'):
+        parts = text.split(maxsplit=1)
+        return _strip_command_bot_suffix(parts[1]) if len(parts) > 1 else None
+    return None
+
+
+def _find_canonical_path(start_id: str, target_id: str) -> list[str]:
+    start = resolve_location_id(start_id)
+    target = resolve_location_id(target_id)
+    if start == target:
+        return [start]
+    queue = [(start, [start])]
+    seen = {start}
+    while queue:
+        node, path = queue.pop(0)
+        for neighbor in get_location_neighbors(node):
+            canonical_neighbor = resolve_location_id(neighbor)
+            if canonical_neighbor in seen:
+                continue
+            new_path = path + [canonical_neighbor]
+            if canonical_neighbor == target:
+                return new_path
+            seen.add(canonical_neighbor)
+            queue.append((canonical_neighbor, new_path))
+    return []
+
+
+def _build_map_route_keyboard(lang: str) -> InlineKeyboardMarkup:
+    rows = []
+    for route_key, emoji in MAP_BRANCHES:
+        rows.append([InlineKeyboardButton(f"{emoji} {t('location.map_route_'+route_key, lang)}", callback_data=f"map_route_{route_key}")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _build_route_map_text(route_key: str, player_location_id: str | None, lang: str) -> str:
+    if route_key not in ROUTE_DISPLAY_TREES:
+        return t('location.map_unknown_route', lang)
+
+    route_model = ROUTE_DISPLAY_TREES[route_key]
+    trunk = route_model.get('trunk', [])
+    branches = route_model.get('branches', {})
+
+    lines = [
+        f"🗺️ <b>{t('location.map_title', lang)}</b>",
+        '',
+        t('location.map_route_header_' + route_key, lang),
+        t('location.map_route_desc_' + route_key, lang),
+        '',
+    ]
+
+    current_id = resolve_location_id(player_location_id or '')
+
+    def _line_for(location_id: str) -> str:
+        pin = '📍 ' if resolve_location_id(location_id) == current_id else ''
+        return f"{pin}{get_location_name(location_id, lang)} — /go {location_id}"
+
+    def _normalize_branch_paths(node_id: str):
+        branch_paths = branches.get(node_id, [])
+        if branch_paths and isinstance(branch_paths[0], str):
+            return [branch_paths]
+        return branch_paths
+
+    def _render_nested_from(node_id: str, prefix: str) -> None:
+        nested_paths = _normalize_branch_paths(node_id)
+        for nested in nested_paths:
+            lines.append(prefix + '├─ ' + _line_for(nested[0]))
+            for nested_node in nested[1:]:
+                lines.append(prefix + '│  ↓')
+                lines.append(prefix + '│  ' + _line_for(nested_node))
+                _render_nested_from(nested_node, prefix + '│  ')
+
+    for idx, location_id in enumerate(trunk):
+        if idx > 0:
+            lines.append('↓')
+        lines.append(_line_for(location_id))
+
+        for branch_path in _normalize_branch_paths(location_id):
+            lines.append('├─ ' + _line_for(branch_path[0]))
+            _render_nested_from(branch_path[0], '│  ')
+            for branch_node in branch_path[1:]:
+                lines.append('│  ↓')
+                lines.append('│  ' + _line_for(branch_node))
+                _render_nested_from(branch_node, '│  ')
+
+    return '\n'.join(lines)
+
 
 
 def _can_open_inn(location: dict | None) -> bool:
@@ -840,14 +992,8 @@ def build_location_message(
         text += t('location.travel_title', lang) + '\n'
         nav_buttons = []
         for conn_loc in connected:
-            req_level = conn_loc['level_min']
-            can_go    = player['level'] >= req_level or conn_loc['safe']
-            if can_go:
-                label = t('location.go_to_btn', lang, name=get_location_name(conn_loc['id'], lang))
-                cb    = f"goto_{conn_loc['id']}"
-            else:
-                label = t('location.locked_btn', lang, name=get_location_name(conn_loc['id'], lang), req=req_level)
-                cb    = f"locked_{conn_loc['id']}"
+            label = t('location.go_to_btn', lang, name=get_location_name(conn_loc['id'], lang))
+            cb    = f"goto_{conn_loc['id']}"
             nav_buttons.append(InlineKeyboardButton(label, callback_data=cb))
         keyboard.append(nav_buttons)
 
@@ -949,6 +1095,36 @@ def _build_location_message_with_snapshot(
     user_data[LOCATION_ACTION_SNAPSHOT_KEY] = snapshot
     return text, keyboard
 
+
+
+
+async def map_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    player = get_player(update.effective_user.id)
+    lang = player['lang'] if player else 'ru'
+    if not player:
+        await update.message.reply_text(t('common.no_character', lang))
+        return
+    route_key = _parse_map_route_arg(update.message.text or '')
+    if not route_key:
+        text = t('location.map_overview', lang)
+        await update.message.reply_text(text, reply_markup=_build_map_route_keyboard(lang), parse_mode='HTML')
+        return
+    text = _build_route_map_text(route_key, player.get('location_id'), lang)
+    await update.message.reply_text(text, reply_markup=_build_map_route_keyboard(lang), parse_mode='HTML')
+
+
+async def go_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    player = get_player(update.effective_user.id)
+    lang = player['lang'] if player else 'ru'
+    if not player:
+        await update.message.reply_text(t('common.no_character', lang))
+        return
+    loc_arg = _parse_go_location_arg(update.message.text or '')
+    if not loc_arg:
+        await update.message.reply_text(t('location.not_found', lang))
+        return
+    adapted_update = SimpleNamespace(callback_query=_MessageActionQueryAdapter(update=update, callback_data=f'goto_{loc_arg}'))
+    await handle_location_buttons(adapted_update, context)
 
 async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -1052,8 +1228,22 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         return
 
     user = query.from_user
-    p    = get_player(user.id)
+    p = get_player(user.id)
     lang = p['lang'] if p else 'ru'
+
+    if data.startswith('map_route_'):
+        if not p:
+            await query.answer(t('common.no_character', lang), show_alert=True)
+            return
+        route_key = data.replace('map_route_', '', 1)
+        text = _build_route_map_text(route_key, p.get('location_id'), lang)
+        try:
+            await query.edit_message_text(text, reply_markup=_build_map_route_keyboard(lang), parse_mode='HTML')
+        except BadRequest as exc:
+            if 'message is not modified' not in str(exc).lower():
+                raise
+        await query.answer()
+        return
 
     if p and has_active_live_pvp_engagement(int(user.id)) and not data.startswith('pvp_'):
         await query.answer(t('location.pvp_context_block', lang), show_alert=True)
@@ -1614,32 +1804,36 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             return
 
         current_location_id = str(p['location_id'] or '')
-        allowed_neighbors = set(get_location_neighbors(current_location_id))
+        canonical_current_location_id = resolve_location_id(current_location_id)
         canonical_new_loc_id = resolve_location_id(raw_new_loc_id)
+        if canonical_new_loc_id == canonical_current_location_id:
+            await query.answer(t('location.already_here', lang), show_alert=True)
+            return
+        allowed_neighbors = set(get_location_neighbors(current_location_id))
         allowed_canonical_neighbors = {resolve_location_id(location_id) for location_id in allowed_neighbors}
-        if raw_new_loc_id not in allowed_neighbors and canonical_new_loc_id not in allowed_canonical_neighbors:
-            await query.answer(t('location.not_found', lang), show_alert=True)
-            return
 
-        if not new_loc['safe'] and p['level'] < new_loc['level_min']:
-            await query.answer(
-                t('location.level_required', lang, level=new_loc['level_min']),
-                show_alert=True
-            )
-            return
+        route_path = []
+        travel_seconds = GO_TRAVEL_SECONDS
+        if raw_new_loc_id not in allowed_neighbors and canonical_new_loc_id not in allowed_canonical_neighbors:
+            if not is_location_discovered(int(user.id), canonical_new_loc_id):
+                await query.answer(t('location.long_route_unknown', lang), show_alert=True)
+                return
+            route_path = _find_canonical_path(current_location_id, canonical_new_loc_id)
+            if len(route_path) < 2:
+                await query.answer(t('location.not_found', lang), show_alert=True)
+                return
+            travel_seconds = (len(route_path) - 1) * GO_TRAVEL_SECONDS * LONG_ROUTE_MULTIPLIER
 
         await query.answer()
-
-        # Сообщение о переходе
         await query.edit_message_text(
             t('location.traveling', lang,
                 name=get_location_name(canonical_new_loc_id, lang),
-                seconds=15,
+                seconds=travel_seconds,
                 description=get_location_desc(canonical_new_loc_id, lang).lower()),
             parse_mode='HTML'
         )
 
-        await asyncio.sleep(15)
+        await asyncio.sleep(travel_seconds)
 
         if is_pvp_mobility_blocked(int(user.id)):
             await query.edit_message_text(t('location.pvp_mobility_block', lang), parse_mode='HTML')
@@ -1800,3 +1994,13 @@ async def handle_combat_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
 print('✅ handlers/location.py создан!')
+
+
+async def handle_underscore_navigation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (update.message.text or '').strip().lower() if update.message else ''
+    if text.startswith('/map_'):
+        await map_command(update, context)
+        return
+    if text.startswith('/go_'):
+        await go_command(update, context)
+        return
