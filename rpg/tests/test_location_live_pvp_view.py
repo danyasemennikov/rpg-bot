@@ -67,7 +67,10 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
         ):
             await location_command(update, context=context)
 
-        update.message.reply_text.assert_awaited_once_with('ok', reply_markup=None, parse_mode='HTML')
+        update.message.reply_text.assert_awaited_once()
+        self.assertEqual(update.message.reply_text.await_args.args[0], 'ok')
+        self.assertEqual(update.message.reply_text.await_args.kwargs.get('parse_mode'), 'HTML')
+        self.assertIsNotNone(update.message.reply_text.await_args.kwargs.get('reply_markup'))
 
     async def test_location_command_keeps_non_pvp_battle_block(self):
         update = _FakeUpdate(12345)

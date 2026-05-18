@@ -269,6 +269,8 @@ STRINGS = {
         'spawn_profile_rare': '[Raro]',
         'actions_hint': 'Envía un comando con marcador de snapshot {snapshot} (ejemplo: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ Esta acción de ubicación está desactualizada. Actualiza con /location.',
+        'lower_travel_stale': '⏳ Este botón de viaje está desactualizado para tu ubicación actual. Abre /location.',
+        'lower_menu_sync_hint': '🧭 Botones de viaje actualizados para tu ubicación actual.',
         'pve_join_success': '✅ Te uniste al encuentro.',
         'pve_join_already': 'ℹ️ Ya estás en este encuentro.',
         'pve_join_locked': '⛔ Este encuentro ya está bloqueado.',

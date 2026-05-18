@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 from game.locations import get_location
 from handlers.location import (
     LOCATION_ACTION_SNAPSHOT_KEY,
+    _build_contextual_lower_menu_keyboard,
     _build_location_message_with_snapshot,
     build_location_message,
     build_shop_message,
@@ -26,6 +27,23 @@ class _DummyUpdate:
 
 
 class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
+    def test_contextual_lower_menu_includes_neighbors_and_baseline_rows(self):
+        player = {'telegram_id': 5001, 'lang': 'en', 'location_id': 'capital_city'}
+        keyboard = _build_contextual_lower_menu_keyboard(player, 'en')
+        rows = [[button.text for button in row] for row in keyboard.keyboard]
+        self.assertTrue(rows[0][0].startswith('🧭 '))
+        self.assertIn('📍 Location', rows[1])
+        self.assertIn('🗺️ Map', rows[1])
+        self.assertIn('🎒 Inventory', rows[2])
+        self.assertIn('👤 Profile', rows[2])
+
+    def test_contextual_lower_menu_skips_invalid_neighbors(self):
+        player = {'telegram_id': 5001, 'lang': 'en', 'location_id': 'capital_city'}
+        with patch('handlers.location.get_location_neighbors', return_value=['westwild_n1', 'missing_loc']):
+            keyboard = _build_contextual_lower_menu_keyboard(player, 'en')
+        top_row = [button.text for button in keyboard.keyboard[0]]
+        self.assertEqual(len(top_row), 1)
+
     def test_shop_message_title_is_truthful_for_village(self):
         player = {'telegram_id': 5001, 'lang': 'en', 'level': 10}
         location = get_location('village')
@@ -192,7 +210,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('s1 sv2 quests', snapshot['actions'])
         self.assertNotIn('inn', ' '.join(snapshot['actions'].keys()))
 
-    def test_bottom_keyboard_keeps_only_gather_and_travel_buttons(self):
+    def test_bottom_keyboard_keeps_only_gather_button_after_inline_travel_removal(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -225,7 +243,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         callback_rows = [[button.callback_data for button in row] for row in keyboard.inline_keyboard]
         flat_callbacks = [callback for row in callback_rows for callback in row]
         self.assertIn('gather', flat_callbacks)
-        self.assertIn('goto_dark_forest', flat_callbacks)
+        self.assertNotIn('goto_dark_forest', flat_callbacks)
         self.assertNotIn('shop', flat_callbacks)
 
     def test_snapshot_builder_initializes_missing_context_user_data(self):
@@ -590,6 +608,27 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('m1', text)
         self.assertIn('m2', text)
         self.assertNotEqual(snapshot['actions'].get('s1 m1 fight'), snapshot['actions'].get('s1 m2 fight'))
+
+    async def test_lower_menu_travel_text_routes_into_shared_goto_flow(self):
+        update = _DummyUpdate('🧭 🌲 Westwild Wilds')
+        context = SimpleNamespace(user_data={})
+        with (
+            patch('handlers.location.get_player', return_value={'telegram_id': 5001, 'lang': 'en', 'location_id': 'capital_city'}),
+            patch('handlers.location.get_location_neighbors', return_value=['westwild_n1']),
+            patch('handlers.location.get_location_name', return_value='🌲 Westwild Wilds'),
+            patch('handlers.location.handle_location_buttons', new=AsyncMock()) as goto_mock,
+        ):
+            handled = await handle_location_action_text(update, context)
+        self.assertTrue(handled)
+        self.assertEqual(goto_mock.await_args.args[0].callback_query.data, 'goto_westwild_n1')
+
+    async def test_stale_lower_menu_travel_text_is_rejected(self):
+        update = _DummyUpdate('🧭 Old Route')
+        context = SimpleNamespace(user_data={})
+        with patch('handlers.location.get_player', return_value={'telegram_id': 5001, 'lang': 'en', 'location_id': 'capital_city'}):
+            handled = await handle_location_action_text(update, context)
+        self.assertTrue(handled)
+        update.message.reply_text.assert_awaited()
 
 
 if __name__ == '__main__':

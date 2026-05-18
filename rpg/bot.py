@@ -130,6 +130,7 @@ def main():
 
     # Кнопки клавиатуры — матчим по emoji (работает на всех языках)
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📍"), location_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🗺️"), map_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^👤"), profile_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊"), stats_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^❓"), help_command))

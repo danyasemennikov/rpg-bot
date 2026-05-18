@@ -6,7 +6,7 @@ import sys, random, asyncio, re
 from types import SimpleNamespace
 sys.path.append('/content/rpg_bot')
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from database import (
@@ -168,6 +168,7 @@ MAP_BRANCHES = [
 ]
 GO_TRAVEL_SECONDS = 15
 LONG_ROUTE_MULTIPLIER = 3
+LOWER_TRAVEL_PREFIX = '🧭 '
 
 ROUTE_DISPLAY_TREES = {
     'westwild': {
@@ -255,6 +256,46 @@ def _build_map_route_keyboard(lang: str) -> InlineKeyboardMarkup:
     for route_key, emoji in MAP_BRANCHES:
         rows.append([InlineKeyboardButton(f"{emoji} {t('location.map_route_'+route_key, lang)}", callback_data=f"map_route_{route_key}")])
     return InlineKeyboardMarkup(rows)
+
+
+def _build_baseline_lower_menu_rows(lang: str) -> list[list[KeyboardButton]]:
+    return [
+        [KeyboardButton(t('keyboard.location', lang)), KeyboardButton(t('keyboard.map', lang))],
+        [KeyboardButton(t('keyboard.inventory', lang)), KeyboardButton(t('keyboard.profile', lang))],
+        [KeyboardButton(t('keyboard.skills', lang)), KeyboardButton(t('keyboard.stats', lang))],
+        [KeyboardButton(t('keyboard.settings', lang)), KeyboardButton(t('keyboard.help', lang))],
+    ]
+
+
+def _build_contextual_lower_menu_keyboard(player: dict, lang: str) -> ReplyKeyboardMarkup:
+    location_id = resolve_location_id(player.get('location_id'))
+    rows: list[list[KeyboardButton]] = []
+    travel_row: list[KeyboardButton] = []
+    for neighbor_id in get_location_neighbors(location_id):
+        neighbor = get_location(neighbor_id)
+        if not neighbor:
+            continue
+        label = f"{LOWER_TRAVEL_PREFIX}{get_location_name(resolve_location_id(neighbor['id']), lang)}"
+        travel_row.append(KeyboardButton(label))
+    if travel_row:
+        rows.append(travel_row)
+    rows.extend(_build_baseline_lower_menu_rows(lang))
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
+
+
+def _resolve_lower_menu_travel_target(raw_text: str, player: dict, lang: str) -> tuple[str | None, bool]:
+    normalized = (raw_text or '').strip()
+    if not normalized.startswith(LOWER_TRAVEL_PREFIX):
+        return None, False
+    target_name = normalized[len(LOWER_TRAVEL_PREFIX):].strip()
+    if not target_name:
+        return None, True
+    current_location_id = resolve_location_id(player.get('location_id'))
+    for neighbor_id in get_location_neighbors(current_location_id):
+        canonical_neighbor_id = resolve_location_id(neighbor_id)
+        if target_name == get_location_name(canonical_neighbor_id, lang):
+            return canonical_neighbor_id, True
+    return None, True
 
 
 def _build_route_map_text(route_key: str, player_location_id: str | None, lang: str) -> str:
@@ -986,17 +1027,6 @@ def build_location_message(
         )])
         text += "\n"
 
-    # ── Переходы в другие локации ──
-    connected = get_connected_locations(location['id'])
-    if connected and not pvp_only_view:
-        text += t('location.travel_title', lang) + '\n'
-        nav_buttons = []
-        for conn_loc in connected:
-            label = t('location.go_to_btn', lang, name=get_location_name(conn_loc['id'], lang))
-            cb    = f"goto_{conn_loc['id']}"
-            nav_buttons.append(InlineKeyboardButton(label, callback_data=cb))
-        keyboard.append(nav_buttons)
-
     if players_nearby_lines:
         text += t('location.players_nearby', lang) + '\n'
         text += '\n'.join(players_nearby_lines) + '\n\n'
@@ -1073,7 +1103,11 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         location,
         pvp_only_view=in_live_pvp,
     )
-    msg = await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await update.message.reply_text(
+        text,
+        reply_markup=_build_contextual_lower_menu_keyboard(dict(p), lang),
+        parse_mode='HTML',
+    )
 
 
 def _build_location_message_with_snapshot(
@@ -1180,13 +1214,27 @@ class _MessageActionQueryAdapter:
 async def handle_location_action_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     if not update.message or not update.message.text:
         return False
+    player = get_player(update.effective_user.id)
+    lang = player['lang'] if player else 'ru'
+    if player:
+        target_location_id, is_travel_button = _resolve_lower_menu_travel_target(update.message.text, dict(player), lang)
+        if is_travel_button:
+            if not target_location_id:
+                await update.message.reply_text(t('location.lower_travel_stale', lang))
+                return True
+            adapted_update = SimpleNamespace(
+                callback_query=_MessageActionQueryAdapter(
+                    update=update,
+                    callback_data=f'goto_{target_location_id}',
+                )
+            )
+            await handle_location_buttons(adapted_update, context)
+            return True
+
     raw_text = update.message.text.strip().lower()
     token_match = _TOKEN_COMMAND_RE.match(raw_text)
     if not token_match:
         return False
-
-    player = get_player(update.effective_user.id)
-    lang = player['lang'] if player else 'ru'
     if not player:
         await update.message.reply_text(t('common.no_character', lang))
         return True
@@ -1856,6 +1904,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         p = dict(get_player(user.id))
         text, keyboard = _build_location_message_with_snapshot(context, p, new_loc)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        if getattr(context, 'bot', None):
+            await context.bot.send_message(
+                chat_id=user.id,
+                text=t('location.lower_menu_sync_hint', lang),
+                reply_markup=_build_contextual_lower_menu_keyboard(p, lang),
+            )
 
         if not new_loc['safe']:
             context.application.create_task(

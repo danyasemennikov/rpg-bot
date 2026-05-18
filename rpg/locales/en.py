@@ -85,6 +85,7 @@ STRINGS = {
         'stats':        '📊 Stats',
         'help':         '❓ Help',
         'settings':     '⚙️ Settings',
+        'map':          '🗺️ Map',
     },
     'location': {
         'title':        '📍 <b>{name}</b>',
@@ -270,6 +271,8 @@ STRINGS = {
         'spawn_profile_rare': '[Rare]',
         'actions_hint': 'Send a command with snapshot marker {snapshot} (example: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ This location action is stale. Refresh with /location.',
+        'lower_travel_stale': '⏳ This travel button is stale for your current location. Open /location.',
+        'lower_menu_sync_hint': '🧭 Travel buttons updated for your current location.',
         'pve_join_success': '✅ You joined this encounter.',
         'pve_join_already': 'ℹ️ You are already in this encounter.',
         'pve_join_locked': '⛔ This encounter is already locked.',
