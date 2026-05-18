@@ -1123,7 +1123,8 @@ async def go_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not loc_arg:
         await update.message.reply_text(t('location.not_found', lang))
         return
-    adapted_update = SimpleNamespace(callback_query=_MessageActionQueryAdapter(update=update, callback_data=f'goto_{loc_arg}'))
+    canonical_loc_arg = resolve_location_id(loc_arg)
+    adapted_update = SimpleNamespace(callback_query=_MessageActionQueryAdapter(update=update, callback_data=f'goto_{canonical_loc_arg}'))
     await handle_location_buttons(adapted_update, context)
 
 async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
