@@ -66,6 +66,54 @@ class CallbackAndRoutingTests(unittest.IsolatedAsyncioTestCase):
         go_mock.assert_awaited_once()
 
 
+class GoCommandCanonicalizationTests(unittest.IsolatedAsyncioTestCase):
+
+    async def test_go_command_canonicalizes_dark_forest_before_goto(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='/go dark_forest', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'ru', 'location_id': 'capital_city'}), \
+             patch('handlers.location.handle_location_buttons', new=AsyncMock()) as handle_mock:
+            from handlers.location import go_command
+            await go_command(update, context)
+
+        adapted_update = handle_mock.await_args.args[0]
+        self.assertEqual(adapted_update.callback_query.data, 'goto_westwild_n7')
+
+    async def test_go_command_canonicalizes_village_before_goto(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='/go village', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'ru', 'location_id': 'capital_city'}), \
+             patch('handlers.location.handle_location_buttons', new=AsyncMock()) as handle_mock:
+            from handlers.location import go_command
+            await go_command(update, context)
+
+        adapted_update = handle_mock.await_args.args[0]
+        self.assertEqual(adapted_update.callback_query.data, 'goto_hub_westwild')
+
+    async def test_go_command_keeps_canonical_target_unchanged(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='/go westwild_n7', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'ru', 'location_id': 'capital_city'}), \
+             patch('handlers.location.handle_location_buttons', new=AsyncMock()) as handle_mock:
+            from handlers.location import go_command
+            await go_command(update, context)
+
+        adapted_update = handle_mock.await_args.args[0]
+        self.assertEqual(adapted_update.callback_query.data, 'goto_westwild_n7')
+
+
 class LongRouteGuardTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_go_current_location_returns_already_here(self):
