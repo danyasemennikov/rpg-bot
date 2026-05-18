@@ -18,6 +18,9 @@ from handlers.location import (
     handle_location_buttons,
     handle_combat_buttons,
     handle_location_action_text,
+    map_command,
+    go_command,
+    handle_underscore_navigation_command,
 )
 from handlers.battle   import handle_battle_buttons
 from handlers.inventory import inventory_command, handle_inventory_buttons, handle_transfer_input
@@ -104,6 +107,8 @@ def main():
     app.add_handler(CommandHandler('help',     help_command))
     app.add_handler(CommandHandler('profile',  profile_command))
     app.add_handler(CommandHandler('location', location_command))
+    app.add_handler(CommandHandler('map', map_command))
+    app.add_handler(CommandHandler('go', go_command))
     app.add_handler(CommandHandler('pvp',      pvp_command))
     app.add_handler(CommandHandler('stats',    stats_command))
     app.add_handler(CommandHandler('unstuck',  unstuck_command))
@@ -113,13 +118,15 @@ def main():
 
     # Колбэки
     app.add_handler(CallbackQueryHandler(handle_stat_buttons,     pattern='^stat_'))
-    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern='^(goto_|noop|shop$|shop_back$|shop_buy_|pvp_)'))
+    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern='^(goto_|map_route_|noop|shop$|shop_back$|shop_buy_|pvp_)'))
     app.add_handler(CallbackQueryHandler(handle_combat_buttons,   pattern='^(fight_|flee_)'))
     app.add_handler(CallbackQueryHandler(handle_battle_buttons,   pattern='^battle_'))
     app.add_handler(CallbackQueryHandler(handle_stats_buttons,    pattern='^sp_'))
     app.add_handler(CallbackQueryHandler(handle_inventory_buttons, pattern='^inv_'))
     app.add_handler(CallbackQueryHandler(handle_skills_buttons, pattern='^sk_'))
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
+
+    app.add_handler(MessageHandler(filters.COMMAND & filters.Regex(r'^/(map|go)_[a-z0-9_]+(?:@\w+)?$'), handle_underscore_navigation_command))
 
     # Кнопки клавиатуры — матчим по emoji (работает на всех языках)
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📍"), location_command))
