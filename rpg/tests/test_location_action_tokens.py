@@ -192,7 +192,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('s1 sv2 quests', snapshot['actions'])
         self.assertNotIn('inn', ' '.join(snapshot['actions'].keys()))
 
-    def test_location_inline_keyboard_keeps_gather_but_removes_ordinary_travel(self):
+    def test_location_inline_keyboard_removes_gather_and_ordinary_travel(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -224,7 +224,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
 
         callback_rows = [[button.callback_data for button in row] for row in keyboard.inline_keyboard]
         flat_callbacks = [callback for row in callback_rows for callback in row]
-        self.assertIn('gather', flat_callbacks)
+        self.assertNotIn('gather', flat_callbacks)
         self.assertFalse([callback for callback in flat_callbacks if callback.startswith('goto_')])
         self.assertNotIn('shop', flat_callbacks)
         self.assertNotIn('Travel to:', _text)

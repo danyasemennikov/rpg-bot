@@ -19,6 +19,7 @@ from handlers.location import (
     handle_combat_buttons,
     handle_location_action_text,
     handle_lower_menu_travel_text,
+    handle_lower_menu_gather_text,
     map_command,
     go_command,
     handle_underscore_navigation_command,
@@ -61,6 +62,8 @@ async def handle_text(update, context):
         await map_command(update, context)
         return
     if await handle_lower_menu_travel_text(update, context):
+        return
+    if await handle_lower_menu_gather_text(update, context):
         return
     if await handle_location_action_text(update, context):
         return

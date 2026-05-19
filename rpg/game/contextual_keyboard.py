@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from telegram import ReplyKeyboardMarkup
 
-from game.i18n import get_location_name, t
+from game.i18n import SUPPORTED_LANGS, get_location_name, t
+from game.gathering_foundation import build_location_gather_source_profiles
 from game.locations import get_location, get_location_neighbors, resolve_location_id
 
 LOWER_TRAVEL_PREFIX = '🧭 '
@@ -42,12 +43,62 @@ def get_contextual_travel_targets(current_location_id: str | None) -> list[str]:
     return targets
 
 
+
+
+_GATHER_PROFESSION_ORDER = (
+    ('herbalism', 'keyboard.gather_herbalism'),
+    ('woodcutting', 'keyboard.gather_woodcutting'),
+    ('mining', 'keyboard.gather_mining'),
+    ('fishing', 'keyboard.gather_fishing'),
+)
+
+
+def _build_contextual_gather_rows(current_location_id: str | None, lang: str) -> list[list[str]]:
+    canonical_location_id = resolve_location_id(str(current_location_id or ''))
+    profiles = build_location_gather_source_profiles(canonical_location_id)
+    available = {profile.profession_key for profile in profiles}
+    labels = [t(locale_key, lang) for profession, locale_key in _GATHER_PROFESSION_ORDER if profession in available]
+    rows: list[list[str]] = []
+    for index in range(0, len(labels), 2):
+        rows.append(labels[index:index + 2])
+    return rows
+
+
+def _resolve_gather_profession_from_label(text: str, preferred_lang: str) -> str | None:
+    languages = [preferred_lang] + [lang for lang in SUPPORTED_LANGS if lang != preferred_lang]
+    for lang in languages:
+        for profession, locale_key in _GATHER_PROFESSION_ORDER:
+            if text == t(locale_key, lang):
+                return profession
+    return None
+
+
+def looks_like_lower_gather_button(text: str) -> bool:
+    normalized_text = str(text or '').strip()
+    if not normalized_text:
+        return False
+    return _resolve_gather_profession_from_label(normalized_text, 'ru') is not None
+
+
+def resolve_lower_gather_profession_button(text: str, player: dict, lang: str) -> str | None:
+    normalized_text = str(text or '').strip()
+    if not normalized_text:
+        return None
+    matched_profession = _resolve_gather_profession_from_label(normalized_text, lang)
+    if matched_profession is None:
+        return None
+    current_profiles = build_location_gather_source_profiles(resolve_location_id(str(player.get('location_id') or '')))
+    if any(profile.profession_key == matched_profession for profile in current_profiles):
+        return matched_profession
+    return ''
+
 def build_contextual_main_keyboard(player: dict | None = None, lang: str = 'ru') -> ReplyKeyboardMarkup:
     """Build the persistent lower menu, with contextual travel rows first."""
     rows: list[list[str]] = []
     if player:
         for target_id in get_contextual_travel_targets(player.get('location_id')):
             rows.append([build_lower_travel_label(target_id, lang)])
+        rows.extend(_build_contextual_gather_rows(player.get('location_id'), lang))
     rows.extend(_baseline_keyboard_rows(lang))
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 

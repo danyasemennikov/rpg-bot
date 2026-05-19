@@ -96,6 +96,10 @@ STRINGS = {
         'help':         '❓ Помощь',
         'settings':     '⚙️ Настройки',
         'sync_updated': '⌨️ Нижнее меню обновлено.',
+        'gather_herbalism': '🌿 Собирать',
+        'gather_woodcutting': '🪵 Рубить',
+        'gather_mining': '⛏️ Добывать',
+        'gather_fishing': '🎣 Рыбачить',
     },
 
     # ── ЛОКАЦИИ ─────────────────────────────────────────────
@@ -283,6 +287,9 @@ STRINGS = {
         'spawn_profile_rare': '[Редкий]',
         'actions_hint': 'Отправь команду со snapshot-маркером {snapshot} (пример: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ Это действие локации устарело. Обнови /location.',
+        'lower_gather_stale': '⏳ Это действие сбора больше недоступно в текущей локации. Обнови /location.',
+        'gather_success': '✅ Ты добыл: {item}.',
+        'gather_fail': '❌ В этот раз не удалось найти подходящие ресурсы.',
         'lower_travel_stale': '⏳ Этот переход больше недоступен из текущей локации. Обнови /location.',
         'pve_join_success': '✅ Вы присоединились к схватке.',
         'pve_join_already': 'ℹ️ Вы уже участник этой схватки.',
