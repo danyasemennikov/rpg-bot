@@ -1262,6 +1262,7 @@ SKILLS = {
         'level_bonus':    0.11,
         'hits':           2,
         'enemy_target_mode': 'pack_fanout',
+        'target_shape': 'all_enemies_in_small_pack',
     },
     'arcane_lance': {
         'id':             'arcane_lance',
