@@ -18,6 +18,7 @@ from game.pve_live import (
     lock_open_world_pve_roster_for_runtime_start,
     resolve_current_side_if_ready,
     submit_player_commit,
+    list_location_available_spawn_instances,
 )
 from database import get_connection
 from handlers.location import build_pve_encounter_detail_message
@@ -269,7 +270,14 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         self.assertTrue(flags[0].get('increment_turn'))
         self.assertTrue(flags[0].get('tick_player_post_action_buffs'))
 
+
+
+    @staticmethod
+    def _ensure_westwild_wolf_spawns_materialized():
+        list_location_available_spawn_instances(location_id='westwild_n7')
+
     def test_pack_claim_links_all_same_group_spawns_under_one_encounter(self):
+        self._ensure_westwild_wolf_spawns_materialized()
         player_id = 9101
         conn = get_connection()
         conn.execute(
@@ -299,6 +307,7 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         self.assertTrue(all(str(r['linked_encounter_id']) == str(encounter_id) for r in rows))
 
     def test_pack_claim_requires_explicit_anchor_spawn_still_idle_and_unlinked(self):
+        self._ensure_westwild_wolf_spawns_materialized()
         player_id = 9103
         conn = get_connection()
         conn.execute(
@@ -336,20 +345,24 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         self.assertEqual(len(sibling_rows), 0)
 
     def test_pack_claim_helper_rejects_group_claim_when_required_anchor_is_no_longer_claimable(self):
+        self._ensure_westwild_wolf_spawns_materialized()
         conn = get_connection()
-        conn.execute(
-            "UPDATE pve_spawn_instances SET state='idle', linked_encounter_id=NULL, respawn_available_at=NULL WHERE location_id='westwild_n7' AND mob_id='forest_wolf'"
-        )
-        anchor_row = conn.execute(
-            "SELECT spawn_instance_id FROM pve_spawn_instances WHERE location_id='westwild_n7' AND mob_id='forest_wolf' ORDER BY spawn_instance_id ASC LIMIT 1"
-        ).fetchone()
-        anchor_spawn_id = str(anchor_row['spawn_instance_id'])
-        conn.execute(
-            "UPDATE pve_spawn_instances SET state='forming', linked_encounter_id='pve-enc-busy-anchor' WHERE spawn_instance_id=?",
-            (anchor_spawn_id,),
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                "UPDATE pve_spawn_instances SET state='idle', linked_encounter_id=NULL, respawn_available_at=NULL WHERE location_id='westwild_n7' AND mob_id='forest_wolf'"
+            )
+            anchor_row = conn.execute(
+                "SELECT spawn_instance_id FROM pve_spawn_instances WHERE location_id='westwild_n7' AND mob_id='forest_wolf' ORDER BY spawn_instance_id ASC LIMIT 1"
+            ).fetchone()
+            self.assertIsNotNone(anchor_row)
+            anchor_spawn_id = str(anchor_row['spawn_instance_id'])
+            conn.execute(
+                "UPDATE pve_spawn_instances SET state='forming', linked_encounter_id='pve-enc-busy-anchor' WHERE spawn_instance_id=?",
+                (anchor_spawn_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
         claimed = _claim_spawn_pack_for_encounter(
             encounter_id='pve-enc-should-not-claim',
@@ -373,6 +386,7 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         self.assertTrue(all(row['linked_encounter_id'] is None for row in sibling_rows))
 
     def test_pack_lock_runtime_start_transitions_all_linked_forming_rows_to_active(self):
+        self._ensure_westwild_wolf_spawns_materialized()
         player_id = 9102
         conn = get_connection()
         conn.execute(
