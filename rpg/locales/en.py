@@ -370,6 +370,7 @@ STRINGS = {
         'mob_miss_slow': '🧊 {mob_name} is slowed and misses the attack!',
         'player_dodge': '🌀 You dodge the attack!',
         'mob_dodge':    '🌀 {mob_name} dodges!',
+        'pack_fanout_skill_targets_hit': '💥 {skill_name} hits {count} enemies.',
         'stunned':      '💫 {mob_name} is stunned and skips a turn!',
         'potion_heal':  '❤️ +{amount} HP',
         'potion_mana':  ' 🔵 +{amount} mana',

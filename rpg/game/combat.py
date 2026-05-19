@@ -25,7 +25,7 @@ from game.balance import (
     get_enemy_evasion_rating,
     resolve_hit_check,
 )
-from game.i18n import t, get_mob_name
+from game.i18n import t, get_mob_name, get_skill_name
 from game.skills import get_skill
 from game.skill_engine import (
     apply_mob_effects,
@@ -645,6 +645,99 @@ def resolve_enemy_targeted_direct_damage_skill_action(
     return {'handled': True, 'is_hit': True, 'hit_check': hit_check}
 
 
+def resolve_pack_fanout_direct_damage_skill_action(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    skill_result: dict,
+    *,
+    lang: str = 'ru',
+) -> dict:
+    """Resolve explicit pack-fanout direct-damage skill against all living enemy units."""
+    enemy_units = list(battle_state.get('enemy_units') or [])
+    if not enemy_units:
+        return {'handled': False}
+
+    skill_def = get_skill(skill_result.get('skill_id', '')) or {}
+    if skill_def.get('enemy_target_mode') != 'pack_fanout':
+        return {'handled': False}
+    if not skill_result.get('direct_damage_skill'):
+        return {'handled': False}
+    if skill_result.get('target_kind') != 'enemy':
+        return {'handled': False}
+
+    active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
+    alive_indexes = [idx for idx, unit in enumerate(enemy_units) if not bool(unit.get('dead'))]
+    if not alive_indexes:
+        return {'handled': False}
+
+    base_damage = int(skill_result.get('damage', 0) or 0)
+    per_target_results = []
+    targets_hit = 0
+    for idx in alive_indexes:
+        unit = enemy_units[idx]
+        battle_state['mob_hp'] = int(unit.get('hp', 0) or 0)
+        battle_state['mob_max_hp'] = int(unit.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
+        battle_state['mob_effects'] = list(unit.get('mob_effects') or [])
+        battle_state['active_enemy_unit_id'] = unit.get('unit_id')
+
+        per_target_skill_result = dict(skill_result)
+        per_target_skill_result['damage'] = base_damage
+        per_target_skill_result['effects'] = list(skill_result.get('effects') or [])
+        gate_result = resolve_enemy_targeted_direct_damage_skill_action(
+            player, mob, battle_state, per_target_skill_result, lang=lang
+        )
+
+        unit['hp'] = max(0, int(battle_state.get('mob_hp', 0) or 0))
+        unit['dead'] = unit['hp'] <= 0
+        unit['mob_effects'] = list(battle_state.get('mob_effects') or [])
+        enemy_units[idx] = unit
+        battle_state['enemy_units'] = enemy_units
+
+        target_damage = int(per_target_skill_result.get('damage', 0) or 0)
+        if target_damage > 0:
+            targets_hit += 1
+        per_target_results.append({
+            'unit_id': str(unit.get('unit_id', '')),
+            'is_hit': bool(gate_result.get('is_hit')),
+            'damage': target_damage,
+            'mob_dead': bool(unit.get('dead')),
+            'hit_check': per_target_skill_result.get('direct_damage_result', {}).get('hit_check'),
+        })
+
+    living_after = [u for u in enemy_units if not bool(u.get('dead'))]
+    preferred_active = next((u for u in living_after if str(u.get('unit_id')) == active_id_before), None)
+    active_after = preferred_active or (living_after[0] if living_after else None)
+    if active_after is None:
+        battle_state['mob_dead'] = True
+        battle_state['mob_hp'] = 0
+        battle_state['mob_effects'] = []
+    else:
+        battle_state['active_enemy_unit_id'] = active_after.get('unit_id')
+        battle_state['mob_hp'] = int(active_after.get('hp', 0) or 0)
+        battle_state['mob_max_hp'] = int(active_after.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
+        battle_state['mob_effects'] = list(active_after.get('mob_effects') or [])
+        battle_state['mob_dead'] = False
+
+    summary = t(
+        'battle.pack_fanout_skill_targets_hit',
+        lang,
+        skill_name=get_skill_name(str(skill_result.get('skill_id') or ''), lang),
+        count=targets_hit,
+    )
+    skill_result['log'] = summary
+    skill_result['damage'] = int(sum(int(item.get('damage', 0) or 0) for item in per_target_results))
+    skill_result['effects'] = []
+    skill_result['direct_damage_result'] = {
+        'fanout': True,
+        'target_mode': 'pack_fanout',
+        'targets_total': len(alive_indexes),
+        'targets_hit': targets_hit,
+        'per_target': per_target_results,
+    }
+    return {'handled': True, 'targets_hit': targets_hit, 'targets_total': len(alive_indexes)}
+
+
 def build_guaranteed_hit_check() -> dict:
     """Стандартизованный hit_check для guaranteed-hit действий."""
     return {
@@ -904,13 +997,17 @@ def process_skill_turn(
 
     direct_damage = skill_result.get('damage', 0)
     if direct_damage > 0:
-        gate_result = resolve_enemy_targeted_direct_damage_skill_action(
-            player_state,
-            mob,
-            battle_state,
-            skill_result,
-            lang=lang,
+        gate_result = resolve_pack_fanout_direct_damage_skill_action(
+            player_state, mob, battle_state, skill_result, lang=lang
         )
+        if not gate_result.get('handled'):
+            gate_result = resolve_enemy_targeted_direct_damage_skill_action(
+                player_state,
+                mob,
+                battle_state,
+                skill_result,
+                lang=lang,
+            )
         if not gate_result.get('handled'):
             action_result = finalize_player_direct_damage_action(
                 battle_state,
