@@ -1241,12 +1241,37 @@ def _claim_spawn_pack_for_encounter(
     spawn_profile: str,
     special_spawn_key: str | None,
     special_spawn_name: str | None,
+    required_anchor_spawn_instance_id: str | None = None,
 ) -> list[str]:
     _ensure_world_spawn_table()
     ensure_location_pve_spawn_instances(location_id=location_id)
     conn = get_connection()
     conn.execute('BEGIN IMMEDIATE')
     try:
+        normalized_profile = _normalize_spawn_profile(spawn_profile)
+        normalized_special_key = str(special_spawn_key or '').strip()
+        normalized_special_name = str(special_spawn_name or '').strip()
+        required_anchor = str(required_anchor_spawn_instance_id or '').strip()
+        if required_anchor:
+            anchor_row = conn.execute(
+                '''
+                SELECT spawn_profile, special_spawn_key, special_spawn_name
+                FROM pve_spawn_instances
+                WHERE spawn_instance_id=?
+                  AND location_id=?
+                  AND mob_id=?
+                  AND state=?
+                  AND linked_encounter_id IS NULL
+                LIMIT 1
+                ''',
+                (required_anchor, location_id, mob_id, SPAWN_STATE_IDLE),
+            ).fetchone()
+            if not anchor_row:
+                conn.rollback()
+                return []
+            normalized_profile = _normalize_spawn_profile(anchor_row['spawn_profile'])
+            normalized_special_key = str(anchor_row['special_spawn_key'] or '').strip()
+            normalized_special_name = str(anchor_row['special_spawn_name'] or '').strip()
         rows = conn.execute(
             '''
             SELECT spawn_instance_id
@@ -1260,10 +1285,10 @@ def _claim_spawn_pack_for_encounter(
               AND linked_encounter_id IS NULL
             ORDER BY spawn_instance_id ASC
             ''',
-            (location_id, mob_id, _normalize_spawn_profile(spawn_profile), str(special_spawn_key or '').strip(), str(special_spawn_name or '').strip(), SPAWN_STATE_IDLE),
+            (location_id, mob_id, normalized_profile, normalized_special_key, normalized_special_name, SPAWN_STATE_IDLE),
         ).fetchall()
         spawn_ids = [str(row['spawn_instance_id']) for row in rows]
-        if not spawn_ids:
+        if not spawn_ids or (required_anchor and required_anchor not in spawn_ids):
             conn.rollback()
             return []
         placeholders = ','.join('?' for _ in spawn_ids)
@@ -1626,8 +1651,17 @@ def create_or_load_open_world_pve_encounter(
     if pack_claim_from_visible_group and spawn_instance_id and is_pack_enabled_mob(mob_id):
         conn = get_connection()
         group_row = conn.execute(
-            'SELECT spawn_profile, special_spawn_key, special_spawn_name FROM pve_spawn_instances WHERE spawn_instance_id=? LIMIT 1',
-            (str(spawn_instance_id),),
+            '''
+            SELECT spawn_profile, special_spawn_key, special_spawn_name
+            FROM pve_spawn_instances
+            WHERE spawn_instance_id=?
+              AND location_id=?
+              AND mob_id=?
+              AND state=?
+              AND linked_encounter_id IS NULL
+            LIMIT 1
+            ''',
+            (str(spawn_instance_id), location_id, mob_id, SPAWN_STATE_IDLE),
         ).fetchone()
         conn.close()
         if group_row:
@@ -1638,6 +1672,7 @@ def create_or_load_open_world_pve_encounter(
                 spawn_profile=str(group_row['spawn_profile'] or 'normal'),
                 special_spawn_key=group_row['special_spawn_key'],
                 special_spawn_name=group_row['special_spawn_name'],
+                required_anchor_spawn_instance_id=str(spawn_instance_id),
             )
     if not claimed_spawn_ids:
         claimed_spawn_id = _claim_spawn_instance_for_encounter(
