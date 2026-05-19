@@ -27,6 +27,7 @@ from game.contextual_keyboard import (
     resolve_lower_service_button,
 )
 from game.gathering_foundation import build_location_gather_source_profiles
+from game.resource_handbook import HANDBOOK_PROFESSIONS, build_resource_handbook_index
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
 from game.items_data import get_item
@@ -1309,6 +1310,48 @@ async def handle_location_action_text(update: Update, context: ContextTypes.DEFA
     return True
 
 
+
+def _can_open_craftsmen_guild(location: dict | None) -> bool:
+    if not location:
+        return False
+    return 'craftsmen_guild' in (location.get('services', []) or [])
+
+
+def build_craftsmen_guild_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
+    lang = str(player.get('lang') or 'ru')
+    text = t('location.craftsmen_guild_title', lang, place=get_location_name(str(location.get('id') or ''), lang))
+    text += '\n' + t('location.craftsmen_guild_body', lang)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t('location.craftsmen_handbook_btn', lang), callback_data='craftsmen_handbook')],
+        [InlineKeyboardButton(t('location.craftsmen_back_to_location_btn', lang), callback_data='craftsmen_back_to_location')],
+    ])
+    return text, keyboard
+
+
+def build_craftsmen_handbook_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
+    lang = str(player.get('lang') or 'ru')
+    rows = [
+        [InlineKeyboardButton(t(f'location.craftsmen_prof_{profession}_btn', lang), callback_data=f'craftsmen_handbook_{profession}')]
+        for profession in HANDBOOK_PROFESSIONS
+    ]
+    rows.append([InlineKeyboardButton(t('location.craftsmen_back_to_guild_btn', lang), callback_data='craftsmen_back_to_guild')])
+    return t('location.craftsmen_handbook_title', lang), InlineKeyboardMarkup(rows)
+
+
+def build_craftsmen_handbook_profession_page(player: dict, profession: str) -> tuple[str, InlineKeyboardMarkup]:
+    lang = str(player.get('lang') or 'ru')
+    entries = build_resource_handbook_index().get(profession, [])
+    lines = [t('location.craftsmen_handbook_profession_title', lang, profession=t(f'location.craftsmen_prof_{profession}', lang))]
+    if not entries:
+        lines.append(t('location.craftsmen_handbook_empty', lang))
+    for row in entries:
+        item_name = get_item_name(str(row['item_id']), lang)
+        location_names = ', '.join(get_location_name(location_id, lang) for location_id in row['location_ids'])
+        lines.append(f"• {item_name} — {location_names}")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(t('location.craftsmen_back_to_handbook_btn', lang), callback_data='craftsmen_handbook')]])
+    return '\n'.join(lines), kb
+
+
 # ────────────────────────────────────────
 # ПЕРЕХОД МЕЖДУ ЛОКАЦИЯМИ
 # ────────────────────────────────────────
@@ -1621,6 +1664,49 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
         )
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('craftsmen_'):
+        location = get_location(p['location_id'])
+        if not location:
+            await query.answer(t('location.not_found', lang), show_alert=True)
+            return
+        if not _can_open_craftsmen_guild(location):
+            await query.answer(t('location.craftsmen_guild_not_available', lang), show_alert=True)
+            return
+
+    if data == 'craftsmen_guild':
+        text, keyboard = build_craftsmen_guild_message(dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data == 'craftsmen_handbook':
+        text, keyboard = build_craftsmen_handbook_home(dict(p))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('craftsmen_handbook_'):
+        profession = data.replace('craftsmen_handbook_', '', 1)
+        if profession not in HANDBOOK_PROFESSIONS:
+            await query.answer()
+            return
+        text, keyboard = build_craftsmen_handbook_profession_page(dict(p), profession)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data == 'craftsmen_back_to_guild':
+        text, keyboard = build_craftsmen_guild_message(dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data == 'craftsmen_back_to_location':
+        text, keyboard = _build_location_message_with_snapshot(context, dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
         return
 
     if data == 'quest_board':

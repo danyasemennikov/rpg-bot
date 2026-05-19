@@ -131,7 +131,7 @@ def main():
 
     # Колбэки
     app.add_handler(CallbackQueryHandler(handle_stat_buttons,     pattern='^stat_'))
-    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern='^(goto_|map_route_|noop|shop$|shop_back$|shop_buy_|pvp_)'))
+    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern='^(goto_|map_route_|noop|shop$|shop_back$|shop_buy_|quest_board|inn|craftsmen_|pvp_)'))
     app.add_handler(CallbackQueryHandler(handle_combat_buttons,   pattern='^(fight_|flee_)'))
     app.add_handler(CallbackQueryHandler(handle_battle_buttons,   pattern='^battle_'))
     app.add_handler(CallbackQueryHandler(handle_stats_buttons,    pattern='^sp_'))
