@@ -219,7 +219,7 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
 
     def test_capital_city_has_starter_services_and_teleport_disabled(self):
         location = get_location('capital_city')
-        self.assertEqual(location.get('services'), ['shop', 'inn', 'quest_board'])
+        self.assertEqual(location.get('services'), ['shop', 'inn', 'quest_board', 'craftsmen_guild'])
         self.assertFalse(location.get('teleport_enabled'))
         self.assertIsNone(location.get('teleport_group'))
 

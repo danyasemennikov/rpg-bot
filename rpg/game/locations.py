@@ -463,7 +463,7 @@ WORLD_LOCATIONS['south_coast_shore'].update({
 })
 WORLD_LOCATIONS['capital_city'].update({
     'description': 'Столица королевства и главный безопасный узел дорог. Здесь можно отдохнуть, закупиться и взять первые задания.',
-    'services': ['shop', 'inn', 'quest_board'],
+    'services': ['shop', 'inn', 'quest_board', 'craftsmen_guild'],
     'region_flavor_tags': ['capital_services', 'starter_hub'],
 })
 WORLD_LOCATIONS['hub_westwild'].update({
@@ -472,7 +472,7 @@ WORLD_LOCATIONS['hub_westwild'].update({
     'region_id': 'ember_valley',
     'zone_id': 'ember_village',
     'description': 'Мирные поля и деревня на краю тёмного леса. Здесь можно отдохнуть, закупиться и взять квесты.',
-    'services': ['shop', 'inn', 'quest_board'],
+    'services': ['shop', 'inn', 'quest_board', 'craftsmen_guild'],
     'region_flavor_tags': ['civilized_frontier', 'ashen_farmland'],
 })
 WORLD_LOCATIONS['hub_frostspine'].update({
@@ -481,8 +481,17 @@ WORLD_LOCATIONS['hub_frostspine'].update({
     'region_id': 'iron_pass',
     'zone_id': 'frontier_outpost',
     'description': 'Укреплённая застава у шахтного тракта. Здесь перевязывают раны и берут местные контракты.',
-    'services': ['shop', 'inn', 'quest_board'],
+    'services': ['shop', 'inn', 'quest_board', 'craftsmen_guild'],
     'region_flavor_tags': ['mine_waystation', 'hunter_lodge'],
+})
+WORLD_LOCATIONS['hub_ashen_ruins'].update({
+    'services': ['craftsmen_guild'],
+})
+WORLD_LOCATIONS['hub_sunscar'].update({
+    'services': ['craftsmen_guild'],
+})
+WORLD_LOCATIONS['hub_mireveil'].update({
+    'services': ['craftsmen_guild'],
 })
 WORLD_LOCATIONS['westwild_n4'].update({
     'description': 'Светлая лиственная роща на переходе от лугов к лесу. Здесь уже встречаются волки и первые пауки.',

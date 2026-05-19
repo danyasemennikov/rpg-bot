@@ -55,6 +55,7 @@ _SERVICE_ORDER = (
     ('shop', 'keyboard.service_shop'),
     ('inn', 'keyboard.service_inn'),
     ('quest_board', 'keyboard.service_quest_board'),
+    ('craftsmen_guild', 'keyboard.service_craftsmen_guild'),
 )
 
 
