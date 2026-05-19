@@ -618,6 +618,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
 
     result = {
         'success': True,
+        'skill_id': skill_id,
         'damage':  0,
         'heal':    0,
         'log':     '',
