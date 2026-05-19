@@ -125,7 +125,7 @@ class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
         update.callback_query.answer.assert_awaited_once()
         update.callback_query.edit_message_text.assert_awaited_once()
         rendered = update.callback_query.edit_message_text.await_args.args[0]
-        self.assertIn('Quick actions', rendered)
+        self.assertNotIn('sv1 shop', rendered)
 
     def test_inn_message_title_is_location_aware_for_outpost(self):
         location = get_location('frontier_outpost')

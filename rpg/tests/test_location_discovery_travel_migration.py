@@ -213,9 +213,9 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([callback for callback in callbacks if callback.startswith('goto_')], [])
         self.assertNotIn('teleport', ''.join(callbacks))
         self.assertNotIn('Travel to:', text)
-        self.assertIn('s1 sv1 shop', text)
-        self.assertIn('s1 sv2 inn', text)
-        self.assertIn('s1 sv3 quests', text)
+        self.assertNotIn('s1 sv1 shop', text)
+        self.assertNotIn('s1 sv2 inn', text)
+        self.assertNotIn('s1 sv3 quests', text)
 
     def test_capital_city_has_starter_services_and_teleport_disabled(self):
         location = get_location('capital_city')

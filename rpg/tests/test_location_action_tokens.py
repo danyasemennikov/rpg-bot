@@ -42,7 +42,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Shop — 🏕️ Frontier Outpost', text)
         self.assertNotIn('Village vendor', text)
 
-    def test_frontier_outpost_exposes_shop_in_compact_service_commands(self):
+    def test_frontier_outpost_does_not_expose_service_snapshot_commands(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -72,12 +72,10 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             conn_mock.return_value.close.return_value = None
             text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
 
-        self.assertIn('sv1 shop', text)
-        self.assertIn('s1 sv1 shop', snapshot['actions'])
-        self.assertIn('s1 sv2 inn', snapshot['actions'])
-        self.assertIn('s1 sv3 quests', snapshot['actions'])
+        self.assertNotIn('sv1 shop', text)
+        self.assertFalse([k for k in snapshot['actions'] if ' sv' in k])
 
-    def test_shop_service_action_is_exposed_via_snapshot_text_command(self):
+    def test_shop_service_action_is_not_exposed_via_snapshot_text_command(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -106,11 +104,11 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             conn_mock.return_value.close.return_value = None
             text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
 
-        self.assertIn('sv1 shop', text)
-        self.assertEqual(snapshot['actions'].get('s1 sv1 shop'), 'shop')
+        self.assertNotIn('sv1 shop', text)
+        self.assertIsNone(snapshot['actions'].get('s1 sv1 shop'))
         self.assertNotIn('snapshot_id', snapshot)
 
-    def test_supported_services_are_exposed_and_unsupported_are_skipped(self):
+    def test_supported_services_are_not_present_in_snapshot_commands(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -147,12 +145,9 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             _text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
 
         service_commands = [cmd for cmd in snapshot['actions'] if re.search(r'\ssv\d+\s', cmd)]
-        self.assertEqual(service_commands, ['s1 sv1 shop', 's1 sv2 inn', 's1 sv3 quests'])
-        self.assertEqual(snapshot['actions']['s1 sv1 shop'], 'shop')
-        self.assertEqual(snapshot['actions']['s1 sv2 inn'], 'inn')
-        self.assertEqual(snapshot['actions']['s1 sv3 quests'], 'quest_board')
+        self.assertEqual(service_commands, [])
 
-    def test_inn_service_is_hidden_in_unsafe_location_even_if_listed(self):
+    def test_pve_and_mob_snapshot_actions_remain_intact_after_service_cleanup(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -163,14 +158,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             'max_mana': 50,
             'gold': 0,
         }
-        location = {
-            'id': 'dark_forest',
-            'safe': False,
-            'level_min': 1,
-            'level_max': 30,
-            'mobs': [],
-            'services': ['shop', 'inn', 'quest_board'],
-        }
+        location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
         with (
             patch('handlers.location.get_connection') as conn_mock,
             patch('handlers.location.get_connected_locations', return_value=[]),
@@ -179,18 +167,20 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.get_pending_player_engagement', return_value=None),
             patch('handlers.location.get_pending_reinforcement_engagement_for_player', return_value=None),
             patch('handlers.location.get_pending_location_encounters', return_value=[]),
-            patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
-            patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
+            patch('handlers.location.list_location_available_spawn_instances', return_value=[{'spawn_instance_id': 'spawn-1', 'mob_id': 'forest_wolf', 'spawn_profile': 'normal', 'special_spawn_key': '', 'special_spawn_name': ''}]),
+            patch('handlers.location.list_location_active_pve_encounters', return_value=[{'encounter_id': 'enc-1', 'mob_id': 'forest_wolf', 'spawn_profile': 'normal', 'participant_player_ids': [], 'participant_count': 0, 'joinable': True}]),
             patch('handlers.location.build_location_gather_source_profiles', return_value=[]),
             patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
+            patch('handlers.location.get_mob', return_value={'aggressive': False, 'level': 10}),
+            patch('handlers.location.can_join_open_world_pve_encounter', return_value=(True, None)),
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
             _text, _keyboard, snapshot = build_location_message(player, location, include_action_map=True)
 
-        self.assertIn('s1 sv1 shop', snapshot['actions'])
-        self.assertIn('s1 sv2 quests', snapshot['actions'])
-        self.assertNotIn('inn', ' '.join(snapshot['actions'].keys()))
+        self.assertIn('s1 pe1 view', snapshot['actions'])
+        self.assertIn('s1 pe1 join', snapshot['actions'])
+        self.assertIn('s1 m1 fight', snapshot['actions'])
 
     def test_location_inline_keyboard_removes_gather_and_ordinary_travel(self):
         player = {
@@ -490,7 +480,6 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
 
         commands = list(snapshot['actions'].keys())
         self.assertTrue(any(re.search(r'\sp1 attack$', cmd) for cmd in commands))
-        self.assertTrue(any(re.search(r'\ssv1 shop$', cmd) for cmd in commands))
         self.assertTrue(any(re.search(r'\sm1 fight$', cmd) for cmd in commands))
         self.assertTrue(any(re.search(r'\spv1 view$', cmd) for cmd in commands))
         self.assertTrue(any(re.search(r'\spe1 view$', cmd) for cmd in commands))

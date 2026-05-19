@@ -51,6 +51,11 @@ _GATHER_PROFESSION_ORDER = (
     ('mining', 'keyboard.gather_mining'),
     ('fishing', 'keyboard.gather_fishing'),
 )
+_SERVICE_ORDER = (
+    ('shop', 'keyboard.service_shop'),
+    ('inn', 'keyboard.service_inn'),
+    ('quest_board', 'keyboard.service_quest_board'),
+)
 
 
 def _build_contextual_gather_rows(current_location_id: str | None, lang: str) -> list[list[str]]:
@@ -70,6 +75,41 @@ def _resolve_gather_profession_from_label(text: str, preferred_lang: str) -> str
         for profession, locale_key in _GATHER_PROFESSION_ORDER:
             if text == t(locale_key, lang):
                 return profession
+    return None
+
+
+def _can_open_inn_in_location(location: dict | None) -> bool:
+    if not location:
+        return False
+    services = location.get('services', []) or []
+    return bool(location.get('safe')) and ('inn' in services)
+
+
+def _build_contextual_service_rows(current_location_id: str | None, lang: str) -> list[list[str]]:
+    location = get_location(resolve_location_id(str(current_location_id or '')))
+    if not location:
+        return []
+    services = {str(service_id) for service_id in (location.get('services', []) or [])}
+    labels: list[str] = []
+    for service_id, locale_key in _SERVICE_ORDER:
+        if service_id == 'inn':
+            if not _can_open_inn_in_location(location):
+                continue
+        elif service_id not in services:
+            continue
+        labels.append(t(locale_key, lang))
+    rows: list[list[str]] = []
+    for label in labels:
+        rows.append([label])
+    return rows
+
+
+def _resolve_service_from_label(text: str, preferred_lang: str) -> str | None:
+    languages = [preferred_lang] + [lang for lang in SUPPORTED_LANGS if lang != preferred_lang]
+    for lang in languages:
+        for service_id, locale_key in _SERVICE_ORDER:
+            if text == t(locale_key, lang):
+                return service_id
     return None
 
 
@@ -99,6 +139,7 @@ def build_contextual_main_keyboard(player: dict | None = None, lang: str = 'ru')
         for target_id in get_contextual_travel_targets(player.get('location_id')):
             rows.append([build_lower_travel_label(target_id, lang)])
         rows.extend(_build_contextual_gather_rows(player.get('location_id'), lang))
+        rows.extend(_build_contextual_service_rows(player.get('location_id'), lang))
     rows.extend(_baseline_keyboard_rows(lang))
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
@@ -116,3 +157,26 @@ def resolve_lower_travel_button(text: str, player: dict, lang: str) -> str | Non
 
 def looks_like_lower_travel_button(text: str) -> bool:
     return str(text or '').strip().startswith(LOWER_TRAVEL_PREFIX)
+
+
+def looks_like_lower_service_button(text: str) -> bool:
+    normalized_text = str(text or '').strip()
+    if not normalized_text:
+        return False
+    return _resolve_service_from_label(normalized_text, 'ru') is not None
+
+
+def resolve_lower_service_button(text: str, player: dict, lang: str) -> str | None:
+    normalized_text = str(text or '').strip()
+    if not normalized_text:
+        return None
+    matched_service = _resolve_service_from_label(normalized_text, lang)
+    if matched_service is None:
+        return None
+    location = get_location(resolve_location_id(str(player.get('location_id') or '')))
+    services = {str(service_id) for service_id in ((location or {}).get('services', []) or [])}
+    if matched_service == 'inn':
+        return 'inn' if _can_open_inn_in_location(location) else ''
+    if matched_service in services:
+        return matched_service
+    return ''

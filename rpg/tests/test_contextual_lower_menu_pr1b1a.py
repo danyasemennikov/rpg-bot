@@ -7,12 +7,14 @@ from game.contextual_keyboard import (
     build_contextual_main_keyboard,
     build_lower_travel_label,
     looks_like_lower_gather_button,
+    looks_like_lower_service_button,
     resolve_lower_gather_profession_button,
 )
 from handlers.location import (
     build_location_message,
     handle_location_buttons,
     handle_lower_menu_gather_text,
+    handle_lower_menu_service_text,
     handle_lower_menu_travel_text,
     location_command,
 )
@@ -63,6 +65,16 @@ class ContextualLowerMenuTests(unittest.TestCase):
         self.assertTrue(looks_like_lower_gather_button('🌿 Собирать'))
         self.assertTrue(looks_like_lower_gather_button('🌿 Gather'))
         self.assertTrue(looks_like_lower_gather_button('🌿 Recolectar'))
+
+    def test_contextual_lower_menu_renders_service_rows_after_gather_before_baseline(self):
+        with patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=[SimpleNamespace(profession_key='herbalism')]):
+            keyboard = build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en')
+        rows = _keyboard_text_rows(keyboard)
+        gather_idx = rows.index(['🌿 Gather'])
+        service_idx = rows.index(['🏪 Shop'])
+        baseline_idx = rows.index(['📍 Location', '🗺️ Map'])
+        self.assertLess(gather_idx, service_idx)
+        self.assertLess(service_idx, baseline_idx)
 
 
 class LocationInlineRenderingTests(unittest.TestCase):
@@ -119,12 +131,29 @@ class LocationInlineRenderingTests(unittest.TestCase):
         text, keyboard, snapshot = self._build_location(services=['shop'])
         callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
 
-        self.assertIn('shop', snapshot['actions'].values())
-        self.assertIn('sv1 shop', text)
+        self.assertNotIn('shop', snapshot['actions'].values())
+        self.assertNotIn('sv1 shop', text)
         self.assertFalse([callback for callback in callbacks if callback.startswith('goto_')])
 
 
 class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_looks_like_lower_service_button_accepts_cross_locale_labels(self):
+        self.assertTrue(looks_like_lower_service_button('🏪 Shop'))
+        self.assertTrue(looks_like_lower_service_button('🏨 Таверна'))
+        self.assertTrue(looks_like_lower_service_button('📋 Tablero de encargos'))
+
+    async def test_valid_lower_service_button_routes_to_shared_callback_flow(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='🏪 Shop', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city'}), \
+             patch('handlers.location.handle_location_buttons', new=AsyncMock()) as handle_mock:
+            handled = await handle_lower_menu_service_text(update, context)
+        self.assertTrue(handled)
+        adapted_update = handle_mock.await_args.args[0]
+        self.assertEqual(adapted_update.callback_query.data, 'shop')
     async def test_valid_lower_travel_button_routes_to_shared_goto_flow(self):
         update = SimpleNamespace(
             message=SimpleNamespace(text=build_lower_travel_label('westwild_n1', 'en'), reply_text=AsyncMock()),
