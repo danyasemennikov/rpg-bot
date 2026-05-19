@@ -234,6 +234,16 @@ def _parse_go_location_arg(raw_text: str) -> str | None:
     return None
 
 
+def _parse_encounter_arg(raw_text: str) -> str | None:
+    text = (raw_text or '').strip().lower()
+    if text.startswith('/enc_'):
+        return _strip_command_bot_suffix(text[5:])
+    if text.startswith('/enc'):
+        parts = text.split(maxsplit=1)
+        return _strip_command_bot_suffix(parts[1]) if len(parts) > 1 else None
+    return None
+
+
 def _find_canonical_path(start_id: str, target_id: str) -> list[str]:
     start = resolve_location_id(start_id)
     target = resolve_location_id(target_id)
@@ -738,11 +748,8 @@ def build_location_message(
     players_nearby_lines: list[str] = []
     players_nearby_cmds: list[str] = []
     pvp_encounter_lines: list[str] = []
-    pvp_encounter_cmds: list[str] = []
     pve_encounter_lines: list[str] = []
-    pve_encounter_cmds: list[str] = []
     mob_lines: list[str] = []
-    mob_cmds: list[str] = []
     snapshot_tag = (snapshot_tag or 's1').lower()
 
     def _register_action(command_suffix: str, callback_data: str, command_lines: list[str]) -> None:
@@ -777,11 +784,9 @@ def build_location_message(
     if not pvp_only_view:
         prep_encounters = get_pending_location_encounters(location_id=location['id'], limit=3)
         if prep_encounters:
-            pvp_token_index = 1
             for encounter in prep_encounters:
-                token = f"pv{pvp_token_index}"
                 pvp_encounter_lines.append(
-                    f"{token} — " + t(
+                    t(
                     'location.pvp_encounter_row',
                     lang,
                     id=encounter['id'],
@@ -790,9 +795,7 @@ def build_location_message(
                     time_left=_format_seconds_short(encounter['seconds_until_start']),
                     initiator_count=encounter['initiator_side_count'],
                     defender_count=encounter['defender_side_count'],
-                ))
-                _register_action(f'{token} view', f"pvp_view_{encounter['id']}", pvp_encounter_cmds)
-                pvp_token_index += 1
+                ) + f" | /enc {encounter['id']}")
 
     player_id = int(player['telegram_id'])
     engagement_row = get_pending_player_engagement(player_id)
@@ -889,7 +892,6 @@ def build_location_message(
     if not pvp_only_view:
         active_pve_encounters = list_location_active_pve_encounters(location_id=location['id'])
         if active_pve_encounters:
-            pve_token_index = 1
             for encounter in active_pve_encounters:
                 mob_id = str(encounter.get('mob_id') or '')
                 profile_marker = _format_spawn_profile_marker(str(encounter.get('spawn_profile') or 'normal'), lang)
@@ -897,9 +899,8 @@ def build_location_message(
                     int(pid) for pid in encounter.get('participant_player_ids', [])
                 } if isinstance(encounter.get('participant_player_ids'), list) else set()
                 is_participant = int(player['telegram_id']) in participant_ids
-                token = f"pe{pve_token_index}"
                 pve_encounter_lines.append(
-                    f"{token} — " + t(
+                    t(
                     'location.pve_encounter_row',
                     lang,
                     id=encounter['encounter_id'],
@@ -913,58 +914,54 @@ def build_location_message(
                         ) if bool(encounter.get('joinable')) else 'location.pve_status_locked',
                         lang,
                     ),
-                ))
-                _register_action(f'{token} view', f"pve_view_{encounter['encounter_id']}", pve_encounter_cmds)
-                can_join, _ = can_join_open_world_pve_encounter(
-                    encounter_id=str(encounter['encounter_id']),
-                    player_id=int(player['telegram_id']),
-                )
-                if can_join:
-                    _register_action(f'{token} join', f"pve_join_{encounter['encounter_id']}", pve_encounter_cmds)
-                if is_participant:
-                    _register_action(f'{token} enter', f"pve_enter_{encounter['encounter_id']}", pve_encounter_cmds)
-                    if bool(encounter.get('joinable')):
-                        _register_action(f'{token} leave', f"pve_leave_{encounter['encounter_id']}", pve_encounter_cmds)
-                pve_token_index += 1
+                ) + f" | /enc {encounter['encounter_id']}")
 
         available_spawns = list_location_available_spawn_instances(location_id=location['id'])
         if available_spawns:
-            mob_token_index = 1
-            mob_counter: dict[tuple[str, str, str], int] = {}
-        for spawn in available_spawns:
-            mob_id = str(spawn.get('mob_id') or '')
-            spawn_profile = str(spawn.get('spawn_profile') or 'normal')
-            special_spawn_key = str(spawn.get('special_spawn_key') or '').strip()
-            special_spawn_name = str(spawn.get('special_spawn_name') or '').strip()
-            mob = get_mob(mob_id)
-            if not mob:
-                continue
-            agr_tag  = t('location.aggressive_tag', lang) if mob['aggressive'] else ""
-            lvl_diff = mob['level'] - player['level']
-
-            if lvl_diff >= 3:
-                diff = t('location.diff_deadly', lang)
-            elif lvl_diff >= 1:
-                diff = t('location.diff_hard', lang)
-            elif lvl_diff == 0:
-                diff = t('location.diff_normal', lang)
-            elif lvl_diff >= -2:
-                diff = t('location.diff_easy', lang)
-            else:
-                diff = t('location.diff_unknown', lang)
-
-            token = f"m{mob_token_index}"
-            mob_key = (mob_id, spawn_profile, special_spawn_key)
-            mob_counter[mob_key] = mob_counter.get(mob_key, 0) + 1
-            dup_suffix = f" #{mob_counter[mob_key]}" if mob_counter[mob_key] > 1 else ""
-            profile_marker = _format_spawn_profile_marker(spawn_profile, lang)
-            mob_label = f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=mob_id, lang=lang, special_spawn_key=special_spawn_key, special_spawn_name=special_spawn_name)}".strip()
-            mob_lines.append(
-                f"{token} — {diff} {mob_label}{dup_suffix}  "
-                f"{t('common.level_short', lang)}{mob['level']}{agr_tag}"
-            )
-            _register_action(f'{token} fight', f"fight_spawn_{spawn['spawn_instance_id']}", mob_cmds)
-            mob_token_index += 1
+            grouped_spawns: dict[tuple[str, str, str, str], dict] = {}
+            for spawn in available_spawns:
+                mob_id = str(spawn.get('mob_id') or '')
+                spawn_profile = str(spawn.get('spawn_profile') or 'normal')
+                special_spawn_key = str(spawn.get('special_spawn_key') or '').strip()
+                special_spawn_name = str(spawn.get('special_spawn_name') or '').strip()
+                group_key = (mob_id, spawn_profile, special_spawn_key, special_spawn_name)
+                bucket = grouped_spawns.get(group_key)
+                if bucket is None:
+                    grouped_spawns[group_key] = {
+                        'representative_spawn_id': str(spawn.get('spawn_instance_id') or ''),
+                        'count': 1,
+                        'mob_id': mob_id,
+                        'spawn_profile': spawn_profile,
+                        'special_spawn_key': special_spawn_key,
+                        'special_spawn_name': special_spawn_name,
+                    }
+                else:
+                    bucket['count'] += 1
+            for grouped in grouped_spawns.values():
+                mob = get_mob(grouped['mob_id'])
+                if not mob:
+                    continue
+                agr_tag = t('location.aggressive_tag', lang) if mob['aggressive'] else ""
+                lvl_diff = mob['level'] - player['level']
+                if lvl_diff >= 3:
+                    diff = t('location.diff_deadly', lang)
+                elif lvl_diff >= 1:
+                    diff = t('location.diff_hard', lang)
+                elif lvl_diff == 0:
+                    diff = t('location.diff_normal', lang)
+                elif lvl_diff >= -2:
+                    diff = t('location.diff_easy', lang)
+                else:
+                    diff = t('location.diff_unknown', lang)
+                profile_marker = _format_spawn_profile_marker(grouped['spawn_profile'], lang)
+                mob_label = f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=grouped['mob_id'], lang=lang, special_spawn_key=grouped['special_spawn_key'], special_spawn_name=grouped['special_spawn_name'])}".strip()
+                mob_lines.append(
+                    f"• {diff} {mob_label} ×{int(grouped['count'])} — {t('common.level_short', lang)}{mob['level']}{agr_tag}"
+                )
+                keyboard.append([InlineKeyboardButton(
+                    t('location.attack_mob_group_btn', lang, name=mob_label, count=int(grouped['count'])),
+                    callback_data=f"fight_spawn_{grouped['representative_spawn_id']}",
+                )])
 
     if players_nearby_lines:
         text += t('location.players_nearby', lang) + '\n'
@@ -978,7 +975,7 @@ def build_location_message(
     if mob_lines:
         text += t('location.mobs_nearby', lang) + '\n'
         text += '\n'.join(mob_lines) + '\n\n'
-    action_lines = players_nearby_cmds + pvp_encounter_cmds + pve_encounter_cmds + mob_cmds
+    action_lines = players_nearby_cmds
     if action_lines:
         text += t('location.actions_title', lang) + '\n'
         text += '\n'.join(f"• {line}" for line in action_lines[:20]) + '\n'
@@ -1108,6 +1105,28 @@ async def go_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     canonical_loc_arg = resolve_location_id(loc_arg)
     adapted_update = SimpleNamespace(callback_query=_MessageActionQueryAdapter(update=update, callback_data=f'goto_{canonical_loc_arg}'))
     await handle_location_buttons(adapted_update, context)
+
+
+async def enc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    player = get_player(update.effective_user.id)
+    lang = player['lang'] if player else 'ru'
+    if not player:
+        await update.message.reply_text(t('common.no_character', lang))
+        return
+    encounter_id = _parse_encounter_arg(update.message.text or '')
+    if not encounter_id:
+        await update.message.reply_text(t('location.enc_not_found', lang))
+        return
+    pve_text, pve_keyboard = build_pve_encounter_detail_message(dict(player), encounter_id)
+    if pve_text != t('location.pve_no_encounter', lang):
+        await update.message.reply_text(pve_text, reply_markup=pve_keyboard, parse_mode='HTML')
+        return
+    if encounter_id.isdigit():
+        pvp_text, pvp_keyboard = build_pvp_encounter_detail_message(dict(player), int(encounter_id))
+        if pvp_text != t('location.pvp_no_engagement', lang):
+            await update.message.reply_text(pvp_text, reply_markup=pvp_keyboard, parse_mode='HTML')
+            return
+    await update.message.reply_text(t('location.enc_not_found', lang))
 
 async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -2185,4 +2204,7 @@ async def handle_underscore_navigation_command(update: Update, context: ContextT
         return
     if text.startswith('/go_'):
         await go_command(update, context)
+        return
+    if text.startswith('/enc_'):
+        await enc_command(update, context)
         return

@@ -114,6 +114,9 @@ STRINGS = {
         'mobs_nearby':      '👁️ <b>Criaturas cercanas:</b>',
         'aggressive_tag':   ' <b>[agr]</b>',
         'attack_mob_btn':   '⚔️ Atacar {name}',
+        'attack_mob_group_btn': '⚔️ Atacar: {name} ×{count}',
+        'enc_not_found': '📭 Encuentro no encontrado o ya expiró.'
+        ,
         'gather_title':     '🌿 <b>Se puede recolectar:</b>',
         'gather_btn':       '🌿 Recolectar recursos',
         'shop_btn':         '🏪 Tienda',

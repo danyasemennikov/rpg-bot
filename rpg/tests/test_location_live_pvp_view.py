@@ -320,7 +320,8 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             conn_mock.return_value.close.return_value = None
             text, keyboard = build_location_message(player, location, pvp_only_view=False)
         self.assertIn('Active prep PvP encounters', text)
-        self.assertIn('s1 pv1 view', text)
+        self.assertIn('/enc 12', text)
+        self.assertNotIn('pv1 view', text)
         callback_ids = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
         self.assertNotIn('pvp_view_12', callback_ids)
 

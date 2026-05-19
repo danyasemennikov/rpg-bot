@@ -127,6 +127,8 @@ STRINGS = {
         'pvp_busy_tag': '[занят PvP]',
         'aggressive_tag':   ' <b>[агр]</b>',
         'attack_mob_btn':   '⚔️ Атаковать {name}',
+        'attack_mob_group_btn': '⚔️ Напасть: {name} ×{count}',
+        'enc_not_found': '📭 Схватка не найдена или уже устарела.',
         'attack_player_btn': '⚔️ Напасть на {name}',
         'gather_title':     '🌿 <b>Можно собрать:</b>',
         'gather_btn':       '🌿 Собирать ресурсы',
