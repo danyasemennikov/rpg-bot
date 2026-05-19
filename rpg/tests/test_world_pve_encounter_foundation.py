@@ -382,7 +382,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertIsNotNone(encounter_id)
 
         available_after = list_location_available_spawn_instances(location_id=self.location_id)
-        self.assertFalse(any(spawn['mob_id'] == 'forest_wolf' for spawn in available_after))
+        self.assertEqual(sum(1 for spawn in available_after if spawn['mob_id'] == 'forest_wolf'), 2)
 
         active = list_location_active_pve_encounters(location_id=self.location_id)
         self.assertTrue(any(row['encounter_id'] == encounter_id for row in active))

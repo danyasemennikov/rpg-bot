@@ -38,6 +38,8 @@ from game.pve_live import (
     run_with_participant_projection,
     run_enemy_instant_side,
     submit_player_commit,
+    resolve_enemy_unit_index_for_participant,
+    sync_pack_projection_after_turn,
     sync_projection_for_participant,
     update_participant_combat_state_from_projection,
 )
@@ -256,6 +258,9 @@ def build_battle_message(player, mob, battle_state, log):
     weapon_name = get_item_name(weapon_id, lang) if weapon_id != 'unarmed' else t('battle.unarmed', lang)
 
     text  = f"⚔️ <b>{get_mob_name(mob['id'], lang)}</b>\n"
+    if battle_state.get('enemy_units'):
+        alive_count = sum(1 for unit in battle_state.get('enemy_units', []) if not bool(unit.get('dead')))
+        text += f"{t('battle.pack_label', lang)}\n{t('battle.pack_remaining', lang, count=alive_count)}\n"
     text += f"{hp_bar_mob} {battle_state['mob_hp']}/{mob['hp']}\n\n"
     text += f"👤 <b>{t('battle.player_label', lang)}</b>\n"
     text += f"{hp_bar_player} {battle_state['player_hp']}/{battle_state['player_max_hp']}\n"
@@ -264,50 +269,50 @@ def build_battle_message(player, mob, battle_state, log):
 
     # Активные баффы
     buff_lines = []
-    if battle_state.get('defense_buff_turns', 0) > 0:
+    if int(battle_state.get('defense_buff_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_defense', lang,
             value=battle_state['defense_buff_value'],
             turns=battle_state['defense_buff_turns']))
-    if battle_state.get('berserk_turns', 0) > 0:
+    if int(battle_state.get('berserk_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_berserk', lang,
             value=battle_state['berserk_damage'],
             turns=battle_state['berserk_turns']))
-    if battle_state.get('blessing_turns', 0) > 0:
+    if int(battle_state.get('blessing_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_blessing', lang,
             value=battle_state['blessing_value'],
             turns=battle_state['blessing_turns']))
-    if battle_state.get('regen_turns', 0) > 0:
+    if int(battle_state.get('regen_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_regen', lang,
             amount=battle_state['regen_amount'],
             turns=battle_state['regen_turns']))
     if battle_state.get('resurrection_active'):
         buff_lines.append(t('battle.buff_resurrection', lang))
-    if battle_state.get('invincible_turns', 0) > 0:
+    if int(battle_state.get('invincible_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_invincible', lang,
             turns=battle_state['invincible_turns']))
 
-    if battle_state.get('dodge_buff_turns', 0) > 0:
+    if int(battle_state.get('dodge_buff_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_dodge', lang,
             value=battle_state['dodge_buff_value'],
             turns=battle_state['dodge_buff_turns']))
 
-    if battle_state.get('guaranteed_crit_turns', 0) > 0:
+    if int(battle_state.get('guaranteed_crit_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_guaranteed_crit', lang,
             turns=battle_state['guaranteed_crit_turns']))
 
-    if battle_state.get('hunters_mark_turns', 0) > 0:
+    if int(battle_state.get('hunters_mark_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_hunters_mark', lang,
             turns=battle_state['hunters_mark_turns']))
 
-    if battle_state.get('vulnerability_turns', 0) > 0:
+    if int(battle_state.get('vulnerability_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_vulnerability', lang,
             turns=battle_state['vulnerability_turns']))
 
-    if battle_state.get('disarm_turns', 0) > 0:
+    if int(battle_state.get('disarm_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_disarm', lang,
             turns=battle_state['disarm_turns']))
 
-    if battle_state.get('fire_shield_turns', 0) > 0:
+    if int(battle_state.get('fire_shield_turns') or 0) > 0:
         buff_lines.append(t('battle.buff_fire_shield', lang,
             value=battle_state['fire_shield_value'],
             turns=battle_state['fire_shield_turns']))
@@ -493,6 +498,7 @@ async def start_battle(
         mob=mob,
         side_a_player_ids=[user.id],
         spawn_instance_id=spawn_instance_id,
+        pack_claim_from_visible_group=True,
     )
     if not encounter_id:
         _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
@@ -635,11 +641,6 @@ async def _handle_victory_cleanup(
     levelup_before_loot: bool = False,
 ):
     """Общий post-victory cleanup для обычной атаки и скиллов."""
-    rewards = calc_rewards(mob)
-    rewards['location_id'] = battle_state.get('location_id', rewards.get('location_id'))
-    rewards['spawn_profile'] = battle_state.get('spawn_profile', rewards.get('spawn_profile'))
-    rewards['content_identity'] = battle_state.get('reward_content_identity', rewards.get('content_identity'))
-    rewards['spawn_identity'] = battle_state.get('spawn_identity', rewards.get('spawn_identity'))
     if _is_group_encounter(battle_state):
         participant_ids = get_pve_encounter_player_ids(encounter_id=str(battle_state.get('pve_encounter_id', '')))
         if not participant_ids:
@@ -648,6 +649,13 @@ async def _handle_victory_cleanup(
         participant_ids = [user_id]
     rewarded_participants: list[int] = []
     result_reward = None
+    owner_any_levelup = False
+    owner_latest_level = int(player.get('level', 1))
+    defeated_units = list(battle_state.get('enemy_units') or [])
+    reward_units = defeated_units or [{}]
+    total_exp = 0
+    total_gold = 0
+    total_loot: list[str] = []
     for participant_id in participant_ids:
         snapshot = _participant_snapshot(battle_state, participant_id)
         if snapshot and bool(snapshot.get('player_dead', snapshot.get('defeated', False))):
@@ -657,14 +665,32 @@ async def _handle_victory_cleanup(
         participant_player_row = get_player(participant_id)
         if participant_player_row:
             participant_player = dict(participant_player_row)
-            reward_result = apply_rewards(participant_id, participant_player, rewards)
-            register_hunt_kill_progress(
-                player_id=participant_id,
-                mob_id=str(mob.get('id', '')),
-                location_id=str(battle_state.get('location_id') or participant_player.get('location_id') or ''),
-                spawn_profile=battle_state.get('spawn_profile'),
-                special_spawn_key=battle_state.get('special_spawn_key'),
-            )
+            reward_result = None
+            for unit in reward_units:
+                unit_rewards = calc_rewards(mob)
+                unit_rewards['location_id'] = battle_state.get('location_id', unit_rewards.get('location_id'))
+                unit_rewards['spawn_profile'] = unit.get('spawn_profile', battle_state.get('spawn_profile', unit_rewards.get('spawn_profile')))
+                unit_rewards['content_identity'] = battle_state.get('reward_content_identity', unit_rewards.get('content_identity'))
+                unit_rewards['spawn_identity'] = battle_state.get('spawn_identity', unit_rewards.get('spawn_identity'))
+                reward_result = apply_rewards(participant_id, participant_player, unit_rewards)
+                if isinstance(reward_result, dict):
+                    participant_player['exp'] = int(reward_result.get('new_exp', participant_player.get('exp', 0)))
+                    participant_player['gold'] = int(reward_result.get('new_gold', participant_player.get('gold', 0)))
+                    participant_player['level'] = int(reward_result.get('new_level', participant_player.get('level', 1)))
+                    if participant_id == user_id:
+                        owner_any_levelup = owner_any_levelup or bool(reward_result.get('leveled_up', False))
+                        owner_latest_level = int(reward_result.get('new_level', owner_latest_level))
+                total_exp += int(unit_rewards.get('exp', 0)) if participant_id == user_id else 0
+                total_gold += int(unit_rewards.get('gold', 0)) if participant_id == user_id else 0
+                if participant_id == user_id:
+                    total_loot.extend(list(unit_rewards.get('loot') or []))
+                register_hunt_kill_progress(
+                    player_id=participant_id,
+                    mob_id=str(unit.get('mob_id') or mob.get('id', '')),
+                    location_id=str(battle_state.get('location_id') or participant_player.get('location_id') or ''),
+                    spawn_profile=unit.get('spawn_profile', battle_state.get('spawn_profile')),
+                    special_spawn_key=unit.get('special_spawn_key', battle_state.get('special_spawn_key')),
+                )
             rewarded_participants.append(participant_id)
             if participant_id == user_id:
                 result_reward = reward_result
@@ -677,6 +703,8 @@ async def _handle_victory_cleanup(
             'new_exp': player.get('exp', 0),
             'new_gold': player.get('gold', 0),
         }
+    result_reward['leveled_up'] = bool(result_reward.get('leveled_up', False) or owner_any_levelup)
+    result_reward['new_level'] = owner_latest_level
 
     finish_solo_pve_encounter(
         player_id=user_id,
@@ -696,8 +724,8 @@ async def _handle_victory_cleanup(
 
     victory_text = t('battle.victory', lang,
                      mob_name=get_mob_name(mob['id'], lang),
-                     exp=rewards['exp'],
-                     gold=rewards['gold'])
+                     exp=total_exp,
+                     gold=total_gold)
     if owner_dead and owner_penalty:
         victory_text = t(
             'battle.death',
@@ -711,8 +739,8 @@ async def _handle_victory_cleanup(
         levelup_text = '\n\n' + t('battle.levelup', lang, level=result_reward['new_level'])
 
     loot_text = ""
-    if rewards['loot']:
-        loot_names = [get_item_name(i, lang) for i in rewards['loot']]
+    if total_loot:
+        loot_names = [get_item_name(i, lang) for i in total_loot]
         loot_text = '\n' + t('battle.loot', lang, items=', '.join(loot_names))
 
     if levelup_before_loot:
@@ -989,12 +1017,55 @@ def _apply_timeout_fallback_action(action, battle_state: dict, lang: str) -> Non
 
 def _run_group_enemy_side_action(
     *,
+    action=None,
     owner_player: dict,
     mob: dict,
     battle_state: dict,
     lang: str,
     include_pre_enemy_ticks: bool = False,
 ) -> None:
+    enemy_side_total = int(battle_state.get('_pack_enemy_side_total') or 0)
+    enemy_side_processed = int(battle_state.get('_pack_enemy_side_processed') or 0)
+    pack_side_timing = enemy_side_total > 0
+    if pack_side_timing:
+        enemy_side_processed += 1
+        battle_state['_pack_enemy_side_processed'] = enemy_side_processed
+        should_finalize_timing = enemy_side_processed >= enemy_side_total
+    else:
+        should_finalize_timing = True
+    encounter_id = str(battle_state.get('pve_encounter_id', ''))
+    unit_index = None
+    if action is not None and encounter_id:
+        unit_index = resolve_enemy_unit_index_for_participant(
+            encounter_id=encounter_id,
+            battle_state=battle_state,
+            participant_id=int(getattr(action, 'participant_id', 0) or 0),
+        )
+    def _restore_active_pack_enemy_projection() -> None:
+        enemy_units = list(battle_state.get('enemy_units') or [])
+        if not enemy_units:
+            return
+        active_id = str(battle_state.get('active_enemy_unit_id') or '')
+        active = next((u for u in enemy_units if str(u.get('unit_id')) == active_id and not bool(u.get('dead'))), None)
+        if active is None:
+            active = next((u for u in enemy_units if not bool(u.get('dead'))), None)
+        if active is None:
+            battle_state['mob_dead'] = True
+            battle_state['mob_hp'] = 0
+            return
+        battle_state['active_enemy_unit_id'] = active.get('unit_id')
+        battle_state['mob_hp'] = int(active.get('hp', 0) or 0)
+        battle_state['mob_max_hp'] = int(active.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
+        battle_state['mob_effects'] = list(active.get('mob_effects') or [])
+        battle_state['mob_dead'] = False
+    if unit_index is not None:
+        enemy_units = list(battle_state.get('enemy_units') or [])
+        if 0 <= unit_index < len(enemy_units):
+            enemy_unit = enemy_units[unit_index]
+            battle_state['mob_hp'] = int(enemy_unit.get('hp', battle_state.get('mob_hp', 0)) or 0)
+            battle_state['mob_max_hp'] = int(enemy_unit.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
+            battle_state['mob_effects'] = list(enemy_unit.get('mob_effects') or [])
+
     target_id, target_player = _resolve_enemy_target_player_for_group(
         owner_player=owner_player,
         battle_state=battle_state,
@@ -1007,10 +1078,18 @@ def _run_group_enemy_side_action(
         lang=lang,
         user_id=target_id,
         include_pre_enemy_ticks=include_pre_enemy_ticks,
-        tick_player_post_action_buffs=True,
-        tick_timed_trigger_buffs=True,
-        increment_turn=True,
+        tick_player_post_action_buffs=should_finalize_timing,
+        tick_timed_trigger_buffs=should_finalize_timing,
+        increment_turn=should_finalize_timing,
     )
+    if unit_index is not None:
+        enemy_units = list(battle_state.get('enemy_units') or [])
+        if 0 <= unit_index < len(enemy_units):
+            enemy_units[unit_index]['hp'] = max(0, int(battle_state.get('mob_hp', 0) or 0))
+            enemy_units[unit_index]['dead'] = enemy_units[unit_index]['hp'] <= 0
+            enemy_units[unit_index]['mob_effects'] = list(battle_state.get('mob_effects') or [])
+            battle_state['enemy_units'] = enemy_units
+        _restore_active_pack_enemy_projection()
     update_participant_combat_state_from_projection(battle_state=battle_state, player_id=target_id)
     _reconcile_group_participant_outcomes(battle_state)
 
@@ -1126,6 +1205,7 @@ def _dispatch_group_player_action(
     def _mark_terminal_flags() -> None:
         battle_state['mob_dead'] = battle_state.get('mob_dead', battle_state.get('mob_hp', 1) <= 0)
         battle_state['player_dead'] = battle_state.get('player_dead', battle_state.get('player_hp', 1) <= 0)
+        sync_pack_projection_after_turn(battle_state)
 
     def _resolver():
         if action_type == 'basic_attack':
@@ -1221,10 +1301,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             battle_state=battle_state,
             lang=lang,
         ),
-        on_enemy_action=lambda _action: _run_group_enemy_side_action(
-            owner_player=p,
-            mob=mob,
-            battle_state=battle_state,
+            on_enemy_action=lambda _action: _run_group_enemy_side_action(
+                action=_action,
+                owner_player=p,
+                mob=mob,
+                battle_state=battle_state,
             lang=lang,
         ),
     )
@@ -1420,6 +1501,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 player_id=user.id,
                 battle_state=battle_state,
                 on_enemy_action=lambda _action: _run_group_enemy_side_action(
+                    action=_action,
                     owner_player=p,
                     mob=mob,
                     battle_state=battle_state,
@@ -1506,6 +1588,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 player_id=user.id,
                 battle_state=battle_state,
                 on_enemy_action=lambda _action: _run_group_enemy_side_action(
+                    action=_action,
                     owner_player=p,
                     mob=mob,
                     battle_state=battle_state,
