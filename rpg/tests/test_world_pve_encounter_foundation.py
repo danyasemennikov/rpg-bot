@@ -477,7 +477,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertIn('Active PvE encounters', text)
         self.assertIn(encounter_id, text)
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertEqual(callbacks, ['gather'])
+        self.assertEqual(callbacks, [])
         self.assertIn('pe1 view', text)
         self.assertNotIn(f'fight_spawn_spawn-{self.location_id}-forest_wolf', callbacks)
 
@@ -533,7 +533,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             text, keyboard = build_location_message(player, location, pvp_only_view=False)
 
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertEqual(callbacks, ['gather'])
+        self.assertEqual(callbacks, [])
         self.assertIn('pe1 join', text)
         self.assertIn('joinable', text)
 
@@ -572,7 +572,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         runtime = ensure_runtime_for_battle(player_id=self.player_id, battle_state=battle_state, mob={'id': 'forest_wolf', 'hp': 20})
         self.assertEqual(runtime.sides['side_a'].participant_order, [self.player_id, self.player2_id])
 
-    def test_location_keyboard_keeps_gather_and_removes_ordinary_navigation(self):
+    def test_location_keyboard_removes_legacy_gather_and_ordinary_navigation(self):
         player = {
             'telegram_id': self.player_id,
             'lang': 'en',
@@ -600,7 +600,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             _text, keyboard = build_location_message(player, location, pvp_only_view=False)
 
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertEqual(callbacks, ['gather'])
+        self.assertEqual(callbacks, [])
 
     def test_same_player_cannot_join_twice(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(

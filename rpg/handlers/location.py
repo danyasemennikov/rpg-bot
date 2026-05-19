@@ -20,7 +20,9 @@ from game.locations import get_location, get_connected_locations, get_location_n
 from game.contextual_keyboard import (
     build_contextual_main_keyboard,
     looks_like_lower_travel_button,
+    looks_like_lower_gather_button,
     resolve_lower_travel_button,
+    resolve_lower_gather_profession_button,
 )
 from game.gathering_foundation import build_location_gather_source_profiles
 from game.mobs import get_mob
@@ -981,16 +983,6 @@ def build_location_message(
             _register_action(f'{token} fight', f"fight_spawn_{spawn['spawn_instance_id']}", mob_cmds)
             mob_token_index += 1
 
-    # ── Ресурсы ──
-    gather_profiles = build_location_gather_source_profiles(location['id'])
-    if gather_profiles and not pvp_only_view:
-        text += t('location.gather_title', lang) + " "
-        text += ", ".join(get_item_name(profile.item_id, lang) for profile in gather_profiles) + "\n"
-        keyboard.append([InlineKeyboardButton(
-            t('location.gather_btn', lang), callback_data="gather"
-        )])
-        text += "\n"
-
     if players_nearby_lines:
         text += t('location.players_nearby', lang) + '\n'
         text += '\n'.join(players_nearby_lines) + '\n\n'
@@ -1205,6 +1197,68 @@ async def handle_lower_menu_travel_text(update: Update, context: ContextTypes.DE
 
     adapted_update = SimpleNamespace(callback_query=_MessageActionQueryAdapter(update=update, callback_data=f'goto_{target_id}'))
     await handle_location_buttons(adapted_update, context)
+    return True
+
+
+async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not update.message or not update.message.text:
+        return False
+    raw_text = update.message.text.strip()
+    if not looks_like_lower_gather_button(raw_text):
+        return False
+
+    player = get_player(update.effective_user.id)
+    lang = player['lang'] if player else 'ru'
+    if not player:
+        await update.message.reply_text(t('common.no_character', lang))
+        return True
+
+    if has_active_live_pvp_engagement(int(player['telegram_id'])):
+        await update.message.reply_text(t('location.pvp_context_block', lang))
+        return True
+    if bool(player.get('in_battle')):
+        await update.message.reply_text(t('location.in_battle_block', lang))
+        return True
+    if is_in_battle(update.effective_user.id):
+        await update.message.reply_text(t('location.in_battle', lang))
+        return True
+
+    profession = resolve_lower_gather_profession_button(raw_text, dict(player), lang)
+    if profession is None:
+        return False
+    if profession == '':
+        await update.message.reply_text(t('location.lower_gather_stale', lang))
+        return True
+
+    profiles = [
+        profile for profile in build_location_gather_source_profiles(resolve_location_id(str(player.get('location_id') or '')))
+        if profile.profession_key == profession
+    ]
+    if not profiles:
+        await update.message.reply_text(t('location.lower_gather_stale', lang))
+        return True
+
+    roll = random.random()
+    cumulative = 0.0
+    picked = None
+    for profile in profiles:
+        cumulative += max(0.0, float(profile.chance))
+        if roll < cumulative:
+            picked = profile
+            break
+
+    if not picked:
+        await update.message.reply_text(t('location.gather_fail', lang))
+        return True
+
+    grant_item_to_player(
+        int(player['telegram_id']),
+        picked.item_id,
+        quantity=1,
+        source='gathering',
+        source_level=max(1, int(player.get('level', 1) or 1)),
+    )
+    await update.message.reply_text(t('location.gather_success', lang, item=get_item_name(picked.item_id, lang)))
     return True
 
 

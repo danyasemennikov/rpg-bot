@@ -6,13 +6,17 @@ from game.contextual_keyboard import (
     LOWER_TRAVEL_PREFIX,
     build_contextual_main_keyboard,
     build_lower_travel_label,
+    looks_like_lower_gather_button,
+    resolve_lower_gather_profession_button,
 )
 from handlers.location import (
     build_location_message,
     handle_location_buttons,
+    handle_lower_menu_gather_text,
     handle_lower_menu_travel_text,
     location_command,
 )
+from game.i18n import t
 
 
 def _keyboard_text_rows(keyboard):
@@ -42,6 +46,23 @@ class ContextualLowerMenuTests(unittest.TestCase):
 
         for label in ['📍 Location', '🗺️ Map', '🎒 Inventory', '👤 Profile', '🔮 Skills', '📊 Stats', '⚙️ Settings', '❓ Help']:
             self.assertIn(label, flat)
+
+    def test_contextual_lower_menu_renders_profession_rows_between_travel_and_baseline(self):
+        with patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=[
+            SimpleNamespace(profession_key='herbalism'),
+            SimpleNamespace(profession_key='mining'),
+        ]):
+            keyboard = build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en')
+        rows = _keyboard_text_rows(keyboard)
+        baseline_index = rows.index(['📍 Location', '🗺️ Map'])
+        self.assertIn(['🌿 Gather', '⛏️ Mine'], rows)
+        self.assertLess(rows.index(['🌿 Gather', '⛏️ Mine']), baseline_index)
+        self.assertGreater(rows.index(['🌿 Gather', '⛏️ Mine']), 0)
+
+    def test_looks_like_lower_gather_button_accepts_cross_locale_labels(self):
+        self.assertTrue(looks_like_lower_gather_button('🌿 Собирать'))
+        self.assertTrue(looks_like_lower_gather_button('🌿 Gather'))
+        self.assertTrue(looks_like_lower_gather_button('🌿 Recolectar'))
 
 
 class LocationInlineRenderingTests(unittest.TestCase):
@@ -88,11 +109,11 @@ class LocationInlineRenderingTests(unittest.TestCase):
         self.assertFalse([callback for callback in callbacks if callback.startswith('goto_')])
         self.assertNotIn('Travel to:', text)
 
-    def test_location_keeps_inline_gather_when_profiles_exist(self):
+    def test_location_removes_inline_gather_when_profiles_exist(self):
         _text, keyboard, _snapshot = self._build_location(gather_profiles=[SimpleNamespace(item_id='herb_common')])
         callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
 
-        self.assertIn('gather', callbacks)
+        self.assertNotIn('gather', callbacks)
 
     def test_location_keeps_unrelated_inline_location_actions(self):
         text, keyboard, snapshot = self._build_location(services=['shop'])
@@ -162,6 +183,95 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
             await handle_text(update, context)
 
         map_mock.assert_awaited_once_with(update, context)
+
+    async def test_stale_lower_gather_text_replies_and_does_not_fall_through(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city'}), \
+             patch('handlers.location.build_location_gather_source_profiles', return_value=[]), \
+             patch('handlers.location.grant_item_to_player') as grant_mock:
+            handled = await handle_lower_menu_gather_text(update, context)
+        self.assertTrue(handled)
+        grant_mock.assert_not_called()
+        update.message.reply_text.assert_awaited_once()
+
+    async def test_valid_lower_gather_button_grants_profession_filtered_resource(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+        profiles = [SimpleNamespace(item_id='herb_common', profession_key='herbalism', chance=1.0)]
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10}), \
+             patch('handlers.location.build_location_gather_source_profiles', return_value=profiles), \
+             patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=profiles), \
+             patch('handlers.location.grant_item_to_player') as grant_mock, \
+             patch('handlers.location.random.random', return_value=0.2):
+            handled = await handle_lower_menu_gather_text(update, context)
+        self.assertTrue(handled)
+        grant_mock.assert_called_once()
+
+    async def test_valid_lower_gather_button_fail_roll_replies_and_does_not_grant(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+        profiles = [SimpleNamespace(item_id='herb_common', profession_key='herbalism', chance=0.1)]
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10, 'in_battle': 0}), \
+             patch('handlers.location.build_location_gather_source_profiles', return_value=profiles), \
+             patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=profiles), \
+             patch('handlers.location.is_in_battle', return_value=False), \
+             patch('handlers.location.grant_item_to_player') as grant_mock, \
+             patch('handlers.location.random.random', return_value=0.99):
+            handled = await handle_lower_menu_gather_text(update, context)
+        self.assertTrue(handled)
+        grant_mock.assert_not_called()
+        update.message.reply_text.assert_awaited_once_with(t('location.gather_fail', 'en'))
+
+    async def test_lower_gather_recognized_without_character_stops_fallthrough(self):
+        from bot import handle_text
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+        with patch('handlers.location.get_player', return_value=None), \
+             patch('bot.handle_name_input', new=AsyncMock()) as name_mock:
+            await handle_text(update, context)
+        name_mock.assert_not_awaited()
+        update.message.reply_text.assert_awaited_once_with(t('common.no_character', 'ru'))
+
+    async def test_gather_blocked_while_in_battle(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10, 'in_battle': 1}), \
+             patch('handlers.location.has_active_live_pvp_engagement', return_value=False), \
+             patch('handlers.location.grant_item_to_player') as grant_mock:
+            handled = await handle_lower_menu_gather_text(update, context)
+        self.assertTrue(handled)
+        grant_mock.assert_not_called()
+        update.message.reply_text.assert_awaited_once_with(t('location.in_battle_block', 'en'))
+
+    async def test_gather_blocked_in_pending_prep_live_pvp_context(self):
+        update = SimpleNamespace(
+            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace()
+        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10, 'in_battle': 0}), \
+             patch('handlers.location.has_active_live_pvp_engagement', return_value=True), \
+             patch('handlers.location.grant_item_to_player') as grant_mock:
+            handled = await handle_lower_menu_gather_text(update, context)
+        self.assertTrue(handled)
+        grant_mock.assert_not_called()
+        update.message.reply_text.assert_awaited_once_with(t('location.pvp_context_block', 'en'))
 
 
 class LowerMenuRefreshTests(unittest.IsolatedAsyncioTestCase):
