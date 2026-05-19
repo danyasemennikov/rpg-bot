@@ -27,6 +27,10 @@ from game.balance import (
 )
 from game.i18n import t, get_mob_name, get_skill_name
 from game.skills import get_skill
+from game.targeting import (
+    TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK,
+    select_all_enemies_in_small_pack,
+)
 from game.skill_engine import (
     apply_mob_effects,
     build_skill_result_log,
@@ -661,23 +665,19 @@ def resolve_pack_fanout_direct_damage_skill_action(
     skill_def = get_skill(skill_result.get('skill_id', '')) or {}
     if skill_def.get('enemy_target_mode') != 'pack_fanout':
         return {'handled': False}
+    if skill_def.get('target_shape') != TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK:
+        return {'handled': False}
     if not skill_result.get('direct_damage_skill'):
         return {'handled': False}
     if skill_result.get('target_kind') != 'enemy':
         return {'handled': False}
 
     active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
-    living_indexes = [idx for idx, unit in enumerate(enemy_units) if not bool(unit.get('dead'))]
-    if not living_indexes:
+    ordered_targets = select_all_enemies_in_small_pack(enemy_units, active_unit_id=active_id_before)
+    if not ordered_targets:
         return {'handled': False}
-    active_living_index = next(
-        (idx for idx in living_indexes if str(enemy_units[idx].get('unit_id')) == active_id_before),
-        None,
-    )
-    if active_living_index is None:
-        alive_indexes = living_indexes
-    else:
-        alive_indexes = [active_living_index] + [idx for idx in living_indexes if idx != active_living_index]
+    unit_index_by_id = {str(unit.get('unit_id')): idx for idx, unit in enumerate(enemy_units)}
+    alive_indexes = [unit_index_by_id[str(unit.get('unit_id'))] for unit in ordered_targets if str(unit.get('unit_id')) in unit_index_by_id]
 
     base_damage = int(skill_result.get('damage', 0) or 0)
     per_target_results = []
