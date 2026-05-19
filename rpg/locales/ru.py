@@ -100,6 +100,9 @@ STRINGS = {
         'gather_woodcutting': '🪵 Рубить',
         'gather_mining': '⛏️ Добывать',
         'gather_fishing': '🎣 Рыбачить',
+        'service_shop': '🏪 Магазин',
+        'service_inn': '🏨 Таверна',
+        'service_quest_board': '📋 Доска заказов',
     },
 
     # ── ЛОКАЦИИ ─────────────────────────────────────────────
@@ -288,6 +291,7 @@ STRINGS = {
         'actions_hint': 'Отправь команду со snapshot-маркером {snapshot} (пример: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ Это действие локации устарело. Обнови /location.',
         'lower_gather_stale': '⏳ Это действие сбора больше недоступно в текущей локации. Обнови /location.',
+        'lower_service_stale': '⏳ Эта услуга больше недоступна в текущей локации. Обнови /location.',
         'gather_success': '✅ Ты добыл: {item}.',
         'gather_fail': '❌ В этот раз не удалось найти подходящие ресурсы.',
         'lower_travel_stale': '⏳ Этот переход больше недоступен из текущей локации. Обнови /location.',

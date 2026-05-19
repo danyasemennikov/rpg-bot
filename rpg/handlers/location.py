@@ -21,8 +21,10 @@ from game.contextual_keyboard import (
     build_contextual_main_keyboard,
     looks_like_lower_travel_button,
     looks_like_lower_gather_button,
+    looks_like_lower_service_button,
     resolve_lower_travel_button,
     resolve_lower_gather_profession_button,
+    resolve_lower_service_button,
 )
 from game.gathering_foundation import build_location_gather_source_profiles
 from game.mobs import get_mob
@@ -159,11 +161,6 @@ LOCATION_ACTION_SNAPSHOT_KEY = 'location_action_snapshot'
 _TOKEN_COMMAND_RE = re.compile(
     r'^(?P<snapshot>s\d+)\s+(?P<token>(?:p|m|pv|pe|sv)\d+)\s+(?P<action>[a-z_]+)$'
 )
-_SUPPORTED_LOCATION_SERVICE_ACTIONS = {
-    'shop': ('shop', 'shop'),
-    'inn': ('inn', 'inn'),
-    'quest_board': ('quests', 'quest_board'),
-}
 INN_REST_COST_GOLD = 12
 
 MAP_BRANCHES = [
@@ -745,27 +742,12 @@ def build_location_message(
     pve_encounter_cmds: list[str] = []
     mob_lines: list[str] = []
     mob_cmds: list[str] = []
-    service_cmds: list[str] = []
     snapshot_tag = (snapshot_tag or 's1').lower()
 
     def _register_action(command_suffix: str, callback_data: str, command_lines: list[str]) -> None:
         full_command = f'{snapshot_tag} {command_suffix}'
         token_actions[full_command] = callback_data
         command_lines.append(full_command)
-
-    if not pvp_only_view:
-        service_token_index = 1
-        for service_id in location.get('services', []) or []:
-            if service_id == 'inn' and not bool(location.get('safe')):
-                # Truthful contract: tavern is safe-hub only even if service is listed by mistake.
-                continue
-            service_action = _SUPPORTED_LOCATION_SERVICE_ACTIONS.get(str(service_id))
-            if not service_action:
-                continue
-            action_word, callback_data = service_action
-            token = f"sv{service_token_index}"
-            _register_action(f'{token} {action_word}', callback_data, service_cmds)
-            service_token_index += 1
 
     # ── PvP nearby players ──
     conn = get_connection()
@@ -995,7 +977,7 @@ def build_location_message(
     if mob_lines:
         text += t('location.mobs_nearby', lang) + '\n'
         text += '\n'.join(mob_lines) + '\n\n'
-    action_lines = service_cmds + players_nearby_cmds + pvp_encounter_cmds + pve_encounter_cmds + mob_cmds
+    action_lines = players_nearby_cmds + pvp_encounter_cmds + pve_encounter_cmds + mob_cmds
     if action_lines:
         text += t('location.actions_title', lang) + '\n'
         text += '\n'.join(f"• {line}" for line in action_lines[:20]) + '\n'
@@ -1259,6 +1241,32 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
         source_level=max(1, int(player.get('level', 1) or 1)),
     )
     await update.message.reply_text(t('location.gather_success', lang, item=get_item_name(picked.item_id, lang)))
+    return True
+
+
+async def handle_lower_menu_service_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not update.message or not update.message.text:
+        return False
+    raw_text = update.message.text.strip()
+    if not looks_like_lower_service_button(raw_text):
+        return False
+
+    player = get_player(update.effective_user.id)
+    lang = player['lang'] if player else 'ru'
+    if not player:
+        await update.message.reply_text(t('common.no_character', lang))
+        return True
+
+    service_id = resolve_lower_service_button(raw_text, dict(player), lang)
+    if service_id is None:
+        return False
+    if service_id == '':
+        await update.message.reply_text(t('location.lower_service_stale', lang))
+        return True
+
+    callback_data = service_id
+    adapted_update = SimpleNamespace(callback_query=_MessageActionQueryAdapter(update=update, callback_data=callback_data))
+    await handle_location_buttons(adapted_update, context)
     return True
 
 

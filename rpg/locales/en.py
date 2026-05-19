@@ -91,6 +91,9 @@ STRINGS = {
         'gather_woodcutting': '🪵 Chop',
         'gather_mining': '⛏️ Mine',
         'gather_fishing': '🎣 Fish',
+        'service_shop': '🏪 Shop',
+        'service_inn': '🏨 Inn',
+        'service_quest_board': '📋 Quest Board',
     },
     'location': {
         'title':        '📍 <b>{name}</b>',
@@ -277,6 +280,7 @@ STRINGS = {
         'actions_hint': 'Send a command with snapshot marker {snapshot} (example: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ This location action is stale. Refresh with /location.',
         'lower_gather_stale': '⏳ This gathering action is no longer available here. Refresh with /location.',
+        'lower_service_stale': '⏳ This service is no longer available here. Refresh with /location.',
         'gather_success': '✅ You gathered: {item}.',
         'gather_fail': '❌ You found no usable resources this time.',
         'lower_travel_stale': '⏳ This travel option is no longer available from your current location. Refresh with /location.',
