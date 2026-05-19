@@ -572,7 +572,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         runtime = ensure_runtime_for_battle(player_id=self.player_id, battle_state=battle_state, mob={'id': 'forest_wolf', 'hp': 20})
         self.assertEqual(runtime.sides['side_a'].participant_order, [self.player_id, self.player2_id])
 
-    def test_location_keyboard_keeps_only_gather_and_navigation(self):
+    def test_location_keyboard_keeps_gather_and_removes_ordinary_navigation(self):
         player = {
             'telegram_id': self.player_id,
             'lang': 'en',
@@ -600,7 +600,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             _text, keyboard = build_location_message(player, location, pvp_only_view=False)
 
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertEqual(callbacks, ['gather', 'goto_village'])
+        self.assertEqual(callbacks, ['gather'])
 
     def test_same_player_cannot_join_twice(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(

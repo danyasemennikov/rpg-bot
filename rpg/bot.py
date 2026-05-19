@@ -18,6 +18,7 @@ from handlers.location import (
     handle_location_buttons,
     handle_combat_buttons,
     handle_location_action_text,
+    handle_lower_menu_travel_text,
     map_command,
     go_command,
     handle_underscore_navigation_command,
@@ -55,6 +56,12 @@ async def pvp_tick(context):
 
 async def handle_text(update, context):
     """Роутер текстовых сообщений."""
+    text = (getattr(update.message, 'text', '') or '').strip() if update.message else ''
+    if text.startswith('🗺️'):
+        await map_command(update, context)
+        return
+    if await handle_lower_menu_travel_text(update, context):
+        return
     if await handle_location_action_text(update, context):
         return
     if await handle_transfer_input(update, context):
@@ -130,6 +137,7 @@ def main():
 
     # Кнопки клавиатуры — матчим по emoji (работает на всех языках)
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📍"), location_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🗺️"), map_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^👤"), profile_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊"), stats_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^❓"), help_command))
