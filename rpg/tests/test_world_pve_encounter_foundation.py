@@ -477,8 +477,8 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertIn('Active PvE encounters', text)
         self.assertIn(encounter_id, text)
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertEqual(callbacks, [])
-        self.assertIn('pe1 view', text)
+        self.assertIn('/enc', text)
+        self.assertNotIn('pe1 view', text)
         self.assertNotIn(f'fight_spawn_spawn-{self.location_id}-forest_wolf', callbacks)
 
     def test_encounter_detail_round_trip_contains_anchor(self):
@@ -533,8 +533,9 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             text, keyboard = build_location_message(player, location, pvp_only_view=False)
 
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertEqual(callbacks, [])
-        self.assertIn('pe1 join', text)
+        self.assertNotIn(f'fight_spawn_spawn-{self.location_id}-forest_wolf', callbacks)
+        self.assertNotIn('pe1 join', text)
+        self.assertIn('/enc', text)
         self.assertIn('joinable', text)
 
         detail_text, detail_keyboard = build_pve_encounter_detail_message(player, encounter_id)
@@ -600,7 +601,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             _text, keyboard = build_location_message(player, location, pvp_only_view=False)
 
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertEqual(callbacks, [])
+        self.assertTrue(all(callback.startswith('fight_spawn_') for callback in callbacks))
 
     def test_same_player_cannot_join_twice(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(

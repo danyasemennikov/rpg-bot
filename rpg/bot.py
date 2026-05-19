@@ -23,6 +23,7 @@ from handlers.location import (
     handle_lower_menu_service_text,
     map_command,
     go_command,
+    enc_command,
     handle_underscore_navigation_command,
 )
 from handlers.battle   import handle_battle_buttons
@@ -31,6 +32,8 @@ from handlers.skills_ui import skills_command, handle_skills_buttons
 from handlers.settings import settings_command, handle_settings_buttons
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+LOCATION_CALLBACK_PATTERN = r'^(goto_|map_route_|noop|shop$|shop_back$|shop_buy_|quest_board|inn|craftsmen_|pvp_|pve_)'
+UNDERSCORE_NAV_COMMAND_PATTERN = r'^/(map|go|enc)_[a-z0-9_-]+(?:@\w+)?$'
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -122,6 +125,7 @@ def main():
     app.add_handler(CommandHandler('location', location_command))
     app.add_handler(CommandHandler('map', map_command))
     app.add_handler(CommandHandler('go', go_command))
+    app.add_handler(CommandHandler('enc',      enc_command))
     app.add_handler(CommandHandler('pvp',      pvp_command))
     app.add_handler(CommandHandler('stats',    stats_command))
     app.add_handler(CommandHandler('unstuck',  unstuck_command))
@@ -131,7 +135,7 @@ def main():
 
     # Колбэки
     app.add_handler(CallbackQueryHandler(handle_stat_buttons,     pattern='^stat_'))
-    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern='^(goto_|map_route_|noop|shop$|shop_back$|shop_buy_|quest_board|inn|craftsmen_|pvp_)'))
+    app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern=LOCATION_CALLBACK_PATTERN))
     app.add_handler(CallbackQueryHandler(handle_combat_buttons,   pattern='^(fight_|flee_)'))
     app.add_handler(CallbackQueryHandler(handle_battle_buttons,   pattern='^battle_'))
     app.add_handler(CallbackQueryHandler(handle_stats_buttons,    pattern='^sp_'))
@@ -139,7 +143,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_skills_buttons, pattern='^sk_'))
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
 
-    app.add_handler(MessageHandler(filters.COMMAND & filters.Regex(r'^/(map|go)_[a-z0-9_]+(?:@\w+)?$'), handle_underscore_navigation_command))
+    app.add_handler(MessageHandler(filters.COMMAND & filters.Regex(UNDERSCORE_NAV_COMMAND_PATTERN), handle_underscore_navigation_command))
 
     # Кнопки клавиатуры — матчим по emoji (работает на всех языках)
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📍"), location_command))

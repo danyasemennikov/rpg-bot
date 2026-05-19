@@ -116,6 +116,8 @@ STRINGS = {
         'pvp_busy_tag': '[busy in PvP]',
         'aggressive_tag':   ' <b>[aggr]</b>',
         'attack_mob_btn':   '⚔️ Attack {name}',
+        'attack_mob_group_btn': '⚔️ Attack: {name} ×{count}',
+        'enc_not_found': '📭 Encounter not found or already stale.',
         'attack_player_btn': '⚔️ Attack {name}',
         'gather_title':     '🌿 <b>Can gather:</b>',
         'gather_btn':       '🌿 Gather resources',
