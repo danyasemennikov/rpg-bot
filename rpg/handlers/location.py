@@ -469,6 +469,8 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         'location.pve_start_policy_open' if bool(detail.get('joinable')) else 'location.pve_start_policy_locked',
         lang,
     )
+    if bool(detail.get('is_pack')):
+        text += '\n' + t('location.pve_pack_detail', lang, count=int(detail.get('enemy_count', 1)))
     keyboard_rows: list[list[InlineKeyboardButton]] = []
 
     if can_join:

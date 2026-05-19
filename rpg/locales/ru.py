@@ -282,6 +282,7 @@ STRINGS = {
         'pve_enter_btn': '⚔️ Войти в бой',
         'pve_detail_header': '🔥 PvE-схватка {id}\nЦель: {mob}\nУчастников: {players}\nСостояние: {join_state}',
         'pve_start_policy_open': 'ℹ️ Любой присоединившийся участник может нажать «Войти в бой», чтобы стартовать и зафиксировать состав.',
+        'pve_pack_detail': '👥 Это стая. Врагов: {count}',
         'pve_start_policy_locked': '🔒 Схватка уже зафиксирована/в живом бою. Join и leave больше недоступны.',
         'pve_no_encounter': '📭 Эта PvE-схватка больше не активна.',
         'pve_status_joinable': 'можно присоединиться',
@@ -376,6 +377,8 @@ STRINGS = {
         # UI боя
         'player_label':  'Ты',
         'unarmed':       'Кулаки',
+        'pack_label': '👥 Стая',
+        'pack_remaining': 'Осталось врагов: {count}',
         'choose_potion': '🧪 <b>Выбери зелье:</b>',
  
         # Сообщения атак

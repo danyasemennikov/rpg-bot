@@ -674,6 +674,12 @@ _PHASE1_ELITE_MOB_BY_LOCATION = {
     location_id: _PHASE1_ELITE_MOB_OVERRIDES.get(location_id, _PHASE1_LOCATION_MOBS[location_id][-1])
     for location_id in _PHASE1_ELITE_ANCHOR_IDS
 }
+_PHASE1_PACK_NORMAL_COUNT_OVERRIDES = {
+    'forest_wolf': 3,
+    'white_wolf': 3,
+    'leech': 3,
+    'zombie': 3,
+}
 
 for _phase1_location_id, _phase1_mobs in _PHASE1_LOCATION_MOBS.items():
     WORLD_LOCATIONS[_phase1_location_id]['mobs'] = list(_phase1_mobs)
@@ -682,6 +688,9 @@ for _phase1_location_id, _phase1_mobs in _PHASE1_LOCATION_MOBS.items():
         mob_id: {'normal': 1}
         for mob_id in _phase1_mobs
     }
+    for _mob_id, _count in _PHASE1_PACK_NORMAL_COUNT_OVERRIDES.items():
+        if _mob_id in WORLD_LOCATIONS[_phase1_location_id]['world_spawn_profiles']:
+            WORLD_LOCATIONS[_phase1_location_id]['world_spawn_profiles'][_mob_id]['normal'] = _count
     _elite_mob_id = _PHASE1_ELITE_MOB_BY_LOCATION.get(_phase1_location_id)
     if _elite_mob_id:
         WORLD_LOCATIONS[_phase1_location_id]['world_spawn_profiles'][_elite_mob_id] = {'normal': 1, 'elite': 1}
