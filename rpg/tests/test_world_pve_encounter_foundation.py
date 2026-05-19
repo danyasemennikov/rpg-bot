@@ -23,6 +23,7 @@ from game.pve_live import (
     list_location_available_spawn_instances,
     open_world_runtime_start_mode,
     resolve_world_spawn_profile_modifiers,
+    resolve_available_spawn_for_group_click,
     ensure_runtime_for_battle,
     get_pve_encounter_player_ids,
 )
@@ -1802,6 +1803,60 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         )
         self.assertEqual(retry_status, 'spawn_busy')
         self.assertEqual(retry_id, encounter_a)
+
+    def test_group_click_fallback_resolves_idle_same_visible_group_spawn(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 2},
+        }):
+            list_location_available_spawn_instances(location_id=self.location_id)
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=?
+            WHERE spawn_instance_id=?
+            ''',
+            ('forming', 'pve-enc-other', 'spawn-dark_forest-forest_wolf'),
+        )
+        conn.commit()
+        conn.close()
+
+        resolved = resolve_available_spawn_for_group_click(
+            location_id=self.location_id,
+            clicked_spawn_instance_id='spawn-dark_forest-forest_wolf',
+        )
+        self.assertIsNotNone(resolved)
+        self.assertEqual(str(resolved['spawn_instance_id']), 'spawn-dark_forest-forest_wolf-2')
+
+    def test_group_click_fallback_does_not_cross_visible_group_identity(self):
+        with patch('game.pve_live.get_location', return_value={
+            'id': self.location_id,
+            'mobs': ['forest_wolf'],
+            'world_spawn_counts': {'forest_wolf': 1},
+            'world_spawn_profiles': {'forest_wolf': {'normal': 1, 'elite': 1}},
+        }):
+            list_location_available_spawn_instances(location_id=self.location_id)
+
+        conn = get_connection()
+        conn.execute(
+            '''
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=?
+            WHERE spawn_instance_id=?
+            ''',
+            ('forming', 'pve-enc-other', 'spawn-dark_forest-forest_wolf-elite'),
+        )
+        conn.commit()
+        conn.close()
+
+        resolved = resolve_available_spawn_for_group_click(
+            location_id=self.location_id,
+            clicked_spawn_instance_id='spawn-dark_forest-forest_wolf-elite',
+        )
+        self.assertIsNone(resolved)
 
 
 if __name__ == '__main__':

@@ -509,6 +509,49 @@ def list_location_available_spawn_instances(*, location_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def resolve_available_spawn_for_group_click(*, location_id: str, clicked_spawn_instance_id: str) -> dict | None:
+    ensure_location_pve_spawn_instances(location_id=location_id)
+    conn = get_connection()
+    original_row = conn.execute(
+        '''
+        SELECT mob_id, spawn_profile, special_spawn_key, special_spawn_name
+        FROM pve_spawn_instances
+        WHERE location_id=?
+          AND spawn_instance_id=?
+        LIMIT 1
+        ''',
+        (str(location_id), str(clicked_spawn_instance_id)),
+    ).fetchone()
+    if not original_row:
+        conn.close()
+        return None
+    replacement_row = conn.execute(
+        '''
+        SELECT spawn_instance_id, location_id, mob_id, spawn_profile, special_spawn_key, special_spawn_name, state
+        FROM pve_spawn_instances
+        WHERE location_id=?
+          AND mob_id=?
+          AND spawn_profile=?
+          AND COALESCE(special_spawn_key, '')=COALESCE(?, '')
+          AND COALESCE(special_spawn_name, '')=COALESCE(?, '')
+          AND state=?
+          AND linked_encounter_id IS NULL
+        ORDER BY spawn_instance_id ASC
+        LIMIT 1
+        ''',
+        (
+            str(location_id),
+            str(original_row['mob_id']),
+            _normalize_spawn_profile(original_row['spawn_profile']),
+            original_row['special_spawn_key'],
+            original_row['special_spawn_name'],
+            SPAWN_STATE_IDLE,
+        ),
+    ).fetchone()
+    conn.close()
+    return dict(replacement_row) if replacement_row else None
+
+
 def _prune_expired_forming_encounters(
     conn,
     *,

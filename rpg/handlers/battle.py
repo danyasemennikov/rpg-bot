@@ -28,6 +28,7 @@ from game.pve_live import (
     OpenWorldRuntimeStartBlocked,
     ensure_runtime_for_battle,
     list_location_available_spawn_instances,
+    resolve_available_spawn_for_group_click,
     load_active_pve_encounter,
     get_pve_encounter_player_ids,
     load_active_solo_pve_encounter,
@@ -389,9 +390,15 @@ async def start_battle(
         spawn_by_id = {str(row.get('spawn_instance_id')): row for row in spawn_rows}
         selected_spawn = spawn_by_id.get(str(spawn_instance_id))
         if not selected_spawn:
-            _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
-            await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)
-            return
+            selected_spawn = resolve_available_spawn_for_group_click(
+                location_id=location_id,
+                clicked_spawn_instance_id=str(spawn_instance_id),
+            )
+            if not selected_spawn:
+                _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
+                await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)
+                return
+            spawn_instance_id = str(selected_spawn.get('spawn_instance_id') or '')
         mob_id = str(selected_spawn.get('mob_id') or '')
 
     mob = get_mob(mob_id)
