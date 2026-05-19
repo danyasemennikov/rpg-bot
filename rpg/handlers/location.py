@@ -17,6 +17,11 @@ from database import (
     is_location_discovered,
 )
 from game.locations import get_location, get_connected_locations, get_location_neighbors, resolve_location_id
+from game.contextual_keyboard import (
+    build_contextual_main_keyboard,
+    looks_like_lower_travel_button,
+    resolve_lower_travel_button,
+)
 from game.gathering_foundation import build_location_gather_source_profiles
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
@@ -986,17 +991,6 @@ def build_location_message(
         )])
         text += "\n"
 
-    # ── Переходы в другие локации ──
-    connected = get_connected_locations(location['id'])
-    if connected and not pvp_only_view:
-        text += t('location.travel_title', lang) + '\n'
-        nav_buttons = []
-        for conn_loc in connected:
-            label = t('location.go_to_btn', lang, name=get_location_name(conn_loc['id'], lang))
-            cb    = f"goto_{conn_loc['id']}"
-            nav_buttons.append(InlineKeyboardButton(label, callback_data=cb))
-        keyboard.append(nav_buttons)
-
     if players_nearby_lines:
         text += t('location.players_nearby', lang) + '\n'
         text += '\n'.join(players_nearby_lines) + '\n\n'
@@ -1040,6 +1034,17 @@ def build_location_message(
     return text, keyboard_markup, snapshot
 
 
+
+async def _send_lower_menu_sync_message(message, player: dict) -> None:
+    if not hasattr(message, 'reply_text'):
+        return
+    lang = player.get('lang', 'ru')
+    await message.reply_text(
+        t('keyboard.sync_updated', lang),
+        reply_markup=build_contextual_main_keyboard(player, lang),
+    )
+
+
 # ────────────────────────────────────────
 # КОМАНДА /location
 # ────────────────────────────────────────
@@ -1073,7 +1078,9 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         location,
         pvp_only_view=in_live_pvp,
     )
-    msg = await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
+    if not in_live_pvp:
+        await _send_lower_menu_sync_message(update.message, dict(p))
 
 
 def _build_location_message_with_snapshot(
@@ -1175,6 +1182,30 @@ class _MessageActionQueryAdapter:
 
     async def edit_message_text(self, text: str, reply_markup=None, parse_mode=None):
         await self._update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+
+
+
+async def handle_lower_menu_travel_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not update.message or not update.message.text:
+        return False
+    raw_text = update.message.text.strip()
+    if not looks_like_lower_travel_button(raw_text):
+        return False
+
+    player = get_player(update.effective_user.id)
+    lang = player['lang'] if player else 'ru'
+    if not player:
+        await update.message.reply_text(t('common.no_character', lang))
+        return True
+
+    target_id = resolve_lower_travel_button(raw_text, dict(player), lang)
+    if not target_id:
+        await update.message.reply_text(t('location.lower_travel_stale', lang))
+        return True
+
+    adapted_update = SimpleNamespace(callback_query=_MessageActionQueryAdapter(update=update, callback_data=f'goto_{target_id}'))
+    await handle_location_buttons(adapted_update, context)
+    return True
 
 
 async def handle_location_action_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -1854,8 +1885,10 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         )
 
         p = dict(get_player(user.id))
+        new_loc = get_location(canonical_new_loc_id) or new_loc
         text, keyboard = _build_location_message_with_snapshot(context, p, new_loc)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await _send_lower_menu_sync_message(query.message, p)
 
         if not new_loc['safe']:
             context.application.create_task(

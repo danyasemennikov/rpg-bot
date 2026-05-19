@@ -195,7 +195,7 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(location_id=location_id):
                 self.assertEqual(get_location(location_id).get('region_flavor_tags'), tags)
 
-    def test_capital_city_location_view_has_starter_services_and_travel_controls(self):
+    def test_capital_city_location_view_has_starter_services_without_inline_travel_controls(self):
         player = dict(get_player(9101))
         player['location_id'] = 'capital_city'
         location = get_location('capital_city')
@@ -210,19 +210,9 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
             for row in keyboard.inline_keyboard
             for button in row
         ]
-        self.assertEqual(
-            [callback for callback in callbacks if callback.startswith('goto_')],
-            [
-                'goto_westwild_n1',
-                'goto_frostspine_n1',
-                'goto_ashen_n1',
-                'goto_sunscar_n1',
-                'goto_mireveil_n1',
-                'goto_south_coast_shore',
-            ],
-        )
+        self.assertEqual([callback for callback in callbacks if callback.startswith('goto_')], [])
         self.assertNotIn('teleport', ''.join(callbacks))
-        self.assertIn('Travel to:', text)
+        self.assertNotIn('Travel to:', text)
         self.assertIn('s1 sv1 shop', text)
         self.assertIn('s1 sv2 inn', text)
         self.assertIn('s1 sv3 quests', text)

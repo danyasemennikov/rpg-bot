@@ -5,7 +5,7 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from database import get_player, get_connection
 from game.balance import exp_to_next_level, calc_max_hp, calc_max_mana, calc_carry_weight
@@ -75,13 +75,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 def main_keyboard(lang: str = 'ru'):
-    from game.i18n import t
-    return ReplyKeyboardMarkup([
-        [t('keyboard.location', lang), t('keyboard.profile', lang)],
-        [t('keyboard.inventory', lang), t('keyboard.skills', lang)],
-        [t('keyboard.quests', lang), t('keyboard.stats', lang)],
-        [t('keyboard.settings', lang), t('keyboard.help', lang)],
-    ], resize_keyboard=True)
+    from game.contextual_keyboard import build_contextual_main_keyboard
+    return build_contextual_main_keyboard(lang=lang)
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user

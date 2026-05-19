@@ -78,6 +78,7 @@ STRINGS = {
     },
     'keyboard': {
         'location':     '📍 Ubicación',
+        'map':          '🗺️ Mapa',
         'profile':      '👤 Perfil',
         'inventory':    '🎒 Inventario',
         'skills':       '🔮 Habilidades',
@@ -85,6 +86,7 @@ STRINGS = {
         'stats':        '📊 Stats',
         'help':         '❓ Ayuda',
         'settings':     '⚙️ Ajustes',
+        'sync_updated': '⌨️ Menú inferior actualizado.',
     },
     'location': {
         'title':        '📍 <b>{name}</b>',
@@ -269,6 +271,7 @@ STRINGS = {
         'spawn_profile_rare': '[Raro]',
         'actions_hint': 'Envía un comando con marcador de snapshot {snapshot} (ejemplo: <code>{snapshot} m1 fight</code>).',
         'action_stale': '⏳ Esta acción de ubicación está desactualizada. Actualiza con /location.',
+        'lower_travel_stale': '⏳ Este viaje ya no está disponible desde tu ubicación actual. Actualiza con /location.',
         'pve_join_success': '✅ Te uniste al encuentro.',
         'pve_join_already': 'ℹ️ Ya estás en este encuentro.',
         'pve_join_locked': '⛔ Este encuentro ya está bloqueado.',
