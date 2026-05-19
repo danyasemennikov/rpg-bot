@@ -667,9 +667,17 @@ def resolve_pack_fanout_direct_damage_skill_action(
         return {'handled': False}
 
     active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
-    alive_indexes = [idx for idx, unit in enumerate(enemy_units) if not bool(unit.get('dead'))]
-    if not alive_indexes:
+    living_indexes = [idx for idx, unit in enumerate(enemy_units) if not bool(unit.get('dead'))]
+    if not living_indexes:
         return {'handled': False}
+    active_living_index = next(
+        (idx for idx in living_indexes if str(enemy_units[idx].get('unit_id')) == active_id_before),
+        None,
+    )
+    if active_living_index is None:
+        alive_indexes = living_indexes
+    else:
+        alive_indexes = [active_living_index] + [idx for idx in living_indexes if idx != active_living_index]
 
     base_damage = int(skill_result.get('damage', 0) or 0)
     per_target_results = []

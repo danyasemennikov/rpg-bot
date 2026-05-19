@@ -157,3 +157,85 @@ class PackAoeFanoutPR2B2Tests(unittest.TestCase):
         )
         self.assertIn('Flame Wave', line)
         self.assertIn('3', line)
+
+    def test_fanout_processes_active_target_first_in_per_target_order(self):
+        battle_state = self._base_battle_state()
+        battle_state['active_enemy_unit_id'] = 'u2'
+        with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
+             patch('game.combat.use_skill', return_value={'success': True, 'skill_id': 'flame_wave', 'log': 'cast', 'damage': 10, 'heal': 0, 'effects': [], 'target_kind': 'enemy', 'direct_damage_skill': True}), \
+             patch('game.combat.resolve_hit_check', return_value={'is_hit': True}):
+            result = process_skill_turn('flame_wave', self._base_player(), self._base_mob(), battle_state, user_id=1, include_enemy_response=False)
+        self.assertEqual(
+            [entry['unit_id'] for entry in result['skill_result']['direct_damage_result']['per_target']],
+            ['u2', 'u1', 'u3'],
+        )
+
+    def test_fanout_guaranteed_crit_is_consumed_on_active_target_first(self):
+        battle_state = self._base_battle_state()
+        battle_state['active_enemy_unit_id'] = 'u2'
+        battle_state['guaranteed_crit_turns'] = 1
+
+        def _fake_finalize(state, *, base_damage, **_kwargs):
+            bonus = 100 if int(state.get('guaranteed_crit_turns', 0)) > 0 else 0
+            if bonus:
+                state['guaranteed_crit_turns'] = 0
+            final = int(base_damage) + bonus
+            state['mob_hp'] = max(0, int(state.get('mob_hp', 0)) - final)
+            return {'final_damage': final, 'mob_hp_after': state['mob_hp'], 'mob_dead': state['mob_hp'] <= 0}
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
+             patch('game.combat.use_skill', return_value={'success': True, 'skill_id': 'flame_wave', 'log': 'cast', 'damage': 10, 'heal': 0, 'effects': [], 'target_kind': 'enemy', 'direct_damage_skill': True}), \
+             patch('game.combat.resolve_hit_check', return_value={'is_hit': True}), \
+             patch('game.combat.finalize_player_direct_damage_action', side_effect=_fake_finalize):
+            result = process_skill_turn('flame_wave', self._base_player(), self._base_mob(), battle_state, user_id=1, include_enemy_response=False)
+
+        per_target = result['skill_result']['direct_damage_result']['per_target']
+        self.assertEqual(per_target[0]['unit_id'], 'u2')
+        self.assertEqual(per_target[0]['damage'], 110)
+        self.assertEqual(per_target[1]['unit_id'], 'u1')
+        self.assertEqual(per_target[1]['damage'], 10)
+
+    def test_fanout_vulnerability_is_consumed_on_active_target_first(self):
+        battle_state = self._base_battle_state()
+        battle_state['active_enemy_unit_id'] = 'u2'
+        battle_state['vulnerability_turns'] = 1
+        battle_state['vulnerability_value'] = 50
+
+        def _fake_finalize(state, *, base_damage, **_kwargs):
+            mult = 1.5 if int(state.get('vulnerability_turns', 0)) > 0 else 1.0
+            if mult > 1.0:
+                state['vulnerability_turns'] = 0
+            final = int(int(base_damage) * mult)
+            state['mob_hp'] = max(0, int(state.get('mob_hp', 0)) - final)
+            return {'final_damage': final, 'mob_hp_after': state['mob_hp'], 'mob_dead': state['mob_hp'] <= 0}
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
+             patch('game.combat.use_skill', return_value={'success': True, 'skill_id': 'flame_wave', 'log': 'cast', 'damage': 10, 'heal': 0, 'effects': [], 'target_kind': 'enemy', 'direct_damage_skill': True}), \
+             patch('game.combat.resolve_hit_check', return_value={'is_hit': True}), \
+             patch('game.combat.finalize_player_direct_damage_action', side_effect=_fake_finalize):
+            result = process_skill_turn('flame_wave', self._base_player(), self._base_mob(), battle_state, user_id=1, include_enemy_response=False)
+
+        per_target = result['skill_result']['direct_damage_result']['per_target']
+        self.assertEqual(per_target[0]['unit_id'], 'u2')
+        self.assertEqual(per_target[0]['damage'], 15)
+        self.assertEqual(per_target[1]['unit_id'], 'u1')
+        self.assertEqual(per_target[1]['damage'], 10)
+
+    def test_fanout_falls_back_to_stable_order_when_active_missing_or_dead(self):
+        missing_active_state = self._base_battle_state()
+        missing_active_state['active_enemy_unit_id'] = 'u99'
+        dead_active_state = self._base_battle_state()
+        dead_active_state['active_enemy_unit_id'] = 'u2'
+        dead_active_state['enemy_units'][1]['dead'] = True
+
+        def _fanout_skill_result():
+            return {'success': True, 'skill_id': 'flame_wave', 'log': 'cast', 'damage': 1, 'heal': 0, 'effects': [], 'target_kind': 'enemy', 'direct_damage_skill': True}
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
+             patch('game.combat.use_skill', side_effect=lambda *_a, **_k: _fanout_skill_result()), \
+             patch('game.combat.resolve_hit_check', return_value={'is_hit': True}):
+            missing_result = process_skill_turn('flame_wave', self._base_player(), self._base_mob(), missing_active_state, user_id=1, include_enemy_response=False)
+            dead_result = process_skill_turn('flame_wave', self._base_player(), self._base_mob(), dead_active_state, user_id=1, include_enemy_response=False)
+
+        self.assertEqual([x['unit_id'] for x in missing_result['skill_result']['direct_damage_result']['per_target']], ['u1', 'u2', 'u3'])
+        self.assertEqual([x['unit_id'] for x in dead_result['skill_result']['direct_damage_result']['per_target']], ['u1', 'u3'])
