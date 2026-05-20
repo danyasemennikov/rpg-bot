@@ -29,8 +29,10 @@ from game.i18n import t, get_mob_name, get_skill_name
 from game.skills import get_skill
 from game.targeting import (
     TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK,
+    TARGET_SHAPE_BACK_LINE_SINGLE,
     TARGET_SHAPE_FRONT_LINE_CLUSTER,
     select_all_enemies_in_small_pack,
+    select_back_line_single,
     select_front_line_cluster,
 )
 from game.skill_engine import (
@@ -754,6 +756,84 @@ def resolve_pack_fanout_direct_damage_skill_action(
     return {'handled': True, 'targets_hit': targets_hit, 'targets_total': len(alive_indexes)}
 
 
+def resolve_back_line_single_direct_damage_skill_action(
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    skill_result: dict,
+    *,
+    lang: str = 'ru',
+) -> dict:
+    """Resolve back-line single-target redirect for enemy_units packs."""
+    enemy_units = list(battle_state.get('enemy_units') or [])
+    if not enemy_units:
+        return {'handled': False}
+
+    skill_def = get_skill(skill_result.get('skill_id', '')) or {}
+    if str(skill_def.get('target_shape') or '') != TARGET_SHAPE_BACK_LINE_SINGLE:
+        return {'handled': False}
+    if not skill_result.get('direct_damage_skill'):
+        return {'handled': False}
+    if skill_result.get('target_kind') != 'enemy':
+        return {'handled': False}
+
+    active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
+    selected_targets = select_back_line_single(enemy_units, active_unit_id=active_id_before)
+    if not selected_targets:
+        return {'handled': False}
+    selected_target = selected_targets[0]
+
+    selected_unit_id = str(selected_target.get('unit_id') or '')
+    selected_idx = next((idx for idx, unit in enumerate(enemy_units) if str(unit.get('unit_id')) == selected_unit_id), None)
+    if selected_idx is None:
+        return {'handled': False}
+
+    unit = enemy_units[selected_idx]
+    battle_state['mob_hp'] = int(unit.get('hp', 0) or 0)
+    battle_state['mob_max_hp'] = int(unit.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
+    battle_state['mob_effects'] = list(unit.get('mob_effects') or [])
+    battle_state['active_enemy_unit_id'] = unit.get('unit_id')
+
+    gate_result = resolve_enemy_targeted_direct_damage_skill_action(
+        player, mob, battle_state, skill_result, lang=lang
+    )
+    if not gate_result.get('handled'):
+        return {'handled': False}
+
+    if skill_result.get('effects'):
+        if 'mob_effects' not in battle_state:
+            battle_state['mob_effects'] = []
+        battle_state['mob_effects'].extend(skill_result['effects'])
+        skill_result['effects'] = []
+
+    unit['hp'] = max(0, int(battle_state.get('mob_hp', 0) or 0))
+    unit['dead'] = unit['hp'] <= 0
+    unit['mob_effects'] = list(battle_state.get('mob_effects') or [])
+    enemy_units[selected_idx] = unit
+    battle_state['enemy_units'] = enemy_units
+
+    living_after = [u for u in enemy_units if not bool(u.get('dead'))]
+    preferred_active = next((u for u in living_after if str(u.get('unit_id')) == active_id_before), None)
+    active_after = preferred_active or (living_after[0] if living_after else None)
+    if active_after is None:
+        battle_state['mob_dead'] = True
+        battle_state['mob_hp'] = 0
+        battle_state['mob_effects'] = []
+    else:
+        battle_state['active_enemy_unit_id'] = active_after.get('unit_id')
+        battle_state['mob_hp'] = int(active_after.get('hp', 0) or 0)
+        battle_state['mob_max_hp'] = int(active_after.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
+        battle_state['mob_effects'] = list(active_after.get('mob_effects') or [])
+        battle_state['mob_dead'] = False
+
+    direct_damage_result = skill_result.get('direct_damage_result')
+    if isinstance(direct_damage_result, dict):
+        direct_damage_result['target_shape'] = TARGET_SHAPE_BACK_LINE_SINGLE
+        direct_damage_result['selected_unit_id'] = selected_unit_id
+        direct_damage_result['shape_redirect'] = True
+    return {'handled': True, 'selected_unit_id': selected_unit_id}
+
+
 def build_guaranteed_hit_check() -> dict:
     """Стандартизованный hit_check для guaranteed-hit действий."""
     return {
@@ -1016,6 +1096,10 @@ def process_skill_turn(
         gate_result = resolve_pack_fanout_direct_damage_skill_action(
             player_state, mob, battle_state, skill_result, lang=lang
         )
+        if not gate_result.get('handled'):
+            gate_result = resolve_back_line_single_direct_damage_skill_action(
+                player_state, mob, battle_state, skill_result, lang=lang
+            )
         if not gate_result.get('handled'):
             gate_result = resolve_enemy_targeted_direct_damage_skill_action(
                 player_state,
