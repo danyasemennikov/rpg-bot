@@ -107,6 +107,7 @@ class PatternRuntimeMigrationPR2C6Tests(unittest.TestCase):
             {'unit_id': 'm1', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False, 'formation_line': 'melee'},
         ])
         skill_result = self._skill_result()
+        skill_result['heal'] = 7
         skill_result['effects'] = [{'type': 'bleed', 'value': 3, 'turns': 2}]
         with patch('game.combat.get_skill', return_value={'target_pattern_id': 'ranged_line_single'}):
             result = resolve_back_line_single_direct_damage_skill_action(self._player(), self._mob(), no_ranged_state, skill_result, lang='en')
@@ -115,6 +116,7 @@ class PatternRuntimeMigrationPR2C6Tests(unittest.TestCase):
         self.assertTrue(result['no_valid_target'])
         self.assertEqual([u['hp'] for u in no_ranged_state['enemy_units']], [20, 20])
         self.assertEqual(skill_result['damage'], 0)
+        self.assertEqual(skill_result['heal'], 0)
         self.assertEqual(skill_result['effects'], [])
         self.assertEqual(skill_result['log'], 'No valid target.')
         self.assertEqual(skill_result['direct_damage_result']['target_pattern_id'], 'ranged_line_single')
@@ -133,16 +135,20 @@ class PatternRuntimeMigrationPR2C6Tests(unittest.TestCase):
             {'unit_id': 'f1', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False, 'formation_line': 'front'},
             {'unit_id': 'm1', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False, 'formation_line': 'melee'},
         ], active_enemy_unit_id='f1')
+        battle_state['player_hp'] = 50
         skill_result = self._skill_result('rangedline')
+        skill_result['heal'] = 9
         skill_result['effects'] = [{'type': 'bleed', 'value': 3, 'turns': 2}]
         with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
              patch('game.combat.use_skill', return_value=skill_result), \
              patch('game.combat.get_skill', return_value={'target_pattern_id': 'ranged_line_single'}):
             result = process_skill_turn('rangedline', self._player(), self._mob(), battle_state, user_id=1, lang='en', include_enemy_response=False)
         self.assertTrue(result['success'])
+        self.assertEqual(battle_state['player_hp'], 50)
         self.assertEqual([u['hp'] for u in battle_state['enemy_units']], [20, 20])
         self.assertEqual(battle_state['enemy_units'][0]['mob_effects'], [])
         self.assertEqual(battle_state['enemy_units'][1]['mob_effects'], [])
+        self.assertEqual(skill_result['heal'], 0)
         self.assertTrue(skill_result['direct_damage_result']['no_valid_target'])
         self.assertEqual(skill_result['direct_damage_result']['selected_unit_id'], None)
 
@@ -171,15 +177,19 @@ class PatternRuntimeMigrationPR2C6Tests(unittest.TestCase):
         battle_state = self._state([
             {'unit_id': 'f1', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False, 'formation_line': 'front'},
         ], active_enemy_unit_id='f1')
+        battle_state['player_hp'] = 50
         skill_result = self._skill_result('bad_pattern_skill')
+        skill_result['heal'] = 11
         skill_result['effects'] = [{'type': 'bleed', 'value': 3, 'turns': 2}]
         with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
              patch('game.combat.use_skill', return_value=skill_result), \
              patch('game.combat.get_skill', return_value={'target_pattern_id': 'unknown_pattern'}):
             result = process_skill_turn('bad_pattern_skill', self._player(), self._mob(), battle_state, user_id=1, lang='en', include_enemy_response=False)
         self.assertTrue(result['success'])
+        self.assertEqual(battle_state['player_hp'], 50)
         self.assertEqual(battle_state['enemy_units'][0]['hp'], 20)
         self.assertEqual(skill_result['damage'], 0)
+        self.assertEqual(skill_result['heal'], 0)
         self.assertEqual(skill_result['effects'], [])
         self.assertTrue(skill_result['direct_damage_result']['invalid_target_pattern'])
         self.assertTrue(skill_result['direct_damage_result']['no_valid_target'])

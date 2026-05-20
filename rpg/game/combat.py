@@ -785,6 +785,7 @@ def resolve_back_line_single_direct_damage_skill_action(
     selected_targets = select_targets_for_pattern(enemy_units, pattern, active_unit_id=active_id_before)
     if not selected_targets:
         skill_result['damage'] = 0
+        skill_result['heal'] = 0
         skill_result['effects'] = []
         skill_result['log'] = t('battle.no_valid_target', lang)
         skill_result['direct_damage_result'] = {
@@ -1116,6 +1117,7 @@ def process_skill_turn(
     if direct_damage > 0:
         if explicit_pattern is not None and resolved_pattern_id is None:
             skill_result['damage'] = 0
+            skill_result['heal'] = 0
             skill_result['effects'] = []
             skill_result['log'] = t('battle.no_valid_target', lang)
             skill_result['direct_damage_result'] = {
