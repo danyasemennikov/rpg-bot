@@ -682,7 +682,21 @@ def resolve_pack_fanout_direct_damage_skill_action(
     ordered_targets = select_targets_for_pattern(enemy_units, pattern, active_unit_id=active_id_before)
 
     if not ordered_targets:
-        return {'handled': False}
+        skill_result['damage'] = 0
+        skill_result['heal'] = 0
+        skill_result['effects'] = []
+        skill_result['log'] = t('battle.no_valid_target', lang)
+        skill_result['direct_damage_result'] = {
+            'fanout': True,
+            'target_mode': 'pack_fanout',
+            'target_shape': skill_def.get('target_shape'),
+            'target_pattern_id': pattern_id,
+            'targets_total': 0,
+            'targets_hit': 0,
+            'per_target': [],
+            'no_valid_target': True,
+        }
+        return {'handled': True, 'targets_hit': 0, 'targets_total': 0, 'no_valid_target': True}
     unit_index_by_id = {str(unit.get('unit_id')): idx for idx, unit in enumerate(enemy_units)}
     alive_indexes = [unit_index_by_id[str(unit.get('unit_id'))] for unit in ordered_targets if str(unit.get('unit_id')) in unit_index_by_id]
 

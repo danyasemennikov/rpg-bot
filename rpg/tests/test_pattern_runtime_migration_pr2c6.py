@@ -71,6 +71,48 @@ class PatternRuntimeMigrationPR2C6Tests(unittest.TestCase):
         self.assertTrue(result['handled'])
         self.assertEqual([x['unit_id'] for x in skill_result['direct_damage_result']['per_target']], ['f1', 'f2', 'm2', 'm1'])
 
+    def test_fanout_empty_selection_is_handled_no_valid_target(self):
+        battle_state = self._state([
+            {'unit_id': 'u1', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False},
+            {'unit_id': 'u2', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False},
+        ], active_enemy_unit_id='u1')
+        skill_result = self._skill_result('future_two_line_skill')
+        skill_result['heal'] = 8
+        skill_result['effects'] = [{'type': 'bleed', 'value': 3, 'turns': 2}]
+        with patch('game.combat.get_skill', return_value={'target_pattern_id': 'two_front_lines_2x2'}):
+            result = resolve_pack_fanout_direct_damage_skill_action(self._player(), self._mob(), battle_state, skill_result, lang='en')
+        self.assertTrue(result['handled'])
+        self.assertTrue(result['no_valid_target'])
+        self.assertEqual(result['targets_total'], 0)
+        self.assertEqual(result['targets_hit'], 0)
+        self.assertEqual([u['hp'] for u in battle_state['enemy_units']], [20, 20])
+        self.assertEqual(skill_result['damage'], 0)
+        self.assertEqual(skill_result['heal'], 0)
+        self.assertEqual(skill_result['effects'], [])
+        self.assertTrue(skill_result['direct_damage_result']['no_valid_target'])
+        self.assertEqual(skill_result['direct_damage_result']['target_pattern_id'], 'two_front_lines_2x2')
+
+    def test_process_fanout_empty_selection_does_not_fall_through(self):
+        battle_state = self._state([
+            {'unit_id': 'u1', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False},
+            {'unit_id': 'u2', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False},
+        ], active_enemy_unit_id='u1')
+        battle_state['player_hp'] = 50
+        skill_result = self._skill_result('future_two_line_skill')
+        skill_result['heal'] = 8
+        skill_result['effects'] = [{'type': 'bleed', 'value': 3, 'turns': 2}]
+        with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
+             patch('game.combat.use_skill', return_value=skill_result), \
+             patch('game.combat.get_skill', return_value={'target_pattern_id': 'two_front_lines_2x2'}):
+            result = process_skill_turn('future_two_line_skill', self._player(), self._mob(), battle_state, user_id=1, lang='en', include_enemy_response=False)
+        self.assertTrue(result['success'])
+        self.assertEqual(battle_state['player_hp'], 50)
+        self.assertEqual([u['hp'] for u in battle_state['enemy_units']], [20, 20])
+        self.assertEqual(skill_result['damage'], 0)
+        self.assertEqual(skill_result['heal'], 0)
+        self.assertEqual(skill_result['effects'], [])
+        self.assertTrue(skill_result['direct_damage_result']['no_valid_target'])
+
     def test_fanout_rejects_unknown_or_non_fanout_patterns(self):
         state = self._state([{'unit_id': 'u1', 'hp': 20, 'max_hp': 20, 'mob_effects': [], 'dead': False}])
         with patch('game.combat.get_skill', return_value={'target_pattern_id': 'unknown_pattern'}):
