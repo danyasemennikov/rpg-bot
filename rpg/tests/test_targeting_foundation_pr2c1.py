@@ -10,6 +10,8 @@ from game.targeting import (
     TARGET_SHAPES,
     is_valid_formation_line,
     normalize_formation_line,
+    resolve_default_enemy_formation_line,
+    resolve_default_player_formation_line,
     select_all_enemies_in_small_pack,
     select_back_line_single,
     select_front_line_cluster,
@@ -94,6 +96,21 @@ class TargetingFoundationPR2C1Tests(unittest.TestCase):
         selected = select_back_line_single(fallback_targets, active_unit_id='u3')
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0]['unit_id'], 'u3')
+
+    def test_default_player_formation_policy(self):
+        self.assertEqual(resolve_default_player_formation_line(formation_line=' SUPPORT '), 'support')
+        self.assertEqual(resolve_default_player_formation_line(offhand_profile='shield'), 'front')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='holy_staff'), 'support')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='holy_rod'), 'support')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='tome'), 'support')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='bow'), 'ranged')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='wand'), 'ranged')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='magic_staff'), 'ranged')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='sword'), 'melee')
+
+    def test_default_enemy_formation_policy(self):
+        self.assertEqual(resolve_default_enemy_formation_line(formation_line='RANGED'), 'ranged')
+        self.assertEqual(resolve_default_enemy_formation_line(), 'melee')
 
 
 if __name__ == '__main__':

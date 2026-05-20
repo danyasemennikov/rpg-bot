@@ -22,6 +22,7 @@ from game.live_combat_runtime import (
     LiveCombatRuntime,
     LiveCombatRuntimeStore,
 )
+from game.targeting import resolve_default_enemy_formation_line, resolve_default_player_formation_line
 
 SIDE_PLAYER = 'side_a'
 SIDE_ENEMY = 'side_b'
@@ -68,6 +69,7 @@ PARTICIPANT_COMBAT_SNAPSHOT_FIELDS = (
     'weapon_damage',
     'armor_class',
     'offhand_profile',
+    'formation_line',
     'encumbrance',
     'effective_strength',
     'effective_agility',
@@ -1764,6 +1766,7 @@ def create_or_load_open_world_pve_encounter(
                 'max_hp': max_hp,
                 'dead': False,
                 'mob_effects': [],
+                'formation_line': resolve_default_enemy_formation_line(),
             })
         battle_state['enemy_units'] = enemy_units
         battle_state['active_enemy_unit_id'] = enemy_units[0]['unit_id']
@@ -2171,6 +2174,7 @@ def _build_participant_bootstrap_snapshot_for_player(*, battle_state: dict, part
 
     chest_meta = get_item_archetype_metadata(chest_item)
     offhand_meta = get_item_archetype_metadata(offhand_item)
+    normalized_offhand_profile = normalize_offhand_profile(offhand_meta.get('offhand_profile'))
 
     snapshot = dict(fallback)
     snapshot.update({
@@ -2183,7 +2187,11 @@ def _build_participant_bootstrap_snapshot_for_player(*, battle_state: dict, part
         'weapon_profile': weapon_profile,
         'weapon_damage': weapon_damage,
         'armor_class': normalize_armor_class(chest_meta.get('armor_class')),
-        'offhand_profile': normalize_offhand_profile(offhand_meta.get('offhand_profile')),
+        'offhand_profile': normalized_offhand_profile,
+        'formation_line': resolve_default_player_formation_line(
+            weapon_profile=weapon_profile,
+            offhand_profile=normalized_offhand_profile,
+        ),
         'encumbrance': normalize_encumbrance(get_item_encumbrance(chest_item) or get_item_encumbrance(offhand_item)),
         'effective_strength': int(effective.get('strength', player.get('strength', 1)) or 1),
         'effective_agility': int(effective.get('agility', player.get('agility', 1)) or 1),

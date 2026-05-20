@@ -14,6 +14,7 @@ from game.balance import (
     get_player_accuracy_rating,
     get_player_evasion_rating,
     normalize_damage_school,
+    normalize_offhand_profile,
     normalize_weapon_profile,
     apply_mitigation_percent,
     resolve_hit_check,
@@ -49,6 +50,7 @@ from game.pvp_rules import (
 )
 from game.pvp_turn_timing import ACTION_FAMILY_ATTACK, PvpActionOption
 from game.skill_engine import get_battle_skills, precheck_skill_use, use_skill
+from game.targeting import resolve_default_player_formation_line
 from game.weapon_mastery import tick_cooldowns
 from game.weapon_mastery import get_mastery
 
@@ -461,6 +463,8 @@ def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: dateti
     defender = dict(defender_row) if defender_row else {'max_hp': 100}
     attacker_effective = get_player_effective_stats(attacker_id, attacker)
     defender_effective = get_player_effective_stats(defender_id, defender)
+    attacker_profile = _resolve_combat_profile(attacker_id, attacker)
+    defender_profile = _resolve_combat_profile(defender_id, defender)
     return {
         'state': PVP_BATTLE_STATE_LIVE,
         'attacker_hp': max(1, min(int(attacker.get('hp', 1)), int(attacker_effective.get('max_hp', attacker.get('max_hp', 100))))),
@@ -474,6 +478,8 @@ def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: dateti
         'turn_started_at': _to_iso(now),
         'guarded_player_id': None,
         'last_log': '',
+        'attacker_formation_line': attacker_profile['formation_line'],
+        'defender_formation_line': defender_profile['formation_line'],
     }
 
 
@@ -977,7 +983,10 @@ def _resolve_combat_profile(player_id: int, player_row: dict) -> dict:
     effective = get_player_effective_stats(player_id, player_row)
     equipped_item_ids = get_equipped_item_ids(player_id)
     weapon_id = equipped_item_ids.get('weapon', 'unarmed')
+    offhand_id = equipped_item_ids.get('offhand')
     weapon = get_item(weapon_id) or {}
+    offhand = get_item(offhand_id) or {}
+    offhand_profile = normalize_offhand_profile(offhand.get('offhand_profile'))
     weapon_type = weapon.get('weapon_type', 'melee')
     weapon_profile = normalize_weapon_profile(weapon.get('weapon_profile'), weapon_type)
     damage_school = normalize_damage_school(weapon.get('damage_school'), weapon_profile=weapon_profile, weapon_type=weapon_type)
@@ -990,6 +999,11 @@ def _resolve_combat_profile(player_id: int, player_row: dict) -> dict:
         'damage_school': damage_school,
         'effective': effective,
         'mastery_level': int(mastery.get('level', 1)),
+        'offhand_profile': offhand_profile,
+        'formation_line': resolve_default_player_formation_line(
+            weapon_profile=weapon_profile,
+            offhand_profile=offhand_profile,
+        ),
     }
 
 
