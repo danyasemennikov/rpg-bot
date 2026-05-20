@@ -28,10 +28,12 @@ An **execution mode** decides *how the skill resolves on selected units*:
 - `single_redirect`
 - `fanout`
 
-## Compatibility
-`target_shape` remains supported for compatibility.
-`target_pattern_id` is the canonical targeting metadata going forward.
+## Runtime status after PR 2C6
+- Enemy-targeted direct-damage runtime now resolves fanout and single-redirect pack targeting through the target pattern registry.
+- Live skill rollout remains unchanged; no new real skills were assigned to dormant patterns.
+- `target_shape` remains compatibility metadata.
+- `target_pattern_id` is canonical going forward.
+- Ordinary direct damage is recognized as `ordinary_single_enemy`, while existing active-enemy projection behavior remains unchanged.
 
-## Scope of this foundation
-This V1 foundation adds registry/resolution/selector helpers only.
-It does **not** add UI, repositioning, new skill rollout, or PvP mass-battle targeting changes.
+## Non-goals
+This system does **not** add UI, repositioning, new skill rollout, or PvP mass-battle targeting changes.
