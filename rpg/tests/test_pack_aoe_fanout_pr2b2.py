@@ -223,7 +223,7 @@ class PackAoeFanoutPR2B2Tests(unittest.TestCase):
         self.assertEqual(per_target[1]['damage'], 10)
 
 
-    def test_pack_fanout_requires_small_pack_target_shape(self):
+    def test_pack_fanout_requires_supported_target_shape(self):
         battle_state = self._base_battle_state()
         skill_result = {
             'success': True,
@@ -241,7 +241,7 @@ class PackAoeFanoutPR2B2Tests(unittest.TestCase):
         with patch('game.combat.get_skill', return_value={'enemy_target_mode': 'pack_fanout'}):
             result_missing = resolve_pack_fanout_direct_damage_skill_action(player, mob, dict(battle_state), dict(skill_result), lang='en')
 
-        with patch('game.combat.get_skill', return_value={'enemy_target_mode': 'pack_fanout', 'target_shape': 'front_line_cluster'}):
+        with patch('game.combat.get_skill', return_value={'enemy_target_mode': 'pack_fanout', 'target_shape': 'unknown_shape'}):
             result_wrong = resolve_pack_fanout_direct_damage_skill_action(player, mob, dict(battle_state), dict(skill_result), lang='en')
 
         self.assertFalse(result_missing['handled'])

@@ -29,7 +29,9 @@ from game.i18n import t, get_mob_name, get_skill_name
 from game.skills import get_skill
 from game.targeting import (
     TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK,
+    TARGET_SHAPE_FRONT_LINE_CLUSTER,
     select_all_enemies_in_small_pack,
+    select_front_line_cluster,
 )
 from game.skill_engine import (
     apply_mob_effects,
@@ -657,7 +659,7 @@ def resolve_pack_fanout_direct_damage_skill_action(
     *,
     lang: str = 'ru',
 ) -> dict:
-    """Resolve explicit pack-fanout direct-damage skill against all living enemy units."""
+    """Resolve explicit pack-fanout direct-damage skill through a supported target shape."""
     enemy_units = list(battle_state.get('enemy_units') or [])
     if not enemy_units:
         return {'handled': False}
@@ -665,15 +667,20 @@ def resolve_pack_fanout_direct_damage_skill_action(
     skill_def = get_skill(skill_result.get('skill_id', '')) or {}
     if skill_def.get('enemy_target_mode') != 'pack_fanout':
         return {'handled': False}
-    if skill_def.get('target_shape') != TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK:
-        return {'handled': False}
     if not skill_result.get('direct_damage_skill'):
         return {'handled': False}
     if skill_result.get('target_kind') != 'enemy':
         return {'handled': False}
 
+    target_shape = str(skill_def.get('target_shape') or '')
     active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
-    ordered_targets = select_all_enemies_in_small_pack(enemy_units, active_unit_id=active_id_before)
+    if target_shape == TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK:
+        ordered_targets = select_all_enemies_in_small_pack(enemy_units, active_unit_id=active_id_before)
+    elif target_shape == TARGET_SHAPE_FRONT_LINE_CLUSTER:
+        ordered_targets = select_front_line_cluster(enemy_units, active_unit_id=active_id_before, cap=4)
+    else:
+        return {'handled': False}
+
     if not ordered_targets:
         return {'handled': False}
     unit_index_by_id = {str(unit.get('unit_id')): idx for idx, unit in enumerate(enemy_units)}
@@ -739,6 +746,7 @@ def resolve_pack_fanout_direct_damage_skill_action(
     skill_result['direct_damage_result'] = {
         'fanout': True,
         'target_mode': 'pack_fanout',
+        'target_shape': target_shape,
         'targets_total': len(alive_indexes),
         'targets_hit': targets_hit,
         'per_target': per_target_results,
