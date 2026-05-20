@@ -45,6 +45,29 @@ def is_valid_formation_line(value):
     return normalize_formation_line(value) is not None
 
 
+def resolve_default_player_formation_line(*, formation_line=None, weapon_profile=None, offhand_profile=None):
+    explicit_line = normalize_formation_line(formation_line)
+    if explicit_line:
+        return explicit_line
+
+    if str(offhand_profile or '').strip().lower() == 'shield':
+        return FORMATION_LINE_FRONT
+
+    normalized_weapon_profile = str(weapon_profile or '').strip().lower()
+    if normalized_weapon_profile in {'holy_staff', 'holy_rod', 'tome'}:
+        return FORMATION_LINE_SUPPORT
+    if normalized_weapon_profile in {'bow', 'wand', 'magic_staff'}:
+        return FORMATION_LINE_RANGED
+    return FORMATION_LINE_MELEE
+
+
+def resolve_default_enemy_formation_line(*, formation_line=None):
+    explicit_line = normalize_formation_line(formation_line)
+    if explicit_line:
+        return explicit_line
+    return FORMATION_LINE_MELEE
+
+
 def _living_targets(targets):
     return [target for target in list(targets or []) if not bool(target.get('dead'))]
 
