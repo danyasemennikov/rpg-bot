@@ -28,12 +28,11 @@ from game.balance import (
 from game.i18n import t, get_mob_name, get_skill_name
 from game.skills import get_skill
 from game.targeting import (
-    TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK,
-    TARGET_SHAPE_BACK_LINE_SINGLE,
-    TARGET_SHAPE_FRONT_LINE_CLUSTER,
-    select_all_enemies_in_small_pack,
-    select_back_line_single,
-    select_front_line_cluster,
+    TARGET_SHAPE_SINGLE_ACTIVE_ENEMY,
+    TARGET_PATTERN_ORDINARY_SINGLE_ENEMY,
+    get_target_pattern,
+    resolve_target_pattern_id,
+    select_targets_for_pattern,
 )
 from game.skill_engine import (
     apply_mob_effects,
@@ -661,30 +660,43 @@ def resolve_pack_fanout_direct_damage_skill_action(
     *,
     lang: str = 'ru',
 ) -> dict:
-    """Resolve explicit pack-fanout direct-damage skill through a supported target shape."""
+    """Resolve pack fanout direct-damage skills through target pattern registry."""
     enemy_units = list(battle_state.get('enemy_units') or [])
     if not enemy_units:
         return {'handled': False}
 
     skill_def = get_skill(skill_result.get('skill_id', '')) or {}
-    if skill_def.get('enemy_target_mode') != 'pack_fanout':
-        return {'handled': False}
     if not skill_result.get('direct_damage_skill'):
         return {'handled': False}
     if skill_result.get('target_kind') != 'enemy':
         return {'handled': False}
 
-    target_shape = str(skill_def.get('target_shape') or '')
-    active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
-    if target_shape == TARGET_SHAPE_ALL_ENEMIES_IN_SMALL_PACK:
-        ordered_targets = select_all_enemies_in_small_pack(enemy_units, active_unit_id=active_id_before)
-    elif target_shape == TARGET_SHAPE_FRONT_LINE_CLUSTER:
-        ordered_targets = select_front_line_cluster(enemy_units, active_unit_id=active_id_before, cap=4)
-    else:
+    pattern_id = resolve_target_pattern_id(skill_def)
+    pattern = get_target_pattern(pattern_id)
+    if not pattern:
+        return {'handled': False}
+    if pattern.get('execution_mode') != 'fanout':
         return {'handled': False}
 
+    active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
+    ordered_targets = select_targets_for_pattern(enemy_units, pattern, active_unit_id=active_id_before)
+
     if not ordered_targets:
-        return {'handled': False}
+        skill_result['damage'] = 0
+        skill_result['heal'] = 0
+        skill_result['effects'] = []
+        skill_result['log'] = t('battle.no_valid_target', lang)
+        skill_result['direct_damage_result'] = {
+            'fanout': True,
+            'target_mode': 'pack_fanout',
+            'target_shape': skill_def.get('target_shape'),
+            'target_pattern_id': pattern_id,
+            'targets_total': 0,
+            'targets_hit': 0,
+            'per_target': [],
+            'no_valid_target': True,
+        }
+        return {'handled': True, 'targets_hit': 0, 'targets_total': 0, 'no_valid_target': True}
     unit_index_by_id = {str(unit.get('unit_id')): idx for idx, unit in enumerate(enemy_units)}
     alive_indexes = [unit_index_by_id[str(unit.get('unit_id'))] for unit in ordered_targets if str(unit.get('unit_id')) in unit_index_by_id]
 
@@ -748,7 +760,8 @@ def resolve_pack_fanout_direct_damage_skill_action(
     skill_result['direct_damage_result'] = {
         'fanout': True,
         'target_mode': 'pack_fanout',
-        'target_shape': target_shape,
+        'target_shape': skill_def.get('target_shape'),
+        'target_pattern_id': pattern_id,
         'targets_total': len(alive_indexes),
         'targets_hit': targets_hit,
         'per_target': per_target_results,
@@ -764,23 +777,40 @@ def resolve_back_line_single_direct_damage_skill_action(
     *,
     lang: str = 'ru',
 ) -> dict:
-    """Resolve back-line single-target redirect for enemy_units packs."""
+    """Resolve single-redirect direct-damage skills through target pattern registry."""
     enemy_units = list(battle_state.get('enemy_units') or [])
     if not enemy_units:
         return {'handled': False}
 
     skill_def = get_skill(skill_result.get('skill_id', '')) or {}
-    if str(skill_def.get('target_shape') or '') != TARGET_SHAPE_BACK_LINE_SINGLE:
-        return {'handled': False}
     if not skill_result.get('direct_damage_skill'):
         return {'handled': False}
     if skill_result.get('target_kind') != 'enemy':
         return {'handled': False}
 
-    active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
-    selected_targets = select_back_line_single(enemy_units, active_unit_id=active_id_before)
-    if not selected_targets:
+    pattern_id = resolve_target_pattern_id(skill_def)
+    pattern = get_target_pattern(pattern_id)
+    if not pattern:
         return {'handled': False}
+    if pattern.get('execution_mode') != 'single_redirect':
+        return {'handled': False}
+
+    active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
+    selected_targets = select_targets_for_pattern(enemy_units, pattern, active_unit_id=active_id_before)
+    if not selected_targets:
+        skill_result['damage'] = 0
+        skill_result['heal'] = 0
+        skill_result['effects'] = []
+        skill_result['log'] = t('battle.no_valid_target', lang)
+        skill_result['direct_damage_result'] = {
+            'target_pattern_id': pattern_id,
+            'shape_redirect': True,
+            'selected_unit_id': None,
+            'no_valid_target': True,
+        }
+        if skill_def.get('target_shape') is not None:
+            skill_result['direct_damage_result']['target_shape'] = skill_def.get('target_shape')
+        return {'handled': True, 'selected_unit_id': None, 'no_valid_target': True}
     selected_target = selected_targets[0]
 
     selected_unit_id = str(selected_target.get('unit_id') or '')
@@ -828,7 +858,9 @@ def resolve_back_line_single_direct_damage_skill_action(
 
     direct_damage_result = skill_result.get('direct_damage_result')
     if isinstance(direct_damage_result, dict):
-        direct_damage_result['target_shape'] = TARGET_SHAPE_BACK_LINE_SINGLE
+        direct_damage_result['target_pattern_id'] = pattern_id
+        if skill_def.get('target_shape') is not None:
+            direct_damage_result['target_shape'] = skill_def.get('target_shape')
         direct_damage_result['selected_unit_id'] = selected_unit_id
         direct_damage_result['shape_redirect'] = True
     return {'handled': True, 'selected_unit_id': selected_unit_id}
@@ -1091,34 +1123,56 @@ def process_skill_turn(
             'battle_state': battle_state,
         }
 
+    skill_def = get_skill(skill_result.get('skill_id', '')) or {}
+    resolved_pattern_id = resolve_target_pattern_id(skill_def)
+    explicit_pattern = skill_def.get('target_pattern_id')
+
     direct_damage = skill_result.get('damage', 0)
     if direct_damage > 0:
-        gate_result = resolve_pack_fanout_direct_damage_skill_action(
-            player_state, mob, battle_state, skill_result, lang=lang
-        )
-        if not gate_result.get('handled'):
-            gate_result = resolve_back_line_single_direct_damage_skill_action(
+        if explicit_pattern is not None and resolved_pattern_id is None:
+            skill_result['damage'] = 0
+            skill_result['heal'] = 0
+            skill_result['effects'] = []
+            skill_result['log'] = t('battle.no_valid_target', lang)
+            skill_result['direct_damage_result'] = {
+                'target_pattern_id': str(explicit_pattern),
+                'invalid_target_pattern': True,
+                'no_valid_target': True,
+            }
+        else:
+            gate_result = resolve_pack_fanout_direct_damage_skill_action(
                 player_state, mob, battle_state, skill_result, lang=lang
             )
-        if not gate_result.get('handled'):
-            gate_result = resolve_enemy_targeted_direct_damage_skill_action(
-                player_state,
-                mob,
-                battle_state,
-                skill_result,
-                lang=lang,
-            )
-        if not gate_result.get('handled'):
-            action_result = finalize_player_direct_damage_action(
-                battle_state,
-                base_damage=direct_damage,
-                can_consume_guaranteed_crit=True,
-                damage_school=skill_result.get('damage_school'),
-            )
-            skill_result['damage'] = action_result['final_damage']
-            skill_result['direct_damage_result'] = action_result
-            apply_post_hit_skill_actions(skill_result, battle_state)
-            finalize_direct_damage_skill_result(skill_result, lang)
+            if not gate_result.get('handled'):
+                gate_result = resolve_back_line_single_direct_damage_skill_action(
+                    player_state, mob, battle_state, skill_result, lang=lang
+                )
+            if not gate_result.get('handled'):
+                gate_result = resolve_enemy_targeted_direct_damage_skill_action(
+                    player_state,
+                    mob,
+                    battle_state,
+                    skill_result,
+                    lang=lang,
+                )
+            if gate_result.get('handled') and gate_result.get('is_hit') is not None:
+                if resolved_pattern_id == TARGET_PATTERN_ORDINARY_SINGLE_ENEMY:
+                    direct_damage_result = skill_result.get('direct_damage_result')
+                    if isinstance(direct_damage_result, dict):
+                        direct_damage_result['target_pattern_id'] = resolved_pattern_id
+                        if skill_def.get('target_shape') == TARGET_SHAPE_SINGLE_ACTIVE_ENEMY:
+                            direct_damage_result['target_shape'] = TARGET_SHAPE_SINGLE_ACTIVE_ENEMY
+            if not gate_result.get('handled'):
+                action_result = finalize_player_direct_damage_action(
+                    battle_state,
+                    base_damage=direct_damage,
+                    can_consume_guaranteed_crit=True,
+                    damage_school=skill_result.get('damage_school'),
+                )
+                skill_result['damage'] = action_result['final_damage']
+                skill_result['direct_damage_result'] = action_result
+                apply_post_hit_skill_actions(skill_result, battle_state)
+                finalize_direct_damage_skill_result(skill_result, lang)
 
     log.append(skill_result['log'])
 

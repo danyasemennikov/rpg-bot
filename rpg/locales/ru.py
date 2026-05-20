@@ -388,6 +388,7 @@ STRINGS = {
         'mob_miss_slow': '🧊 {mob_name} замедлен и промахивается!',
         'player_dodge': '🌀 Ты уклоняешься от атаки!',
         'mob_dodge':    '🌀 {mob_name} уклоняется!',
+        'no_valid_target': 'Нет подходящей цели.',
         'pack_fanout_skill_targets_hit': '💥 {skill_name} задевает {count} врагов.',
         'stunned':      '💫 {mob_name} оглушён и пропускает ход!',
  
