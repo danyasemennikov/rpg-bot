@@ -43,8 +43,13 @@ This system does **not** add UI, repositioning, new skill rollout, or PvP mass-b
 - `flame_wave` currently uses `all_enemies_in_small_pack` via compatibility `target_shape`.
 - `heavy_swing` now uses canonical `target_pattern_id='front_line_cluster'`.
 - `arcane_lance` now uses canonical `target_pattern_id='back_line_single'`.
-- `deadeye` now uses canonical `target_pattern_id='back_line_single'` with `target_local_resolution=True`.
+- Sniper payoff shots now use canonical `target_pattern_id='back_line_single'` with `target_local_resolution=True`:
+  - `aimed_shot`
+  - `piercing_arrow`
+  - `deadeye`
 
 - PR 2C8A foundation: added opt-in target-local payoff recomputation for `single_redirect` patterns via `target_local_resolution` metadata.
 - PR 2C8B rollout: enabled this for `deadeye` as the first real target-dependent `single_redirect` skill.
+- PR 2C8C rollout: extended the same direct-damage target-local flow to `aimed_shot` and `piercing_arrow`.
+- `hunters_mark` is intentionally not line-aware yet; enemy debuff/control single_redirect targeting is a separate future step.
 - Fanout target-local payoff recomputation remains out of scope and unchanged.
