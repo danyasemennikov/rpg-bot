@@ -626,7 +626,7 @@ SKILLS = {
     'deadeye': {
         'id':             'deadeye',
         'name':           '💀 Мёртвый глаз',
-        'description':    'Капстоун Sniper: commit-выстрел с гарантированным попаданием, максимальный payoff по отмеченной цели.',
+        'description':    'Капстоун Sniper: гарантированное попадание; в pack-бою целится в дальнюю back-line цель, с payoff от Marked и Steady Aim.',
         'weapon_id':      'short_bow',
         'branch':         'A',
         'unlock_mastery': 10,
@@ -642,6 +642,8 @@ SKILLS = {
         'marked_mult':    1.38,
         'steady_mult':    1.18,
         'marked_steady_mult': 1.55,
+        'target_pattern_id': 'back_line_single',
+        'target_local_resolution': True,
     },
     'eagle_eye': {
         'id':             'eagle_eye',

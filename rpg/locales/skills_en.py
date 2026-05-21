@@ -45,7 +45,7 @@ SKILL_NAMES = {
     'hunters_mark': {'name': '🔍 Hunter\'s Mark', 'description': 'Marks the target for several turns so sniper payoff shots gain bonus damage.'},
     'steady_aim': {'name': '🧭 Steady Aim', 'description': 'Sniper setup that opens a short focus window for your next commit ranged shot.'},
     'piercing_arrow': {'name': '🏹 Piercing Arrow', 'description': 'Payoff arrow with partial defense ignore, stronger into marked or armored targets.'},
-    'deadeye': {'name': '💀 Deadeye', 'description': 'Sniper capstone commit shot with guaranteed hit and the strongest marked-target payoff.'},
+    'deadeye': {'name': '💀 Deadeye', 'description': 'Guaranteed-hit Sniper capstone; in pack fights it aims at the farthest back-line target, with marked/steady payoff intact.'},
     'quick_shot': {'name': '⚡ Quick Shot', 'description': 'Cheap low-cooldown ranged pressure shot.'},
     'hamstring_arrow': {'name': '🪢 Hamstring Arrow', 'description': 'Deals direct damage and applies Slow as core Ranger setup.'},
     'reposition': {'name': '↩️ Reposition', 'description': 'Defensive mobility step that grants dodge for a short window.'},

@@ -58,7 +58,8 @@ class FirstPatternRolloutPR2C7ATests(unittest.TestCase):
         self.assertIsNone(bow_ult_a.get('target_pattern_id'))
 
         self.assertIsNone(cleave.get('target_pattern_id'))
-        self.assertIsNone(deadeye.get('target_pattern_id'))
+        self.assertEqual(deadeye.get('target_pattern_id'), 'back_line_single')
+        self.assertIs(deadeye.get('target_local_resolution'), True)
 
         self.assertEqual(heavy_swing.get('mana_cost'), 18)
         self.assertEqual(heavy_swing.get('cooldown'), 3)
