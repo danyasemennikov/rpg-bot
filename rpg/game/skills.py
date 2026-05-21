@@ -544,7 +544,7 @@ SKILLS = {
     'aimed_shot': {
         'id':             'aimed_shot',
         'name':           '🎯 Прицельный выстрел',
-        'description':    'Точный снайперский выстрел: стабильное попадание, сильнее по отмеченной цели и в окно Твёрдого прицела.',
+        'description':    'Точный снайперский выстрел: в pack-бою целится в дальнюю back-line цель, сохраняя payoff от метки и Твёрдого прицела.',
         'weapon_id':      'short_bow',
         'branch':         'A',
         'unlock_mastery': 3,
@@ -562,6 +562,8 @@ SKILLS = {
         'marked_mult':    1.22,
         'steady_mult':    1.10,
         'marked_steady_mult': 1.30,
+        'target_pattern_id': 'back_line_single',
+        'target_local_resolution': True,
     },
     'hunters_mark': {
         'id':             'hunters_mark',
@@ -602,7 +604,7 @@ SKILLS = {
     'piercing_arrow': {
         'id':             'piercing_arrow',
         'name':           '🏹 Пробивающая стрела',
-        'description':    'Сильный payoff-выстрел с частичным игнором защиты: сильнее по отмеченной или бронированной цели.',
+        'description':    'Сильный payoff-выстрел: в pack-бою целится в дальнюю back-line цель; бонусы по marked/armored/steady сохраняются.',
         'weapon_id':      'short_bow',
         'branch':         'A',
         'unlock_mastery': 7,
@@ -622,6 +624,8 @@ SKILLS = {
         'steady_mult': 1.08,
         'steady_payoff_mult': 1.35,
         'steady_accuracy_bonus': 20,
+        'target_pattern_id': 'back_line_single',
+        'target_local_resolution': True,
     },
     'deadeye': {
         'id':             'deadeye',
