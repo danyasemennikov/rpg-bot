@@ -663,7 +663,7 @@ SKILLS = {
     'bow_ult_a': {
         'id':             'bow_ult_a',
         'name':           '☄️ Пронзающая стрела',
-        'description':    'Стрела пронзает все защиты. Урон x4, игнорирует 100% защиты.',
+        'description':    'Стрела пронзает все защиты. В боях с пачкой целится по самой дальней/тыловой цели. Урон x4, игнорирует 100% защиты.',
         'weapon_id':      'short_bow',
         'branch':         'A',
         'unlock_mastery': 10,
@@ -676,6 +676,7 @@ SKILLS = {
         'base_value':     350,
         'level_bonus':    0.15,
         'ignore_defense': 1.0,
+        'target_pattern_id': 'back_line_single',
     },
 
     # Ветка B — Ranger
@@ -844,7 +845,7 @@ SKILLS = {
     'heavy_swing': {
         'id':             'heavy_swing',
         'name':           '🪓 Тяжёлый взмах',
-        'description':    'Базовый тяжёлый удар двуручным мечом.',
+        'description':    'Базовый тяжёлый удар двуручным мечом. В боях с пачкой рассекает ближайшую вражескую линию.',
         'weapon_id':      'sword_2h',
         'branch':         'A',
         'unlock_mastery': 1,
@@ -856,6 +857,7 @@ SKILLS = {
         'scale_mult':     1.8,
         'base_value':     148,
         'level_bonus':    0.10,
+        'target_pattern_id': 'front_line_cluster',
     },
     'armor_split': {
         'id':             'armor_split',

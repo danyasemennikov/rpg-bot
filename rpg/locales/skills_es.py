@@ -52,7 +52,7 @@ SKILL_NAMES = {
     'volley_step': {'name': '🏃‍➡️ Paso de Descarga', 'description': 'Herramienta móvil de presión en 2 impactos: más fuerte contra objetivo ralentizado y con bono controlado en ventana evasiva.'},
     'rain_of_barbs': {'name': '🌵 Lluvia de Púas', 'description': 'Capstone Ranger de presión de tempo, más fuerte contra objetivos ralentizados.'},
     'eagle_eye': {'name': '🦅 Ojo de Águila', 'description': 'Los próximos 3 ataques son críticos garantizados.'},
-    'bow_ult_a': {'name': '☄️ Flecha Perforadora', 'description': 'La flecha atraviesa todas las defensas. Daño x4, ignora 100% de defensa.'},
+    'bow_ult_a': {'name': '☄️ Flecha Perforadora', 'description': 'La flecha atraviesa todas las defensas. En peleas de grupo apunta al objetivo más lejano/de retaguardia. Daño x4, ignora 100% de defensa.'},
     'retreat': {'name': '🏃 Retirada', 'description': '+60% de esquiva durante 1 turno, ataca desde lejos.'},
     'arrow_rain': {'name': '🌧️ Lluvia de Flechas', 'description': 'Dispara 5 flechas. Cada una inflige 40% de daño.'},
     'kite': {'name': '🎪 Atraer', 'description': 'Ralentiza al enemigo. Se salta su próximo turno.'},
@@ -117,7 +117,7 @@ SKILL_NAMES = {
     'synthesis': {'name': '🧬 Síntesis', 'description': 'Lanzamiento de payoff que gana daño notable con quemadura y/o gracia activa.'},
     'forbidden_thesis': {'name': '⛔ Tesis Prohibida', 'description': 'Capstone Researcher: remate híbrido fuerte que consume setup solo tras un impacto exitoso.'},
 
-    'heavy_swing': {'name': '🪓 Golpe Pesado', 'description': 'Golpe pesado base con espada a dos manos.'},
+    'heavy_swing': {'name': '🪓 Golpe Pesado', 'description': 'Golpe pesado base con espada a dos manos. En peleas de grupo atraviesa la línea enemiga más cercana.'},
     'armor_split': {'name': '🧱 Partir Armadura', 'description': 'Debuff de preparación: abre una ventana corta de vulnerabilidad.'},
     'executioners_focus': {'name': '🎯 Enfoque del Verdugo', 'description': 'Buff corto de preparación para potenciar la siguiente ventana de payoff.'},
     'cleave_through': {'name': '🗡️ Cortar de Parte a Parte', 'description': 'Golpe de payoff: más fuerte contra objetivo vulnerable y/o herido, y con Enfoque activo (consume Enfoque).'},

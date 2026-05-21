@@ -52,7 +52,7 @@ SKILL_NAMES = {
     'volley_step': {'name': '🏃‍➡️ Volley Step', 'description': 'Mobile 2-hit pressure tool: stronger vs slowed targets, with a controlled bonus in evasive window.'},
     'rain_of_barbs': {'name': '🌵 Rain of Barbs', 'description': 'Ranger capstone tempo barrage that is stronger into slowed targets.'},
     'eagle_eye': {'name': '🦅 Eagle Eye', 'description': 'Next 3 attacks are guaranteed crits.'},
-    'bow_ult_a': {'name': '☄️ Piercing Arrow', 'description': 'Arrow pierces all defenses. 4x damage, ignores 100% defense.'},
+    'bow_ult_a': {'name': '☄️ Piercing Arrow', 'description': 'Arrow pierces all defenses. In pack fights it aims at the farthest back-line target. 4x damage, ignores 100% defense.'},
     'retreat': {'name': '🏃 Retreat', 'description': '+60% evasion for 1 turn, attacks from range.'},
     'arrow_rain': {'name': '🌧️ Arrow Rain', 'description': 'Fires 5 arrows. Each deals 40% damage.'},
     'kite': {'name': '🎪 Kite', 'description': 'Slows the enemy. They skip their next turn.'},
@@ -117,7 +117,7 @@ SKILL_NAMES = {
     'synthesis': {'name': '🧬 Synthesis', 'description': 'Payoff cast that gains meaningful damage from burn and/or active grace.'},
     'forbidden_thesis': {'name': '⛔ Forbidden Thesis', 'description': 'Researcher capstone finisher that consumes mixed setup only on successful boosted hit.'},
 
-    'heavy_swing': {'name': '🪓 Heavy Swing', 'description': 'A simple heavy two-handed sword strike.'},
+    'heavy_swing': {'name': '🪓 Heavy Swing', 'description': 'A simple heavy two-handed sword strike. In pack fights it cleaves through the nearest enemy line.'},
     'armor_split': {'name': '🧱 Armor Split', 'description': 'Setup debuff that opens a short vulnerability window on the target.'},
     'executioners_focus': {'name': "🎯 Executioner's Focus", 'description': 'Short setup buff that empowers the next two-handed payoff window.'},
     'cleave_through': {'name': '🗡️ Cleave Through', 'description': 'Payoff strike: stronger into vulnerable and/or wounded targets, also stronger with Focus (consumes Focus).'},
