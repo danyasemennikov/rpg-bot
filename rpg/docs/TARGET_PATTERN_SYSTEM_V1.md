@@ -37,3 +37,9 @@ An **execution mode** decides *how the skill resolves on selected units*:
 
 ## Non-goals
 This system does **not** add UI, repositioning, new skill rollout, or PvP mass-battle targeting changes.
+
+## Current rollout (live examples)
+
+- `flame_wave` currently uses `all_enemies_in_small_pack` via compatibility `target_shape`.
+- `heavy_swing` now uses canonical `target_pattern_id='front_line_cluster'`.
+- `bow_ult_a` now uses canonical `target_pattern_id='back_line_single'`.
