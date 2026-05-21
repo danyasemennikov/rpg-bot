@@ -30,7 +30,7 @@ An **execution mode** decides *how the skill resolves on selected units*:
 
 ## Runtime status after PR 2C6
 - Enemy-targeted direct-damage runtime now resolves fanout and single-redirect pack targeting through the target pattern registry.
-- Live skill rollout remains unchanged; no new real skills were assigned to dormant patterns.
+- Initial live rollout examples are tracked below; target_pattern_id is now used by selected real skills.
 - `target_shape` remains compatibility metadata.
 - `target_pattern_id` is canonical going forward.
 - Ordinary direct damage is recognized as `ordinary_single_enemy`, while existing active-enemy projection behavior remains unchanged.
@@ -42,4 +42,4 @@ This system does **not** add UI, repositioning, new skill rollout, or PvP mass-b
 
 - `flame_wave` currently uses `all_enemies_in_small_pack` via compatibility `target_shape`.
 - `heavy_swing` now uses canonical `target_pattern_id='front_line_cluster'`.
-- `bow_ult_a` now uses canonical `target_pattern_id='back_line_single'`.
+- `arcane_lance` now uses canonical `target_pattern_id='back_line_single'`.

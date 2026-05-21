@@ -663,7 +663,7 @@ SKILLS = {
     'bow_ult_a': {
         'id':             'bow_ult_a',
         'name':           '☄️ Пронзающая стрела',
-        'description':    'Стрела пронзает все защиты. В боях с пачкой целится по самой дальней/тыловой цели. Урон x4, игнорирует 100% защиты.',
+        'description':    'Стрела пронзает все защиты. Урон x4, игнорирует 100% защиты.',
         'weapon_id':      'short_bow',
         'branch':         'A',
         'unlock_mastery': 10,
@@ -676,7 +676,6 @@ SKILLS = {
         'base_value':     350,
         'level_bonus':    0.15,
         'ignore_defense': 1.0,
-        'target_pattern_id': 'back_line_single',
     },
 
     # Ветка B — Ranger
@@ -1269,7 +1268,7 @@ SKILLS = {
     'arcane_lance': {
         'id':             'arcane_lance',
         'name':           '💠 Тайное копьё',
-        'description':    'Сильный выстрел энергией, особенно опасный в окно Тайного всплеска.',
+        'description':    'Сильный выстрел энергией: в боях с пачкой целится по самой дальней/тыловой цели, особенно опасен в окно Тайного всплеска.',
         'weapon_id':      'magic_staff',
         'branch':         'A',
         'unlock_mastery': 7,
@@ -1283,6 +1282,7 @@ SKILLS = {
         'level_bonus':    0.12,
         'surge_payoff_scale': 1.0,
         'surge_payoff_cap_percent': 55,
+        'target_pattern_id': 'back_line_single',
     },
     'cataclysm': {
         'id':             'cataclysm',
