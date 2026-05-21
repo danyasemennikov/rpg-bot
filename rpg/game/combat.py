@@ -2,6 +2,7 @@
 # combat.py — боевой движок
 # ============================================================
 
+import copy
 import random
 import sys
 sys.path.append('/content/rpg_bot')
@@ -595,6 +596,7 @@ def resolve_enemy_targeted_direct_damage_skill_action(
     battle_state: dict,
     skill_result: dict,
     *,
+    user_id: int = 0,
     lang: str = 'ru',
 ) -> dict:
     """
@@ -658,6 +660,7 @@ def resolve_pack_fanout_direct_damage_skill_action(
     battle_state: dict,
     skill_result: dict,
     *,
+    user_id: int = 0,
     lang: str = 'ru',
 ) -> dict:
     """Resolve pack fanout direct-damage skills through target pattern registry."""
@@ -775,6 +778,7 @@ def resolve_back_line_single_direct_damage_skill_action(
     battle_state: dict,
     skill_result: dict,
     *,
+    user_id: int = 0,
     lang: str = 'ru',
 ) -> dict:
     """Resolve single-redirect direct-damage skills through target pattern registry."""
@@ -819,6 +823,20 @@ def resolve_back_line_single_direct_damage_skill_action(
         return {'handled': False}
 
     unit = enemy_units[selected_idx]
+
+    if bool(skill_def.get('target_local_resolution')) and skill_result.get('skill_id'):
+        preview_skill_result = preview_skill_result_for_enemy_unit(
+            str(skill_result.get('skill_id')),
+            player,
+            mob,
+            battle_state,
+            unit,
+            user_id,
+            lang,
+        )
+        if preview_skill_result.get('success'):
+            apply_target_local_skill_result_fields(skill_result, preview_skill_result)
+
     battle_state['mob_hp'] = int(unit.get('hp', 0) or 0)
     battle_state['mob_max_hp'] = int(unit.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
     battle_state['mob_effects'] = list(unit.get('mob_effects') or [])
@@ -865,6 +883,69 @@ def resolve_back_line_single_direct_damage_skill_action(
         direct_damage_result['shape_redirect'] = True
     return {'handled': True, 'selected_unit_id': selected_unit_id}
 
+
+
+
+def preview_skill_result_for_enemy_unit(
+    skill_id: str,
+    player_state: dict,
+    mob: dict,
+    battle_state: dict,
+    enemy_unit: dict,
+    user_id: int,
+    lang: str,
+) -> dict:
+    """Preview skill payoff for a specific enemy unit without mutating real combat state."""
+    preview_battle_state = copy.deepcopy(battle_state)
+    preview_enemy_unit = copy.deepcopy(enemy_unit)
+
+    preview_battle_state['mob_hp'] = int(preview_enemy_unit.get('hp', 0) or 0)
+    preview_battle_state['mob_max_hp'] = int(preview_enemy_unit.get('max_hp', preview_battle_state.get('mob_max_hp', 1)) or 1)
+    preview_battle_state['mob_effects'] = list(preview_enemy_unit.get('mob_effects') or [])
+    preview_battle_state['active_enemy_unit_id'] = preview_enemy_unit.get('unit_id')
+
+    preview_mob_state = {
+        'hp': preview_battle_state['mob_hp'],
+        'defense': mob.get('defense', 0),
+        'effects': list(preview_battle_state.get('mob_effects') or []),
+    }
+    preview_result = use_skill(
+        skill_id,
+        copy.deepcopy(player_state),
+        preview_mob_state,
+        preview_battle_state,
+        user_id,
+        lang,
+        commit_resources=False,
+    )
+    return preview_result
+
+
+def apply_target_local_skill_result_fields(base_skill_result: dict, preview_skill_result: dict) -> None:
+    """Replace target-dependent result fields after redirect target selection."""
+    target_local_fields = [
+        'damage',
+        'heal',
+        'effects',
+        'log_key',
+        'log_params',
+        'log_suffixes',
+        'post_hit_actions',
+        'lifesteal_ratio',
+        'heal_from_damage_ratio',
+        'heal_cap_missing_hp',
+        'damage_school',
+        'direct_damage_skill',
+        'target_kind',
+        'guaranteed_hit',
+        'accuracy_bonus',
+        'ignore_evasion',
+    ]
+    for field in target_local_fields:
+        if field in preview_skill_result:
+            base_skill_result[field] = copy.deepcopy(preview_skill_result[field])
+        elif field in base_skill_result:
+            base_skill_result.pop(field, None)
 
 def build_guaranteed_hit_check() -> dict:
     """Стандартизованный hit_check для guaranteed-hit действий."""
@@ -1145,7 +1226,7 @@ def process_skill_turn(
             )
             if not gate_result.get('handled'):
                 gate_result = resolve_back_line_single_direct_damage_skill_action(
-                    player_state, mob, battle_state, skill_result, lang=lang
+                    player_state, mob, battle_state, skill_result, user_id=user_id, lang=lang
                 )
             if not gate_result.get('handled'):
                 gate_result = resolve_enemy_targeted_direct_damage_skill_action(
@@ -1425,6 +1506,7 @@ def resolve_normal_attack_action(
     mob: dict,
     battle_state: dict,
     *,
+    user_id: int = 0,
     lang: str = 'ru',
 ) -> dict:
     """
@@ -1753,6 +1835,7 @@ def process_player_attack_side_turn(
     mob: dict,
     battle_state: dict,
     *,
+    user_id: int = 0,
     lang: str = 'ru',
 ) -> dict:
     """
@@ -1861,6 +1944,7 @@ def process_enemy_side_turn(
 def apply_timeout_fallback_guard(
     battle_state: dict,
     *,
+    user_id: int = 0,
     lang: str = 'ru',
 ) -> dict:
     """
