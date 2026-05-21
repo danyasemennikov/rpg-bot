@@ -45,7 +45,7 @@ SKILL_NAMES = {
     'hunters_mark': {'name': '🔍 Marca del Cazador', 'description': 'Marca al objetivo por varios turnos para potenciar los disparos de payoff de Sniper.'},
     'steady_aim': {'name': '🧭 Puntería Firme', 'description': 'Preparación de francotirador: abre una ventana corta de enfoque para tu siguiente disparo de compromiso.'},
     'piercing_arrow': {'name': '🏹 Flecha Perforante', 'description': 'Flecha de payoff con ignorar defensa parcial, más fuerte contra objetivo marcado o blindado.'},
-    'deadeye': {'name': '💀 Tiro Mortal', 'description': 'Capstone Sniper: disparo de compromiso con impacto garantizado y máximo payoff contra objetivo marcado.'},
+    'deadeye': {'name': '💀 Tiro Mortal', 'description': 'Capstone Sniper de impacto garantizado; en peleas de grupo apunta al objetivo más lejano de retaguardia, con payoff de marcado/steady.'},
     'quick_shot': {'name': '⚡ Disparo Rápido', 'description': 'Disparo barato y de bajo enfriamiento para presión constante.'},
     'hamstring_arrow': {'name': '🪢 Flecha Mermante', 'description': 'Inflige daño directo y aplica ralentización como setup principal de Ranger.'},
     'reposition': {'name': '↩️ Reposicionamiento', 'description': 'Herramienta defensiva de movilidad que otorga evasión por poco tiempo.'},
