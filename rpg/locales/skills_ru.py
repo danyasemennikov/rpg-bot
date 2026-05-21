@@ -42,7 +42,7 @@ SKILL_NAMES = {
     'death_dance': {'name': '💃 Смертельный танец', 'description': 'Атакует 3 раза за ход. Каждый удар слабее но может крит.'},
     'dagger_ult_b': {'name': '👻 Тень смерти', 'description': 'Телепортируется за спину врага. Следующие 3 атаки — гарантированный крит.'},
     'aimed_shot': {'name': '🎯 Прицельный выстрел', 'description': 'Точный снайперский выстрел: в pack-бою целится в дальнюю back-line цель, сохраняя payoff от метки и Твёрдого прицела.'},
-    'hunters_mark': {'name': '🔍 Метка охотника', 'description': 'Помечает цель на несколько ходов: Sniper-payoff выстрелы по метке наносят больше урона.'},
+    'hunters_mark': {'name': '🔍 Метка охотника', 'description': 'Помечает цель для Sniper-payoff выстрелов; в pack-бою выбирает самую дальнюю back-line цель.'},
     'steady_aim': {'name': '🧭 Твёрдый прицел', 'description': 'Подготовка снайпера: создаёт короткое focus-окно для следующего commit-выстрела.'},
     'piercing_arrow': {'name': '🏹 Пробивающая стрела', 'description': 'Сильный payoff-выстрел: в pack-бою целится в дальнюю back-line цель, сохраняя бонусы marked/armored/steady.'},
     'deadeye': {'name': '💀 Мёртвый глаз', 'description': 'Капстоун Sniper с гарантированным попаданием: в pack-бою целится в дальнюю цель back-line, сохраняя payoff от Marked и Steady Aim.'},

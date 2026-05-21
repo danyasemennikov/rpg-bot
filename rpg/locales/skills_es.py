@@ -42,7 +42,7 @@ SKILL_NAMES = {
     'death_dance': {'name': '💃 Danza de la Muerte', 'description': 'Ataca 3 veces por turno. Cada golpe es más débil pero puede ser crítico.'},
     'dagger_ult_b': {'name': '👻 Sombra de la Muerte', 'description': 'Se teleporta detrás del enemigo. Los próximos 3 ataques son críticos garantizados.'},
     'aimed_shot': {'name': '🎯 Disparo Certero', 'description': 'Disparo de precisión; en peleas de grupo apunta al objetivo más lejano de retaguardia, con payoff de marcado/steady intacto.'},
-    'hunters_mark': {'name': '🔍 Marca del Cazador', 'description': 'Marca al objetivo por varios turnos para potenciar los disparos de payoff de Sniper.'},
+    'hunters_mark': {'name': '🔍 Marca del Cazador', 'description': 'Marca un objetivo para los disparos de payoff de Sniper; en peleas de pack marca al enemigo más lejano de back-line.'},
     'steady_aim': {'name': '🧭 Puntería Firme', 'description': 'Preparación de francotirador: abre una ventana corta de enfoque para tu siguiente disparo de compromiso.'},
     'piercing_arrow': {'name': '🏹 Flecha Perforante', 'description': 'Flecha de payoff; en peleas de grupo apunta al objetivo más lejano de retaguardia, con payoff de marcado/blindado/steady intacto.'},
     'deadeye': {'name': '💀 Tiro Mortal', 'description': 'Capstone Sniper de impacto garantizado; en peleas de grupo apunta al objetivo más lejano de retaguardia, con payoff de marcado/steady.'},

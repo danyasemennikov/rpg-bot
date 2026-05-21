@@ -73,7 +73,7 @@ class SniperTargetLocalRolloutPR2C8CTests(unittest.TestCase):
         self.assertIs(deadeye.get('target_local_resolution'), True)
 
         hunters_mark = get_skill('hunters_mark')
-        self.assertIsNone(hunters_mark.get('target_pattern_id'))
+        self.assertEqual(hunters_mark.get('target_pattern_id'), 'back_line_single')
 
     def test_aimed_shot_selection_mark_leak_and_steady(self):
         direct = self._run('aimed_shot', self._state())
