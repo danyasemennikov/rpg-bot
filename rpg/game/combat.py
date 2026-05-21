@@ -972,13 +972,10 @@ def resolve_single_redirect_enemy_effect_skill_action(
         battle_state['mob_effects'].extend(skill_result['effects'])
         skill_result['effects'] = []
 
-    unit['hp'] = max(0, int(battle_state.get('mob_hp', 0) or 0))
-    unit['dead'] = unit['hp'] <= 0
-    unit['mob_effects'] = list(battle_state.get('mob_effects') or [])
-    enemy_units[selected_idx] = unit
-    battle_state['enemy_units'] = enemy_units
-
-    restore_active_projection()
+    battle_state['_pending_enemy_effect_redirect_projection'] = {
+        'selected_unit_id': selected_unit_id,
+        'previous_active_unit_id': active_id_before,
+    }
 
     skill_result['target_pattern_id'] = pattern_id
     skill_result['selected_unit_id'] = selected_unit_id
@@ -986,6 +983,42 @@ def resolve_single_redirect_enemy_effect_skill_action(
     skill_result['enemy_effect_redirect'] = True
     skill_result['effect_redirect'] = True
     return {'handled': True, 'success': True, 'skill_result': skill_result}
+
+
+def finalize_pending_enemy_effect_redirect_projection(battle_state: dict) -> None:
+    """Finalize projected redirected enemy-effect target after tick window."""
+    pending = battle_state.pop('_pending_enemy_effect_redirect_projection', None)
+    if not isinstance(pending, dict):
+        return
+
+    enemy_units = list(battle_state.get('enemy_units') or [])
+    if not enemy_units:
+        return
+
+    selected_unit_id = str(pending.get('selected_unit_id') or '')
+    selected_idx = next((idx for idx, unit in enumerate(enemy_units) if str(unit.get('unit_id')) == selected_unit_id), None)
+    if selected_idx is not None:
+        selected_unit = enemy_units[selected_idx]
+        selected_unit['hp'] = max(0, int(battle_state.get('mob_hp', 0) or 0))
+        selected_unit['dead'] = selected_unit['hp'] <= 0
+        selected_unit['mob_effects'] = list(battle_state.get('mob_effects') or [])
+        enemy_units[selected_idx] = selected_unit
+        battle_state['enemy_units'] = enemy_units
+
+    previous_active_id = str(pending.get('previous_active_unit_id') or '')
+    living_after = [u for u in enemy_units if not bool(u.get('dead'))]
+    preferred_active = next((u for u in living_after if str(u.get('unit_id')) == previous_active_id), None)
+    active_after = preferred_active or (living_after[0] if living_after else None)
+    if active_after is None:
+        battle_state['mob_dead'] = True
+        battle_state['mob_hp'] = 0
+        battle_state['mob_effects'] = []
+    else:
+        battle_state['active_enemy_unit_id'] = active_after.get('unit_id')
+        battle_state['mob_hp'] = int(active_after.get('hp', 0) or 0)
+        battle_state['mob_max_hp'] = int(active_after.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
+        battle_state['mob_effects'] = list(active_after.get('mob_effects') or [])
+        battle_state['mob_dead'] = False
 
 
 
@@ -1401,6 +1434,8 @@ def process_skill_turn(
             battle_state,
             skip_resurrection_tick=(skill_id == 'resurrection'),
         )
+
+    finalize_pending_enemy_effect_redirect_projection(battle_state)
 
     battle_state['mob_dead'] = battle_state['mob_hp'] <= 0
     battle_state['player_dead'] = battle_state['player_hp'] <= 0

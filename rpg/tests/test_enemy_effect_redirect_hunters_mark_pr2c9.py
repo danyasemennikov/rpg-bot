@@ -124,6 +124,41 @@ class EnemyEffectRedirectHuntersMarkPR2C9Tests(unittest.TestCase):
         self.assertEqual(state['mob_effects'], [{'type': 'front_only', 'turns': 2, 'value': 1}])
         self.assertEqual(state['enemy_units'][1]['mob_effects'], [])
         self.assertEqual(state['enemy_units'][0]['hp'], 91)
+        self.assertNotIn('_pending_enemy_effect_redirect_projection', state)
+
+    def test_include_enemy_response_true_ticks_selected_target_mark_duration(self):
+        state = self._state(units=[self._unit('f1', 'front'), self._unit('s1', 'support')])
+        with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
+             patch('game.skill_engine.get_skill_level', return_value=1), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.has_active_mob_effect', side_effect=lambda bs, *effects: any(e in ('stun', 'freeze') for e in effects)):
+            result = process_skill_turn('hunters_mark', self._player(), self._mob(), state, user_id=1, lang='en', include_enemy_response=True)
+
+        self.assertTrue(result['success'])
+        support_marks = [e for e in state['enemy_units'][1]['mob_effects'] if e.get('type') == 'hunters_mark']
+        self.assertEqual(len(support_marks), 1)
+        self.assertEqual(int(support_marks[0].get('turns', 0)), 2)
+        self.assertEqual(state['enemy_units'][0]['mob_effects'], [])
+        self.assertEqual(state['active_enemy_unit_id'], 'f1')
+        self.assertNotIn('_pending_enemy_effect_redirect_projection', state)
+
+    def test_include_enemy_response_false_does_not_tick_early(self):
+        state = self._state(units=[self._unit('f1', 'front'), self._unit('s1', 'support')])
+        result = self._run('hunters_mark', state)
+        self.assertTrue(result['success'])
+        support_marks = [e for e in state['enemy_units'][1]['mob_effects'] if e.get('type') == 'hunters_mark']
+        self.assertEqual(len(support_marks), 1)
+        self.assertEqual(int(support_marks[0].get('turns', 0)), 3)
+        self.assertEqual(state['active_enemy_unit_id'], 'f1')
+        self.assertNotIn('_pending_enemy_effect_redirect_projection', state)
+
+    def test_no_enemy_units_falls_back_to_ordinary_flow(self):
+        state = self._state(units=[])
+        state.pop('enemy_units', None)
+        result = self._run('hunters_mark', state)
+        self.assertTrue(result['success'])
+        self.assertTrue(any(e.get('type') == 'hunters_mark' for e in state.get('mob_effects', [])))
 
     def _chain_baseline_and_marked(self, shot_skill):
         marked_state = self._state()
