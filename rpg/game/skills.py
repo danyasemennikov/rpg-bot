@@ -902,7 +902,7 @@ SKILLS = {
     'cleave_through': {
         'id':             'cleave_through',
         'name':           '🗡️ Рассечение насквозь',
-        'description':    'Payoff-удар: сильнее в окно уязвимости, по раненой цели и под Фокусом палача.',
+        'description':    'Линейный payoff-удар: в пачке рубит ближайшую линию, бонусы уязвимости/ранений/Фокуса считаются по каждой задетой цели.',
         'weapon_id':      'sword_2h',
         'branch':         'A',
         'unlock_mastery': 7,
@@ -914,6 +914,8 @@ SKILLS = {
         'scale_mult':     2.1,
         'base_value':     172,
         'level_bonus':    0.11,
+        'target_pattern_id': 'front_line_cluster',
+        'target_local_resolution': True,
     },
     'executioners_stroke': {
         'id':             'executioners_stroke',
@@ -1270,7 +1272,7 @@ SKILLS = {
         'level_bonus':    0.11,
         'hits':           2,
         'enemy_target_mode': 'pack_fanout',
-        'target_shape': 'all_enemies_in_small_pack',
+        'target_pattern_id': 'all_enemies_in_small_pack',
     },
     'arcane_lance': {
         'id':             'arcane_lance',

@@ -35,7 +35,8 @@ class PackAoeFanoutPR2B2Tests(unittest.TestCase):
 
     def test_flame_wave_is_explicit_pack_fanout_and_twin_cut_is_not(self):
         self.assertEqual(get_skill('flame_wave').get('enemy_target_mode'), 'pack_fanout')
-        self.assertEqual(get_skill('flame_wave').get('target_shape'), 'all_enemies_in_small_pack')
+        self.assertEqual(get_skill('flame_wave').get('target_pattern_id'), 'all_enemies_in_small_pack')
+        self.assertIsNone(get_skill('flame_wave').get('target_shape'))
         self.assertNotEqual(get_skill('twin_cut').get('enemy_target_mode'), 'pack_fanout')
 
     def test_real_use_skill_result_carries_skill_id(self):
