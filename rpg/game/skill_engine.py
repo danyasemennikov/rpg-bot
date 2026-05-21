@@ -586,7 +586,7 @@ def precheck_skill_use(skill_id: str, player_mana: int, telegram_id: int, lang: 
     return {'success': True, 'log': ''}
 
 def use_skill(skill_id: str, player: dict, mob_state: dict,
-              battle_state: dict, telegram_id: int, lang: str) -> dict:
+              battle_state: dict, telegram_id: int, lang: str, *, commit_resources: bool = True) -> dict:
     """
     Применяет скилл в бою.
     Возвращает результат: урон, лечение, эффекты, лог.
@@ -600,19 +600,17 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     if skill_level == 0:
         return {'success': False, 'log': t('skills.not_learned_simple', lang)}
 
-    # Проверка кулдауна
-    cd = get_skill_cooldown(telegram_id, skill_id)
-    if cd > 0:
-        return {'success': False, 'log': t('skills.on_cooldown', lang, name=get_skill_name(skill_id, lang), cd=cd)}
-
-    # Проверка маны
+    # Проверка маны (в preview режиме не блокирует расчёт payoff)
     mana_cost = calc_skill_mana_cost(skill, skill_level)
-    if player.get('mana', 0) < mana_cost and mana_cost > 0:
-        return {'success': False, 'log': t('skills.no_mana', lang, cost=mana_cost)}
-
-    # Списываем ману
-    player['mana'] = player.get('mana', 0) - mana_cost
-    battle_state['player_mana'] = player['mana']
+    if commit_resources:
+        cd = get_skill_cooldown(telegram_id, skill_id)
+        if cd > 0:
+            return {'success': False, 'log': t('skills.on_cooldown', lang, name=get_skill_name(skill_id, lang), cd=cd)}
+        if player.get('mana', 0) < mana_cost and mana_cost > 0:
+            return {'success': False, 'log': t('skills.no_mana', lang, cost=mana_cost)}
+        # Списываем ману
+        player['mana'] = player.get('mana', 0) - mana_cost
+        battle_state['player_mana'] = player['mana']
 
     target_kind, target_id = _resolve_runtime_target_selection(skill, battle_state)
 
@@ -2146,7 +2144,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     _consume_runtime_target_selection(battle_state)
 
     # Устанавливаем кулдаун
-    if skill['cooldown'] > 0:
+    if commit_resources and skill['cooldown'] > 0:
         set_skill_cooldown(telegram_id, skill_id, skill['cooldown'])
 
     return result

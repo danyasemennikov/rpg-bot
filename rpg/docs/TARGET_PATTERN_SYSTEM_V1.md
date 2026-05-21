@@ -43,3 +43,7 @@ This system does **not** add UI, repositioning, new skill rollout, or PvP mass-b
 - `flame_wave` currently uses `all_enemies_in_small_pack` via compatibility `target_shape`.
 - `heavy_swing` now uses canonical `target_pattern_id='front_line_cluster'`.
 - `arcane_lance` now uses canonical `target_pattern_id='back_line_single'`.
+
+- PR 2C8A: Added opt-in target-local payoff recomputation for `single_redirect` patterns via `target_local_resolution` metadata.
+- This support is foundation-only in this phase (no real target-dependent skill rollout enabled yet).
+- Fanout target-local payoff recomputation is intentionally out of scope and unchanged.
