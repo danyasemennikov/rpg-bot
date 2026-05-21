@@ -681,6 +681,7 @@ def resolve_pack_fanout_direct_damage_skill_action(
     if pattern.get('execution_mode') != 'fanout':
         return {'handled': False}
 
+    target_local_resolution = bool(skill_def.get('target_local_resolution'))
     active_id_before = str(battle_state.get('active_enemy_unit_id') or '')
     ordered_targets = select_targets_for_pattern(enemy_units, pattern, active_unit_id=active_id_before)
 
@@ -697,6 +698,7 @@ def resolve_pack_fanout_direct_damage_skill_action(
             'targets_total': 0,
             'targets_hit': 0,
             'per_target': [],
+            'target_local_resolution': target_local_resolution,
             'no_valid_target': True,
         }
         return {'handled': True, 'targets_hit': 0, 'targets_total': 0, 'no_valid_target': True}
@@ -704,18 +706,41 @@ def resolve_pack_fanout_direct_damage_skill_action(
     alive_indexes = [unit_index_by_id[str(unit.get('unit_id'))] for unit in ordered_targets if str(unit.get('unit_id')) in unit_index_by_id]
 
     base_damage = int(skill_result.get('damage', 0) or 0)
+    cast_preview_state = copy.deepcopy(battle_state) if target_local_resolution else battle_state
+    one_cast_post_hit_actions = copy.deepcopy(skill_result.get('post_hit_actions', [])) if target_local_resolution else []
     per_target_results = []
     targets_hit = 0
     for idx in alive_indexes:
         unit = enemy_units[idx]
+
+        per_target_skill_result = dict(skill_result)
+        per_target_skill_result['damage'] = base_damage
+        per_target_skill_result['effects'] = list(skill_result.get('effects') or [])
+        if target_local_resolution:
+            per_target_skill_result['post_hit_actions'] = []
+
+        if target_local_resolution and skill_result.get('skill_id'):
+            preview_skill_result = preview_skill_result_for_enemy_unit(
+                str(skill_result.get('skill_id')),
+                player,
+                mob,
+                cast_preview_state,
+                unit,
+                user_id,
+                lang,
+            )
+            if preview_skill_result.get('success'):
+                apply_target_local_skill_result_fields(
+                    per_target_skill_result,
+                    preview_skill_result,
+                    include_post_hit_actions=False,
+                )
+
         battle_state['mob_hp'] = int(unit.get('hp', 0) or 0)
         battle_state['mob_max_hp'] = int(unit.get('max_hp', battle_state.get('mob_max_hp', 1)) or 1)
         battle_state['mob_effects'] = list(unit.get('mob_effects') or [])
         battle_state['active_enemy_unit_id'] = unit.get('unit_id')
 
-        per_target_skill_result = dict(skill_result)
-        per_target_skill_result['damage'] = base_damage
-        per_target_skill_result['effects'] = list(skill_result.get('effects') or [])
         gate_result = resolve_enemy_targeted_direct_damage_skill_action(
             player, mob, battle_state, per_target_skill_result, lang=lang
         )
@@ -751,6 +776,16 @@ def resolve_pack_fanout_direct_damage_skill_action(
         battle_state['mob_effects'] = list(active_after.get('mob_effects') or [])
         battle_state['mob_dead'] = False
 
+    if target_local_resolution and targets_hit > 0 and one_cast_post_hit_actions:
+        apply_post_hit_skill_actions(
+            {
+                'direct_damage_skill': True,
+                'direct_damage_result': {'final_damage': 1},
+                'post_hit_actions': one_cast_post_hit_actions,
+            },
+            battle_state,
+        )
+
     summary = t(
         'battle.pack_fanout_skill_targets_hit',
         lang,
@@ -768,6 +803,7 @@ def resolve_pack_fanout_direct_damage_skill_action(
         'targets_total': len(alive_indexes),
         'targets_hit': targets_hit,
         'per_target': per_target_results,
+        'target_local_resolution': target_local_resolution,
     }
     return {'handled': True, 'targets_hit': targets_hit, 'targets_total': len(alive_indexes)}
 
@@ -1058,7 +1094,7 @@ def preview_skill_result_for_enemy_unit(
     return preview_result
 
 
-def apply_target_local_skill_result_fields(base_skill_result: dict, preview_skill_result: dict) -> None:
+def apply_target_local_skill_result_fields(base_skill_result: dict, preview_skill_result: dict, *, include_post_hit_actions: bool = True) -> None:
     """Replace target-dependent result fields after redirect target selection."""
     target_local_fields = [
         'damage',
@@ -1067,7 +1103,6 @@ def apply_target_local_skill_result_fields(base_skill_result: dict, preview_skil
         'log_key',
         'log_params',
         'log_suffixes',
-        'post_hit_actions',
         'lifesteal_ratio',
         'heal_from_damage_ratio',
         'heal_cap_missing_hp',
@@ -1078,6 +1113,9 @@ def apply_target_local_skill_result_fields(base_skill_result: dict, preview_skil
         'accuracy_bonus',
         'ignore_evasion',
     ]
+    if include_post_hit_actions:
+        target_local_fields.append('post_hit_actions')
+
     for field in target_local_fields:
         if field in preview_skill_result:
             base_skill_result[field] = copy.deepcopy(preview_skill_result[field])
@@ -1376,7 +1414,7 @@ def process_skill_turn(
             }
         else:
             gate_result = resolve_pack_fanout_direct_damage_skill_action(
-                player_state, mob, battle_state, skill_result, lang=lang
+                player_state, mob, battle_state, skill_result, user_id=user_id, lang=lang
             )
             if not gate_result.get('handled'):
                 gate_result = resolve_back_line_single_direct_damage_skill_action(

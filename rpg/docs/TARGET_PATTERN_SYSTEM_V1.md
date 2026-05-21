@@ -37,11 +37,11 @@ An **execution mode** decides *how the skill resolves on selected units*:
 - Ordinary direct damage is recognized as `ordinary_single_enemy`, while existing active-enemy projection behavior remains unchanged.
 
 ## Non-goals
-This system does **not** add UI, repositioning, fanout target-local payoff, or PvP mass-battle targeting changes.
+This system does **not** add UI, repositioning, global fanout target-local behavior, or PvP mass-battle targeting changes.
 
 ## Current rollout (live examples)
 
-- `flame_wave` currently uses `all_enemies_in_small_pack` via compatibility `target_shape`.
+- `flame_wave` now uses canonical `target_pattern_id='all_enemies_in_small_pack'` (no compatibility shape needed).
 - `heavy_swing` now uses canonical `target_pattern_id='front_line_cluster'`.
 - `arcane_lance` now uses canonical `target_pattern_id='back_line_single'`.
 - Sniper payoff shots now use canonical `target_pattern_id='back_line_single'` with `target_local_resolution=True`:
@@ -56,4 +56,8 @@ This system does **not** add UI, repositioning, fanout target-local payoff, or P
 - Sniper package is now coherent in pack fights:
   - `hunters_mark` marks the selected back-line target.
   - `aimed_shot`, `piercing_arrow`, and `deadeye` consume payoff on that selected back-line target.
-- Fanout target-local payoff recomputation remains out of scope and unchanged.
+- Fanout target-local payoff recomputation is now available only as opt-in behavior via `target_local_resolution=True`.
+
+- PR 2C10: opt-in fanout target-local recomputation is now available for direct-damage fanout skills via `target_local_resolution=True`.
+- PR 2C10 rollout: `cleave_through` is now on `front_line_cluster` with target-local payoff recomputation.
+- Fanout target-local remains opt-in and does not change global fanout behavior.

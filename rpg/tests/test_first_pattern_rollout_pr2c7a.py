@@ -57,7 +57,8 @@ class FirstPatternRolloutPR2C7ATests(unittest.TestCase):
         self.assertIsNone(arcane_lance.get('target_shape'))
         self.assertIsNone(bow_ult_a.get('target_pattern_id'))
 
-        self.assertIsNone(cleave.get('target_pattern_id'))
+        self.assertEqual(cleave.get('target_pattern_id'), 'front_line_cluster')
+        self.assertIs(cleave.get('target_local_resolution'), True)
         self.assertEqual(deadeye.get('target_pattern_id'), 'back_line_single')
         self.assertIs(deadeye.get('target_local_resolution'), True)
 
