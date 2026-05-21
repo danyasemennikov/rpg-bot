@@ -42,7 +42,7 @@ SKILL_NAMES = {
     'death_dance': {'name': '💃 Death Dance', 'description': 'Attacks 3 times per turn. Each hit is weaker but can crit.'},
     'dagger_ult_b': {'name': '👻 Shadow of Death', 'description': 'Teleports behind the enemy. Next 3 attacks are guaranteed crits.'},
     'aimed_shot': {'name': '🎯 Aimed Shot', 'description': 'Precision sniper shot; in pack fights it aims for the farthest back-line target, with marked/steady payoff intact.'},
-    'hunters_mark': {'name': '🔍 Hunter\'s Mark', 'description': 'Marks the target for several turns so sniper payoff shots gain bonus damage.'},
+    'hunters_mark': {'name': '🔍 Hunter\'s Mark', 'description': 'Marks a target for sniper payoff shots; in pack fights it marks the farthest back-line enemy.'},
     'steady_aim': {'name': '🧭 Steady Aim', 'description': 'Sniper setup that opens a short focus window for your next commit ranged shot.'},
     'piercing_arrow': {'name': '🏹 Piercing Arrow', 'description': 'Payoff arrow; in pack fights it aims for the farthest back-line target, with marked/armored/steady payoff intact.'},
     'deadeye': {'name': '💀 Deadeye', 'description': 'Guaranteed-hit Sniper capstone; in pack fights it aims at the farthest back-line target, with marked/steady payoff intact.'},

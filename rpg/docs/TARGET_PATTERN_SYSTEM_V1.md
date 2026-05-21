@@ -28,15 +28,16 @@ An **execution mode** decides *how the skill resolves on selected units*:
 - `single_redirect`
 - `fanout`
 
-## Runtime status after PR 2C6
-- Enemy-targeted direct-damage runtime now resolves fanout and single-redirect pack targeting through the target pattern registry.
+## Runtime status
+- Enemy-targeted direct-damage runtime resolves fanout and single-redirect pack targeting through the target pattern registry.
+- Enemy-effect single_redirect runtime now exists for selected enemy debuff/control skills.
 - Initial live rollout examples are tracked below; target_pattern_id is now used by selected real skills.
 - `target_shape` remains compatibility metadata.
 - `target_pattern_id` is canonical going forward.
 - Ordinary direct damage is recognized as `ordinary_single_enemy`, while existing active-enemy projection behavior remains unchanged.
 
 ## Non-goals
-This system does **not** add UI, repositioning, new skill rollout, or PvP mass-battle targeting changes.
+This system does **not** add UI, repositioning, fanout target-local payoff, or PvP mass-battle targeting changes.
 
 ## Current rollout (live examples)
 
@@ -51,5 +52,8 @@ This system does **not** add UI, repositioning, new skill rollout, or PvP mass-b
 - PR 2C8A foundation: added opt-in target-local payoff recomputation for `single_redirect` patterns via `target_local_resolution` metadata.
 - PR 2C8B rollout: enabled this for `deadeye` as the first real target-dependent `single_redirect` skill.
 - PR 2C8C rollout: extended the same direct-damage target-local flow to `aimed_shot` and `piercing_arrow`.
-- `hunters_mark` is intentionally not line-aware yet; enemy debuff/control single_redirect targeting is a separate future step.
+- `hunters_mark` now uses canonical `target_pattern_id='back_line_single'` as the first live enemy-effect single_redirect rollout.
+- Sniper package is now coherent in pack fights:
+  - `hunters_mark` marks the selected back-line target.
+  - `aimed_shot`, `piercing_arrow`, and `deadeye` consume payoff on that selected back-line target.
 - Fanout target-local payoff recomputation remains out of scope and unchanged.

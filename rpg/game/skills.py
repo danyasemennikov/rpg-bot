@@ -568,7 +568,7 @@ SKILLS = {
     'hunters_mark': {
         'id':             'hunters_mark',
         'name':           '🔍 Метка охотника',
-        'description':    'Помечает цель на несколько ходов: Sniper-payoff выстрелы по метке наносят больше урона.',
+        'description':    'Помечает цель для Sniper-payoff выстрелов; в pack-бою выбирает самую дальнюю back-line цель.',
         'weapon_id':      'short_bow',
         'branch':         'A',
         'unlock_mastery': 1,
@@ -581,6 +581,7 @@ SKILLS = {
         'base_value':     25,
         'duration':       3,
         'level_bonus':    0.08,
+        'target_pattern_id': 'back_line_single',
     },
     'steady_aim': {
         'id':             'steady_aim',
