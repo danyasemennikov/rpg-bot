@@ -1414,7 +1414,7 @@ def process_skill_turn(
             }
         else:
             gate_result = resolve_pack_fanout_direct_damage_skill_action(
-                player_state, mob, battle_state, skill_result, lang=lang
+                player_state, mob, battle_state, skill_result, user_id=user_id, lang=lang
             )
             if not gate_result.get('handled'):
                 gate_result = resolve_back_line_single_direct_damage_skill_action(

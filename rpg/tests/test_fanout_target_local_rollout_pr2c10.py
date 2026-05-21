@@ -156,6 +156,42 @@ class FanoutTargetLocalRolloutPR2C10Tests(unittest.TestCase):
         self.assertEqual(state['player_mana'], 0)
         self.assertEqual(set_cd.call_count, 1)
 
+    def test_process_fanout_target_local_preview_uses_real_user_id(self):
+        seen_telegram_ids = []
+
+        def _skill_level_side_effect(telegram_id, skill_id):
+            if skill_id != 'cleave_through':
+                return 0
+            seen_telegram_ids.append(int(telegram_id))
+            if int(telegram_id) == 777:
+                return 1
+            if int(telegram_id) == 0:
+                return 0
+            raise AssertionError(f'unexpected telegram_id={telegram_id}')
+
+        state = self._state([
+            {'unit_id': 'f1', 'hp': 40, 'max_hp': 100, 'mob_effects': [], 'dead': False, 'formation_line': 'front'},
+            {'unit_id': 'f2', 'hp': 100, 'max_hp': 100, 'mob_effects': [], 'dead': False, 'formation_line': 'front'},
+            {'unit_id': 'm1', 'hp': 100, 'max_hp': 100, 'mob_effects': [], 'dead': False, 'formation_line': 'melee'},
+        ], active_enemy_unit_id='m1')
+        state['vulnerability_turns'] = 2
+        state['vulnerability_value'] = 20
+
+        with patch('game.combat.precheck_skill_use', return_value={'success': True}), \
+             patch('game.skill_engine.get_skill_level', side_effect=_skill_level_side_effect), \
+             patch('game.skill_engine.get_skill_cooldown', return_value=0), \
+             patch('game.skill_engine.random.uniform', return_value=1.0), \
+             patch('game.combat.resolve_hit_check', return_value={'is_hit': True}), \
+             patch('game.skill_engine.set_skill_cooldown'):
+            result = process_skill_turn('cleave_through', self._player(), self._mob(), state, user_id=777, lang='en', include_enemy_response=False)
+
+        self.assertTrue(result['success'])
+        direct = result['skill_result']['direct_damage_result']
+        self.assertIs(direct.get('target_local_resolution'), True)
+        self.assertGreater(direct['per_target'][0]['damage'], direct['per_target'][1]['damage'])
+        self.assertIn(777, seen_telegram_ids)
+        self.assertNotIn(0, seen_telegram_ids)
+
 
 if __name__ == '__main__':
     unittest.main()
