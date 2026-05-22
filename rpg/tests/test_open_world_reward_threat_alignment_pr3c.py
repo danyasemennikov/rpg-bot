@@ -1,6 +1,8 @@
 import unittest
 from pathlib import Path
 
+from unittest.mock import patch
+
 from game.open_world_pack_balance import (
     ALLOWED_OPEN_WORLD_THREAT_BANDS,
     get_open_world_route_encounter_compositions,
@@ -15,6 +17,7 @@ from game.open_world_reward_alignment import (
     get_open_world_reward_profile_for_threat_band,
     validate_open_world_reward_alignment_metadata,
 )
+from game.open_world_reward_pools import OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY
 from game.pve_live import WORLD_SPAWN_PROFILES, WORLD_SPAWN_PROFILE_COMBAT_MODIFIERS
 from game.reward_policies import REWARD_FAMILIES_BY_SOURCE
 from game.skills import SKILLS
@@ -30,6 +33,13 @@ class OpenWorldRewardThreatAlignmentPR3CTests(unittest.TestCase):
             self.assertIn(profile.get('reward_category'), REWARD_FAMILIES_BY_SOURCE)
 
         self.assertEqual(set(OPEN_WORLD_THREAT_BAND_TO_REWARD_PROFILE.keys()), set(ALLOWED_OPEN_WORLD_THREAT_BANDS))
+
+        for threat_band in ALLOWED_OPEN_WORLD_THREAT_BANDS:
+            profile = get_open_world_reward_profile_for_threat_band(threat_band)
+            category = profile.get('reward_category')
+            profile_id = profile.get('reward_profile_id')
+            self.assertIn(category, OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY)
+            self.assertEqual(profile_id, OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY[category])
 
     def test_route_composition_threat_bands_align_to_reward_metadata(self):
         for entry in get_open_world_route_encounter_compositions():
@@ -48,6 +58,11 @@ class OpenWorldRewardThreatAlignmentPR3CTests(unittest.TestCase):
             self.assertIn(alignment.get('threat_band'), ALLOWED_OPEN_WORLD_THREAT_BANDS)
             self.assertIn(alignment.get('reward_category'), REWARD_FAMILIES_BY_SOURCE)
             self.assertLessEqual(alignment.get('expected_size_min', 0), alignment.get('expected_size_max', 0))
+
+            category = alignment.get('reward_category')
+            profile_id = alignment.get('reward_profile_id')
+            self.assertIn(category, OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY)
+            self.assertEqual(profile_id, OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY[category])
 
     def test_spawn_profile_alignment(self):
         self.assertEqual(set(WORLD_SPAWN_PROFILES), {'normal', 'elite', 'rare'})
@@ -80,6 +95,17 @@ class OpenWorldRewardThreatAlignmentPR3CTests(unittest.TestCase):
             get_open_world_reward_category_for_spawn_profile('  ELITE  '),
             'open_world_elite',
         )
+
+
+    def test_validator_reports_mismatched_reward_profile_id(self):
+        corrupted = dict(OPEN_WORLD_THREAT_BAND_TO_REWARD_PROFILE)
+        corrupted['starter'] = dict(corrupted['starter'])
+        corrupted['starter']['reward_profile_id'] = 'broken_profile_id'
+
+        with patch('game.open_world_reward_alignment.OPEN_WORLD_THREAT_BAND_TO_REWARD_PROFILE', corrupted):
+            errors = validate_open_world_reward_alignment_metadata()
+
+        self.assertTrue(any('mismatched reward_profile_id' in err for err in errors))
 
     def test_reward_metadata_structure_guard_exists(self):
         for category in ('open_world_normal', 'open_world_elite', 'open_world_rare_spawn'):

@@ -4,6 +4,7 @@ from game.open_world_pack_balance import (
     ALLOWED_OPEN_WORLD_THREAT_BANDS,
     get_open_world_pack_archetype_metadata,
 )
+from game.open_world_reward_pools import OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY
 from game.reward_policies import REWARD_FAMILIES_BY_SOURCE
 from game.reward_source_metadata import OPEN_WORLD_SOURCE_CATEGORY_BY_SPAWN_PROFILE
 
@@ -26,29 +27,36 @@ OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY: dict[str, str] = {
 OPEN_WORLD_THREAT_BAND_TO_REWARD_PROFILE: dict[str, dict[str, str]] = {
     'starter': {
         'reward_category': 'open_world_normal',
-        'reward_profile_id': 'starter_normal_surface',
+        'reward_profile_id': OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY['open_world_normal'],
+        'threat_band_note': 'starter lane; normal rewards',
     },
     'low': {
         'reward_category': 'open_world_normal',
-        'reward_profile_id': 'low_normal_surface',
+        'reward_profile_id': OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY['open_world_normal'],
+        'threat_band_note': 'low lane; normal rewards',
     },
     'low_mid': {
         'reward_category': 'open_world_normal',
-        'reward_profile_id': 'low_mid_normal_surface',
+        'reward_profile_id': OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY['open_world_normal'],
+        'threat_band_note': 'low-mid lane; normal rewards',
     },
     'mid': {
         'reward_category': 'open_world_normal',
-        'reward_profile_id': 'mid_normal_elite_capable_surface',
+        'reward_profile_id': OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY['open_world_normal'],
+        'threat_band_note': 'mid lane; normal rewards (elite-capable threat metadata)',
     },
     'mid_high': {
         'reward_category': 'open_world_elite',
-        'reward_profile_id': 'mid_high_elite_capable_surface',
+        'reward_profile_id': OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY['open_world_elite'],
+        'threat_band_note': 'mid-high lane; elite-capable rewards metadata',
     },
     'high': {
         'reward_category': 'open_world_rare_spawn',
-        'reward_profile_id': 'high_elite_rare_capable_surface',
+        'reward_profile_id': OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY['open_world_rare_spawn'],
+        'threat_band_note': 'high lane; rare-capable rewards metadata',
     },
 }
+
 
 
 def get_open_world_reward_category_for_spawn_profile(spawn_profile: object) -> str:
@@ -85,12 +93,29 @@ def validate_open_world_reward_alignment_metadata() -> list[str]:
         if not profile:
             errors.append(f'missing threat band profile: {band}')
             continue
+
         category = profile.get('reward_category')
+        profile_id = profile.get('reward_profile_id')
+        if category not in REWARD_FAMILIES_BY_SOURCE:
+            errors.append(f'unknown reward category in policy for threat band {band}: {category}')
+            continue
         if category not in ALLOWED_OPEN_WORLD_REWARD_CATEGORIES:
-            errors.append(f'unknown reward category for threat band {band}: {category}')
+            errors.append(f'unknown open-world reward category for threat band {band}: {category}')
+            continue
+
+        expected_profile_id = OPEN_WORLD_POOL_PROFILE_ID_BY_SOURCE_CATEGORY.get(category)
+        if expected_profile_id is None:
+            errors.append(f'missing pool profile registry for threat band {band} category {category}')
+            continue
+        if profile_id != expected_profile_id:
+            errors.append(
+                f'threat band {band} has mismatched reward_profile_id {profile_id}; expected {expected_profile_id}'
+            )
 
     for spawn_profile, category in OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY.items():
-        if category not in ALLOWED_OPEN_WORLD_REWARD_CATEGORIES:
-            errors.append(f'unknown reward category for spawn profile {spawn_profile}: {category}')
+        if category not in REWARD_FAMILIES_BY_SOURCE:
+            errors.append(f'unknown reward category in policy for spawn profile {spawn_profile}: {category}')
+        elif category not in ALLOWED_OPEN_WORLD_REWARD_CATEGORIES:
+            errors.append(f'unknown open-world reward category for spawn profile {spawn_profile}: {category}')
 
     return errors

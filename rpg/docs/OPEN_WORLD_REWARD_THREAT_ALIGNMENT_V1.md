@@ -10,6 +10,7 @@ This pass follows PR 3A (open-world pack balance baseline) and PR 3B (route enco
 - Explicit spawn profile (`normal` / `elite` / `rare`) -> reward category alignment.
 - Regression tests to prevent route/archetype/reward metadata drift.
 - Unknown spawn profiles fall back to `open_world_normal` as a safe metadata default; `WORLD_SPAWN_PROFILES` remains explicitly locked by tests.
+- reward_profile_id values intentionally reference existing open-world reward pool profile IDs; threat-band labels are tuning metadata, not new reward pool profile definitions.
 
 ## Scope boundaries
 
