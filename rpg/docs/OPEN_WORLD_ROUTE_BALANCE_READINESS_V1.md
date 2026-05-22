@@ -5,6 +5,7 @@ This document follows PR 3A–3D and adds **route balance readiness** reporting.
 ## What this adds
 - Machine-readable per-route balance/readiness reports.
 - Diagnostic warnings for sparse coverage or tuning gaps.
+- Sparse/stub routes suppress some completeness warnings such as missing pack/elite/rare anchors.
 - Structural validation for route report integrity.
 
 ## What this does not change

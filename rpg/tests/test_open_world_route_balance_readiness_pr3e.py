@@ -70,6 +70,23 @@ class OpenWorldRouteBalanceReadinessPR3ETests(unittest.TestCase):
 
         self.assertFalse(build_open_world_route_balance_report('route_westwild').get('is_sparse_or_stub'))
 
+
+    def test_sparse_stub_routes_suppress_no_rare_anchor_warning(self):
+        south_coast = build_open_world_route_balance_report('route_south_coast_stub')
+        self.assertTrue(south_coast.get('is_sparse_or_stub'))
+        self.assertNotIn('no_rare_anchors', south_coast.get('readiness_warnings', ()))
+
+        old_mine = build_open_world_route_balance_report('route_old_mine_stub')
+        if old_mine:
+            self.assertTrue(old_mine.get('is_sparse_or_stub'))
+            self.assertNotIn('no_rare_anchors', old_mine.get('readiness_warnings', ()))
+
+    def test_non_stub_route_without_rare_anchors_keeps_warning(self):
+        westwild = build_open_world_route_balance_report('route_westwild')
+        self.assertFalse(westwild.get('is_sparse_or_stub'))
+        self.assertEqual(westwild.get('rare_anchor_count', 0), 0)
+        self.assertIn('no_rare_anchors', westwild.get('readiness_warnings', ()))
+
     def test_readiness_warnings_are_diagnostic(self):
         for report in build_all_open_world_route_balance_reports():
             warnings = report.get('readiness_warnings')

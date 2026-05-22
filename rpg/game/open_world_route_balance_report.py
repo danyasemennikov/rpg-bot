@@ -54,7 +54,7 @@ def _build_readiness_warnings(report: dict[str, object]) -> tuple[str, ...]:
         warnings.append('no_pack_mobs_on_non_stub_route')
     if report.get('elite_anchor_count', 0) == 0 and not is_sparse:
         warnings.append('no_elite_anchors_on_non_stub_route')
-    if report.get('rare_anchor_count', 0) == 0:
+    if report.get('rare_anchor_count', 0) == 0 and not is_sparse:
         warnings.append('no_rare_anchors')
     if threat_band in {'mid_high', 'high'} and report.get('elite_anchor_count', 0) == 0 and not is_sparse:
         warnings.append('mid_high_or_high_without_elite_anchor')
