@@ -17,7 +17,9 @@ from game.itemization import get_item_archetype_metadata
 from game.items_data import get_item, get_item_encumbrance
 from game.locations import get_location
 from game.open_world_pack_balance import (
+    get_pack_enabled_mob_ids,
     get_open_world_pack_archetype_metadata,
+    is_open_world_pack_enabled_mob,
     resolve_enemy_formation_line_for_mob,
 )
 from game.live_combat_runtime import (
@@ -37,7 +39,7 @@ SPAWN_STATE_RESPAWNING = 'respawning'
 DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS = 30
 FORMING_ENCOUNTER_TTL_SECONDS = 90
 DEFAULT_WORLD_SPAWN_PROFILE = 'normal'
-PACK_ENABLED_MOB_IDS: frozenset[str] = frozenset({'forest_wolf', 'white_wolf', 'leech', 'zombie'})
+PACK_ENABLED_MOB_IDS: frozenset[str] = get_pack_enabled_mob_ids()
 WORLD_SPAWN_PROFILES = ('normal', 'elite', 'rare')
 WORLD_SPAWN_PROFILE_COMBAT_MODIFIERS = {
     'normal': {
@@ -2654,4 +2656,4 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
     battle_state.pop('_pack_enemy_side_total', None)
     battle_state.pop('_pack_enemy_side_processed', None)
 def is_pack_enabled_mob(mob_id: str) -> bool:
-    return str(mob_id or '').strip() in PACK_ENABLED_MOB_IDS
+    return is_open_world_pack_enabled_mob(mob_id)
