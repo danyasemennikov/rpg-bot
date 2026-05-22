@@ -16,13 +16,17 @@ from game.equipment_stats import get_equipped_item_ids, get_player_effective_sta
 from game.itemization import get_item_archetype_metadata
 from game.items_data import get_item, get_item_encumbrance
 from game.locations import get_location
+from game.open_world_pack_balance import (
+    get_open_world_pack_archetype_metadata,
+    resolve_enemy_formation_line_for_mob,
+)
 from game.live_combat_runtime import (
     DEFAULT_SIDE_TURN_TIMEOUT_SECONDS,
     EncounterRuntimeState,
     LiveCombatRuntime,
     LiveCombatRuntimeStore,
 )
-from game.targeting import resolve_default_enemy_formation_line, resolve_default_player_formation_line
+from game.targeting import resolve_default_player_formation_line
 
 SIDE_PLAYER = 'side_a'
 SIDE_ENEMY = 'side_b'
@@ -1766,9 +1770,10 @@ def create_or_load_open_world_pve_encounter(
                 'max_hp': max_hp,
                 'dead': False,
                 'mob_effects': [],
-                'formation_line': resolve_default_enemy_formation_line(),
+                'formation_line': resolve_enemy_formation_line_for_mob(mob_id),
             })
         battle_state['enemy_units'] = enemy_units
+        battle_state['pack_archetype'] = get_open_world_pack_archetype_metadata(mob_id)
         battle_state['active_enemy_unit_id'] = enemy_units[0]['unit_id']
         battle_state['pack_size'] = len(enemy_units)
     apply_world_spawn_profile_combat_scaling(
