@@ -1,11 +1,20 @@
 # Target Pattern System V1
 
 ## Purpose
-Target Pattern System V1 standardizes target selection presets for:
-- ordinary single-target enemy acquisition,
-- single-target redirects,
-- line cluster fanout,
-- small-pack AoE fanout.
+This document stabilizes the targeting chapter after PRs **2C5–2C10**.
+
+It defines canonical metadata, runtime support boundaries, and rollout policy.
+
+## Core model
+- `target_pattern_id` is the canonical targeting metadata.
+- `target_shape` is compatibility metadata only.
+- A **target selection pattern** decides which units are selected.
+- An **execution_mode** decides how selected units are resolved.
+
+## Supported execution modes
+- `single`
+- `single_redirect`
+- `fanout`
 
 ## Canonical formation lines
 - `front`
@@ -21,43 +30,42 @@ Target Pattern System V1 standardizes target selection presets for:
 - `two_front_lines_2x2`
 - `ranged_line_single`
 
-## Pattern vs execution mode
-A **target selection pattern** decides *which units are selected*.
-An **execution mode** decides *how the skill resolves on selected units*:
-- `single`
-- `single_redirect`
-- `fanout`
+## Runtime support status
+- Direct-damage `fanout` is supported through the target pattern registry.
+- Direct-damage `single_redirect` is supported through the target pattern registry.
+- Enemy-effect/control `single_redirect` is supported through the target pattern registry.
+- Ordinary direct damage still uses active-target projection unless a skill opts into a pattern.
 
-## Runtime status
-- Enemy-targeted direct-damage runtime resolves fanout and single-redirect pack targeting through the target pattern registry.
-- Enemy-effect single_redirect runtime now exists for selected enemy debuff/control skills.
-- Initial live rollout examples are tracked below; target_pattern_id is now used by selected real skills.
-- `target_shape` remains compatibility metadata.
-- `target_pattern_id` is canonical going forward.
-- Ordinary direct damage is recognized as `ordinary_single_enemy`, while existing active-enemy projection behavior remains unchanged.
+## Target-local support status
+- `single_redirect` target-local support exists via `target_local_resolution=True`.
+- `fanout` target-local support exists via `target_local_resolution=True`.
+- Target-local support is opt-in.
+- No global fanout target-local behavior was added.
 
-## Non-goals
-This system does **not** add UI, repositioning, global fanout target-local behavior, or PvP mass-battle targeting changes.
+## Current rollout (live)
+- `flame_wave` -> `all_enemies_in_small_pack`
+- `heavy_swing` -> `front_line_cluster`
+- `cleave_through` -> `front_line_cluster` + `target_local_resolution=True`
+- `arcane_lance` -> `back_line_single`
+- `hunters_mark` -> `back_line_single`
+- `aimed_shot` -> `back_line_single` + `target_local_resolution=True`
+- `piercing_arrow` -> `back_line_single` + `target_local_resolution=True`
+- `deadeye` -> `back_line_single` + `target_local_resolution=True`
 
-## Current rollout (live examples)
+## Rollout policy (post-2C10)
+- No blanket rollout and no mass assignment of target patterns.
+- New `target_pattern_id` assignments happen only inside focused branch/balance/content passes.
+- Each rollout must explicitly include:
+  - metadata update;
+  - truthful RU/EN/ES descriptions when behavior changes;
+  - runtime tests for selected-target behavior;
+  - payoff-locality tests for target-dependent behavior;
+  - resource/cooldown single-spend tests when preview/recompute is involved;
+  - explicit scope confirmation in PR description.
 
-- `flame_wave` now uses canonical `target_pattern_id='all_enemies_in_small_pack'` (no compatibility shape needed).
-- `heavy_swing` now uses canonical `target_pattern_id='front_line_cluster'`.
-- `arcane_lance` now uses canonical `target_pattern_id='back_line_single'`.
-- Sniper payoff shots now use canonical `target_pattern_id='back_line_single'` with `target_local_resolution=True`:
-  - `aimed_shot`
-  - `piercing_arrow`
-  - `deadeye`
-
-- PR 2C8A foundation: added opt-in target-local payoff recomputation for `single_redirect` patterns via `target_local_resolution` metadata.
-- PR 2C8B rollout: enabled this for `deadeye` as the first real target-dependent `single_redirect` skill.
-- PR 2C8C rollout: extended the same direct-damage target-local flow to `aimed_shot` and `piercing_arrow`.
-- `hunters_mark` now uses canonical `target_pattern_id='back_line_single'` as the first live enemy-effect single_redirect rollout.
-- Sniper package is now coherent in pack fights:
-  - `hunters_mark` marks the selected back-line target.
-  - `aimed_shot`, `piercing_arrow`, and `deadeye` consume payoff on that selected back-line target.
-- Fanout target-local payoff recomputation is now available only as opt-in behavior via `target_local_resolution=True`.
-
-- PR 2C10: opt-in fanout target-local recomputation is now available for direct-damage fanout skills via `target_local_resolution=True`.
-- PR 2C10 rollout: `cleave_through` is now on `front_line_cluster` with target-local payoff recomputation.
-- Fanout target-local remains opt-in and does not change global fanout behavior.
+## Non-goals for this chapter close
+- No UI or repositioning changes.
+- No PvP mass-battle targeting changes.
+- No enemy AI changes.
+- No blanket skill rollout.
+- No automatic pattern inference from skill flavor text.
