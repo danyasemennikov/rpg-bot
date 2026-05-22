@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from game.locations import WORLD_LOCATIONS, WORLD_ROUTES
 from game.open_world_pack_balance import (
@@ -13,6 +14,7 @@ from game.open_world_pack_balance import (
     validate_open_world_spawn_profile_placement,
 )
 from game.open_world_reward_alignment import (
+    OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY,
     get_open_world_reward_category_for_spawn_profile,
     get_open_world_reward_profile_for_threat_band,
 )
@@ -46,6 +48,7 @@ class OpenWorldSpawnProfilePlacementPR3DTests(unittest.TestCase):
                     normalized = str(profile).strip().lower()
                     discovered_profiles.add(normalized)
                     self.assertIn(normalized, known_profiles)
+                    self.assertIn(normalized, OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY)
                     category = get_open_world_reward_category_for_spawn_profile(normalized)
                     self.assertTrue(category)
         self.assertTrue(discovered_profiles)
@@ -154,6 +157,13 @@ class OpenWorldSpawnProfilePlacementPR3DTests(unittest.TestCase):
 
     def test_policy_validator_reports_no_errors(self):
         self.assertEqual(validate_open_world_spawn_profile_placement(), [])
+
+    def test_validator_rejects_missing_explicit_spawn_profile_mapping(self):
+        corrupted = dict(OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY)
+        corrupted.pop('elite', None)
+        with patch('game.open_world_reward_alignment.OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY', corrupted):
+            errors = validate_open_world_spawn_profile_placement()
+        self.assertTrue(any('missing explicit reward alignment' in err and 'elite' in err for err in errors))
 
 
 if __name__ == '__main__':

@@ -263,10 +263,17 @@ def get_world_location_ids_by_route_id(route_id: str) -> tuple[str, ...]:
 
 
 def validate_open_world_spawn_profile_placement() -> list[str]:
-    from game.open_world_reward_alignment import get_open_world_reward_category_for_spawn_profile
+    from game.open_world_reward_alignment import (
+        ALLOWED_OPEN_WORLD_REWARD_CATEGORIES,
+        OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY,
+        get_open_world_reward_category_for_spawn_profile,
+    )
 
     errors: list[str] = []
     known_profiles = {'normal', 'elite', 'rare'}
+    for canonical_profile in sorted(known_profiles):
+        if canonical_profile not in OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY:
+            errors.append(f'missing explicit reward alignment for spawn profile {canonical_profile}')
 
     for route_id in WORLD_ROUTES:
         if route_id == 'core':
@@ -281,9 +288,20 @@ def validate_open_world_spawn_profile_placement() -> list[str]:
                 if normalized_profile not in known_profiles:
                     errors.append(f'unknown world spawn profile key {profile} at {location_id}:{mob_id}')
                     continue
-                reward_category = get_open_world_reward_category_for_spawn_profile(normalized_profile)
-                if not reward_category:
-                    errors.append(f'missing reward alignment for spawn profile {normalized_profile}')
+                if normalized_profile not in OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY:
+                    errors.append(f'missing explicit reward alignment for discovered spawn profile {normalized_profile}')
+                    continue
+                explicit_category = OPEN_WORLD_SPAWN_PROFILE_TO_REWARD_CATEGORY.get(normalized_profile)
+                if explicit_category not in ALLOWED_OPEN_WORLD_REWARD_CATEGORIES:
+                    errors.append(
+                        f'unknown reward category {explicit_category} in explicit alignment for spawn profile {normalized_profile}'
+                    )
+                resolved_category = get_open_world_reward_category_for_spawn_profile(normalized_profile)
+                if resolved_category != explicit_category:
+                    errors.append(
+                        f'resolved reward category {resolved_category} mismatches explicit mapping {explicit_category} '
+                        f'for spawn profile {normalized_profile}'
+                    )
 
     for composition in OPEN_WORLD_ROUTE_ENCOUNTER_COMPOSITION:
         route_id = str(composition.get('route_id') or '').strip()

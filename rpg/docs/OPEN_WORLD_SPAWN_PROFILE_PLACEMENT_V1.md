@@ -12,6 +12,7 @@ This pass follows PR 3A/3B/3C and keeps the existing runtime spawn system intact
   - rare anchors -> rare (where represented)
 - Spawn profile keys are validated against canonical world spawn profile keys and reward/threat alignment helpers.
 - Covered route live mobs and `world_spawn_profiles` are expected to be represented in route composition metadata.
+- Validation requires explicit reward-alignment mappings for canonical and discovered spawn profiles; runtime-safe fallback does not satisfy placement validation.
 
 ## Scope boundaries kept in this PR
 
