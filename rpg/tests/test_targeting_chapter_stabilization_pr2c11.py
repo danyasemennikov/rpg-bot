@@ -25,20 +25,41 @@ class TargetingChapterStabilizationPR2C11Tests(unittest.TestCase):
             self.assertIs(skill.get('target_local_resolution'), locked['target_local_resolution'], skill_id)
             self.assertIsNone(skill.get('target_shape'), skill_id)
 
-    def test_deferred_skills_still_have_no_pattern_or_target_local(self):
-        deferred_ids = [
-            'frost_bolt', 'ice_shackles', 'shatter', 'absolute_zero', 'ice_lance', 'ice_chains',
-            'blizzard', 'cataclysm', 'meteor', 'arrow_rain', 'rain_of_barbs', 'arcane_barrage',
-            'bow_ult_b', 'driving_slash',
-        ]
+    def test_target_pattern_rollout_set_is_globally_locked(self):
+        actual_pattern_skills = {
+            skill_id
+            for skill_id, skill in SKILLS.items()
+            if skill.get('target_pattern_id') is not None
+        }
+        self.assertEqual(
+            actual_pattern_skills,
+            {
+                'flame_wave',
+                'heavy_swing',
+                'cleave_through',
+                'arcane_lance',
+                'hunters_mark',
+                'aimed_shot',
+                'piercing_arrow',
+                'deadeye',
+            },
+        )
 
-        existing = [skill_id for skill_id in deferred_ids if get_skill(skill_id)]
-        self.assertGreater(len(existing), 0, 'no deferred skills found; test fixture likely changed unexpectedly')
-
-        for skill_id in existing:
-            skill = get_skill(skill_id)
-            self.assertIsNone(skill.get('target_pattern_id'), skill_id)
-            self.assertIsNone(skill.get('target_local_resolution'), skill_id)
+    def test_target_local_resolution_set_is_globally_locked(self):
+        actual_target_local_skills = {
+            skill_id
+            for skill_id, skill in SKILLS.items()
+            if skill.get('target_local_resolution') is not None
+        }
+        approved_target_local_skills = {
+            'cleave_through',
+            'aimed_shot',
+            'piercing_arrow',
+            'deadeye',
+        }
+        self.assertEqual(actual_target_local_skills, approved_target_local_skills)
+        for skill_id in approved_target_local_skills:
+            self.assertIs(get_skill(skill_id).get('target_local_resolution'), True, skill_id)
 
     def test_target_shape_is_not_used_by_current_skill_metadata(self):
         skills_with_shape = [skill_id for skill_id, skill in SKILLS.items() if skill.get('target_shape') is not None]
