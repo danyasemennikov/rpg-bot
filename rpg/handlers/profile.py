@@ -14,6 +14,7 @@ from game.items_data import get_item, get_item_metadata
 from game.equipment_stats import get_player_effective_stats
 from game.gear_instances import get_equipped_gear_instances, resolve_equipped_item_ids_with_fallback
 from game.pvp_live import is_pvp_mobility_blocked
+from game.alpha_recovery import build_recovery_decision
 
 STAT_RESET_COST = 100  # стоимость сброса статов в золоте
 
@@ -419,13 +420,20 @@ async def handle_stats_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
 async def unstuck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = get_player_lang(user.id)
-    if is_pvp_mobility_blocked(int(user.id)):
-        await update.message.reply_text(t('location.pvp_mobility_block', lang))
+    p = get_player(user.id)
+    decision = build_recovery_decision({
+        'in_battle': bool(p and p['in_battle']),
+        'pvp_mobility_blocked': is_pvp_mobility_blocked(int(user.id)),
+        'location_id': p['location_id'] if p else '',
+    })
+    if not decision['allowed']:
+        key = 'location.pvp_mobility_block' if decision['reason'] == 'pvp_blocked' else 'profile.unstuck_blocked_battle'
+        await update.message.reply_text(t(key, lang))
         return
     conn = get_connection()
     conn.execute(
-        'UPDATE players SET in_battle=0, location_id="village" WHERE telegram_id=?',
-        (user.id,)
+        'UPDATE players SET in_battle=0, location_id=? WHERE telegram_id=?',
+        (decision['target_location_id'], user.id)
     )
     conn.commit()
     conn.close()

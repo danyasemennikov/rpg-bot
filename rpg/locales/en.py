@@ -23,6 +23,17 @@ STRINGS = {
         'name_short':   '❌ Name is too short (min 2 characters):',
         'name_long':    '❌ Name is too long (max 20 characters):',
         'distribute':   '✅ Character <b>{name}</b> created!\n\nDistribute 6 starting points:',
+        'alpha_intro': '🧭 Early alpha loop: /location → /map travel → fight mobs → take contracts at quest boards → use inventory/equipment and enhancement. Systems are incomplete, but playable.',
+        'alpha_next_steps_title': 'Next steps:',
+
+        'alpha_step_finish_battle': 'Finish your current battle.',
+        'alpha_step_check_location': 'Check your location.',
+        'alpha_step_open_map': 'Open the world map and travel to a route.',
+        'alpha_step_take_contract': 'Take a hunt contract from the local quest board.',
+        'alpha_step_fight_claim': 'Fight route mobs and claim contract rewards.',
+        'alpha_step_inventory_equipment': 'Open inventory and equipment to review upgrades.',
+        'alpha_step_enhance': 'Enhance gear when you have enough materials.',
+        'alpha_step_unstuck': 'Use /unstuck if your state looks broken outside combat or PvP.',
         'created':      '🎉 Hero <b>{name}</b> is ready for adventure!\n\nUse the buttons below to navigate.',
     },
     'profile': {
@@ -49,6 +60,7 @@ STRINGS = {
         'saved_ok':      '✅ <b>Stats saved!</b>\n\n',
         'reset_no_gold': '❌ Not enough gold! Need {cost} 💰',
         'reset_success': '✅ Stats reset!',
+        'unstuck_blocked_battle': '⛔ You cannot use /unstuck during active combat.',
         'unstuck_done':  '🔧 Done! Moved to village.',
         'identity': {
             'armor_class': {
@@ -124,6 +136,8 @@ STRINGS = {
         'shop_btn':         '🏪 Shop',
         'shop_title_named': '🏪 <b>Shop — {place}</b>\nCurated gear for this hub progression:',
         'shop_empty':       'The vendor has nothing useful right now.',
+        'alpha_contracts_available': '📋 Available contracts here: {count}.',
+        'alpha_route_partial': '⚠️ Sunscar route is still partial in alpha (pack readiness gap remains).',
         'shop_entry':       '• {name} — Lv.{level} — 💰 {price}',
         'shop_buy_btn':     '🛒 Buy {name} ({price}g)',
         'shop_back_btn':    '⬅️ Back to location',
@@ -679,6 +693,7 @@ STRINGS = {
     'help': {
         'title':    '❓ <b>Help</b>',
         'commands': (
+            'Alpha guide: /location, /map, fight, contracts, inventory/equipment, enhancement\n'
             '/start — create character\n'
             '/profile — profile\n'
             '/inventory — inventory\n'

@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from database import get_player, create_player, player_exists
+from game.alpha_guidance import build_alpha_next_steps
 from game.balance import calc_max_hp, calc_max_mana
 from game.i18n import t, get_player_lang, DEFAULT_LANG
 
@@ -83,6 +84,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if player_exists(user.id):
         player = get_player(user.id)
         from handlers.profile import main_keyboard
+        next_steps = build_alpha_next_steps(dict(player), lang=lang)
         await update.message.reply_text(
             t('start.welcome', lang) if False else (
                 f"👋 {'С возвращением' if lang == 'ru' else 'Welcome back' if lang == 'en' else 'Bienvenido de nuevo'}, "
@@ -91,7 +93,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🔵 {t('common.mana', lang)}: {player['mana']}/{player['max_mana']}\n"
                 f"⭐ {t('common.level', lang)}: {player['level']}  |  "
                 f"💰 {t('common.gold', lang)}: {player['gold']}\n\n"
-                f"{'Используй кнопки внизу!' if lang == 'ru' else 'Use the buttons below!' if lang == 'en' else '¡Usa los botones!'}"
+                f"{'Используй кнопки внизу!' if lang == 'ru' else 'Use the buttons below!' if lang == 'en' else '¡Usa los botones!'}\n\n"
+                f"{t('start.alpha_next_steps_title', lang)}\n• " + "\n• ".join(next_steps[:3])
             ),
             parse_mode='HTML',
             reply_markup=main_keyboard()
@@ -184,7 +187,7 @@ async def handle_stat_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         from handlers.profile import main_keyboard
         await context.bot.send_message(
             chat_id=user.id,
-            text=t('start.distribute', lang, name=name),
+            text=t('start.distribute', lang, name=name) + "\n\n" + t('start.alpha_intro', lang),
             reply_markup=main_keyboard()
         )
         return

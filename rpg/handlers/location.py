@@ -59,6 +59,7 @@ from game.quest_board import (
     list_hunt_contracts_for_player,
     get_player_hunt_contract_state,
 )
+from game.alpha_guidance import build_location_objective_hint, build_alpha_route_status_hint
 from game.pvp_live import (
     advance_engagement_to_live_battle_if_ready,
     apply_illegal_aggression_penalties,
@@ -744,6 +745,13 @@ def build_location_message(
         )
         if active_contract_line:
             text += active_contract_line + '\n\n'
+        objective_hint = build_location_objective_hint(str(location.get('id') or ''))
+        route_hint = build_alpha_route_status_hint(str(location.get('id') or ''))
+        if objective_hint.get('has_contracts'):
+            text += t('location.alpha_contracts_available', lang, count=objective_hint.get('contract_count', 0)) + '\n'
+        if route_hint.get('route_id') == 'route_sunscar':
+            text += t('location.alpha_route_partial', lang) + '\n'
+        text += '\n'
 
     keyboard = []
     token_actions: dict[str, str] = {}
