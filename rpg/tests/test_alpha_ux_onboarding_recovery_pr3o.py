@@ -65,8 +65,15 @@ def test_quest_board_discoverability_route_locality():
 
 
 def test_recovery_policy_blocks_and_unknown_fallback():
-    assert build_recovery_decision({'in_battle': True})['allowed'] is False
+    assert build_recovery_decision({'active_danger_context': True})['allowed'] is False
+    assert build_recovery_decision({'active_battle_context': True})['allowed'] is False
+    assert build_recovery_decision({'active_danger_context': True, 'battle_mob': True})['allowed'] is False
+    assert build_recovery_decision({'active_danger_context': True, 'aggro_message_id': 123})['allowed'] is False
     assert build_recovery_decision({'pvp_mobility_blocked': True})['allowed'] is False
+    stale = build_recovery_decision({'persisted_in_battle': True, 'active_danger_context': False, 'location_id': 'hub_westwild'})
+    assert stale['allowed'] is True
+    assert stale['reason'] == 'stale_battle_flag'
+    assert stale['target_location_id'] == 'village'
     known = build_recovery_decision({'location_id': 'hub_westwild'})
     assert known['allowed'] is True
     assert known['target_location_id'] == 'village'
@@ -74,6 +81,13 @@ def test_recovery_policy_blocks_and_unknown_fallback():
     assert unknown['allowed'] is True
     assert unknown['target_location_id'] == 'village'
     assert validate_alpha_recovery_policy() == []
+
+
+def test_recovery_policy_stale_battle_flag_vs_aggro_marker():
+    allowed = build_recovery_decision({'persisted_in_battle': True, 'active_danger_context': False, 'location_id': 'hub_westwild'})
+    blocked = build_recovery_decision({'persisted_in_battle': True, 'active_danger_context': True, 'location_id': 'hub_westwild'})
+    assert allowed['allowed'] is True
+    assert blocked['allowed'] is False
 
 
 def test_validators_baselines_and_rollout_locks():

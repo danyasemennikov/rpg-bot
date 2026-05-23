@@ -421,8 +421,15 @@ async def unstuck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = get_player_lang(user.id)
     p = get_player(user.id)
+    active_danger_context = bool(
+        context.user_data.get('battle')
+        or context.user_data.get('battle_mob')
+        or context.user_data.get('aggro_message_id')
+    )
     decision = build_recovery_decision({
-        'in_battle': bool(p and p['in_battle']),
+        'persisted_in_battle': bool(p and p['in_battle']),
+        'active_danger_context': active_danger_context,
+        'active_battle_context': bool(context.user_data.get('battle')),
         'pvp_mobility_blocked': is_pvp_mobility_blocked(int(user.id)),
         'location_id': p['location_id'] if p else '',
     })
