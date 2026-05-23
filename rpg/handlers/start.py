@@ -84,7 +84,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if player_exists(user.id):
         player = get_player(user.id)
         from handlers.profile import main_keyboard
-        next_steps = build_alpha_next_steps(dict(player), lang=lang)
+        next_steps = build_alpha_next_steps(
+            {
+                **dict(player),
+                'active_battle_context': bool(context.user_data.get('battle')),
+                'active_danger_context': bool(
+                    context.user_data.get('battle')
+                    or context.user_data.get('battle_mob')
+                    or context.user_data.get('aggro_message_id')
+                ),
+            },
+            lang=lang,
+        )
         await update.message.reply_text(
             t('start.welcome', lang) if False else (
                 f"👋 {'С возвращением' if lang == 'ru' else 'Welcome back' if lang == 'en' else 'Bienvenido de nuevo'}, "

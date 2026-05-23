@@ -11,7 +11,8 @@ def build_alpha_next_steps(player_state: dict, lang: str = 'en') -> tuple[str, .
     if not isinstance(player_state, dict):
         player_state = {}
     steps: list[str] = []
-    if player_state.get('in_battle'):
+    active_danger = bool(player_state.get('active_danger_context') or player_state.get('active_battle_context'))
+    if active_danger:
         steps.append(t('start.alpha_step_finish_battle', lang))
     else:
         steps.extend([

@@ -14,6 +14,8 @@ from game.open_world_route_objectives import validate_open_world_route_objective
 from game.quest_board import get_hunt_contract, list_hunt_contracts_for_location
 from game.skills import SKILLS
 
+RPG_ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_alpha_guidance_helpers_shape_and_stability():
     steps = build_alpha_next_steps({'in_battle': False}, lang='en')
@@ -34,8 +36,8 @@ def test_alpha_guidance_helpers_shape_and_stability():
 
 
 def test_onboarding_and_help_locale_keys_exist():
-    for locale in ('locales/en.py', 'locales/ru.py', 'locales/es.py'):
-        text = Path(locale).read_text(encoding='utf-8').lower()
+    for locale_rel in ('locales/en.py', 'locales/ru.py', 'locales/es.py'):
+        text = (RPG_ROOT / locale_rel).read_text(encoding='utf-8').lower()
         for needle in ('alpha_intro', 'alpha_next_steps_title', 'location', 'map', 'contract', 'inventory'):
             assert needle in text
         for needle in (
@@ -117,7 +119,7 @@ def test_validators_baselines_and_rollout_locks():
 
 
 def test_docs_guard():
-    text = Path('docs/ALPHA_UX_ONBOARDING_RECOVERY_PASS1.md').read_text(encoding='utf-8').lower()
+    text = (RPG_ROOT / 'docs/ALPHA_UX_ONBOARDING_RECOVERY_PASS1.md').read_text(encoding='utf-8').lower()
     for phrase in (
         'onboarding', 'route objectives', 'quest board contracts', 'inventory', 'equipment',
         'enhancement', 'recovery', 'route_sunscar', 'no_pack_mobs_on_non_stub_route',
