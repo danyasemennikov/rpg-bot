@@ -23,6 +23,17 @@ STRINGS = {
         'name_short':   '❌ Nombre demasiado corto (mínimo 2 caracteres):',
         'name_long':    '❌ Nombre demasiado largo (máximo 20 caracteres):',
         'distribute':   '✅ ¡Personaje <b>{name}</b> creado!\n\nDistribuye 6 puntos iniciales:',
+        'alpha_intro': '🧭 Bucle de alpha temprana: /location → viajar con /map → combatir mobs → tomar contratos en el tablón → inventario/equipo y mejora. El sistema aún está incompleto, pero jugable.',
+        'alpha_next_steps_title': 'Siguientes pasos:',
+
+        'alpha_step_finish_battle': 'Termina tu combate actual.',
+        'alpha_step_check_location': 'Revisa tu ubicación actual.',
+        'alpha_step_open_map': 'Abre el mapa mundial y viaja a una ruta.',
+        'alpha_step_take_contract': 'Acepta un contrato de caza en el tablón local.',
+        'alpha_step_fight_claim': 'Combate mobs de la ruta y reclama contratos completados.',
+        'alpha_step_inventory_equipment': 'Abre inventario y equipo para revisar mejoras.',
+        'alpha_step_enhance': 'Mejora equipo cuando tengas materiales suficientes.',
+        'alpha_step_unstuck': 'Usa /unstuck si tu estado parece roto fuera de combate o PvP.',
         'created':      '🎉 ¡Héroe <b>{name}</b> listo para la aventura!\n\nUsa los botones de abajo para navegar.',
     },
     'profile': {
@@ -49,6 +60,7 @@ STRINGS = {
         'saved_ok':      '✅ <b>¡Stats guardados!</b>\n\n',
         'reset_no_gold': '❌ ¡Oro insuficiente! Necesitas {cost} 💰',
         'reset_success': '✅ ¡Stats reiniciados!',
+        'unstuck_blocked_battle': '⛔ No puedes usar /unstuck durante combate activo.',
         'unstuck_done':  '🔧 ¡Listo! Trasladado al pueblo.',
         'identity': {
             'armor_class': {
@@ -122,6 +134,8 @@ STRINGS = {
         'shop_btn':         '🏪 Tienda',
         'shop_title_named': '🏪 <b>Tienda — {place}</b>\nEquipo curado para la progresión de este enclave:',
         'shop_empty':       'La tienda no tiene nada útil ahora.',
+        'alpha_contracts_available': '📋 Contratos disponibles aquí: {count}.',
+        'alpha_route_partial': '⚠️ La ruta Sunscar sigue parcial en alpha (la brecha de pack-ready continúa).',
         'shop_entry':       '• {name} — Nv.{level} — 💰 {price}',
         'shop_buy_btn':     '🛒 Comprar {name} ({price}o)',
         'shop_back_btn':    '⬅️ Volver a ubicación',
@@ -659,6 +673,7 @@ STRINGS = {
     'help': {
         'title':    '❓ <b>Ayuda</b>',
         'commands': (
+            'Guía alpha: /location, /map, combate, contratos, inventario/equipo, mejora\n'
             '/start — crear personaje\n'
             '/profile — perfil\n'
             '/inventory — inventario\n'
