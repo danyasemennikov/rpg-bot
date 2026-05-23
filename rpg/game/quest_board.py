@@ -123,7 +123,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=48,
         board_locations=('frostspine_n5',),
         hunter_points_reward=24,
-        target_location_ids=('frostspine_n6', 'frostspine_n8'),
+        target_location_ids=('frostspine_n2', 'frostspine_n3', 'frostspine_n5'),
     ),
     HuntContract(
         contract_key='hunt_ashen_zombie_clusters',
@@ -134,7 +134,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=50,
         board_locations=('ashen_n3a2',),
         hunter_points_reward=24,
-        target_location_ids=('ashen_n3b1', 'ashen_n3b2'),
+        target_location_ids=('ashen_n1', 'ashen_n2', 'ashen_n3c1'),
     ),
     HuntContract(
         contract_key='hunt_mireveil_leech_swarms',
@@ -145,7 +145,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         reward_gold=47,
         board_locations=('mireveil_n5a1',),
         hunter_points_reward=24,
-        target_location_ids=('mireveil_n6', 'mireveil_n8'),
+        target_location_ids=('mireveil_n1', 'mireveil_n2', 'mireveil_n5'),
     ),
 )
 

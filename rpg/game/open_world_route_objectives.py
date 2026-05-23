@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from game.locations import WORLD_ROUTES
+from game.locations import WORLD_LOCATIONS, WORLD_ROUTES, resolve_location_id
 from game.mobs import MOBS
-from game.open_world_pack_balance import collect_open_world_route_mob_ids
+from game.open_world_pack_balance import collect_open_world_route_mob_ids, get_world_location_ids_by_route_id
 from game.open_world_readiness_gap_report import build_open_world_readiness_gap_report
 from game.open_world_route_balance_report import build_open_world_route_balance_report
 from game.quest_board import HuntContract, list_hunt_contracts_for_location
@@ -93,6 +93,21 @@ def collect_route_contract_target_mob_ids(route_id: str) -> tuple[str, ...]:
     return tuple(sorted({contract.target_mob_id for contract in list_route_hunt_contracts(route_id)}))
 
 
+def collect_route_spawnable_mob_locations(route_id: str, mob_id: str) -> tuple[str, ...]:
+    normalized_route = str(route_id or '').strip()
+    normalized_mob = str(mob_id or '').strip()
+    if not normalized_route or not normalized_mob:
+        return ()
+    locations: list[str] = []
+    for location_id in get_world_location_ids_by_route_id(normalized_route):
+        location = WORLD_LOCATIONS.get(location_id, {})
+        mobs = set(location.get('mobs') or ())
+        spawn_profiles = set((location.get('world_spawn_profiles') or {}).keys())
+        if normalized_mob in mobs or normalized_mob in spawn_profiles:
+            locations.append(location_id)
+    return tuple(sorted(set(locations)))
+
+
 def validate_open_world_route_objectives() -> list[str]:
     errors: list[str] = []
     for profile in build_all_route_objective_profiles():
@@ -120,6 +135,25 @@ def validate_open_world_route_objectives() -> list[str]:
                     errors.append(f'route contract target mob is non-local: {route_id}:{contract.contract_key}')
                 if int(contract.reward_exp) <= 0 or int(contract.reward_gold) <= 0:
                     errors.append(f'route contract has non-positive rewards: {route_id}:{contract.contract_key}')
+                if not contract.target_location_ids:
+                    errors.append(f'route contract has empty target locations: {route_id}:{contract.contract_key}')
+                    continue
+                spawnable_locations = set(collect_route_spawnable_mob_locations(route_id, contract.target_mob_id))
+                valid_spawnable_count = 0
+                for target_location_id in contract.target_location_ids:
+                    normalized_target_location_id = resolve_location_id(target_location_id)
+                    if normalized_target_location_id not in set(get_world_location_ids_by_route_id(route_id)):
+                        errors.append(
+                            f'route contract target location is not route-local: {route_id}:{contract.contract_key}:{target_location_id}'
+                        )
+                    if normalized_target_location_id not in spawnable_locations:
+                        errors.append(
+                            f'route contract target location does not spawn target mob: {route_id}:{contract.contract_key}:{target_location_id}:{contract.target_mob_id}'
+                        )
+                    else:
+                        valid_spawnable_count += 1
+                if valid_spawnable_count <= 0:
+                    errors.append(f'route contract has no spawnable target locations: {route_id}:{contract.contract_key}')
 
         if route_id == 'route_sunscar':
             if profile.get('numeric_tuning_ready'):

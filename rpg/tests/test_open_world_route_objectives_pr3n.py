@@ -3,6 +3,7 @@ import tempfile
 
 import database
 from database import get_connection, init_db
+from game.locations import WORLD_LOCATIONS, resolve_location_id
 from game.mobs import MOBS
 from game.open_world_pack_balance import collect_open_world_route_mob_ids
 from game.open_world_progression_loop import validate_open_world_progression_loop_sanity
@@ -14,6 +15,8 @@ from game.open_world_route_balance_report import validate_open_world_route_balan
 from game.open_world_route_objectives import (
     build_all_route_objective_profiles,
     build_route_objective_profile,
+    collect_route_contract_target_mob_ids,
+    collect_route_spawnable_mob_locations,
     get_route_representative_contract_locations,
     list_route_hunt_contracts,
     validate_open_world_route_objectives,
@@ -109,6 +112,24 @@ def test_quest_board_visible_contract_coverage_for_all_numeric_ready_routes():
         assert expected_targets.issubset(route_local)
 
 
+def test_route_contract_target_locations_are_spawnable():
+    for route_id in NUMERIC_READY_ROUTES:
+        route_local_mobs = collect_open_world_route_mob_ids(route_id)
+        route_targets = set(collect_route_contract_target_mob_ids(route_id))
+        assert route_targets.issubset(route_local_mobs)
+        for contract in list_route_hunt_contracts(route_id):
+            assert contract.target_location_ids
+            spawnable_locations = set(collect_route_spawnable_mob_locations(route_id, contract.target_mob_id))
+            for location_id in contract.target_location_ids:
+                normalized_location_id = resolve_location_id(location_id)
+                location = WORLD_LOCATIONS.get(normalized_location_id, {})
+                assert location.get('route_id') == route_id
+                loc_mobs = set(location.get('mobs') or ())
+                loc_profiles = set((location.get('world_spawn_profiles') or {}).keys())
+                assert contract.target_mob_id in loc_mobs or contract.target_mob_id in loc_profiles
+                assert normalized_location_id in spawnable_locations
+
+
 def test_contract_accept_progress_claim_smoke_all_numeric_ready_routes():
     tmpdir = tempfile.TemporaryDirectory()
     orig = database.DB_PATH
@@ -132,6 +153,10 @@ def test_contract_accept_progress_claim_smoke_all_numeric_ready_routes():
             assert (ok, reason) == (True, 'accepted')
             for _ in range(contract.required_kills):
                 kill_location = contract.target_location_ids[0] if contract.target_location_ids else board_location
+                location = WORLD_LOCATIONS.get(kill_location, {})
+                location_mobs = set(location.get('mobs') or ())
+                location_profiles = set((location.get('world_spawn_profiles') or {}).keys())
+                assert contract.target_mob_id in location_mobs or contract.target_mob_id in location_profiles
                 register_hunt_kill_progress(player_id=player_id, mob_id=contract.target_mob_id, location_id=kill_location)
             state = get_player_hunt_contract_state(player_id)
             assert state and state['status'] == 'completed'
