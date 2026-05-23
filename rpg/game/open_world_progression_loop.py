@@ -29,6 +29,36 @@ def _classify_item(item_id: str) -> str:
     return 'unknown'
 
 
+
+
+def _iter_valid_loot_item_ids(profile: dict) -> tuple[list[str], list[str]]:
+    valid_item_ids: list[str] = []
+    warnings: list[str] = []
+    mob_id = str(profile.get('mob_id') or '').strip() or 'unknown_mob'
+    loot_table = profile.get('loot_table')
+
+    if not isinstance(loot_table, (list, tuple)):
+        warnings.append(f'malformed_loot_table:{mob_id}')
+        return valid_item_ids, warnings
+
+    for index, entry in enumerate(loot_table):
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            warnings.append(f'malformed_loot_entry:{mob_id}:{index}')
+            continue
+
+        item_id, chance = entry
+        normalized_item_id = str(item_id or '').strip() if isinstance(item_id, str) else ''
+        if not normalized_item_id:
+            warnings.append(f'malformed_loot_item_id:{mob_id}:{index}')
+            continue
+
+        if not isinstance(chance, (int, float)) or chance <= 0 or chance > 1:
+            warnings.append(f'malformed_loot_chance:{mob_id}:{index}')
+            continue
+
+        valid_item_ids.append(normalized_item_id)
+
+    return valid_item_ids, warnings
 def build_open_world_progression_source_report(route_id: str) -> dict:
     reward_report = build_route_open_world_reward_sanity_report(str(route_id or '').strip())
     if not reward_report:
@@ -41,10 +71,9 @@ def build_open_world_progression_source_report(route_id: str) -> dict:
     progression_warnings: list[str] = []
 
     for profile in reward_report.get('mob_profiles', ()):
-        for item_id, _chance in profile.get('loot_table', ()):
-            normalized_item_id = str(item_id or '').strip()
-            if not normalized_item_id:
-                continue
+        valid_item_ids, malformed_warnings = _iter_valid_loot_item_ids(profile if isinstance(profile, dict) else {})
+        progression_warnings.extend(malformed_warnings)
+        for normalized_item_id in valid_item_ids:
             loot_item_ids.add(normalized_item_id)
             item_class = _classify_item(normalized_item_id)
             if item_class == 'unknown':
@@ -105,4 +134,6 @@ def validate_open_world_progression_loop_sanity() -> list[str]:
                 errors.append(f'progression report has unknown rewarded item ids on ready route {route_id}')
             if any('unknown_loot_items' in warning for warning in report.get('progression_warnings', ())):
                 errors.append(f'progression report has unknown loot item ids on ready route {route_id}')
+            if any('malformed_loot_' in warning for warning in report.get('progression_warnings', ())):
+                errors.append(f'progression report has malformed loot entries on ready route {route_id}')
     return errors

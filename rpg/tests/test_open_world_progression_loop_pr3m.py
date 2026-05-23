@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import database
 from database import get_connection, init_db
@@ -200,6 +201,44 @@ class OpenWorldProgressionLoopPR3MTests(unittest.TestCase):
         )
         for phrase in required_phrases:
             self.assertIn(phrase, text)
+
+
+    def test_malformed_loot_report_is_safe_and_keeps_valid_entries(self):
+        fake_report = {
+            'route_id': 'route_fake_ready',
+            'numeric_tuning_ready': True,
+            'is_sparse_or_stub': False,
+            'reward_category': 'test',
+            'reward_profile_id': 'test_profile',
+            'mob_profiles': (
+                {'mob_id': 'fake_none', 'loot_table': None},
+                {'mob_id': 'fake_str', 'loot_table': 'not-a-table'},
+                {'mob_id': 'fake_mixed', 'loot_table': [('enhance_shard', 0.08), ('bad_singleton',), 'bad_entry']},
+                {'mob_id': 'fake_chance', 'loot_table': [('enhance_shard', 0.08), ('bad_chance', 2.0)]},
+            ),
+            'actionable_warnings': (),
+        }
+        with patch('game.open_world_progression_loop.build_route_open_world_reward_sanity_report', return_value=fake_report):
+            report = build_open_world_progression_source_report('route_fake_ready')
+
+        self.assertIn('enhance_shard', report['loot_item_ids'])
+        self.assertTrue(any(w.startswith('malformed_loot_table:fake_none') for w in report['progression_warnings']))
+        self.assertTrue(any(w.startswith('malformed_loot_table:fake_str') for w in report['progression_warnings']))
+        self.assertTrue(any(w.startswith('malformed_loot_entry:fake_mixed:1') for w in report['progression_warnings']))
+        self.assertTrue(any(w.startswith('malformed_loot_entry:fake_mixed:2') for w in report['progression_warnings']))
+        self.assertTrue(any(w.startswith('malformed_loot_chance:fake_chance:1') for w in report['progression_warnings']))
+
+    def test_validator_flags_malformed_loot_on_numeric_ready_route(self):
+        fake = ({
+            'route_id': 'route_fake_ready',
+            'numeric_tuning_ready': True,
+            'loot_item_ids': ('enhance_shard',),
+            'has_rewarded_items_with_metadata': True,
+            'progression_warnings': ('malformed_loot_entry:fake:0',),
+        },)
+        with patch('game.open_world_progression_loop.build_all_open_world_progression_source_reports', return_value=fake):
+            errors = validate_open_world_progression_loop_sanity()
+        self.assertIn('progression report has malformed loot entries on ready route route_fake_ready', errors)
 
 if __name__ == '__main__':
     unittest.main()
