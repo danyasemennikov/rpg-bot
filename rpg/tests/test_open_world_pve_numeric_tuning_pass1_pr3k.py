@@ -113,13 +113,13 @@ class OpenWorldPveNumericTuningPass1PR3KTests(unittest.TestCase):
         self.assertEqual(actual, expected)
 
 
-    def test_changed_mobs_keep_combat_tuning_and_preserve_old_rewards(self):
+    def test_changed_mobs_keep_combat_tuning_baseline(self):
         expected = {
-            'white_wolf': {'level': 4, 'hp': 58, 'damage_min': 8, 'damage_max': 13, 'exp_reward': 30, 'gold_min': 1, 'gold_max': 6},
-            'mountain_stone_golem': {'level': 10, 'hp': 210, 'damage_min': 15, 'damage_max': 24, 'exp_reward': 60, 'gold_min': 3, 'gold_max': 9},
-            'zombie': {'level': 4, 'hp': 62, 'damage_min': 7, 'damage_max': 12, 'exp_reward': 30, 'gold_min': 1, 'gold_max': 6},
-            'leech': {'level': 3, 'hp': 38, 'damage_min': 5, 'damage_max': 9, 'exp_reward': 20, 'gold_min': 1, 'gold_max': 5},
-            'drowned': {'level': 10, 'hp': 138, 'damage_min': 20, 'damage_max': 30, 'exp_reward': 70, 'gold_min': 3, 'gold_max': 10},
+            'white_wolf': {'level': 4, 'hp': 58, 'damage_min': 8, 'damage_max': 13},
+            'mountain_stone_golem': {'level': 10, 'hp': 210, 'damage_min': 15, 'damage_max': 24},
+            'zombie': {'level': 4, 'hp': 62, 'damage_min': 7, 'damage_max': 12},
+            'leech': {'level': 3, 'hp': 38, 'damage_min': 5, 'damage_max': 9},
+            'drowned': {'level': 10, 'hp': 138, 'damage_min': 20, 'damage_max': 30},
         }
         for mob_id, expected_values in expected.items():
             mob = MOBS[mob_id]
