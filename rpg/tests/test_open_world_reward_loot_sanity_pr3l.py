@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from game.mobs import MOBS
 from game.open_world_pack_balance import get_open_world_pack_archetype_metadata, is_open_world_pack_enabled_mob, validate_open_world_spawn_profile_placement
@@ -20,11 +21,40 @@ STUBS = ('route_south_coast_stub', 'route_old_mine_stub')
 
 class OpenWorldRewardLootSanityPR3LTests(unittest.TestCase):
     def test_reward_reports_build(self):
-        required = {'route_id', 'numeric_tuning_ready', 'is_sparse_or_stub', 'reward_category', 'reward_profile_id', 'solo_mob_ids', 'pack_mob_ids', 'elite_anchor_mob_ids', 'rare_anchor_mob_ids', 'exp_min', 'exp_max', 'gold_min', 'gold_max', 'has_loot_tables', 'route_reward_warnings'}
+        required = {'route_id', 'numeric_tuning_ready', 'is_sparse_or_stub', 'reward_category', 'reward_profile_id', 'solo_mob_ids', 'pack_mob_ids', 'elite_anchor_mob_ids', 'rare_anchor_mob_ids', 'exp_min', 'exp_max', 'gold_min', 'gold_max', 'has_loot_tables', 'route_reward_warnings', 'missing_mob_ids'}
         for route_id in (*NUMERIC_READY, 'route_sunscar', *STUBS):
             report = build_route_open_world_reward_sanity_report(route_id)
             self.assertTrue(report)
             self.assertTrue(required.issubset(report.keys()))
+
+
+    def test_missing_mob_profiles_are_preserved_and_validated(self):
+        fake_report = {
+            'route_id': 'route_fake_ready',
+            'numeric_tuning_ready': True,
+            'is_sparse_or_stub': False,
+            'reward_category': 'open_world_normal',
+            'reward_profile_id': 'open_world_normal_surface',
+            'mob_ids': ('forest_wolf', 'typo_missing_mob'),
+            'solo_mob_ids': ('forest_wolf',),
+            'pack_mob_ids': (),
+            'elite_anchor_mob_ids': (),
+            'rare_anchor_mob_ids': (),
+            'actionable_warnings': (),
+        }
+        with patch('game.open_world_reward_sanity.build_route_pve_numeric_tuning_report', return_value=fake_report):
+            route_report = build_route_open_world_reward_sanity_report('route_fake_ready')
+
+        self.assertIn('typo_missing_mob', route_report['missing_mob_ids'])
+        self.assertIn('missing_mob_reward_profile:typo_missing_mob', route_report['route_reward_warnings'])
+
+        with patch('game.open_world_reward_sanity.build_all_open_world_reward_sanity_reports', return_value=(route_report,)):
+            errors = validate_open_world_reward_loot_sanity()
+
+        joined = '\n'.join(errors)
+        self.assertIn('missing reward profile', joined)
+        self.assertIn('typo_missing_mob', joined)
+        self.assertIn('route_fake_ready', joined)
 
     def test_numeric_ready_reward_shape(self):
         for route_id in NUMERIC_READY:

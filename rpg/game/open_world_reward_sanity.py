@@ -52,14 +52,22 @@ def build_route_open_world_reward_sanity_report(route_id) -> dict:
         return {}
 
     mob_ids = numeric_report.get('mob_ids', ())
-    profiles = [build_open_world_mob_reward_profile(mob_id) for mob_id in mob_ids]
-    profiles = [profile for profile in profiles if profile]
+    profiles: list[dict] = []
+    missing_mob_ids: list[str] = []
+    for mob_id in mob_ids:
+        profile = build_open_world_mob_reward_profile(mob_id)
+        if profile:
+            profiles.append(profile)
+        else:
+            missing_mob_ids.append(str(mob_id))
 
     exp_values = [int(p['exp_reward']) for p in profiles if isinstance(p.get('exp_reward'), int)]
     gold_min_values = [int(p['gold_min']) for p in profiles if isinstance(p.get('gold_min'), int)]
     gold_max_values = [int(p['gold_max']) for p in profiles if isinstance(p.get('gold_max'), int)]
 
     warnings: list[str] = []
+    for missing_mob_id in sorted(set(missing_mob_ids)):
+        warnings.append(f'missing_mob_reward_profile:{missing_mob_id}')
     for profile in profiles:
         mob_id = str(profile.get('mob_id'))
         if not isinstance(profile.get('exp_reward'), int) or profile.get('exp_reward', 0) <= 0:
@@ -82,6 +90,7 @@ def build_route_open_world_reward_sanity_report(route_id) -> dict:
         'elite_anchor_mob_ids': numeric_report.get('elite_anchor_mob_ids', ()),
         'rare_anchor_mob_ids': numeric_report.get('rare_anchor_mob_ids', ()),
         'mob_profiles': tuple(profiles),
+        'missing_mob_ids': tuple(sorted(set(missing_mob_ids))),
         'exp_min': min(exp_values) if exp_values else None,
         'exp_max': max(exp_values) if exp_values else None,
         'gold_min': min(gold_min_values) if gold_min_values else None,
@@ -112,6 +121,10 @@ def validate_open_world_reward_loot_sanity() -> list[str]:
             errors.append(f'invalid exp bounds on route {route_id}')
         if report.get('gold_min') is not None and report.get('gold_max') is not None and report['gold_min'] > report['gold_max']:
             errors.append(f'invalid gold bounds on route {route_id}')
+
+        missing_mob_ids = tuple(str(mob_id) for mob_id in report.get('missing_mob_ids', ()) if str(mob_id).strip())
+        for mob_id in missing_mob_ids:
+            errors.append(f'missing reward profile on route {route_id}: {mob_id}')
 
         if bool(report.get('numeric_tuning_ready')):
             for profile in report.get('mob_profiles', ()):
