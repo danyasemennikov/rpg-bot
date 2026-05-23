@@ -35,7 +35,7 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         self.assertTrue(is_pack_enabled_mob('forest_wolf'))
         self.assertFalse(is_pack_enabled_mob('forest_boar'))
 
-    def test_pack_counts_cover_all_existing_approved_mob_locations_including_westwild_n7_and_ashen(self):
+    def test_pack_counts_cover_all_existing_approved_mob_locations(self):
         expected = {
             'forest_wolf': {'westwild_n3', 'westwild_n4', 'westwild_n6', 'westwild_n7'},
             'white_wolf': {'frostspine_n2', 'frostspine_n3', 'frostspine_n5'},
@@ -46,9 +46,20 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
             seen = set()
             for location_id in locations:
                 profiles = (WORLD_LOCATIONS[location_id].get('world_spawn_profiles') or {}).get(mob_id) or {}
-                self.assertEqual(int(profiles.get('normal', 1)), 3)
+                self.assertIn('normal', profiles)
+                self.assertEqual(int(profiles['normal']), 3)
                 seen.add(location_id)
             self.assertEqual(seen, locations)
+
+    def test_each_pack_enabled_mob_has_runtime_pack_eligible_normal_spawn_location(self):
+        for mob_id in PACK_ENABLED_MOB_IDS:
+            has_pack_location = False
+            for location in WORLD_LOCATIONS.values():
+                profiles = (location.get('world_spawn_profiles') or {}).get(mob_id) or {}
+                if 'normal' in profiles and int(profiles['normal']) >= 2:
+                    has_pack_location = True
+                    break
+            self.assertTrue(has_pack_location, msg=mob_id)
 
     def test_pack_runtime_uses_one_enemy_participant_per_living_unit(self):
         battle_state = {
