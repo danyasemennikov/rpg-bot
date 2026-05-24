@@ -13,6 +13,7 @@ from game.open_world_pack_balance import (
     validate_open_world_spawn_profile_placement,
 )
 from game.open_world_readiness_gap_report import (
+    ACTIONABLE_WARNING_IDS,
     build_open_world_readiness_gap_report,
     validate_open_world_readiness_gap_report,
 )
@@ -27,6 +28,9 @@ from game.skills import SKILLS
 
 
 class OpenWorldReadinessGapClosurePR3ITests(unittest.TestCase):
+    def test_missing_alpha_pressure_profile_is_registered_actionable(self):
+        self.assertIn('missing_alpha_pressure_profile', ACTIONABLE_WARNING_IDS)
+
     def test_sunscar_route_specific_pressure_is_tracked(self):
         report = build_open_world_route_balance_report('route_sunscar')
         self.assertEqual(report.get('route_id'), 'route_sunscar')
