@@ -147,6 +147,30 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
         hunter_points_reward=24,
         target_location_ids=('mireveil_n1', 'mireveil_n2', 'mireveil_n5'),
     ),
+    HuntContract(
+        contract_key='hunt_sunscar_scorpions',
+        title_i18n_key='location.quest_contract_spiders_title',
+        target_mob_id='scorpion',
+        required_kills=4,
+        reward_exp=110,
+        reward_gold=52,
+        board_locations=('hub_sunscar',),
+        hunter_points_reward=24,
+        target_location_ids=('sunscar_n3', 'sunscar_n4', 'sunscar_n5'),
+    ),
+    HuntContract(
+        contract_key='hunt_sunscar_air_elementals',
+        title_i18n_key='location.quest_contract_greyfang_title',
+        target_mob_id='air_elemental',
+        required_kills=2,
+        reward_exp=120,
+        reward_gold=58,
+        board_locations=('hub_sunscar',),
+        spawn_profile='elite',
+        hunter_points_reward=30,
+        required_hunter_rank='tracker',
+        target_location_ids=('sunscar_n10', 'sunscar_n11'),
+    ),
 )
 
 HUNT_CONTRACTS_BY_KEY = {contract.contract_key: contract for contract in HUNT_CONTRACTS}
