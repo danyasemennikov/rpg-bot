@@ -3,7 +3,7 @@ import unittest
 from game.gathering_foundation import build_location_gather_source_profiles
 from game.i18n import get_location_desc, get_location_name
 from game.items_data import get_item_reward_tags
-from game.locations import LOCATIONS, get_location, resolve_location_id
+from game.locations import LOCATIONS, get_location, get_route_alpha_depth_stage, resolve_location_id
 from game.mobs import MOBS
 from game.quest_board import HUNT_CONTRACTS_BY_KEY
 from game.open_world_reward_pools import build_open_world_reward_pool_profile
@@ -238,6 +238,24 @@ class OpenWorldGameplayRolloutPhase1Tests(unittest.TestCase):
         self.assertLess(get_location('westwild_n1').get('level_max'), get_location('westwild_n7').get('level_max'))
         self.assertLess(get_location('sunscar_n1').get('level_max'), get_location('sunscar_n11').get('level_max'))
         self.assertEqual(get_location('old_mine_entrance').get('level_max'), 4)
+
+    def test_alpha_depth_stage_policy_for_full_routes(self):
+        for location_id in ('westwild_n1', 'frostspine_n2', 'ashen_n1', 'sunscar_n2', 'mireveil_n1'):
+            self.assertEqual(get_route_alpha_depth_stage(location_id), 'soft_entry')
+
+        self.assertEqual(get_route_alpha_depth_stage('ashen_n3b2a1'), 'identity_visible')
+        self.assertEqual(get_route_alpha_depth_stage('sunscar_n6'), 'build_testing')
+        self.assertEqual(get_route_alpha_depth_stage('westwild_n10'), 'route_exam')
+
+        self.assertEqual(get_route_alpha_depth_stage('hub_westwild'), '')
+        self.assertEqual(get_route_alpha_depth_stage('south_coast_shore'), '')
+        self.assertEqual(get_route_alpha_depth_stage('old_mine_entrance'), '')
+
+    def test_alpha_depth_stage_metadata_does_not_affect_travel_or_discovery_surface(self):
+        westwild = get_location('westwild_n1')
+        self.assertIn('westwild_n2', westwild.get('neighbors', []))
+        self.assertIn('westwild_n2', westwild.get('canonical_neighbors', []))
+        self.assertEqual(westwild.get('alpha_depth_stage'), 'soft_entry')
 
 
 if __name__ == '__main__':

@@ -9,9 +9,9 @@ Alpha-ready routes:
 - route_frostspine
 - route_ashen_ruins
 - route_mireveil
+- route_sunscar
 
 Known non-ready / partial routes:
-- route_sunscar due to no_pack_mobs_on_non_stub_route
 - route_south_coast_stub
 - route_old_mine_stub
 
@@ -34,7 +34,9 @@ Known non-ready / partial routes:
 - no dynamic quest generation
 - no mixed-mob packs
 - no dungeon/world boss/rare boss readiness
-- Sunscar pack pressure is still future work
+- route-specific pressure readiness policy is active
+- pack pressure is required only where route identity requires it
+- Sunscar readiness is validated by solo_elite_precision_skirmish pressure
 
 ## Explicit non-goals
 

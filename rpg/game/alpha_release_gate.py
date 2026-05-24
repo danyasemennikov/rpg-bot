@@ -17,12 +17,13 @@ ALPHA_READY_ROUTES: tuple[str, ...] = (
     'route_frostspine',
     'route_ashen_ruins',
     'route_mireveil',
+    'route_sunscar',
 )
-BLOCKED_ROUTES: tuple[str, ...] = ('route_sunscar',)
+BLOCKED_ROUTES: tuple[str, ...] = ()
 SPARSE_STUB_ROUTES: tuple[str, ...] = ('route_south_coast_stub', 'route_old_mine_stub')
 
 TARGETING_ROLLOUT_FROZEN_NOTE = 'targeting rollout remains frozen by pr2c11 policy'
-SUNSCAR_BLOCKER_NOTE = 'route_sunscar remains blocked by no_pack_mobs_on_non_stub_route'
+SUNSCAR_READINESS_NOTE = 'route_sunscar is alpha-ready via solo_elite_precision_skirmish (no pack requirement)'
 APPROVED_TARGET_PATTERN_SKILL_IDS: frozenset[str] = frozenset({
     'flame_wave', 'heavy_swing', 'cleave_through', 'arcane_lance',
     'hunters_mark', 'aimed_shot', 'piercing_arrow', 'deadeye',
@@ -62,11 +63,10 @@ def build_alpha_release_gate_report() -> dict[str, object]:
         'recovery/unstuck policy',
         'i18n surface for EN/RU/ES',
         'targeting rollout freeze',
-        'Sunscar known blocker remains explicit',
+        'Sunscar route-specific readiness is explicit',
     )
 
     known_alpha_limits = (
-        SUNSCAR_BLOCKER_NOTE,
         'contracts are curated/static',
         'single-active-contract architecture unchanged',
         'no full dynamic quest generation',
@@ -79,14 +79,19 @@ def build_alpha_release_gate_report() -> dict[str, object]:
         'route_contract_loop': 'covered_by_alpha_release_gate_pr3p',
         'reward_progression_recovery': 'covered_by_alpha_release_gate_pr3p',
     }
+    readiness_policy_notes = (
+        'alpha readiness accepts route-specific combat pressure profiles',
+        'pack pressure is required only where route identity requires it',
+        SUNSCAR_READINESS_NOTE,
+    )
 
     release_warnings: list[str] = []
     for validator_name, validator_errors in validator_status.items():
         if validator_errors:
             release_warnings.append(f'validator_failed:{validator_name}')
     sunscar_warnings = set(readiness_report.get('remaining_warnings_by_route', {}).get('route_sunscar', ()))
-    if 'no_pack_mobs_on_non_stub_route' in sunscar_warnings:
-        release_warnings.append(SUNSCAR_BLOCKER_NOTE)
+    if 'missing_alpha_pressure_profile' in sunscar_warnings:
+        release_warnings.append('route_sunscar missing pressure profile metadata')
     release_warnings.append(TARGETING_ROLLOUT_FROZEN_NOTE)
 
     return {
@@ -94,6 +99,7 @@ def build_alpha_release_gate_report() -> dict[str, object]:
         'blocked_routes': BLOCKED_ROUTES,
         'sparse_stub_routes': SPARSE_STUB_ROUTES,
         'known_alpha_limits': known_alpha_limits,
+        'readiness_policy_notes': readiness_policy_notes,
         'required_systems': required_systems,
         'validator_status': validator_status,
         'smoke_path_status': smoke_path_status,
@@ -110,6 +116,7 @@ def validate_alpha_release_gate() -> list[str]:
         'blocked_routes',
         'sparse_stub_routes',
         'known_alpha_limits',
+        'readiness_policy_notes',
         'required_systems',
         'validator_status',
         'smoke_path_status',
@@ -135,8 +142,9 @@ def validate_alpha_release_gate() -> list[str]:
                 errors.append(f'validator {validator_name} failed: {validator_errors}')
 
     warnings = set(report.get('release_warnings', ()))
-    if SUNSCAR_BLOCKER_NOTE not in warnings:
-        errors.append('sunscar alpha blocker warning missing from release warnings')
+    policy_notes = ' '.join(report.get('readiness_policy_notes', ()))
+    if 'solo_elite_precision_skirmish' not in policy_notes:
+        errors.append('sunscar route-specific readiness note missing')
     if TARGETING_ROLLOUT_FROZEN_NOTE not in warnings:
         errors.append('targeting rollout freeze warning missing from release warnings')
 

@@ -156,10 +156,8 @@ def validate_open_world_route_objectives() -> list[str]:
                     errors.append(f'route contract has no spawnable target locations: {route_id}:{contract.contract_key}')
 
         if route_id == 'route_sunscar':
-            if profile.get('numeric_tuning_ready'):
-                errors.append('route_sunscar must remain non-numeric-ready')
-            if 'no_pack_mobs_on_non_stub_route' not in set(profile.get('objective_warnings') or ()):
-                errors.append('route_sunscar must expose no_pack_mobs_on_non_stub_route')
+            if not profile.get('numeric_tuning_ready'):
+                errors.append('route_sunscar must be numeric-ready via route-specific pressure profile')
             if 'pack_pressure' in set(profile.get('supported_contract_types') or ()):
                 errors.append('route_sunscar must not expose pack-ready objective signal')
 

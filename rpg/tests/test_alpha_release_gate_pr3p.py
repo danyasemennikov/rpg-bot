@@ -33,16 +33,16 @@ from game.quest_board import (
 from game.skills import SKILLS
 
 RPG_ROOT = Path(__file__).resolve().parents[1]
-ALPHA_READY_ROUTES = ('route_westwild', 'route_frostspine', 'route_ashen_ruins', 'route_mireveil')
+ALPHA_READY_ROUTES = ('route_westwild', 'route_frostspine', 'route_ashen_ruins', 'route_mireveil', 'route_sunscar')
 
 
 def test_release_gate_report_builds_and_routes_are_explicit():
     report = build_alpha_release_gate_report()
     assert isinstance(report, dict)
-    for key in ('alpha_ready_routes', 'blocked_routes', 'sparse_stub_routes', 'known_alpha_limits', 'required_systems', 'validator_status', 'smoke_path_status', 'release_warnings'):
+    for key in ('alpha_ready_routes', 'blocked_routes', 'sparse_stub_routes', 'known_alpha_limits', 'required_systems', 'readiness_policy_notes', 'validator_status', 'smoke_path_status', 'release_warnings'):
         assert key in report
     assert tuple(report['alpha_ready_routes']) == ALPHA_READY_ROUTES
-    assert 'route_sunscar' in set(report['blocked_routes'])
+    assert not set(report['blocked_routes'])
     assert set(report['sparse_stub_routes']) == {'route_south_coast_stub', 'route_old_mine_stub'}
 
 
@@ -170,8 +170,7 @@ def test_i18n_and_known_limitations_and_frozen_baselines():
 
     report = build_alpha_release_gate_report()
     limits_text = ' '.join(report['known_alpha_limits']) + ' ' + ' '.join(report['release_warnings'])
-    assert 'route_sunscar' in limits_text
-    assert 'no_pack_mobs_on_non_stub_route' in limits_text
+    assert 'solo_elite_precision_skirmish' in ' '.join(report['readiness_policy_notes'])
     for phrase in ('curated/static', 'single-active-contract architecture unchanged', 'no full dynamic quest generation', 'no mixed-mob packs', 'world boss'):
         assert phrase in limits_text
 
@@ -196,7 +195,7 @@ def test_alpha_release_gate_doc_guard():
     for phrase in (
         'follows pr 3o', 'first alpha release gate',
         'route_westwild', 'route_frostspine', 'route_ashen_ruins', 'route_mireveil',
-        'route_sunscar', 'no_pack_mobs_on_non_stub_route', 'route_south_coast_stub', 'route_old_mine_stub',
+        'route_sunscar', 'solo_elite_precision_skirmish', 'route_south_coast_stub', 'route_old_mine_stub',
         'curated/static', 'single-active-contract architecture unchanged', 'no dynamic quest generation', 'no mixed-mob packs',
         'no combat formula changes', 'no mob stat changes', 'no reward formula', 'no spawn probability changes',
         'no new mobs/items', 'no route topology changes', 'no skill targeting rollout', 'no pvp behavior changes',
