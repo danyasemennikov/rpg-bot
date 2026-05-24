@@ -329,5 +329,25 @@ def get_mobs_for_location(mob_ids: list) -> list:
     """Получить список мобов для локации."""
     return [get_mob(mid) for mid in mob_ids if get_mob(mid)]
 
+
+
+_PHASE1_COMBAT_PRESSURE_TAGS = {
+    'westwild_rabbit': ('soft_entry','small_game','basic_beast'),'crow': ('soft_entry','small_game'),'forest_boar': ('basic_beast','bruiser'),
+    'forest_wolf': ('pack_hunter','predator','moderate_pack'),'forest_spider': ('venom','ambush'),'goblin_scout': ('skirmisher','goblin_pressure'),
+    'bear': ('bruiser','solo_pressure'),'goblin_hunter': ('ambush','ranged_hunter'),'goblin_shaman': ('caster','disruptor','goblin_shaman_pressure'),'goblin_chief': ('leader','route_exam'),
+    'mountain_rabbit': ('soft_entry','small_game'),'rock_lizard': ('armored','mitigation_check'),'white_wolf': ('pack_hunter','sustained_trade'),'stone_beetle': ('armored','bruiser'),
+    'mountain_stone_golem': ('armored','elite_bruiser','mitigation_check'),'troll': ('high_hp','sustained_trade','heavy_trade'),'ice_troll': ('high_hp','heavy_trade'),'troll_chief': ('high_hp','heavy_trade','route_exam'),
+    'zombie': ('soft_entry','undead','attrition'),'skeleton_warrior': ('soft_entry','undead','relic'),'skeleton_mage': ('undead','caster','holy_target'),'ghost': ('undead','ethereal','evasive_target'),
+    'skeleton_guard': ('undead','relic_guardian'),'cursed_knight': ('undead','bruiser'),'skeleton_priest': ('undead','caster','holy_target'),'temple_guardian': ('construct','relic_guardian','armored','route_exam'),
+    'swamp_toad': ('soft_entry','attrition'),'leech': ('attrition','sustain_pressure'),'water_snake': ('venom','attrition'),'swamp_spider': ('venom','attrition'),
+    'giant_leech': ('attrition','sustain_pressure'),'slug': ('toxin','debuff_pressure'),'drowned': ('attrition_exam','sustain_pressure'),'swamp_witch': ('caster','control_pressure'),'toxic_slime': ('toxin','debuff_pressure'),'old_witch': ('caster','control_pressure','attrition_exam','route_exam'),
+    'desert_beetle': ('soft_entry','armored_light'),'desert_lizard': ('skirmisher','precision_threat'),'scavenger': ('skirmisher','precision'),'scorpion': ('precision_threat','venom','evasive_target'),
+    'snake': ('precision_threat','venom','evasive_target'),'desert_elephant': ('bruiser','solo_pressure'),'fire_elemental': ('elemental','burst'),'earth_elemental': ('elemental','armored'),'air_elemental': ('elemental','evasive_target','elite_skirmisher','route_exam'),
+}
+
+for _mob_id, _tags in _PHASE1_COMBAT_PRESSURE_TAGS.items():
+    if _mob_id in MOBS:
+        MOBS[_mob_id]['combat_pressure_tags'] = tuple(_tags)
+
 print('✅ game/mobs.py создан!')
 print(f'   Мобов в базе: {len(MOBS)}')

@@ -445,6 +445,65 @@ ROUTE_ALPHA_PRESSURE_PROFILES: dict[str, dict[str, object]] = {
     },
 }
 
+
+ROUTE_GAMEPLAY_IDENTITY_PROFILES: dict[str, dict[str, object]] = {
+    'route_westwild': {
+        'gameplay_identity_id': 'mixed_hunting_ambush',
+        'primary_pressure_tags': ('mixed_hunting', 'ambush', 'moderate_pack', 'beast_hunting', 'goblin_pressure'),
+        'depth_pressure_tags': {
+            'soft_entry': ('soft_entry', 'small_game', 'basic_beast'),
+            'identity_visible': ('pack_hunter', 'ambush', 'predator'),
+            'build_testing': ('moderate_pack', 'bruiser', 'goblin_pressure'),
+            'route_exam': ('goblin_shaman_pressure', 'leader_pressure', 'route_exam'),
+        },
+        'soft_matchup_targets': ('generalist_melee', 'hybrid_hunter', 'light_ranged'),
+    },
+    'route_frostspine': {
+        'gameplay_identity_id': 'endurance_armor_heavy_trade',
+        'primary_pressure_tags': ('armored', 'high_hp', 'bruiser', 'sustained_trade', 'mitigation_check'),
+        'depth_pressure_tags': {
+            'soft_entry': ('soft_entry', 'armored_light'),
+            'identity_visible': ('armored', 'sustained_trade'),
+            'build_testing': ('mitigation_check', 'elite_bruiser'),
+            'route_exam': ('heavy_trade', 'high_hp', 'route_exam'),
+        },
+        'soft_matchup_targets': ('armor_break_tools', 'sustain_builds', 'steady_dps'),
+    },
+    'route_ashen_ruins': {
+        'gameplay_identity_id': 'undead_relic_holy_pressure',
+        'primary_pressure_tags': ('undead', 'relic', 'construct', 'caster', 'poison_bleed_poor_target'),
+        'depth_pressure_tags': {
+            'soft_entry': ('soft_entry', 'undead'),
+            'identity_visible': ('undead', 'relic', 'caster'),
+            'build_testing': ('construct', 'holy_target', 'evasive_target'),
+            'route_exam': ('relic_guardian', 'route_exam', 'armored'),
+        },
+        'soft_matchup_targets': ('holy_magic', 'anti_undead', 'physical_viable'),
+    },
+    'route_mireveil': {
+        'gameplay_identity_id': 'attrition_toxin_sustain',
+        'primary_pressure_tags': ('toxin', 'attrition', 'sustain_pressure', 'control_pressure', 'mirror_checked_venom'),
+        'depth_pressure_tags': {
+            'soft_entry': ('soft_entry', 'light_attrition'),
+            'identity_visible': ('venom', 'attrition', 'sustain_pressure'),
+            'build_testing': ('toxin', 'debuff_pressure', 'control_pressure'),
+            'route_exam': ('attrition_exam', 'mirror_checked_venom', 'route_exam'),
+        },
+        'soft_matchup_targets': ('cleanse_tools', 'regen_sustain', 'steady_damage'),
+    },
+    'route_sunscar': {
+        'gameplay_identity_id': 'solo_elite_precision_skirmish',
+        'primary_pressure_tags': ('solo_pressure', 'elite_pressure', 'precision', 'skirmisher', 'evasion_accuracy_check', 'elemental_pressure'),
+        'depth_pressure_tags': {
+            'soft_entry': ('soft_entry', 'skirmisher'),
+            'identity_visible': ('precision_threat', 'venom', 'skirmisher'),
+            'build_testing': ('solo_pressure', 'elemental', 'precision'),
+            'route_exam': ('elite_skirmisher', 'evasion_accuracy_check', 'route_exam'),
+        },
+        'soft_matchup_targets': ('single_target_burst', 'accuracy_tools', 'duelist_sustain'),
+    },
+}
+
 ROUTE_DEPTH_BANDS = {
     'n1_n2': {'min_node': 1, 'max_node': 2, 'stage': 'soft_entry'},
     'n3_n5': {'min_node': 3, 'max_node': 5, 'stage': 'identity_visible'},
@@ -886,6 +945,10 @@ def resolve_region_safe_hub(
 
 def get_route_alpha_pressure_profile(route_id: str | None) -> dict[str, object]:
     return dict(ROUTE_ALPHA_PRESSURE_PROFILES.get(str(route_id or '').strip(), {}))
+
+
+def get_route_gameplay_identity_profile(route_id: str | None) -> dict[str, object]:
+    return dict(ROUTE_GAMEPLAY_IDENTITY_PROFILES.get(str(route_id or '').strip(), {}))
 
 
 def get_route_alpha_depth_stage(location_id: str | None) -> str:

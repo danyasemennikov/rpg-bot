@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from game.locations import WORLD_LOCATIONS, WORLD_ROUTES, get_route_alpha_pressure_profile
+from game.locations import (
+    WORLD_LOCATIONS,
+    WORLD_ROUTES,
+    get_route_alpha_pressure_profile,
+    get_route_alpha_depth_stage,
+    get_route_gameplay_identity_profile,
+)
 from game.open_world_pack_balance import (
     ALLOWED_OPEN_WORLD_THREAT_BANDS,
     get_open_world_pack_archetype_metadata,
@@ -22,6 +28,35 @@ def _collect_route_spawn_profiles(route_id: str) -> tuple[str, ...]:
                 if normalized:
                     profiles.add(normalized)
     return tuple(sorted(profiles))
+
+
+def _collect_route_mob_pressure_tags(route_id: str) -> tuple[str, ...]:
+    tags: set[str] = set()
+    for location_id in get_world_location_ids_by_route_id(route_id):
+        location = WORLD_LOCATIONS.get(location_id, {})
+        for mob_id in location.get('mobs', ()):
+            from game.mobs import MOBS
+            for tag in (MOBS.get(str(mob_id), {}).get('combat_pressure_tags') or ()):
+                normalized = str(tag or '').strip().lower()
+                if normalized:
+                    tags.add(normalized)
+    return tuple(sorted(tags))
+
+
+def _build_depth_pressure_summary(route_id: str) -> dict[str, tuple[str, ...]]:
+    summary: dict[str, set[str]] = {}
+    from game.mobs import MOBS
+    for location_id in get_world_location_ids_by_route_id(route_id):
+        stage = get_route_alpha_depth_stage(location_id)
+        if not stage:
+            continue
+        stage_tags = summary.setdefault(stage, set())
+        for mob_id in (WORLD_LOCATIONS.get(location_id, {}).get('mobs') or ()):
+            for tag in (MOBS.get(str(mob_id), {}).get('combat_pressure_tags') or ()):
+                normalized = str(tag or '').strip().lower()
+                if normalized:
+                    stage_tags.add(normalized)
+    return {k: tuple(sorted(v)) for k, v in summary.items()}
 
 
 def _is_sparse_or_stub_route(route_id: str, composition: dict[str, object], *, location_count: int) -> bool:
@@ -56,6 +91,10 @@ def _build_readiness_warnings(report: dict[str, object]) -> tuple[str, ...]:
         warnings.append('no_pack_mobs_on_non_stub_route')
     if not report.get('pressure_profile_id') and not is_sparse:
         warnings.append('missing_alpha_pressure_profile')
+    if not report.get('gameplay_identity_id') and not is_sparse:
+        warnings.append('missing_route_gameplay_identity_profile')
+    if not report.get('identity_tag_representation_ok', False) and not is_sparse:
+        warnings.append('route_identity_tags_not_represented_by_mobs')
     if report.get('elite_anchor_count', 0) == 0 and not is_sparse:
         warnings.append('no_elite_anchors_on_non_stub_route')
     if report.get('rare_anchor_count', 0) == 0 and not is_sparse:
@@ -113,6 +152,11 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         'pressure_build_test_band': '',
         'pressure_exam_band': '',
         'requires_pack_pressure': False,
+        'gameplay_identity_id': '',
+        'route_pressure_tags': (),
+        'represented_mob_pressure_tags': (),
+        'depth_pressure_summary': {},
+        'identity_tag_representation_ok': True,
         'readiness_warnings': (),
     }
     route_meta = WORLD_ROUTES.get(normalized_route_id, {})
@@ -124,6 +168,38 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         report['pressure_build_test_band'] = str(pressure_profile.get('build_test_band') or '')
         report['pressure_exam_band'] = str(pressure_profile.get('exam_band') or '')
         report['requires_pack_pressure'] = bool(pressure_profile.get('requires_pack_pressure'))
+
+        identity_profile = get_route_gameplay_identity_profile(normalized_route_id)
+        report['gameplay_identity_id'] = str(identity_profile.get('gameplay_identity_id') or '')
+        report['route_pressure_tags'] = tuple(sorted(str(t) for t in (identity_profile.get('primary_pressure_tags') or ()) if str(t).strip()))
+        represented_tags = _collect_route_mob_pressure_tags(normalized_route_id)
+        report['represented_mob_pressure_tags'] = represented_tags
+        report['depth_pressure_summary'] = _build_depth_pressure_summary(normalized_route_id)
+        represented_set = {str(t).strip().lower() for t in represented_tags}
+        expected_set = {str(t).strip().lower() for t in report['route_pressure_tags']}
+        has_primary_overlap = bool(represented_set & expected_set)
+        expected_depth = identity_profile.get('depth_pressure_tags') or {}
+        depth_summary = report['depth_pressure_summary']
+        has_depth_overlap = True
+        for stage in ('identity_visible', 'build_testing', 'route_exam'):
+            stage_expected = {str(t).strip().lower() for t in (expected_depth.get(stage) or ()) if str(t).strip()}
+            if not stage_expected or stage not in depth_summary:
+                continue
+            stage_actual = {str(t).strip().lower() for t in (depth_summary.get(stage) or ()) if str(t).strip()}
+            if not (stage_expected & stage_actual):
+                has_depth_overlap = False
+                break
+
+        soft_entry_tags = {str(t).strip().lower() for t in (depth_summary.get('soft_entry') or ()) if str(t).strip()}
+        banned_soft_entry_tags = {'elite_bruiser', 'elite_skirmisher', 'attrition_exam', 'heavy_trade', 'route_exam'}
+        soft_entry_ok = (
+            bool(soft_entry_tags)
+            and 'soft_entry' in soft_entry_tags
+            and 'route_exam' not in soft_entry_tags
+            and not (soft_entry_tags & banned_soft_entry_tags)
+        )
+
+        report['identity_tag_representation_ok'] = has_primary_overlap and has_depth_overlap and soft_entry_ok
     report['readiness_warnings'] = _build_readiness_warnings(report)
     return report
 

@@ -47,6 +47,11 @@ class OpenWorldRouteTuningPass3PR3HTests(unittest.TestCase):
             self.assertNotIn('no_pack_mobs_on_non_stub_route', warnings)
         self.assertNotIn('no_elite_anchors_on_non_stub_route', warnings)
         self.assertNotIn('pack_mobs_missing_archetype_metadata', warnings)
+        self.assertNotIn('missing_route_gameplay_identity_profile', warnings)
+        self.assertNotIn('route_identity_tags_not_represented_by_mobs', warnings)
+        self.assertTrue(report.get('gameplay_identity_id'))
+        self.assertTrue(report.get('route_pressure_tags'))
+        self.assertTrue(report.get('represented_mob_pressure_tags'))
 
         if report.get('rare_anchor_count', 0) == 0:
             self.assertIn('no_rare_anchors', warnings)
@@ -59,6 +64,18 @@ class OpenWorldRouteTuningPass3PR3HTests(unittest.TestCase):
 
     def test_mireveil_route_report_tuning_state(self):
         self._assert_major_route_tuning_state('route_mireveil')
+
+
+    def test_full_alpha_routes_soft_entry_depth_pressure_guard(self):
+        banned_soft_entry_tags = {'elite_bruiser', 'elite_skirmisher', 'attrition_exam', 'heavy_trade', 'route_exam'}
+        for route_id in ('route_westwild', 'route_frostspine', 'route_ashen_ruins', 'route_mireveil', 'route_sunscar'):
+            report = build_open_world_route_balance_report(route_id)
+            depth_summary = report.get('depth_pressure_summary') or {}
+            self.assertIn('soft_entry', depth_summary, msg=route_id)
+            soft_tags = {str(t).strip().lower() for t in (depth_summary.get('soft_entry') or ()) if str(t).strip()}
+            self.assertIn('soft_entry', soft_tags, msg=route_id)
+            self.assertNotIn('route_exam', soft_tags, msg=route_id)
+            self.assertFalse(soft_tags & banned_soft_entry_tags, msg=route_id)
 
     def test_route_composition_and_placement_validators_remain_green(self):
         self.assertEqual(validate_open_world_spawn_profile_placement(), [])
