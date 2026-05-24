@@ -234,10 +234,10 @@ def test_validators_and_baselines_stay_green():
     assert validate_open_world_readiness_gap_report() == []
 
     assert MOBS['white_wolf']['level'] == 4 and MOBS['white_wolf']['hp'] == 58 and MOBS['white_wolf']['damage_min'] == 8 and MOBS['white_wolf']['damage_max'] == 13
-    assert MOBS['mountain_stone_golem']['level'] == 10 and MOBS['mountain_stone_golem']['hp'] == 210 and MOBS['mountain_stone_golem']['damage_min'] == 15 and MOBS['mountain_stone_golem']['damage_max'] == 24
+    assert MOBS['mountain_stone_golem']['level'] == 10 and MOBS['mountain_stone_golem']['hp'] == 245 and MOBS['mountain_stone_golem']['damage_min'] == 18 and MOBS['mountain_stone_golem']['damage_max'] == 28
     assert MOBS['zombie']['level'] == 4 and MOBS['zombie']['hp'] == 62 and MOBS['zombie']['damage_min'] == 7 and MOBS['zombie']['damage_max'] == 12
     assert MOBS['leech']['level'] == 3 and MOBS['leech']['hp'] == 38 and MOBS['leech']['damage_min'] == 5 and MOBS['leech']['damage_max'] == 9
-    assert MOBS['drowned']['level'] == 10 and MOBS['drowned']['hp'] == 138 and MOBS['drowned']['damage_min'] == 20 and MOBS['drowned']['damage_max'] == 30
+    assert MOBS['drowned']['level'] == 10 and MOBS['drowned']['hp'] == 168 and MOBS['drowned']['damage_min'] == 24 and MOBS['drowned']['damage_max'] == 35
     assert MOBS['mountain_stone_golem']['exp_reward'] == 110 and (MOBS['mountain_stone_golem']['gold_min'], MOBS['mountain_stone_golem']['gold_max']) == (5, 14)
     assert MOBS['drowned']['exp_reward'] == 105 and (MOBS['drowned']['gold_min'], MOBS['drowned']['gold_max']) == (5, 14)
 

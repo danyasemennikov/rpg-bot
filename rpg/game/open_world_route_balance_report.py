@@ -18,6 +18,30 @@ from game.open_world_pack_balance import (
 )
 from game.open_world_reward_alignment import get_open_world_reward_profile_for_threat_band
 
+def _resolve_pressure_stage_for_location(location_id: str) -> str:
+    normalized = str(location_id or '').strip().lower()
+    if normalized.startswith('ashen_'):
+        if normalized in {'ashen_n1', 'ashen_n2'}:
+            return 'soft_entry'
+        if normalized in {'ashen_n3', 'ashen_n3a1', 'ashen_n3a2', 'ashen_n3c1'}:
+            return 'identity_visible'
+        if normalized in {'ashen_n3b1', 'ashen_n3b2', 'ashen_n3b2b1'}:
+            return 'build_testing'
+        if normalized in {'ashen_n3b2a1', 'ashen_n3c2'}:
+            return 'route_exam'
+    stage = get_route_alpha_depth_stage(location_id)
+    if stage:
+        return stage
+    location = WORLD_LOCATIONS.get(location_id, {})
+    level_cap = int(location.get('level_max', 0) or 0)
+    if level_cap <= 3:
+        return 'soft_entry'
+    if level_cap <= 6:
+        return 'identity_visible'
+    if level_cap <= 8:
+        return 'build_testing'
+    return 'route_exam'
+
 
 def _collect_route_spawn_profiles(route_id: str) -> tuple[str, ...]:
     profiles: set[str] = set()
@@ -48,7 +72,7 @@ def _build_depth_pressure_summary(route_id: str) -> dict[str, tuple[str, ...]]:
     summary: dict[str, set[str]] = {}
     from game.mobs import MOBS
     for location_id in get_world_location_ids_by_route_id(route_id):
-        stage = get_route_alpha_depth_stage(location_id)
+        stage = _resolve_pressure_stage_for_location(location_id)
         if not stage:
             continue
         stage_tags = summary.setdefault(stage, set())
@@ -58,6 +82,30 @@ def _build_depth_pressure_summary(route_id: str) -> dict[str, tuple[str, ...]]:
                 if normalized:
                     stage_tags.add(normalized)
     return {k: tuple(sorted(v)) for k, v in summary.items()}
+
+
+def _build_depth_pressure_density(route_id: str) -> dict[str, int]:
+    density = {'soft_entry': 0, 'identity_visible': 0, 'build_testing': 0, 'route_exam': 0}
+    from game.mobs import MOBS
+    weighted_tags = {'ambush', 'moderate_pack', 'heavy_trade', 'route_exam', 'attrition_exam', 'elite_skirmisher', 'mitigation_check', 'goblin_pressure', 'caster', 'construct', 'toxin', 'control_pressure', 'precision', 'elemental'}
+    for location_id in get_world_location_ids_by_route_id(route_id):
+        stage = _resolve_pressure_stage_for_location(location_id)
+        if stage not in density:
+            continue
+        location = WORLD_LOCATIONS.get(location_id, {})
+        mobs = tuple(location.get('mobs') or ())
+        profiles = dict(location.get('world_spawn_profiles') or {})
+        for mob_id in mobs:
+            profile_counts = dict(profiles.get(mob_id) or {})
+            normal_count = int(profile_counts.get('normal', 0) or 0)
+            elite_count = int(profile_counts.get('elite', 0) or 0)
+            spawn_weight = normal_count + elite_count
+            if spawn_weight <= 0:
+                spawn_weight = 1
+            tags = {str(t or '').strip().lower() for t in (MOBS.get(str(mob_id), {}).get('combat_pressure_tags') or ())}
+            if tags:
+                density[stage] += max(1, len(tags & weighted_tags)) * max(1, spawn_weight)
+    return density
 
 
 def _is_sparse_or_stub_route(route_id: str, composition: dict[str, object], *, location_count: int) -> bool:
@@ -159,6 +207,12 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         'route_pressure_tags': (),
         'represented_mob_pressure_tags': (),
         'depth_pressure_summary': {},
+        'depth_pressure_density': {},
+        'soft_entry_safety_ok': True,
+        'identity_pressure_present': False,
+        'build_test_pressure_present': False,
+        'route_exam_pressure_present': False,
+        'overpressure_warnings': (),
         'identity_tag_representation_ok': True,
         'matchup_target_profile_id': '',
         'matchup_target_labels': (),
@@ -183,6 +237,7 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         represented_tags = _collect_route_mob_pressure_tags(normalized_route_id)
         report['represented_mob_pressure_tags'] = represented_tags
         report['depth_pressure_summary'] = _build_depth_pressure_summary(normalized_route_id)
+        report['depth_pressure_density'] = _build_depth_pressure_density(normalized_route_id)
         represented_set = {str(t).strip().lower() for t in represented_tags}
         expected_set = {str(t).strip().lower() for t in report['route_pressure_tags']}
         has_primary_overlap = bool(represented_set & expected_set)
@@ -208,6 +263,17 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         )
 
         report['identity_tag_representation_ok'] = has_primary_overlap and has_depth_overlap and soft_entry_ok
+        density = report['depth_pressure_density']
+        report['soft_entry_safety_ok'] = bool(soft_entry_ok and density.get('soft_entry', 0) <= 10)
+        report['identity_pressure_present'] = density.get('identity_visible', 0) > 0
+        report['build_test_pressure_present'] = density.get('build_testing', 0) > 0
+        report['route_exam_pressure_present'] = density.get('route_exam', 0) > 0
+        overpressure: list[str] = []
+        if density.get('soft_entry', 0) > 12:
+            overpressure.append('soft_entry_density_too_high')
+        if 'route_exam' in depth_summary and density.get('route_exam', 0) < density.get('soft_entry', 0):
+            overpressure.append('route_exam_density_not_above_identity')
+        report['overpressure_warnings'] = tuple(sorted(overpressure))
     report['readiness_warnings'] = _build_readiness_warnings(report)
     return report
 
@@ -243,6 +309,18 @@ def validate_open_world_route_balance_reports() -> list[str]:
             errors.append(f'route has no mapped locations and is not sparse/stub: {route_id}')
         if not bool(report.get('is_sparse_or_stub')) and not report.get('matchup_target_profile_id'):
             errors.append(f'missing route matchup target profile for full route {route_id}')
+        if not bool(report.get('is_sparse_or_stub')):
+            if not report.get('soft_entry_safety_ok', False):
+                errors.append(f'soft entry pressure safety failed on route {route_id}')
+            if not report.get('identity_pressure_present', False):
+                errors.append(f'identity pressure missing on route {route_id}')
+            if not report.get('build_test_pressure_present', False):
+                errors.append(f'build-test pressure missing on route {route_id}')
+            if not report.get('route_exam_pressure_present', False):
+                errors.append(f'route-exam pressure missing on route {route_id}')
+            overpressure_warnings = tuple(str(v) for v in (report.get('overpressure_warnings') or ()) if str(v).strip())
+            if overpressure_warnings:
+                errors.append(f'route has pressure overage warnings: {route_id}:{",".join(overpressure_warnings)}')
 
         for mob_id in report.get('pack_mob_ids', ()):
             if not is_open_world_pack_enabled_mob(str(mob_id)):

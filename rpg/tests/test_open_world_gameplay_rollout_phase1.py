@@ -195,7 +195,7 @@ class OpenWorldGameplayRolloutPhase1Tests(unittest.TestCase):
         self.assertNotIn('stone_golem', frostspine_mines.get('mobs', []))
 
         profiles = frostspine_mines.get('world_spawn_profiles') or {}
-        self.assertEqual(profiles.get('stone_beetle'), {'normal': 1})
+        self.assertEqual(profiles.get('stone_beetle'), {'normal': 2})
         self.assertEqual(profiles.get('mountain_stone_golem'), {'normal': 1, 'elite': 1})
 
         golem = MOBS['mountain_stone_golem']

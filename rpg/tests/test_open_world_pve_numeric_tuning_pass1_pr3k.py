@@ -116,10 +116,10 @@ class OpenWorldPveNumericTuningPass1PR3KTests(unittest.TestCase):
     def test_changed_mobs_keep_combat_tuning_baseline(self):
         expected = {
             'white_wolf': {'level': 4, 'hp': 58, 'damage_min': 8, 'damage_max': 13},
-            'mountain_stone_golem': {'level': 10, 'hp': 210, 'damage_min': 15, 'damage_max': 24},
+            'mountain_stone_golem': {'level': 10, 'hp': 245, 'damage_min': 18, 'damage_max': 28},
             'zombie': {'level': 4, 'hp': 62, 'damage_min': 7, 'damage_max': 12},
             'leech': {'level': 3, 'hp': 38, 'damage_min': 5, 'damage_max': 9},
-            'drowned': {'level': 10, 'hp': 138, 'damage_min': 20, 'damage_max': 30},
+            'drowned': {'level': 10, 'hp': 168, 'damage_min': 24, 'damage_max': 35},
         }
         for mob_id, expected_values in expected.items():
             mob = MOBS[mob_id]
