@@ -103,6 +103,11 @@ Alpha readiness policy:
 - Open-world PvE runtime foundations exist.
 - Live PvP foundations exist.
 - Targeting rollout is frozen.
+- Headless Combat Simulation Foundation is implemented:
+  - deterministic player-vs-mob simulations run through existing combat rails;
+  - simulation results expose winner, turns, HP/mana, action, and safety metrics;
+  - simulations do not grant rewards or mutate player progression;
+  - route/class simulation matrix, final balance reports, and live AFK autopilot are deferred.
 
 ---
 
