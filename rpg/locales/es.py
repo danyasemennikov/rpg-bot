@@ -217,6 +217,8 @@ STRINGS = {
         'quest_contract_frostspine_white_wolves_title': 'Lobos blancos de Frostspine',
         'quest_contract_ashen_zombie_clusters_title': 'Grupos de zombis de las ruinas',
         'quest_contract_mireveil_leech_swarms_title': 'Sanguijuelas de Mireveil',
+        'quest_contract_sunscar_scorpions_title': 'Caza de escorpiones de Tierras Quemadas',
+        'quest_contract_sunscar_air_elementals_title': 'Elementales de aire de Tierras Quemadas',
         'location_active_contract_line': '📌 Contrato: {title} ({progress}/{required}, {status}; {geography_hint})',
         'map_title': 'Mapa del mundo',
         'map_overview': '🗺️ <b>Mapa del mundo</b>\n\nDesde Aster salen rutas hacia todo el continente.\nElige una dirección:',

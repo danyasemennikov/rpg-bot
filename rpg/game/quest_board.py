@@ -149,7 +149,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
     ),
     HuntContract(
         contract_key='hunt_sunscar_scorpions',
-        title_i18n_key='location.quest_contract_spiders_title',
+        title_i18n_key='location.quest_contract_sunscar_scorpions_title',
         target_mob_id='scorpion',
         required_kills=4,
         reward_exp=110,
@@ -160,7 +160,7 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
     ),
     HuntContract(
         contract_key='hunt_sunscar_air_elementals',
-        title_i18n_key='location.quest_contract_greyfang_title',
+        title_i18n_key='location.quest_contract_sunscar_air_elementals_title',
         target_mob_id='air_elemental',
         required_kills=2,
         reward_exp=120,

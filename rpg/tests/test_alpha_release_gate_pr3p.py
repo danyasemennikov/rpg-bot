@@ -185,6 +185,13 @@ def test_i18n_and_known_limitations_and_frozen_baselines():
     assert get_hunt_contract('hunt_frostspine_white_wolves')
     assert get_hunt_contract('hunt_ashen_zombie_clusters')
     assert get_hunt_contract('hunt_mireveil_leech_swarms')
+    assert get_hunt_contract('hunt_sunscar_scorpions').title_i18n_key == 'location.quest_contract_sunscar_scorpions_title'
+    assert get_hunt_contract('hunt_sunscar_air_elementals').title_i18n_key == 'location.quest_contract_sunscar_air_elementals_title'
+
+    for locale_rel in ('locales/en.py', 'locales/ru.py', 'locales/es.py'):
+        text = (RPG_ROOT / locale_rel).read_text(encoding='utf-8')
+        assert 'quest_contract_sunscar_scorpions_title' in text
+        assert 'quest_contract_sunscar_air_elementals_title' in text
 
     rolled_out = {skill_id for skill_id, skill in SKILLS.items() if str(skill.get('target_pattern_id') or '').strip()}
     assert rolled_out == {'flame_wave', 'heavy_swing', 'cleave_through', 'arcane_lance', 'hunters_mark', 'aimed_shot', 'piercing_arrow', 'deadeye'}

@@ -230,6 +230,8 @@ STRINGS = {
         'quest_contract_frostspine_white_wolves_title': 'Белые волки Морозного хребта',
         'quest_contract_ashen_zombie_clusters_title': 'Скопления зомби в руинах',
         'quest_contract_mireveil_leech_swarms_title': 'Болотные пиявки Мирвейла',
+        'quest_contract_sunscar_scorpions_title': 'Охота на скорпионов Выжженных земель',
+        'quest_contract_sunscar_air_elementals_title': 'Воздушные элементали Выжженных земель',
         'location_active_contract_line': '📌 Контракт: {title} ({progress}/{required}, {status}; {geography_hint})',
         'map_title': 'Карта мира',
         'map_overview': '🗺️ <b>Карта мира</b>\n\nОт Астера расходятся дороги в разные части материка.\nВыберите направление:',
