@@ -42,7 +42,7 @@ class OpenWorldRouteTuningPass3PR3HTests(unittest.TestCase):
         warnings = set(report.get('readiness_warnings', ()))
         if allow_pack_gap:
             if report.get('pack_count', 0) == 0:
-                self.assertIn('no_pack_mobs_on_non_stub_route', warnings)
+                self.assertNotIn('no_pack_mobs_on_non_stub_route', warnings)
         else:
             self.assertNotIn('no_pack_mobs_on_non_stub_route', warnings)
         self.assertNotIn('no_elite_anchors_on_non_stub_route', warnings)

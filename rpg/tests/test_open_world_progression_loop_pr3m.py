@@ -152,10 +152,10 @@ class OpenWorldProgressionLoopPR3MTests(unittest.TestCase):
         self.assertEqual(validate_open_world_readiness_gap_report(), [])
         self.assertEqual(validate_open_world_progression_loop_sanity(), [])
 
-    def test_sunscar_remains_excluded_with_actionable_gap(self):
+    def test_sunscar_is_ready_without_pack_gap(self):
         report = build_open_world_progression_source_report('route_sunscar')
-        self.assertFalse(report['numeric_tuning_ready'])
-        self.assertIn('no_pack_mobs_on_non_stub_route', report['actionable_warnings'])
+        self.assertTrue(report['numeric_tuning_ready'])
+        self.assertNotIn('no_pack_mobs_on_non_stub_route', report['actionable_warnings'])
 
     def test_pr3k_and_pr3l_baselines_are_frozen(self):
         self.assertEqual((MOBS['white_wolf']['level'], MOBS['white_wolf']['hp'], MOBS['white_wolf']['damage_min'], MOBS['white_wolf']['damage_max']), (4, 58, 8, 13))

@@ -402,6 +402,56 @@ _ROUTE_HUBS = {
     'route_mireveil': 'hub_mireveil',
 }
 
+ROUTE_ALPHA_PRESSURE_PROFILES: dict[str, dict[str, object]] = {
+    'route_westwild': {
+        'pressure_profile_id': 'balanced_mixed_hunting_pressure',
+        'requires_pack_pressure': True,
+        'entry_band': 'soft_entry_flavor',
+        'identity_band': 'mixed_hunting_identity',
+        'build_test_band': 'moderate_pack_ambush_tests',
+        'exam_band': 'mixed_matchup_expression',
+    },
+    'route_frostspine': {
+        'pressure_profile_id': 'endurance_armor_heavy_pressure',
+        'requires_pack_pressure': False,
+        'entry_band': 'soft_entry_flavor',
+        'identity_band': 'armor_and_mitigation_presence',
+        'build_test_band': 'sustained_heavy_trade_tests',
+        'exam_band': 'high_endurance_matchup_expression',
+    },
+    'route_ashen_ruins': {
+        'pressure_profile_id': 'undead_relic_holy_pressure',
+        'requires_pack_pressure': False,
+        'entry_band': 'soft_entry_flavor',
+        'identity_band': 'undead_relic_identity',
+        'build_test_band': 'holy_magic_alignment_tests',
+        'exam_band': 'resistance_matchup_expression',
+    },
+    'route_mireveil': {
+        'pressure_profile_id': 'attrition_toxin_sustain_pressure',
+        'requires_pack_pressure': False,
+        'entry_band': 'soft_entry_flavor',
+        'identity_band': 'toxin_attrition_identity',
+        'build_test_band': 'cleanse_sustain_control_tests',
+        'exam_band': 'mirror_checked_attrition_expression',
+    },
+    'route_sunscar': {
+        'pressure_profile_id': 'solo_elite_precision_skirmish',
+        'requires_pack_pressure': False,
+        'entry_band': 'soft_entry_flavor',
+        'identity_band': 'precision_skirmish_identity',
+        'build_test_band': 'burst_accuracy_evasion_tests',
+        'exam_band': 'solo_elite_matchup_expression',
+    },
+}
+
+ROUTE_DEPTH_BANDS = {
+    'n1_n2': {'min_node': 1, 'max_node': 2, 'stage': 'soft_entry'},
+    'n3_n5': {'min_node': 3, 'max_node': 5, 'stage': 'identity_visible'},
+    'n6_n8': {'min_node': 6, 'max_node': 8, 'stage': 'build_testing'},
+    'n9_plus': {'min_node': 9, 'max_node': 99, 'stage': 'route_exam'},
+}
+
 
 WORLD_LOCATIONS = {}
 for _location_id, _neighbors in _LIVE_WORLD_GRAPH.items():
@@ -456,6 +506,7 @@ for _location_id, _neighbors in _LIVE_WORLD_GRAPH.items():
         'region_id': _content_identity.get('region_id', _route_id),
     })
     WORLD_LOCATIONS[_location_id]['canonical_neighbors'] = list(_WORLD_GRAPH.get(_location_id, []))
+    WORLD_LOCATIONS[_location_id]['alpha_depth_stage'] = ''
 
 # Keep existing battle/reward content on mapped nodes.
 WORLD_LOCATIONS['south_coast_shore'].update({
@@ -493,6 +544,7 @@ WORLD_LOCATIONS['hub_sunscar'].update({
 WORLD_LOCATIONS['hub_mireveil'].update({
     'services': ['craftsmen_guild'],
 })
+
 WORLD_LOCATIONS['westwild_n4'].update({
     'description': 'Светлая лиственная роща на переходе от лугов к лесу. Здесь уже встречаются волки и первые пауки.',
     'zone_id': 'westwild_n4',
@@ -830,3 +882,38 @@ def resolve_region_safe_hub(
         return hub_id
 
     return FALLBACK_SAFE_HUB_ID
+
+
+def get_route_alpha_pressure_profile(route_id: str | None) -> dict[str, object]:
+    return dict(ROUTE_ALPHA_PRESSURE_PROFILES.get(str(route_id or '').strip(), {}))
+
+
+def get_route_alpha_depth_stage(location_id: str | None) -> str:
+    location = get_location(location_id or '') or {}
+    route_id = str(location.get('route_id') or '').strip()
+    route_meta = WORLD_ROUTES.get(route_id, {})
+    if str(route_meta.get('route_type') or '') != 'full':
+        return ''
+    normalized_location_id = str(location.get('id') or location_id or '').strip().lower()
+    if normalized_location_id.startswith('hub_'):
+        return ''
+    if '_n' not in normalized_location_id:
+        return ''
+    n_part = normalized_location_id.split('_n', 1)[1]
+    digits = ''
+    for ch in n_part:
+        if ch.isdigit():
+            digits += ch
+        else:
+            break
+    if not digits:
+        return ''
+    node_index = int(digits)
+    for band in ROUTE_DEPTH_BANDS.values():
+        if int(band['min_node']) <= node_index <= int(band['max_node']):
+            return str(band['stage'])
+    return 'route_exam' if node_index >= 9 else ''
+
+
+for _location_id in WORLD_LOCATIONS:
+    WORLD_LOCATIONS[_location_id]['alpha_depth_stage'] = get_route_alpha_depth_stage(_location_id)

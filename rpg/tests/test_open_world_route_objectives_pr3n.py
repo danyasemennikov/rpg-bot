@@ -70,8 +70,8 @@ def test_numeric_ready_routes_have_objective_coverage():
 def test_sunscar_remains_truthful():
     profile = build_route_objective_profile('route_sunscar')
     assert profile
-    assert profile['numeric_tuning_ready'] is False
-    assert 'no_pack_mobs_on_non_stub_route' in set(profile['objective_warnings'])
+    assert profile['numeric_tuning_ready'] is True
+    assert 'no_pack_mobs_on_non_stub_route' not in set(profile['objective_warnings'])
     assert 'pack_pressure' not in set(profile['supported_contract_types'])
 
 

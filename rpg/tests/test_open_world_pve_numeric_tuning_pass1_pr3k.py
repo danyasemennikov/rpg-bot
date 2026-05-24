@@ -27,7 +27,7 @@ class OpenWorldPveNumericTuningPass1PR3KTests(unittest.TestCase):
         readiness = build_open_world_readiness_gap_report()
         numeric_ready = set(readiness['numeric_tuning_ready_routes'])
         self.assertTrue(set(TUNED_ROUTES).issubset(numeric_ready))
-        self.assertNotIn('route_sunscar', numeric_ready)
+        self.assertIn('route_sunscar', numeric_ready)
 
     def test_tuned_routes_have_coherent_numeric_reports(self):
         for route_id in TUNED_ROUTES:
@@ -88,8 +88,8 @@ class OpenWorldPveNumericTuningPass1PR3KTests(unittest.TestCase):
 
     def test_sunscar_exclusion_remains_truthful(self):
         report = build_route_pve_numeric_tuning_report('route_sunscar')
-        self.assertFalse(report['numeric_tuning_ready'])
-        self.assertIn('no_pack_mobs_on_non_stub_route', report['actionable_warnings'])
+        self.assertTrue(report['numeric_tuning_ready'])
+        self.assertNotIn('no_pack_mobs_on_non_stub_route', report['actionable_warnings'])
 
     def test_stubs_remain_smoke_sanity_only(self):
         for route_id in STUB_ROUTES:

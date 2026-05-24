@@ -13,6 +13,7 @@ from game.open_world_pack_balance import (
     validate_open_world_spawn_profile_placement,
 )
 from game.open_world_readiness_gap_report import (
+    ACTIONABLE_WARNING_IDS,
     build_open_world_readiness_gap_report,
     validate_open_world_readiness_gap_report,
 )
@@ -27,13 +28,17 @@ from game.skills import SKILLS
 
 
 class OpenWorldReadinessGapClosurePR3ITests(unittest.TestCase):
-    def test_sunscar_pack_pressure_gap_tracked_actionable(self):
+    def test_missing_alpha_pressure_profile_is_registered_actionable(self):
+        self.assertIn('missing_alpha_pressure_profile', ACTIONABLE_WARNING_IDS)
+
+    def test_sunscar_route_specific_pressure_is_tracked(self):
         report = build_open_world_route_balance_report('route_sunscar')
         self.assertEqual(report.get('route_id'), 'route_sunscar')
         self.assertFalse(report.get('is_sparse_or_stub'))
         self.assertEqual(report.get('pack_count', 0), 0)
         warnings = set(report.get('readiness_warnings', ()))
-        self.assertIn('no_pack_mobs_on_non_stub_route', warnings)
+        self.assertNotIn('no_pack_mobs_on_non_stub_route', warnings)
+        self.assertEqual(report.get('pressure_profile_id'), 'solo_elite_precision_skirmish')
 
     def test_sunscar_scorpion_runtime_pack_pressure_not_possible_with_normal_one(self):
         selected_mob_id = 'scorpion'
@@ -70,16 +75,13 @@ class OpenWorldReadinessGapClosurePR3ITests(unittest.TestCase):
         self.assertIn('route_sunscar', report['major_routes'])
 
         actionable_gaps = report['actionable_gaps']
-        self.assertTrue(any(
-            gap['route_id'] == 'route_sunscar' and gap['warning_id'] == 'no_pack_mobs_on_non_stub_route'
-            for gap in actionable_gaps
-        ))
+        self.assertFalse(any(gap['route_id'] == 'route_sunscar' for gap in actionable_gaps))
 
         deferred_gaps = report['deferred_gaps']
         self.assertTrue(any(gap['warning_id'] == 'no_rare_anchors' for gap in deferred_gaps))
         self.assertFalse(any(gap['warning_id'] == 'no_rare_anchors' for gap in actionable_gaps))
 
-        self.assertNotIn('route_sunscar', report['numeric_tuning_ready_routes'])
+        self.assertIn('route_sunscar', report['numeric_tuning_ready_routes'])
 
     def test_validators_and_alignment_remain_green(self):
         self.assertEqual(validate_open_world_spawn_profile_placement(), [])

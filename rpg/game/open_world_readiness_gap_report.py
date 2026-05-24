@@ -8,6 +8,7 @@ ACTIONABLE_WARNING_IDS: frozenset[str] = frozenset({
     'pack_mobs_missing_archetype_metadata',
     'mid_high_or_high_without_elite_anchor',
     'no_world_spawn_profiles',
+    'missing_alpha_pressure_profile',
 })
 
 DEFERRED_WARNING_IDS: frozenset[str] = frozenset({

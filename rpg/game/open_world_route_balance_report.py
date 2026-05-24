@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from game.locations import WORLD_LOCATIONS
+from game.locations import WORLD_LOCATIONS, WORLD_ROUTES, get_route_alpha_pressure_profile
 from game.open_world_pack_balance import (
     ALLOWED_OPEN_WORLD_THREAT_BANDS,
     get_open_world_pack_archetype_metadata,
@@ -50,8 +50,12 @@ def _build_readiness_warnings(report: dict[str, object]) -> tuple[str, ...]:
         warnings.append('very_low_location_count')
     if not report.get('spawn_profiles_present'):
         warnings.append('no_world_spawn_profiles')
-    if report.get('pack_count', 0) == 0 and not is_sparse:
+    requires_pack_pressure = bool(report.get('requires_pack_pressure'))
+
+    if report.get('pack_count', 0) == 0 and not is_sparse and requires_pack_pressure:
         warnings.append('no_pack_mobs_on_non_stub_route')
+    if not report.get('pressure_profile_id') and not is_sparse:
+        warnings.append('missing_alpha_pressure_profile')
     if report.get('elite_anchor_count', 0) == 0 and not is_sparse:
         warnings.append('no_elite_anchors_on_non_stub_route')
     if report.get('rare_anchor_count', 0) == 0 and not is_sparse:
@@ -99,11 +103,27 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         'spawn_profiles_present': _collect_route_spawn_profiles(normalized_route_id),
         'reward_category': str(threat_profile.get('reward_category') or '').strip(),
         'reward_profile_id': str(threat_profile.get('reward_profile_id') or '').strip(),
+        'encounter_mix_tags': tuple(sorted(str(tag) for tag in (composition.get('encounter_mix_tags') or ()) if str(tag).strip())),
         'pack_eligibility_coverage_complete': all(is_open_world_pack_enabled_mob(mob_id) for mob_id in pack_mob_ids),
         'pack_archetype_coverage_complete': all(bool(get_open_world_pack_archetype_metadata(mob_id)) for mob_id in pack_mob_ids),
         'is_sparse_or_stub': is_sparse_or_stub,
+        'pressure_profile_id': '',
+        'pressure_entry_band': '',
+        'pressure_identity_band': '',
+        'pressure_build_test_band': '',
+        'pressure_exam_band': '',
+        'requires_pack_pressure': False,
         'readiness_warnings': (),
     }
+    route_meta = WORLD_ROUTES.get(normalized_route_id, {})
+    if str(route_meta.get('route_type') or '') == 'full':
+        pressure_profile = get_route_alpha_pressure_profile(normalized_route_id)
+        report['pressure_profile_id'] = str(pressure_profile.get('pressure_profile_id') or '')
+        report['pressure_entry_band'] = str(pressure_profile.get('entry_band') or '')
+        report['pressure_identity_band'] = str(pressure_profile.get('identity_band') or '')
+        report['pressure_build_test_band'] = str(pressure_profile.get('build_test_band') or '')
+        report['pressure_exam_band'] = str(pressure_profile.get('exam_band') or '')
+        report['requires_pack_pressure'] = bool(pressure_profile.get('requires_pack_pressure'))
     report['readiness_warnings'] = _build_readiness_warnings(report)
     return report
 

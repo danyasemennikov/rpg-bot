@@ -18,8 +18,7 @@ This pass follows PR 3N.
 - inventory/equipment/enhancement
 
 ## Known alpha limits
-- route_sunscar remains non-numeric-ready
-- no_pack_mobs_on_non_stub_route remains unresolved
+- route_sunscar is validated via solo_elite_precision_skirmish route pressure (not pack pressure)
 - rare/world boss/dungeon/mixed packs are future work
 - quest board contracts are curated/static
 - single-active-contract architecture remains unchanged

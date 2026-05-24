@@ -110,12 +110,12 @@ class OpenWorldRewardLootSanityPR3LTests(unittest.TestCase):
         self.assertEqual(MOBS['drowned']['gold_min'], 5)
         self.assertEqual(MOBS['drowned']['gold_max'], 14)
 
-    def test_sunscar_excluded(self):
+    def test_sunscar_ready_without_pack_requirement(self):
         report = build_route_open_world_reward_sanity_report('route_sunscar')
         readiness = build_open_world_readiness_gap_report()
         self.assertTrue(report)
-        self.assertFalse(report['numeric_tuning_ready'])
-        self.assertIn({'route_id': 'route_sunscar', 'warning_id': 'no_pack_mobs_on_non_stub_route'}, list(readiness['actionable_gaps']))
+        self.assertTrue(report['numeric_tuning_ready'])
+        self.assertFalse(any(g['route_id']=='route_sunscar' for g in list(readiness['actionable_gaps'])))
 
     def test_stubs(self):
         for route_id in STUBS:

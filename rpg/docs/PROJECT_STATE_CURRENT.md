@@ -64,16 +64,21 @@ Alpha-ready routes:
 - `route_frostspine`
 - `route_ashen_ruins`
 - `route_mireveil`
+- `route_sunscar`
 
 Known blocked routes:
-
-- `route_sunscar`
-  - reason: pack pressure gap / `no_pack_mobs_on_non_stub_route`
+- none currently
 
 Sparse stub routes:
 
 - `route_south_coast_stub`
 - `route_old_mine_stub`
+
+Alpha readiness policy:
+
+- Alpha readiness accepts route-specific combat pressure profiles.
+- Pack pressure is required only where route identity requires it.
+- `route_sunscar` is alpha-ready through `solo_elite_precision_skirmish`, not pack pressure.
 
 ### Combat / Systems
 
@@ -91,8 +96,8 @@ Sparse stub routes:
 
 ## Current focus
 
-- Sunscar alpha readiness.
-- Sunscar pack pressure.
+- Route-specific alpha pressure profile validation.
+- Open-world route fairness for different build archetypes.
 - Route/class balance.
 - Route fairness for different builds.
 - Alpha-ready loop stabilization.

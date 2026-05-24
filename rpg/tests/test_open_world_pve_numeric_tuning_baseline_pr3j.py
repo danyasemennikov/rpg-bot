@@ -20,7 +20,7 @@ class OpenWorldPveNumericTuningBaselinePR3JTests(unittest.TestCase):
         readiness = build_open_world_readiness_gap_report()
         numeric_ready = set(readiness['numeric_tuning_ready_routes'])
         self.assertTrue({'route_westwild', 'route_frostspine', 'route_ashen_ruins', 'route_mireveil'}.issubset(numeric_ready))
-        self.assertNotIn('route_sunscar', numeric_ready)
+        self.assertIn('route_sunscar', numeric_ready)
 
         sparse = set(readiness['sparse_stub_routes'])
         self.assertIn('route_south_coast_stub', sparse)
@@ -50,15 +50,12 @@ class OpenWorldPveNumericTuningBaselinePR3JTests(unittest.TestCase):
             self.assertTrue(str(report.get('reward_category') or '').strip())
             self.assertTrue(str(report.get('reward_profile_id') or '').strip())
 
-    def test_sunscar_remains_excluded_truthfully(self):
+    def test_sunscar_is_ready_via_route_specific_pressure(self):
         readiness = build_open_world_readiness_gap_report()
-        self.assertTrue(any(
-            gap['route_id'] == 'route_sunscar' and gap['warning_id'] == 'no_pack_mobs_on_non_stub_route'
-            for gap in readiness['actionable_gaps']
-        ))
+        self.assertFalse(any(gap['route_id'] == 'route_sunscar' for gap in readiness['actionable_gaps']))
         report = build_route_pve_numeric_tuning_report('route_sunscar')
         self.assertFalse(report.get('is_sparse_or_stub'))
-        self.assertFalse(report.get('numeric_tuning_ready'))
+        self.assertTrue(report.get('numeric_tuning_ready'))
 
     def test_numeric_profile_sanity(self):
         readiness = build_open_world_readiness_gap_report()

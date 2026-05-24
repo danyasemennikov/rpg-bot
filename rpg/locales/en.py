@@ -219,6 +219,8 @@ STRINGS = {
         'quest_contract_frostspine_white_wolves_title': 'Frostspine White Wolves',
         'quest_contract_ashen_zombie_clusters_title': 'Ashen Zombie Clusters',
         'quest_contract_mireveil_leech_swarms_title': 'Mireveil Leech Swarms',
+        'quest_contract_sunscar_scorpions_title': 'Sunscar Scorpion Hunt',
+        'quest_contract_sunscar_air_elementals_title': 'Sunscar Air Elementals',
         'location_active_contract_line': '📌 Contract: {title} ({progress}/{required}, {status}; {geography_hint})',
         'map_title': 'World Map',
         'map_overview': '🗺️ <b>World Map</b>\n\nRoads spread from Aster to every part of the continent.\nChoose a direction:',

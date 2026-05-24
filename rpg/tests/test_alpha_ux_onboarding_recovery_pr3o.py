@@ -55,7 +55,7 @@ def test_location_objective_hints_numeric_routes_and_sunscar_truthful():
         assert hint['contract_count'] > 0
     sunscar = build_alpha_route_status_hint('hub_sunscar')
     assert sunscar['route_id'] == 'route_sunscar'
-    assert sunscar['numeric_ready'] is False
+    assert sunscar['numeric_ready'] is True
 
 
 def test_quest_board_discoverability_route_locality():
@@ -122,14 +122,14 @@ def test_docs_guard():
     text = (RPG_ROOT / 'docs/ALPHA_UX_ONBOARDING_RECOVERY_PASS1.md').read_text(encoding='utf-8').lower()
     for phrase in (
         'onboarding', 'route objectives', 'quest board contracts', 'inventory', 'equipment',
-        'enhancement', 'recovery', 'route_sunscar', 'no_pack_mobs_on_non_stub_route',
+        'enhancement', 'recovery', 'route_sunscar', 'solo_elite_precision_skirmish',
         'no combat formula changes', 'no reward formula changes', 'no new mobs', 'no new items',
         'no route topology changes', 'no spawn probability changes', 'no mixed-mob packs', 'no pvp behavior changes',
     ):
         assert phrase in text
 
 
-def test_sunscar_warning_remains_in_internal_report():
+def test_sunscar_warning_cleared_in_internal_report():
     report = build_open_world_readiness_gap_report()
     warnings_by_route = report['remaining_warnings_by_route']
-    assert 'no_pack_mobs_on_non_stub_route' in set(warnings_by_route.get('route_sunscar', ()))
+    assert 'no_pack_mobs_on_non_stub_route' not in set(warnings_by_route.get('route_sunscar', ()))

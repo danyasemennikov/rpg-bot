@@ -81,6 +81,8 @@ def build_route_pve_numeric_tuning_report(route_id: str) -> dict[str, object]:
         'pack_archetype_coverage_complete': bool(base_report.get('pack_archetype_coverage_complete')),
         'reward_category': base_report.get('reward_category'),
         'reward_profile_id': base_report.get('reward_profile_id'),
+        'pressure_profile_id': base_report.get('pressure_profile_id'),
+        'requires_pack_pressure': bool(base_report.get('requires_pack_pressure')),
         'hp_min': hp_min,
         'hp_max': hp_max,
         'damage_min': damage_min,
@@ -148,7 +150,8 @@ def validate_open_world_pve_numeric_tuning_baseline() -> list[str]:
         if is_ready:
             if report.get('solo_count', 0) <= 0:
                 errors.append(f'numeric-ready route has no solo mobs: {route_id}')
-            if report.get('pack_mob_count', 0) <= 0:
+            requires_pack_pressure = bool(report.get('requires_pack_pressure'))
+            if report.get('pack_mob_count', 0) <= 0 and requires_pack_pressure:
                 errors.append(f'numeric-ready route has no pack mobs: {route_id}')
             if report.get('elite_anchor_count', 0) <= 0:
                 errors.append(f'numeric-ready route has no elite anchors: {route_id}')
