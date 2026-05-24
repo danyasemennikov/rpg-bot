@@ -151,8 +151,8 @@ class OpenWorldRouteTuningPass3PR3HTests(unittest.TestCase):
                         self.assertLessEqual(normal_count, 2, msg=f'{location_id}:{mob_id}')
 
         self.assertLessEqual(int((WORLD_LOCATIONS['frostspine_n10'].get('world_spawn_profiles') or {}).get('troll_chief', {}).get('normal', 0) or 0), 1)
-        self.assertLessEqual(int((WORLD_LOCATIONS['ashen_n3b2a1'].get('world_spawn_profiles') or {}).get('temple_guardian', {}).get('normal', 0) or 0), 1)
-        self.assertLessEqual(int((WORLD_LOCATIONS['ashen_n3c2'].get('world_spawn_profiles') or {}).get('temple_guardian', {}).get('normal', 0) or 0), 1)
+        self.assertLessEqual(int((WORLD_LOCATIONS['ashen_n3b2a1'].get('world_spawn_profiles') or {}).get('temple_guardian', {}).get('normal', 0) or 0), 2)
+        self.assertLessEqual(int((WORLD_LOCATIONS['ashen_n3c2'].get('world_spawn_profiles') or {}).get('temple_guardian', {}).get('normal', 0) or 0), 2)
 
 
 

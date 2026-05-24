@@ -271,7 +271,11 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         overpressure: list[str] = []
         if density.get('soft_entry', 0) > 12:
             overpressure.append('soft_entry_density_too_high')
-        if 'route_exam' in depth_summary and density.get('route_exam', 0) < density.get('soft_entry', 0):
+        if (
+            'route_exam' in depth_summary
+            and 'identity_visible' in depth_summary
+            and density.get('route_exam', 0) <= density.get('identity_visible', 0)
+        ):
             overpressure.append('route_exam_density_not_above_identity')
         report['overpressure_warnings'] = tuple(sorted(overpressure))
     report['readiness_warnings'] = _build_readiness_warnings(report)

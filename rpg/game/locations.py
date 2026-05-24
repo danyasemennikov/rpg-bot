@@ -870,9 +870,9 @@ _PHASE1_LOCATION_SPAWN_PROFILE_OVERRIDES = {
     'frostspine_n10': {'ice_troll': {'normal': 2}, 'troll_chief': {'normal': 1}},
     # Ashen deeper mixed undead/relic pressure.
     'ashen_n3b2': {'cursed_knight': {'normal': 2}},
-    'ashen_n3b2a1': {'skeleton_priest': {'normal': 2}, 'temple_guardian': {'normal': 1}},
+    'ashen_n3b2a1': {'skeleton_priest': {'normal': 2}, 'temple_guardian': {'normal': 2}},
     'ashen_n3a2': {'skeleton_guard': {'normal': 2}},
-    'ashen_n3c2': {'cursed_knight': {'normal': 2}, 'temple_guardian': {'normal': 1}},
+    'ashen_n3c2': {'cursed_knight': {'normal': 2}, 'temple_guardian': {'normal': 2}},
     # Mireveil attrition depth pressure without soft-entry overload.
     'mireveil_n8': {'giant_leech': {'normal': 2}},
     'mireveil_n9': {'drowned': {'normal': 2}},
