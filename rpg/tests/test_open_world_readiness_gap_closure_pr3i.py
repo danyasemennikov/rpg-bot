@@ -36,6 +36,10 @@ class OpenWorldReadinessGapClosurePR3ITests(unittest.TestCase):
         self.assertIn('missing_route_gameplay_identity_profile', ACTIONABLE_WARNING_IDS)
         self.assertIn('route_identity_tags_not_represented_by_mobs', ACTIONABLE_WARNING_IDS)
 
+
+    def test_route_matchup_warning_id_is_registered_actionable(self):
+        self.assertIn('missing_route_matchup_target_profile', ACTIONABLE_WARNING_IDS)
+
     def test_sunscar_route_specific_pressure_is_tracked(self):
         report = build_open_world_route_balance_report('route_sunscar')
         self.assertEqual(report.get('route_id'), 'route_sunscar')

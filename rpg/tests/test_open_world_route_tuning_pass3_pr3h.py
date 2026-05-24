@@ -48,8 +48,10 @@ class OpenWorldRouteTuningPass3PR3HTests(unittest.TestCase):
         self.assertNotIn('no_elite_anchors_on_non_stub_route', warnings)
         self.assertNotIn('pack_mobs_missing_archetype_metadata', warnings)
         self.assertNotIn('missing_route_gameplay_identity_profile', warnings)
+        self.assertNotIn('missing_route_matchup_target_profile', warnings)
         self.assertNotIn('route_identity_tags_not_represented_by_mobs', warnings)
         self.assertTrue(report.get('gameplay_identity_id'))
+        self.assertTrue(report.get('matchup_target_profile_id'))
         self.assertTrue(report.get('route_pressure_tags'))
         self.assertTrue(report.get('represented_mob_pressure_tags'))
 
@@ -76,6 +78,19 @@ class OpenWorldRouteTuningPass3PR3HTests(unittest.TestCase):
             self.assertIn('soft_entry', soft_tags, msg=route_id)
             self.assertNotIn('route_exam', soft_tags, msg=route_id)
             self.assertFalse(soft_tags & banned_soft_entry_tags, msg=route_id)
+
+
+
+    def test_full_alpha_routes_have_matchup_target_metadata_only(self):
+        for route_id in ('route_westwild', 'route_frostspine', 'route_ashen_ruins', 'route_mireveil', 'route_sunscar'):
+            report = build_open_world_route_balance_report(route_id)
+            self.assertTrue(report.get('matchup_target_profile_id'), msg=route_id)
+            labels = set(report.get('matchup_target_labels') or ())
+            self.assertIn('strong', labels, msg=route_id)
+            if route_id != 'route_sunscar':
+                self.assertIn('normal', labels, msg=route_id)
+            if route_id in {'route_ashen_ruins', 'route_sunscar'}:
+                self.assertTrue(any('very_hard' in x for x in labels), msg=route_id)
 
     def test_route_composition_and_placement_validators_remain_green(self):
         self.assertEqual(validate_open_world_spawn_profile_placement(), [])

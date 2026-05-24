@@ -6,6 +6,7 @@ from game.locations import (
     get_route_alpha_pressure_profile,
     get_route_alpha_depth_stage,
     get_route_gameplay_identity_profile,
+    get_route_matchup_target_profile,
 )
 from game.open_world_pack_balance import (
     ALLOWED_OPEN_WORLD_THREAT_BANDS,
@@ -93,6 +94,8 @@ def _build_readiness_warnings(report: dict[str, object]) -> tuple[str, ...]:
         warnings.append('missing_alpha_pressure_profile')
     if not report.get('gameplay_identity_id') and not is_sparse:
         warnings.append('missing_route_gameplay_identity_profile')
+    if not report.get('matchup_target_profile_id') and not is_sparse:
+        warnings.append('missing_route_matchup_target_profile')
     if not report.get('identity_tag_representation_ok', False) and not is_sparse:
         warnings.append('route_identity_tags_not_represented_by_mobs')
     if report.get('elite_anchor_count', 0) == 0 and not is_sparse:
@@ -157,6 +160,8 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
         'represented_mob_pressure_tags': (),
         'depth_pressure_summary': {},
         'identity_tag_representation_ok': True,
+        'matchup_target_profile_id': '',
+        'matchup_target_labels': (),
         'readiness_warnings': (),
     }
     route_meta = WORLD_ROUTES.get(normalized_route_id, {})
@@ -171,6 +176,9 @@ def build_open_world_route_balance_report(route_id: str) -> dict[str, object]:
 
         identity_profile = get_route_gameplay_identity_profile(normalized_route_id)
         report['gameplay_identity_id'] = str(identity_profile.get('gameplay_identity_id') or '')
+        matchup_profile = get_route_matchup_target_profile(normalized_route_id)
+        report['matchup_target_profile_id'] = str(matchup_profile.get('matchup_profile_id') or '')
+        report['matchup_target_labels'] = tuple(sorted(str(v) for v in (matchup_profile.get('target_matchups') or {}).values()))
         report['route_pressure_tags'] = tuple(sorted(str(t) for t in (identity_profile.get('primary_pressure_tags') or ()) if str(t).strip()))
         represented_tags = _collect_route_mob_pressure_tags(normalized_route_id)
         report['represented_mob_pressure_tags'] = represented_tags
@@ -233,6 +241,8 @@ def validate_open_world_route_balance_reports() -> list[str]:
             errors.append(f'missing reward profile alignment for route {route_id}')
         if int(report.get('location_count', 0)) <= 0 and not bool(report.get('is_sparse_or_stub')):
             errors.append(f'route has no mapped locations and is not sparse/stub: {route_id}')
+        if not bool(report.get('is_sparse_or_stub')) and not report.get('matchup_target_profile_id'):
+            errors.append(f'missing route matchup target profile for full route {route_id}')
 
         for mob_id in report.get('pack_mob_ids', ()):
             if not is_open_world_pack_enabled_mob(str(mob_id)):
