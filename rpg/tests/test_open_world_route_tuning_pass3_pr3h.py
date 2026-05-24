@@ -13,6 +13,8 @@ from game.open_world_route_balance_report import (
     build_open_world_route_balance_report,
     validate_open_world_route_balance_reports,
 )
+from game.open_world_pack_balance import get_world_location_ids_by_route_id
+from game.mobs import MOBS
 from game.skills import SKILLS
 
 
@@ -78,6 +80,79 @@ class OpenWorldRouteTuningPass3PR3HTests(unittest.TestCase):
             self.assertIn('soft_entry', soft_tags, msg=route_id)
             self.assertNotIn('route_exam', soft_tags, msg=route_id)
             self.assertFalse(soft_tags & banned_soft_entry_tags, msg=route_id)
+            self.assertTrue(report.get('soft_entry_safety_ok'), msg=route_id)
+            self.assertTrue(report.get('identity_pressure_present'), msg=route_id)
+            self.assertTrue(report.get('build_test_pressure_present'), msg=route_id)
+            self.assertTrue(report.get('route_exam_pressure_present'), msg=route_id)
+            self.assertEqual(report.get('overpressure_warnings'), (), msg=route_id)
+
+    def test_route_pressure_archetypes_and_density_shape(self):
+        westwild = build_open_world_route_balance_report('route_westwild')
+        ww_tags = set(westwild.get('represented_mob_pressure_tags') or ())
+        self.assertIn('ambush', ww_tags)
+        self.assertIn('goblin_pressure', ww_tags)
+        self.assertTrue({'pack_hunter', 'moderate_pack'} & ww_tags)
+        ww_depth = westwild.get('depth_pressure_summary', {})
+        deep_ww_tags = set(ww_depth.get('build_testing', ())) | set(ww_depth.get('route_exam', ()))
+        self.assertTrue({'goblin_pressure', 'goblin_shaman_pressure', 'leader', 'leader_pressure'} & deep_ww_tags)
+        self.assertGreater(westwild['depth_pressure_density']['route_exam'], westwild['depth_pressure_density']['soft_entry'])
+
+        frostspine = build_open_world_route_balance_report('route_frostspine')
+        fs_tags = set(frostspine.get('represented_mob_pressure_tags') or ())
+        self.assertTrue({'armored', 'mitigation_check', 'sustained_trade', 'heavy_trade', 'high_hp'} <= fs_tags)
+        fs_depth = frostspine.get('depth_pressure_summary', {})
+        self.assertTrue({'mitigation_check', 'elite_bruiser', 'heavy_trade'} & set(fs_depth.get('build_testing', ())))
+        self.assertTrue({'heavy_trade', 'route_exam'} & set(fs_depth.get('route_exam', ())))
+        self.assertNotIn('heavy_trade', set(frostspine.get('depth_pressure_summary', {}).get('soft_entry', ())))
+
+        ashen = build_open_world_route_balance_report('route_ashen_ruins')
+        ashen_depth = ashen.get('depth_pressure_summary', {})
+        ar_tags = set(ashen.get('represented_mob_pressure_tags') or ())
+        self.assertTrue({'undead', 'construct', 'caster', 'relic_guardian'} <= ar_tags)
+        self.assertIn('poison_bleed_poor_target', set(ashen.get('route_pressure_tags') or ()))
+        self.assertIn('undead', set(ashen_depth.get('soft_entry', ())))
+        self.assertTrue({'caster', 'ethereal'} & set(ashen_depth.get('identity_visible', ())))
+        self.assertTrue({'construct', 'cursed', 'relic_guardian'} & (set(ashen_depth.get('build_testing', ())) | set(ashen_depth.get('route_exam', ()))))
+
+        mireveil = build_open_world_route_balance_report('route_mireveil')
+        mv_tags = set(mireveil.get('represented_mob_pressure_tags') or ())
+        self.assertTrue({'toxin', 'attrition', 'sustain_pressure', 'control_pressure'} <= mv_tags)
+        self.assertIn('mirror_checked_venom', set(mireveil.get('route_pressure_tags') or ()))
+        mv_depth = mireveil.get('depth_pressure_summary', {})
+        self.assertFalse({'attrition_exam', 'control_pressure', 'route_exam'} & set(mv_depth.get('soft_entry', ())))
+        self.assertTrue({'toxin', 'attrition', 'sustain_pressure', 'control_pressure'} & set(mv_depth.get('build_testing', ())))
+        self.assertTrue({'attrition_exam', 'route_exam'} & set(mv_depth.get('route_exam', ())))
+
+        sunscar = build_open_world_route_balance_report('route_sunscar')
+        ss_tags = set(sunscar.get('represented_mob_pressure_tags') or ())
+        self.assertIn('elemental', ss_tags)
+        self.assertTrue({'precision', 'precision_threat', 'evasion_accuracy_check'} & ss_tags)
+        self.assertTrue({'solo_pressure', 'elite_skirmisher'} & ss_tags)
+        self.assertEqual(sunscar.get('pack_count'), 0)
+        ss_soft = set((sunscar.get('depth_pressure_summary') or {}).get('soft_entry', ()))
+        self.assertFalse({'route_exam', 'elite_skirmisher', 'burst'} & ss_soft)
+
+    def test_sunscar_normal_spawn_counts_stay_solo_skirmish(self):
+        for location_id in get_world_location_ids_by_route_id('route_sunscar'):
+            profiles = WORLD_LOCATIONS[location_id].get('world_spawn_profiles') or {}
+            for mob_id, profile_counts in profiles.items():
+                normal_count = int((profile_counts or {}).get('normal', 0) or 0)
+                self.assertLessEqual(normal_count, 1, msg=f'{location_id}:{mob_id}')
+
+    def test_route_exam_boss_like_mobs_do_not_spawn_as_normal_triples(self):
+        for route_id in ('route_westwild', 'route_frostspine', 'route_ashen_ruins', 'route_mireveil', 'route_sunscar'):
+            for location_id in get_world_location_ids_by_route_id(route_id):
+                profiles = WORLD_LOCATIONS[location_id].get('world_spawn_profiles') or {}
+                for mob_id, profile_counts in profiles.items():
+                    mob = MOBS.get(str(mob_id), {})
+                    tags = {str(t).strip().lower() for t in (mob.get('combat_pressure_tags') or ())}
+                    normal_count = int((profile_counts or {}).get('normal', 0) or 0)
+                    if 'route_exam' in tags and ({'heavy_trade', 'elite_bruiser', 'construct', 'relic_guardian'} & tags):
+                        self.assertLessEqual(normal_count, 2, msg=f'{location_id}:{mob_id}')
+
+        self.assertLessEqual(int((WORLD_LOCATIONS['frostspine_n10'].get('world_spawn_profiles') or {}).get('troll_chief', {}).get('normal', 0) or 0), 1)
+        self.assertLessEqual(int((WORLD_LOCATIONS['ashen_n3b2a1'].get('world_spawn_profiles') or {}).get('temple_guardian', {}).get('normal', 0) or 0), 2)
+        self.assertLessEqual(int((WORLD_LOCATIONS['ashen_n3c2'].get('world_spawn_profiles') or {}).get('temple_guardian', {}).get('normal', 0) or 0), 2)
 
 
 

@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Weapon-route matchup target metadata/reporting foundation
-- Status: route matchup metadata/reporting foundation
-- Confirmed state below reflects current merged `main` after matchup metadata/reporting foundation
+- PR: Route Identity Gameplay Pass 2
+- Status: playable pressure/composition tuning pass 2
+- Confirmed state below reflects current merged `main` after route identity gameplay pass 2
 
 ---
 
@@ -52,6 +52,10 @@ Legacy read paths and compatibility overlays remain supported.
   - route reports expose matchup target labels for validation and future balance work;
   - the matchup matrix is metadata/reporting only, not direct runtime bonuses.
 - Baseline route-aware PvE exists across the open world.
+- Route Identity Gameplay Pass 2 is implemented:
+  - full alpha routes have first-pass playable pressure/composition tuning;
+  - route reports validate soft-entry safety, depth pressure, pressure density, and route-specific pressure archetypes;
+  - weapon-route matchup targets remain metadata/reporting only and are not direct runtime bonuses.
 - Baseline gathering surfaces exist across the open world.
 - Route identity metadata is wired into world locations:
   - `world_id`

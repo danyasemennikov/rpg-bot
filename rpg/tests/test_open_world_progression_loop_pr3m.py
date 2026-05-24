@@ -159,10 +159,10 @@ class OpenWorldProgressionLoopPR3MTests(unittest.TestCase):
 
     def test_pr3k_and_pr3l_baselines_are_frozen(self):
         self.assertEqual((MOBS['white_wolf']['level'], MOBS['white_wolf']['hp'], MOBS['white_wolf']['damage_min'], MOBS['white_wolf']['damage_max']), (4, 58, 8, 13))
-        self.assertEqual((MOBS['mountain_stone_golem']['level'], MOBS['mountain_stone_golem']['hp'], MOBS['mountain_stone_golem']['damage_min'], MOBS['mountain_stone_golem']['damage_max']), (10, 210, 15, 24))
+        self.assertEqual((MOBS['mountain_stone_golem']['level'], MOBS['mountain_stone_golem']['hp'], MOBS['mountain_stone_golem']['damage_min'], MOBS['mountain_stone_golem']['damage_max']), (10, 245, 18, 28))
         self.assertEqual((MOBS['zombie']['level'], MOBS['zombie']['hp'], MOBS['zombie']['damage_min'], MOBS['zombie']['damage_max']), (4, 62, 7, 12))
         self.assertEqual((MOBS['leech']['level'], MOBS['leech']['hp'], MOBS['leech']['damage_min'], MOBS['leech']['damage_max']), (3, 38, 5, 9))
-        self.assertEqual((MOBS['drowned']['level'], MOBS['drowned']['hp'], MOBS['drowned']['damage_min'], MOBS['drowned']['damage_max']), (10, 138, 20, 30))
+        self.assertEqual((MOBS['drowned']['level'], MOBS['drowned']['hp'], MOBS['drowned']['damage_min'], MOBS['drowned']['damage_max']), (10, 168, 24, 35))
 
         self.assertEqual((MOBS['mountain_stone_golem']['exp_reward'], MOBS['mountain_stone_golem']['gold_min'], MOBS['mountain_stone_golem']['gold_max']), (110, 5, 14))
         self.assertEqual((MOBS['drowned']['exp_reward'], MOBS['drowned']['gold_min'], MOBS['drowned']['gold_max']), (105, 5, 14))
