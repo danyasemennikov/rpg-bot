@@ -123,3 +123,24 @@ Preferred example shape:
 - Do not introduce complex frameworks or unnecessary dependencies.
 - Do not replace readable procedural code with advanced patterns unless there is a clear payoff.
 - Do not ignore `CLAUDE.md` or `GAME_FOUNDATION.md` when working on systems that touch gameplay.
+
+## Project State Update Requirement
+
+`rpg/docs/PROJECT_STATE_CURRENT.md` is the source of truth for confirmed merged project state.
+
+When a PR changes confirmed project state, update `rpg/docs/PROJECT_STATE_CURRENT.md` in the same PR.
+
+Examples of confirmed state changes:
+
+- a route becomes alpha-ready
+- a blocker is fixed or added
+- a major system is implemented
+- a deferred system becomes active
+- a workflow/test command changes
+- a major rollout phase is completed
+
+If the PR does not change confirmed project state, state this explicitly in the PR summary:
+
+`PROJECT_STATE_CURRENT.md not updated: no confirmed project state change.`
+
+Do not record planned or unmerged work as confirmed state.
