@@ -504,6 +504,69 @@ ROUTE_GAMEPLAY_IDENTITY_PROFILES: dict[str, dict[str, object]] = {
     },
 }
 
+# Weapon-route matchup matrix foundation: design-target metadata only.
+# IMPORTANT: this table is NOT consumed by combat calculations and MUST NOT
+# be used as a runtime bonus/resistance modifier table.
+# It exists for reporting/validation and future composition-tuning planning only.
+# Playable pressure/composition tuning is deferred to a later dedicated pass.
+ROUTE_MATCHUP_TARGET_PROFILES: dict[str, dict[str, object]] = {
+    'route_westwild': {
+        'matchup_profile_id': 'route_matchup_westwild_pass2',
+        'notes': 'Design-target outcomes only; enforced indirectly by composition/pressure.',
+        'target_matchups': {
+            'sword_1h_balanced': 'normal', 'shield_defensive_1h': 'normal', 'sword_2h': 'normal_strong',
+            'axe_2h': 'strong', 'daggers_venom': 'strong', 'daggers_evasion': 'strong',
+            'bow_sniper': 'strong', 'bow_ranger': 'strong', 'magic_staff_destruction': 'normal_strong',
+            'magic_staff_control': 'normal', 'wand': 'normal', 'holy_staff_solo_support': 'normal_hard',
+            'holy_rod_paladin': 'normal', 'tome_toolbox': 'normal', 'pure_support_solo_overlay': 'normal_hard',
+        },
+    },
+    'route_frostspine': {
+        'matchup_profile_id': 'route_matchup_frostspine_pass2',
+        'notes': 'Venom is split by taxonomy (living/troll normal, stone/construct hard) via composition target.',
+        'target_matchups': {
+            'sword_1h_balanced': 'strong', 'shield_defensive_1h': 'strong', 'sword_2h': 'strong',
+            'axe_2h': 'strong', 'daggers_venom': 'normal_hard_split', 'daggers_evasion': 'hard',
+            'bow_sniper': 'normal', 'bow_ranger': 'hard', 'magic_staff_destruction': 'normal_hard',
+            'magic_staff_control': 'hard', 'wand': 'hard', 'holy_staff_solo_support': 'normal',
+            'holy_rod_paladin': 'strong', 'tome_toolbox': 'normal', 'pure_support_solo_overlay': 'normal',
+        },
+    },
+    'route_ashen_ruins': {
+        'matchup_profile_id': 'route_matchup_ashen_pass2',
+        'notes': 'Holy strong but not dominant; poison/bleed hard via undead/relic/construct targets only.',
+        'target_matchups': {
+            'sword_1h_balanced': 'normal', 'shield_defensive_1h': 'normal', 'sword_2h': 'normal',
+            'axe_2h': 'hard', 'daggers_venom': 'very_hard', 'daggers_evasion': 'normal_hard',
+            'bow_sniper': 'normal_hard', 'bow_ranger': 'normal', 'magic_staff_destruction': 'strong',
+            'magic_staff_control': 'normal_strong', 'wand': 'normal_strong', 'holy_staff_solo_support': 'strong',
+            'holy_rod_paladin': 'strong', 'tome_toolbox': 'strong', 'pure_support_solo_overlay': 'strong',
+        },
+    },
+    'route_mireveil': {
+        'matchup_profile_id': 'route_matchup_mireveil_pass2',
+        'notes': 'Attrition/toxin/sustain pressure; no blanket poison immunity mechanics.',
+        'target_matchups': {
+            'sword_1h_balanced': 'normal', 'shield_defensive_1h': 'normal_strong', 'sword_2h': 'hard',
+            'axe_2h': 'normal_strong', 'daggers_venom': 'strong', 'daggers_evasion': 'normal',
+            'bow_sniper': 'hard', 'bow_ranger': 'normal', 'magic_staff_destruction': 'normal',
+            'magic_staff_control': 'strong', 'wand': 'normal', 'holy_staff_solo_support': 'strong',
+            'holy_rod_paladin': 'normal_strong', 'tome_toolbox': 'strong', 'pure_support_solo_overlay': 'normal_strong',
+        },
+    },
+    'route_sunscar': {
+        'matchup_profile_id': 'route_matchup_sunscar_pass2',
+        'notes': 'Solo/elite precision route; hard supports are playable, not dead. No pack-pressure requirement.',
+        'target_matchups': {
+            'sword_1h_balanced': 'hard', 'shield_defensive_1h': 'hard', 'sword_2h': 'strong',
+            'axe_2h': 'normal_hard', 'daggers_venom': 'normal_hard', 'daggers_evasion': 'strong',
+            'bow_sniper': 'strong', 'bow_ranger': 'strong', 'magic_staff_destruction': 'hard',
+            'magic_staff_control': 'strong', 'wand': 'strong', 'holy_staff_solo_support': 'hard_very_hard',
+            'holy_rod_paladin': 'hard', 'tome_toolbox': 'normal_hard', 'pure_support_solo_overlay': 'very_hard_playable',
+        },
+    },
+}
+
 ROUTE_DEPTH_BANDS = {
     'n1_n2': {'min_node': 1, 'max_node': 2, 'stage': 'soft_entry'},
     'n3_n5': {'min_node': 3, 'max_node': 5, 'stage': 'identity_visible'},
@@ -949,6 +1012,10 @@ def get_route_alpha_pressure_profile(route_id: str | None) -> dict[str, object]:
 
 def get_route_gameplay_identity_profile(route_id: str | None) -> dict[str, object]:
     return dict(ROUTE_GAMEPLAY_IDENTITY_PROFILES.get(str(route_id or '').strip(), {}))
+
+
+def get_route_matchup_target_profile(route_id: str | None) -> dict[str, object]:
+    return dict(ROUTE_MATCHUP_TARGET_PROFILES.get(str(route_id or '').strip(), {}))
 
 
 def get_route_alpha_depth_stage(location_id: str | None) -> str:

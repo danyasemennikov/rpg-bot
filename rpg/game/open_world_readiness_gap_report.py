@@ -10,6 +10,7 @@ ACTIONABLE_WARNING_IDS: frozenset[str] = frozenset({
     'no_world_spawn_profiles',
     'missing_alpha_pressure_profile',
     'missing_route_gameplay_identity_profile',
+    'missing_route_matchup_target_profile',
     'route_identity_tags_not_represented_by_mobs',
 })
 

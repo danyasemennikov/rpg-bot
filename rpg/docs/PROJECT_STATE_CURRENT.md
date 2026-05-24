@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Route Identity Gameplay Pass 1: route metadata, mob pressure tags, and depth validation
-- Status: route identity gameplay metadata/validation pass
-- Confirmed state below reflects current merged `main` after Route Identity Gameplay Pass 1
+- PR: Weapon-route matchup target metadata/reporting foundation
+- Status: route matchup metadata/reporting foundation
+- Confirmed state below reflects current merged `main` after matchup metadata/reporting foundation
 
 ---
 
@@ -47,6 +47,10 @@ Legacy read paths and compatibility overlays remain supported.
   - full alpha routes have route-specific gameplay pressure metadata;
   - pressure expectations are depth-scaled through soft_entry / identity_visible / build_testing / route_exam;
   - route balance validation covers Westwild, Frostspine, Ashen Ruins, Mireveil, and Sunscar gameplay identity.
+- Weapon-route matchup target metadata is implemented:
+  - full alpha routes have design-target matchup metadata for route/weapon archetypes;
+  - route reports expose matchup target labels for validation and future balance work;
+  - the matchup matrix is metadata/reporting only, not direct runtime bonuses.
 - Baseline route-aware PvE exists across the open world.
 - Baseline gathering surfaces exist across the open world.
 - Route identity metadata is wired into world locations:
