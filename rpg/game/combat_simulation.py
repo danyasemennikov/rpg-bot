@@ -10,12 +10,15 @@ from game.combat import (
     init_battle,
     process_enemy_side_turn,
     process_player_attack_side_turn,
+    process_skill_turn,
 )
+from game.skills import get_skill
 from game.mobs import get_mob
 
 
 SIM_ACTION_NORMAL_ATTACK = "normal_attack"
 SIM_ACTION_GUARD_FALLBACK = "guard_fallback"
+SIM_ACTION_SKILL_PREFIX = "skill:"
 
 
 @dataclass
@@ -24,6 +27,7 @@ class SimulationConfig:
     max_turns: int = 50
     lang: str = "ru"
     include_log_tail: bool = True
+    skill_levels: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -63,6 +67,17 @@ class ScriptedActionPolicy:
         if 1 <= turn <= len(self.actions):
             return self.actions[turn - 1]
         return SIM_ACTION_NORMAL_ATTACK
+
+
+def make_simulation_skill_action(skill_id: str) -> str:
+    return f"{SIM_ACTION_SKILL_PREFIX}{skill_id}"
+
+
+def parse_simulation_skill_action(action: str) -> str | None:
+    if not action.startswith(SIM_ACTION_SKILL_PREFIX):
+        return None
+    skill_id = action[len(SIM_ACTION_SKILL_PREFIX):].strip()
+    return skill_id or None
 
 
 def build_simulation_player_preset(**overrides) -> dict:
@@ -156,6 +171,15 @@ def simulate_single_combat(
     battle_state = build_simulation_battle_state(player_local, mob_local)
 
     actions_used = {SIM_ACTION_NORMAL_ATTACK: 0, SIM_ACTION_GUARD_FALLBACK: 0}
+    simulation_cooldowns: dict[str, int] = {}
+
+    def _tick_skill_cooldowns() -> None:
+        for sid, turns in list(simulation_cooldowns.items()):
+            remaining = int(turns) - 1
+            if remaining > 0:
+                simulation_cooldowns[sid] = remaining
+            else:
+                simulation_cooldowns.pop(sid, None)
 
     def _run() -> SimulationResult:
         terminated_by_max_turns = False
@@ -167,7 +191,8 @@ def simulate_single_combat(
 
             turn_number = int(battle_state.get("turn", 1))
             action = action_policy.choose_action(turn=turn_number, battle_state=battle_state)
-            if action not in actions_used:
+            requested_skill_id = parse_simulation_skill_action(action)
+            if action not in actions_used and requested_skill_id is None:
                 action = SIM_ACTION_NORMAL_ATTACK
 
             if action == SIM_ACTION_NORMAL_ATTACK:
@@ -219,7 +244,64 @@ def simulate_single_combat(
                     tick_player_post_action_buffs=True,
                     tick_timed_trigger_buffs=True,
                 )
+            elif requested_skill_id is not None:
+                action_key = make_simulation_skill_action(requested_skill_id)
+                if action_key not in actions_used:
+                    actions_used[action_key] = 0
 
+                skill_level = int(cfg.skill_levels.get(requested_skill_id, 0))
+                skill_def = get_skill(requested_skill_id)
+                local_cd = int(simulation_cooldowns.get(requested_skill_id, 0))
+                can_use = bool(skill_def) and skill_level > 0 and local_cd <= 0
+
+                if battle_state.get("player_goes_first", True):
+                    if can_use:
+                        skill_turn = process_skill_turn(
+                            requested_skill_id, player_local, mob_local, battle_state, 0, cfg.lang,
+                            include_enemy_response=False,
+                            tick_timed_trigger_buffs_now=False,
+                            skill_level_override=skill_level,
+                            cooldown_override=local_cd,
+                            commit_cooldown_to_db=False,
+                        )
+                        if skill_turn.get("success"):
+                            actions_used[action_key] += 1
+                            battle_state.setdefault("skills_used", []).append(requested_skill_id)
+                            simulation_cooldowns[requested_skill_id] = int(skill_def.get("cooldown", 0))
+                        else:
+                            process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
+                            actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                    else:
+                        process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
+                        actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                    if battle_state.get("mob_hp", 0) > 0:
+                        process_enemy_side_turn(mob_local, player_local, battle_state, lang=cfg.lang, tick_player_post_action_buffs=True, tick_timed_trigger_buffs=True, increment_turn=True)
+                    else:
+                        battle_state["turn"] = int(battle_state.get("turn", 0)) + 1
+                else:
+                    process_enemy_side_turn(mob_local, player_local, battle_state, lang=cfg.lang)
+                    if battle_state.get("player_hp", 0) > 0:
+                        if can_use:
+                            skill_turn = process_skill_turn(
+                                requested_skill_id, player_local, mob_local, battle_state, 0, cfg.lang,
+                                include_enemy_response=False,
+                                skill_level_override=skill_level,
+                                cooldown_override=local_cd,
+                                commit_cooldown_to_db=False,
+                            )
+                            if skill_turn.get("success"):
+                                actions_used[action_key] += 1
+                                battle_state.setdefault("skills_used", []).append(requested_skill_id)
+                                simulation_cooldowns[requested_skill_id] = int(skill_def.get("cooldown", 0))
+                            else:
+                                process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
+                                actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                        else:
+                            process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
+                            actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                    battle_state["turn"] = int(battle_state.get("turn", 0)) + 1
+
+            _tick_skill_cooldowns()
             executed_turns += 1
 
         if battle_state.get("mob_hp", 0) > 0 and battle_state.get("player_hp", 0) > 0:
