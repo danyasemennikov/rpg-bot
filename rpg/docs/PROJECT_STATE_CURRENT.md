@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Route Identity Gameplay Pass 2
-- Status: playable pressure/composition tuning pass 2
-- Confirmed state below reflects current merged `main` after route identity gameplay pass 2
+- PR: PR2: Add alpha archetype presets and simulation policy metadata
+- Status: alpha archetype preset and policy metadata foundation
+- Confirmed state below reflects current merged `main` after alpha combat simulation archetype preset foundation
 
 ---
 
@@ -108,6 +108,12 @@ Alpha readiness policy:
   - simulation results expose winner, turns, HP/mana, action, and safety metrics;
   - simulations do not grant rewards or mutate player progression;
   - route/class simulation matrix, final balance reports, and live AFK autopilot are deferred.
+- Alpha Combat Simulation Archetype Presets are implemented:
+  - full alpha validation archetypes have simulation preset metadata;
+  - presets cover `soft_entry` / `identity_visible` / `build_testing` / `route_exam` power tiers;
+  - archetype policy and preferred skill metadata exist for future reports;
+  - smoke simulations can instantiate and run archetype presets through the headless simulation foundation;
+  - route/class matrix reports, safe skill execution adapters, final balance reports, and live AFK autopilot remain deferred.
 
 ---
 
