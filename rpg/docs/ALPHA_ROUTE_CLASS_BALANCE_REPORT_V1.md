@@ -128,8 +128,8 @@ Suspicious candidates by route:
 - route_mireveil: 16
 - route_sunscar: 32
 - route_westwild: 16
-Showing first 40 of 120 suspicious candidates. Full suspicious candidate data is available from build_alpha_balance_report_data().
-Hidden rows are not resolved or dismissed; this is a compact preview only.
+Showing 40 route-balanced preview rows out of 120 suspicious candidates. Full suspicious candidate data is available from build_alpha_balance_report_data().
+Hidden rows are not resolved or dismissed; this is a compact route-balanced preview only.
 | Route | Stage | Archetype | Observed | Target | Reasons |
 |---|---|---|---|---|---|
 | route_ashen_ruins | build_testing | axe_2h_bruiser | strong | hard | strong_vs_high_target |

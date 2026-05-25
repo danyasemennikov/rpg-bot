@@ -282,8 +282,8 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     for route_id in sorted(suspicious_by_route.keys()):
         lines.append(f"- {route_id}: {suspicious_by_route[route_id]}")
     if len(suspicious_rows) > SUSPICIOUS_TABLE_LIMIT:
-        lines.append(f"Showing first {SUSPICIOUS_TABLE_LIMIT} of {len(suspicious_rows)} suspicious candidates. Full suspicious candidate data is available from build_alpha_balance_report_data().")
-        lines.append("Hidden rows are not resolved or dismissed; this is a compact preview only.")
+        lines.append(f"Showing {SUSPICIOUS_TABLE_LIMIT} route-balanced preview rows out of {len(suspicious_rows)} suspicious candidates. Full suspicious candidate data is available from build_alpha_balance_report_data().")
+        lines.append("Hidden rows are not resolved or dismissed; this is a compact route-balanced preview only.")
     preview_rows = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
     if not suspicious_rows:
         lines.append("No suspicious candidates triggered current threshold rules.")

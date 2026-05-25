@@ -124,7 +124,7 @@ def test_markdown_discloses_suspicious_truncation_when_applicable():
     report = build_default_alpha_balance_report_data()
     md = render_alpha_balance_report_markdown(report)
     if len(report["suspicious_matchups"]) > SUSPICIOUS_TABLE_LIMIT:
-        assert "Showing first" in md
+        assert "route-balanced preview rows" in md
         assert "suspicious candidates" in md
         assert str(len(report["suspicious_matchups"])) in md
 
@@ -153,6 +153,7 @@ def test_checked_in_report_exists_and_sections():
     if len(default_report["target_comparisons"]) > TARGET_TABLE_LIMIT:
         assert "target comparison rows" in content
     if len(default_report["suspicious_matchups"]) > SUSPICIOUS_TABLE_LIMIT:
+        assert "route-balanced preview rows" in content
         assert "suspicious candidates" in content
     assert "diagnostic report" in content.lower()
     assert "not a final balance verdict" in content.lower()
