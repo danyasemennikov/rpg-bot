@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR4: Route stage simulation matrix foundation
-- Status: route-stage simulation matrix data foundation
-- Confirmed state below reflects current merged `main` after route-stage simulation matrix foundation
+- PR: PR5: Alpha balance report v1
+- Status: alpha route/class balance diagnostic report foundation
+- Confirmed state below reflects current merged `main` after alpha balance report v1
 
 ---
 
@@ -124,6 +124,11 @@ Alpha readiness policy:
   - matrix output includes raw runs and archetype summaries with win/death/turn/resource/action/skill metrics;
   - route-stage samples are deterministic representative solo samples from canonical route location data;
   - final balance reports, tuning recommendations, pack/group simulation matrices, and live AFK/autopilot remain deferred.
+- Alpha Balance Report v1 is implemented:
+  - route-stage simulation matrix data can be rendered into a diagnostic alpha route/class balance report;
+  - report compares observed simulation pressure labels against route matchup target metadata where mapping exists;
+  - report surfaces suspicious matchup candidates and limitations for future tuning;
+  - no route, mob, skill, reward, formula, pack/group matrix, or live AFK/autopilot changes are included.
 
 ---
 
@@ -140,6 +145,17 @@ Alpha readiness policy:
 ## Explicit non-goals / deferred
 
 Do not treat these as active scope unless a new accepted Decision Packet explicitly changes them:
+
+- No route/mob/skill/reward/formula tuning.
+- No Combat Core rewrite.
+- No smart autobattle policy.
+- No live AFK/autopilot.
+- No group/pack simulation matrix.
+- No targeting rollout.
+- No teleport.
+- No direct weapon-route bonuses.
+- No resistance framework.
+- No DB schema changes.
 
 - Teleport phase 1.
 - Dungeon runtime expansion.
