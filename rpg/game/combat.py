@@ -928,6 +928,9 @@ def resolve_single_redirect_enemy_effect_skill_action(
     skill_id: str,
     user_id: int = 0,
     lang: str = 'ru',
+    skill_level_override: int | None = None,
+    cooldown_override: int | None = None,
+    commit_cooldown_to_db: bool = True,
 ) -> dict:
     """Resolve enemy-effect skills on selected unit for single_redirect patterns."""
     def restore_active_projection() -> None:
@@ -999,7 +1002,14 @@ def resolve_single_redirect_enemy_effect_skill_action(
     player_state = dict(player)
     player_state['mana'] = battle_state.get('player_mana', player_state.get('mana', 0))
 
-    skill_result = use_skill(skill_id, player_state, mob_state, battle_state, user_id, lang)
+    use_skill_kwargs = {}
+    if skill_level_override is not None:
+        use_skill_kwargs['skill_level_override'] = skill_level_override
+    if cooldown_override is not None:
+        use_skill_kwargs['cooldown_override'] = cooldown_override
+    if commit_cooldown_to_db is not True:
+        use_skill_kwargs['commit_cooldown_to_db'] = commit_cooldown_to_db
+    skill_result = use_skill(skill_id, player_state, mob_state, battle_state, user_id, lang, **use_skill_kwargs)
     if not skill_result.get('success'):
         restore_active_projection()
         return {'handled': True, 'success': False, 'skill_result': skill_result}
@@ -1326,6 +1336,10 @@ def process_skill_turn(
     lang: str = 'ru',
     include_enemy_response: bool = True,
     tick_timed_trigger_buffs_now: bool = True,
+    *,
+    skill_level_override: int | None = None,
+    cooldown_override: int | None = None,
+    commit_cooldown_to_db: bool = True,
 ) -> dict:
     """
     Обрабатывает ход игрока через скилл.
@@ -1337,6 +1351,8 @@ def process_skill_turn(
         battle_state.get('player_mana', 0),
         user_id,
         lang,
+        skill_level_override=skill_level_override,
+        cooldown_override=cooldown_override,
     )
     if not precheck_result.get('success'):
         return {
@@ -1378,6 +1394,9 @@ def process_skill_turn(
         skill_id=skill_id,
         user_id=user_id,
         lang=lang,
+        skill_level_override=skill_level_override,
+        cooldown_override=cooldown_override,
+        commit_cooldown_to_db=commit_cooldown_to_db,
     )
     if redirect_result.get('handled'):
         skill_result = redirect_result.get('skill_result', {})
@@ -1388,7 +1407,22 @@ def process_skill_turn(
                 'battle_state': battle_state,
             }
     else:
-        skill_result = use_skill(skill_id, player_state, mob_state, battle_state, user_id, lang)
+        use_skill_kwargs = {}
+        if skill_level_override is not None:
+            use_skill_kwargs['skill_level_override'] = skill_level_override
+        if cooldown_override is not None:
+            use_skill_kwargs['cooldown_override'] = cooldown_override
+        if commit_cooldown_to_db is not True:
+            use_skill_kwargs['commit_cooldown_to_db'] = commit_cooldown_to_db
+        skill_result = use_skill(
+            skill_id,
+            player_state,
+            mob_state,
+            battle_state,
+            user_id,
+            lang,
+            **use_skill_kwargs,
+        )
     if not skill_result.get('success'):
         return {
             'success': False,

@@ -562,12 +562,20 @@ def calc_skill_mana_cost(skill: dict, skill_level: int) -> int:
     """Стоимость маны растёт чуть с уровнем скилла."""
     return int(skill['mana_cost'] * (1 + 0.05 * (skill_level - 1)))
 
-def precheck_skill_use(skill_id: str, player_mana: int, telegram_id: int, lang: str) -> dict:
+def precheck_skill_use(
+    skill_id: str,
+    player_mana: int,
+    telegram_id: int,
+    lang: str,
+    *,
+    skill_level_override: int | None = None,
+    cooldown_override: int | None = None,
+) -> dict:
     """
     Проверяет, можно ли начать skill-turn без изменения runtime-состояния.
     """
     skill = get_skill(skill_id)
-    skill_level = get_skill_level(telegram_id, skill_id)
+    skill_level = skill_level_override if skill_level_override is not None else get_skill_level(telegram_id, skill_id)
 
     if not skill:
         return {'success': False, 'log': t('skills.not_found', lang)}
@@ -575,7 +583,7 @@ def precheck_skill_use(skill_id: str, player_mana: int, telegram_id: int, lang: 
     if skill_level == 0:
         return {'success': False, 'log': t('skills.not_learned_simple', lang)}
 
-    cd = get_skill_cooldown(telegram_id, skill_id)
+    cd = cooldown_override if cooldown_override is not None else get_skill_cooldown(telegram_id, skill_id)
     if cd > 0:
         return {'success': False, 'log': t('skills.on_cooldown', lang, name=get_skill_name(skill_id, lang), cd=cd)}
 
@@ -585,14 +593,25 @@ def precheck_skill_use(skill_id: str, player_mana: int, telegram_id: int, lang: 
 
     return {'success': True, 'log': ''}
 
-def use_skill(skill_id: str, player: dict, mob_state: dict,
-              battle_state: dict, telegram_id: int, lang: str, *, commit_resources: bool = True) -> dict:
+def use_skill(
+    skill_id: str,
+    player: dict,
+    mob_state: dict,
+    battle_state: dict,
+    telegram_id: int,
+    lang: str,
+    *,
+    commit_resources: bool = True,
+    skill_level_override: int | None = None,
+    cooldown_override: int | None = None,
+    commit_cooldown_to_db: bool = True,
+) -> dict:
     """
     Применяет скилл в бою.
     Возвращает результат: урон, лечение, эффекты, лог.
     """
     skill       = get_skill(skill_id)
-    skill_level = get_skill_level(telegram_id, skill_id)
+    skill_level = skill_level_override if skill_level_override is not None else get_skill_level(telegram_id, skill_id)
 
     if not skill:
         return {'success': False, 'log': t('skills.not_found', lang)}
@@ -603,7 +622,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     # Проверка маны (в preview режиме не блокирует расчёт payoff)
     mana_cost = calc_skill_mana_cost(skill, skill_level)
     if commit_resources:
-        cd = get_skill_cooldown(telegram_id, skill_id)
+        cd = cooldown_override if cooldown_override is not None else get_skill_cooldown(telegram_id, skill_id)
         if cd > 0:
             return {'success': False, 'log': t('skills.on_cooldown', lang, name=get_skill_name(skill_id, lang), cd=cd)}
         if player.get('mana', 0) < mana_cost and mana_cost > 0:
@@ -2144,7 +2163,7 @@ def use_skill(skill_id: str, player: dict, mob_state: dict,
     _consume_runtime_target_selection(battle_state)
 
     # Устанавливаем кулдаун
-    if commit_resources and skill['cooldown'] > 0:
+    if commit_resources and commit_cooldown_to_db and skill['cooldown'] > 0:
         set_skill_cooldown(telegram_id, skill_id, skill['cooldown'])
 
     return result

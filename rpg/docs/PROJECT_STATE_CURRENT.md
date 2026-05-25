@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR2: Add alpha archetype presets and simulation policy metadata
-- Status: alpha archetype preset and policy metadata foundation
-- Confirmed state below reflects current merged `main` after alpha combat simulation archetype preset foundation
+- PR: PR3: Safe simulation skill action adapter
+- Status: simulation-only skill execution adapter foundation
+- Confirmed state below reflects current merged `main` after safe simulation skill action adapter foundation
 
 ---
 
@@ -114,6 +114,11 @@ Alpha readiness policy:
   - archetype policy and preferred skill metadata exist for future reports;
   - smoke simulations can instantiate and run archetype presets through the headless simulation foundation;
   - route/class matrix reports, safe skill execution adapters, final balance reports, and live AFK autopilot remain deferred.
+- Safe Simulation Skill Action Adapter is implemented:
+  - headless simulations can execute selected player skills through existing skill/combat rails;
+  - simulation skill levels, mana spending, and cooldowns are local to the simulation;
+  - simulations do not read/write live player mastery or DB cooldown state when using simulation overrides;
+  - route/class matrix reports, final balance reports, and live AFK autopilot remain deferred.
 
 ---
 

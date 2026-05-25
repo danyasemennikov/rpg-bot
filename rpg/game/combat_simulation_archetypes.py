@@ -8,7 +8,9 @@ from game.combat_simulation import (
     ScriptedActionPolicy,
     SIM_ACTION_GUARD_FALLBACK,
     SIM_ACTION_NORMAL_ATTACK,
+    make_simulation_skill_action,
 )
+from game.skills import get_skill
 
 
 REQUIRED_ARCHETYPE_IDS = (
@@ -72,7 +74,7 @@ ARCHETYPE_METADATA = {
 EXECUTABLE_POLICY_REGISTRY = {
     "always_attack": {"executable": True, "factory": lambda: AlwaysAttackPolicy(), "notes": "safe executable"},
     "always_guard_fallback": {"executable": True, "factory": lambda: AlwaysGuardFallbackPolicy(), "notes": "safe executable"},
-    "scripted_smoke": {"executable": True, "factory": lambda: ScriptedActionPolicy([SIM_ACTION_NORMAL_ATTACK, SIM_ACTION_GUARD_FALLBACK, SIM_ACTION_NORMAL_ATTACK]), "notes": "safe smoke policy"},
+    "scripted_smoke": {"executable": True, "factory": lambda: ScriptedActionPolicy([make_simulation_skill_action("power_strike"), SIM_ACTION_GUARD_FALLBACK, SIM_ACTION_NORMAL_ATTACK]), "notes": "safe smoke policy"},
     "aggressive_burst": {"executable": False, "factory": None, "notes": "future metadata policy"},
     "venom_setup": {"executable": False, "factory": None, "notes": "future metadata policy"},
     "evasion_tempo": {"executable": False, "factory": None, "notes": "future metadata policy"},
@@ -156,6 +158,24 @@ def build_archetype_player_preset(archetype_id: str, power_tier: str) -> dict:
         player.update(wisdom=base["primary_stat"] + 3, vitality=base["secondary_stat"] + 1, mana=base["mana"] + 26, max_mana=base["mana"] + 26, weapon_damage=base["weapon_damage"] - 5, hp=base["hp"] + 10, max_hp=base["hp"] + 10, equipment_magic_power_bonus=gear + 1, equipment_healing_power_bonus=gear + 9, equipment_physical_defense_bonus=max(0, gear - 1), encumbrance=ENCUMBRANCE_BY_LOADOUT["light"])
 
     return player
+
+
+def build_archetype_simulation_skill_levels(archetype_id: str, power_tier: str) -> dict[str, int]:
+    if power_tier not in REQUIRED_POWER_TIERS:
+        raise ValueError(f"Unknown power tier: {power_tier}")
+    metadata = get_archetype_metadata(archetype_id)
+    tier_to_level = {
+        "soft_entry": 1,
+        "identity_visible": 2,
+        "build_testing": 3,
+        "route_exam": 4,
+    }
+    level = tier_to_level[power_tier]
+    skill_levels: dict[str, int] = {}
+    for skill_id in metadata.get("preferred_skill_ids", []):
+        if get_skill(skill_id):
+            skill_levels[skill_id] = level
+    return skill_levels
 
 
 def validate_archetype_preset_coverage() -> list[str]:
