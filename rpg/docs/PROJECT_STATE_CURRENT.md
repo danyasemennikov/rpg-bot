@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR3: Safe simulation skill action adapter
-- Status: simulation-only skill execution adapter foundation
-- Confirmed state below reflects current merged `main` after safe simulation skill action adapter foundation
+- PR: PR4: Route stage simulation matrix foundation
+- Status: route-stage simulation matrix data foundation
+- Confirmed state below reflects current merged `main` after route-stage simulation matrix foundation
 
 ---
 
@@ -119,6 +119,11 @@ Alpha readiness policy:
   - simulation skill levels, mana spending, and cooldowns are local to the simulation;
   - simulations do not read/write live player mastery or DB cooldown state when using simulation overrides;
   - route/class matrix reports, final balance reports, and live AFK autopilot remain deferred.
+- Route Stage Simulation Matrix Foundation is implemented:
+  - route × depth stage × archetype representative simulation runs can be generated;
+  - matrix output includes raw runs and archetype summaries with win/death/turn/resource/action/skill metrics;
+  - route-stage samples are deterministic representative solo samples from canonical route location data;
+  - final balance reports, tuning recommendations, pack/group simulation matrices, and live AFK/autopilot remain deferred.
 
 ---
 
