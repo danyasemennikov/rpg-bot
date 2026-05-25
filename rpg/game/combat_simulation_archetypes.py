@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+
 from game.combat_simulation import (
     AlwaysAttackPolicy,
     AlwaysGuardFallbackPolicy,
@@ -92,7 +94,7 @@ def list_simulation_power_tiers() -> list[str]:
 def get_archetype_metadata(archetype_id: str) -> dict:
     if archetype_id not in ARCHETYPE_METADATA:
         raise ValueError(f"Unknown archetype id: {archetype_id}")
-    metadata = dict(ARCHETYPE_METADATA[archetype_id])
+    metadata = copy.deepcopy(ARCHETYPE_METADATA[archetype_id])
     metadata["id"] = archetype_id
     return metadata
 
@@ -168,6 +170,9 @@ def validate_archetype_preset_coverage() -> list[str]:
     allowed_armor_classes = {"heavy", "medium", "light", None}
 
     for archetype_id in REQUIRED_ARCHETYPE_IDS:
+        if archetype_id not in ARCHETYPE_METADATA:
+            errors.append(f"{archetype_id}: missing metadata")
+            continue
         md = get_archetype_metadata(archetype_id)
         if not md.get("role_tags") or not md.get("strengths") or not md.get("weaknesses"):
             errors.append(f"{archetype_id}: missing role tags/strengths/weaknesses metadata")

@@ -111,3 +111,24 @@ def test_dagger_archetypes_do_not_use_dual_offhand_profile():
             preset = build_archetype_player_preset(archetype_id, power_tier)
             assert preset["offhand_profile"] != "dual"
             assert preset["offhand_profile"] == "none"
+
+
+def test_get_archetype_metadata_returns_deep_copy():
+    metadata = get_archetype_metadata("guardian_shield_1h")
+    metadata["role_tags"].append("mutated")
+    metadata["preferred_skill_ids"].append("mutated_skill")
+
+    fresh = get_archetype_metadata("guardian_shield_1h")
+    assert "mutated" not in fresh["role_tags"]
+    assert "mutated_skill" not in fresh["preferred_skill_ids"]
+
+
+def test_validate_archetype_preset_coverage_collects_missing_metadata_error_without_abort(monkeypatch):
+    from game import combat_simulation_archetypes as csa
+
+    patched = dict(csa.ARCHETYPE_METADATA)
+    patched.pop("guardian_shield_1h", None)
+    monkeypatch.setattr(csa, "ARCHETYPE_METADATA", patched)
+
+    errors = csa.validate_archetype_preset_coverage()
+    assert any(err == "guardian_shield_1h: missing metadata" for err in errors)
