@@ -9,7 +9,7 @@ from game.combat import (
     apply_timeout_fallback_guard,
     init_battle,
     process_enemy_side_turn,
-    process_turn,
+    process_player_attack_side_turn,
 )
 from game.mobs import get_mob
 
@@ -169,12 +169,47 @@ def simulate_single_combat(
             action = action_policy.choose_action(turn=turn_number, battle_state=battle_state)
             if action not in actions_used:
                 action = SIM_ACTION_NORMAL_ATTACK
-            actions_used[action] += 1
 
             if action == SIM_ACTION_NORMAL_ATTACK:
-                process_turn(player_local, mob_local, battle_state, lang=cfg.lang)
+                if battle_state.get("player_goes_first", True):
+                    process_player_attack_side_turn(
+                        player_local,
+                        mob_local,
+                        battle_state,
+                        lang=cfg.lang,
+                    )
+                    actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                    if battle_state.get("mob_hp", 0) > 0:
+                        process_enemy_side_turn(
+                            mob_local,
+                            player_local,
+                            battle_state,
+                            lang=cfg.lang,
+                            tick_player_post_action_buffs=True,
+                            tick_timed_trigger_buffs=True,
+                            increment_turn=True,
+                        )
+                    else:
+                        battle_state["turn"] = int(battle_state.get("turn", 0)) + 1
+                else:
+                    process_enemy_side_turn(
+                        mob_local,
+                        player_local,
+                        battle_state,
+                        lang=cfg.lang,
+                    )
+                    if battle_state.get("player_hp", 0) > 0:
+                        process_player_attack_side_turn(
+                            player_local,
+                            mob_local,
+                            battle_state,
+                            lang=cfg.lang,
+                        )
+                        actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                    battle_state["turn"] = int(battle_state.get("turn", 0)) + 1
             elif action == SIM_ACTION_GUARD_FALLBACK:
                 apply_timeout_fallback_guard(battle_state, lang=cfg.lang)
+                actions_used[SIM_ACTION_GUARD_FALLBACK] += 1
                 process_enemy_side_turn(
                     mob_local,
                     player_local,

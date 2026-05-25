@@ -75,3 +75,15 @@ def test_no_reward_fields_and_no_telegram_context_required():
     assert not hasattr(result, "gold")
     assert not hasattr(result, "loot")
     assert isinstance(result.final_battle_state, dict)
+
+
+def test_enemy_first_kill_before_player_attack_does_not_count_normal_attack():
+    player = build_simulation_player_preset(hp=15, max_hp=15, vitality=1, agility=1, luck=1, weapon_damage=5)
+    mob = build_simulation_mob_preset("stone_golem")
+
+    result = simulate_single_combat(player, mob, policy=AlwaysAttackPolicy(), config=SimulationConfig(seed=9, max_turns=10))
+
+    assert result.winner == "mob"
+    assert result.player_dead is True
+    assert result.final_battle_state.get("player_goes_first") is False
+    assert result.actions_used["normal_attack"] == 0
