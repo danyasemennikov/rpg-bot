@@ -20,6 +20,7 @@ from game.combat_simulation_matrix import (
     run_route_stage_simulation_matrix,
 )
 from game.locations import ROUTE_MATCHUP_TARGET_PROFILES, WORLD_LOCATIONS
+from game.equipment_budget import build_simulation_gear_preset
 from game.mobs import MOBS
 
 ARCHETYPE_MATCHUP_KEY_MAP = {
@@ -346,6 +347,7 @@ def _build_archetype_cards(archetype_ids: list[str], stages: list[str]) -> list[
             preset = build_archetype_player_preset(archetype_id, stage)
             policy_id = md.get("preferred_policy_id")
             policy_registry = EXECUTABLE_POLICY_REGISTRY.get(policy_id, {})
+            gear_preset = preset.get("simulation_gear_preset", {})
             cards.append({
                 "archetype_id": archetype_id,
                 "power_tier": stage,
@@ -359,6 +361,14 @@ def _build_archetype_cards(archetype_ids: list[str], stages: list[str]) -> list[
                 "preferred_policy_id": policy_id,
                 "policy_executable": bool(policy_registry.get("executable")),
                 "policy_warning": "guard_heavy_risk" if policy_id == "always_guard_fallback" else "",
+                "gear_budget_summary": {
+                    "gear_tier": gear_preset.get("gear_tier"),
+                    "rarity": gear_preset.get("rarity"),
+                    "enhancement_level": gear_preset.get("enhancement_level"),
+                    "profile_id": gear_preset.get("profile_id"),
+                    "total_budget": gear_preset.get("total_budget"),
+                    "budget_status": gear_preset.get("budget_status"),
+                },
             })
     return cards
 
@@ -381,7 +391,10 @@ def _build_progression_audit_rows(enriched_runs: list[dict[str, Any]], summaries
     target_map = {(t["route_id"], t["stage"], t["archetype_id"]): t for t in target_comparisons}
     rows = []
     for run in enriched_runs:
-        stage_context = build_simulation_stage_progression_context(str(run.get("stage") or ""))
+        stage = str(run.get("stage") or "")
+        archetype_id = str(run.get("archetype_id") or "")
+        stage_context = build_simulation_stage_progression_context(stage)
+        gear_preset = build_simulation_gear_preset(archetype_id, stage)
         key = (run.get("route_id"), run.get("stage"), run.get("archetype_id"))
         summary = summary_map.get(key, {})
         target = target_map.get(key, {})
@@ -398,8 +411,11 @@ def _build_progression_audit_rows(enriched_runs: list[dict[str, Any]], summaries
             "player_level": stage_context.get("assumed_player_level"),
             "player_macro_band": stage_context.get("macro_band"),
             "gear_tier": stage_context.get("gear_tier"),
-            "gear_rarity_assumption": stage_context.get("gear_rarity_assumption"),
-            "enhancement_assumption": stage_context.get("enhancement_assumption"),
+            "gear_rarity_assumption": gear_preset.get("rarity"),
+            "enhancement_assumption": gear_preset.get("enhancement_level"),
+            "assumption_status": gear_preset.get("budget_status"),
+            "simulation_gear_preset": gear_preset,
+            "gear_budget_summary": {"total_budget": gear_preset.get("total_budget"), "profile_id": gear_preset.get("profile_id")},
             "skill_level_summary": build_archetype_simulation_skill_levels(str(run.get("archetype_id") or ""), str(run.get("stage") or "")),
             "encounter_level": run.get("encounter_level"),
             "mob_role": run.get("mob_role"),
@@ -601,10 +617,10 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     if len(scenario_cards) > SCENARIO_PREVIEW_LIMIT:
         lines.append(f"Showing first {SCENARIO_PREVIEW_LIMIT} of {len(scenario_cards)} scenario cards.")
 
-    lines += ["", "## Archetype Cards", "| archetype_id | power_tier | hp | mana | skill levels | policy metadata | policy warning |", "|---|---|---:|---:|---|---|---|"]
+    lines += ["", "## Archetype Cards", "| archetype_id | power_tier | hp | mana | skill levels | policy metadata | gear budget | policy warning |", "|---|---|---:|---:|---|---|---|---|"]
     archetype_cards = report_data.get("archetype_cards", [])
     for card in archetype_cards[:ARCHETYPE_CARD_PREVIEW_LIMIT]:
-        lines.append(f"| {card['archetype_id']} | {card['power_tier']} | {card.get('hp')} | {card.get('mana')} | {card.get('skill_levels', {})} | {card.get('preferred_policy_id')} (exec={card.get('policy_executable')}) | {card.get('policy_warning') or 'n/a'} |")
+        lines.append(f"| {card['archetype_id']} | {card['power_tier']} | {card.get('hp')} | {card.get('mana')} | {card.get('skill_levels', {})} | {card.get('preferred_policy_id')} (exec={card.get('policy_executable')}) | {card.get('gear_budget_summary', {})} | {card.get('policy_warning') or 'n/a'} |")
     if len(archetype_cards) > ARCHETYPE_CARD_PREVIEW_LIMIT:
         lines.append(f"Showing first {ARCHETYPE_CARD_PREVIEW_LIMIT} of {len(archetype_cards)} archetype cards.")
 
@@ -632,17 +648,18 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines += ["", "## Suspicious Clusters", f"Suspicious rows: {len(suspicious_rows)}."]
     progression_rows = list(report_data.get("progression_audit_rows", []))
     progression_counts = dict(report_data.get("progression_audit_flag_counts", {}))
-    lines += ["", "## Progression Audit Preview", "This section is diagnostic-only and not a tuning verdict."]
+    lines += ["", "## Progression Audit Preview", "This section is diagnostic-only and not a tuning verdict.", "Gear assumptions use formula_budget_v1 simulation presets where available."]
     if progression_counts:
         lines.append("Flag counts:")
         for flag_id in sorted(progression_counts.keys()):
             lines.append(f"- {flag_id}: {progression_counts[flag_id]}")
     else:
         lines.append("No progression audit flags were emitted.")
-    lines += ["| route | stage | archetype | assumed_player_level | gear_tier | mob | node_depth | encounter_level | mob_role | target | observed_diagnostic_label_v2 | audit flags |", "|---|---|---|---:|---|---|---:|---|---|---|---|---|"]
+    lines += ["| route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | target | observed_v2 | audit flags |", "|---|---|---|---:|---|---|---:|---:|---|---|---|---|---|"]
     preview = progression_rows[:PROGRESSION_AUDIT_PREVIEW_LIMIT]
     for row in preview:
-        lines.append(f"| {row.get('route_id')} | {row.get('stage')} | {row.get('archetype_id')} | {row.get('assumed_player_level')} | {row.get('gear_tier')} | {row.get('mob_id')} | {row.get('node_depth')} | {row.get('encounter_level')} | {row.get('mob_role')} | {row.get('target_label')} | {row.get('observed_diagnostic_label_v2')} | {', '.join(row.get('audit_flag_ids', []))} |")
+        gp = row.get('simulation_gear_preset') or {}
+        lines.append(f"| {row.get('route_id')} | {row.get('stage')} | {row.get('archetype_id')} | {row.get('assumed_player_level')} | {row.get('gear_tier')} | {row.get('gear_rarity_assumption')} | +{row.get('enhancement_assumption')} | {gp.get('total_budget')} | {gp.get('profile_id')} | {row.get('mob_id')} | {row.get('target_label')} | {row.get('observed_diagnostic_label_v2')} | {', '.join(row.get('audit_flag_ids', []))} |")
     if len(progression_rows) > PROGRESSION_AUDIT_PREVIEW_LIMIT:
         lines.append(f"Showing first {PROGRESSION_AUDIT_PREVIEW_LIMIT} of {len(progression_rows)} progression audit rows. Hidden rows are not resolved or dismissed.")
 

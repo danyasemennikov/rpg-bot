@@ -165,24 +165,24 @@ PR7 delivers only an initial skeleton flag surface, not the full report pipeline
 PR8 note (implemented diagnostic layer only):
 - PR8 introduces progression-aware audit context in simulation reports.
 - PR8 does not implement equipment budgets or encounter-level scaling.
-- Gear rarity/enhancement assumptions remain pending PR9.
+- Gear rarity/enhancement assumptions were pending PR9 in PR8 and are now implemented in PR9 simulation/reporting scope.
 - Encounter-level scaling remains pending PR10.
 
 
 ## M. Release-grade Balance Arc
-Implemented diagnostic steps:
+Implemented diagnostic/foundation steps:
 - **PR8:** Progression-aware Simulation Audit
+- **PR9:** Equipment Budget Foundation
 
 Planned future work:
-- **PR9:** Equipment Budget Foundation
 - **PR10:** Mob Encounter Scaling Foundation
 - **PR11:** Pack/Group Simulation Harness
 - **PR12:** First Real Tuning Pass
 
-PR8 does not implement PR9/PR10/PR11/PR12:
-- equipment budget remains pending PR9;
+PR9 does not implement PR10/PR11/PR12:
 - mob encounter scaling remains pending PR10;
-- pack/group simulation remains pending PR11.
+- pack/group simulation remains pending PR11;
+- first real tuning pass remains pending PR12.
 
 ## N. Non-goals
 PR7 non-goals:
@@ -194,3 +194,9 @@ PR7 non-goals:
 - no targeting;
 - no teleport;
 - no pack/group harness in PR7.
+
+
+PR9 note (implemented simulation/reporting foundation only):
+- PR9 implements item-level budget, slot weights, rarity multipliers, enhancement multipliers, archetype allocation profiles, and simulation gear presets for headless simulation/reporting.
+- PR9 does not change live equipment runtime, loot/crafting/drop behavior, or player DB/equipment migration.
+- PR9 does not implement mob encounter scaling; PR10 remains responsible for encounter-level scaling.

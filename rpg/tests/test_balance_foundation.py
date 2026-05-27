@@ -89,16 +89,18 @@ def test_simulation_stage_progression_context_route_exam():
     assert ctx["assumed_player_level"] == 95
     assert ctx["macro_band"] == "apex"
     assert ctx["gear_tier"] == "T10"
-    assert ctx["gear_rarity_assumption"] == "pending_pr9"
-    assert ctx["enhancement_assumption"] == "pending_pr9"
+    assert ctx["gear_rarity_assumption"] is None
+    assert ctx["enhancement_assumption"] is None
+    assert ctx["assumption_status"] is None
 
 
-def test_project_state_current_pr8_header_and_future_prs_not_implemented():
+def test_project_state_current_pr9_header_and_future_prs_not_implemented():
     doc = Path(__file__).resolve().parents[1] / "docs" / "PROJECT_STATE_CURRENT.md"
     text = doc.read_text(encoding="utf-8")
 
     pr7_heading = "### Balance Foundation Spec & Audit Skeleton (PR7)"
     pr8_heading = "### Progression-aware Simulation Audit (PR8)"
+    pr9_heading = "### Equipment Budget Foundation (PR9)"
     pr7_detail = "- Balance Foundation Spec & Audit Skeleton is implemented:"
     pr8_detail = "- Progression-aware simulation audit diagnostics are implemented:"
 
@@ -106,13 +108,14 @@ def test_project_state_current_pr8_header_and_future_prs_not_implemented():
     assert pr8_heading in text
     assert pr7_detail in text
     assert pr8_detail in text
+    assert pr9_heading in text
 
     assert text.index(pr7_heading) < text.index(pr8_heading)
     assert text.index(pr7_detail) < text.index(pr8_heading)
     assert text.index(pr8_detail) > text.index(pr8_heading)
 
     lower = text.lower()
-    assert "pr9 is implemented" not in lower
+    assert "equipment budget foundation (pr9)" in lower
     assert "pr10 is implemented" not in lower
     assert "pr11 is implemented" not in lower
     assert "pr12 is implemented" not in lower

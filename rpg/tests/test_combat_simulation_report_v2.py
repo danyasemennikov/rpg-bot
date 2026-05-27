@@ -61,6 +61,8 @@ def test_archetype_cards_per_stage_and_fields():
         assert "hp" in card and "mana" in card
         assert "skill_levels" in card
         assert "preferred_policy_id" in card
+        assert "gear_budget_summary" in card
+        assert card["gear_budget_summary"].get("budget_status") in {"formula_budget_v1", "formula_budget_v1_toolbox_fallback"}
 
 
 def test_rich_run_metrics_present_and_raw_runs_enabled_for_v2_default():
@@ -77,6 +79,8 @@ def test_rich_run_metrics_present_and_raw_runs_enabled_for_v2_default():
     assert "assumed_player_level" in audit_row
     assert "gear_tier" in audit_row
     assert "audit_flag_ids" in audit_row
+    assert "simulation_gear_preset" in audit_row
+    assert audit_row["gear_rarity_assumption"] != "pending_pr9"
 
 
 def test_suspicious_logic_regression_guard():
@@ -108,6 +112,7 @@ def test_markdown_v2_checked_in_has_real_content():
     assert ("actions_used" in content) or ("action usage" in content.lower())
     assert ("skills_used" in content) or ("skill usage" in content.lower())
     assert "Progression Audit Preview" in content
+    assert "formula_budget_v1" in content
 
 
 def test_v2_renderer_smoke():
@@ -244,3 +249,31 @@ def test_representative_trace_selection_is_route_first():
     assert selected_a == selected_b
     routes = {r["route_id"] for r in selected_a}
     assert {"route_a", "route_b", "route_c", "route_d", "route_e"}.issubset(routes)
+
+
+def test_progression_rows_use_archetype_specific_profiles():
+    report = build_default_alpha_simulation_report_v2_data()
+    rows = report["progression_audit_rows"]
+
+    def find_row(arch, stage):
+        return next(r for r in rows if r["archetype_id"] == arch and r["stage"] == stage)
+
+    g = find_row("guardian_shield_1h", "route_exam")
+    b = find_row("bow_sniper", "build_testing")
+    h = find_row("holy_staff_solo", "identity_visible")
+    assert g["simulation_gear_preset"]["profile_id"] == "tank"
+    assert b["simulation_gear_preset"]["profile_id"] == "bow_dps"
+    assert h["simulation_gear_preset"]["profile_id"] == "healer_support"
+
+
+def test_progression_rows_not_all_toolbox_fallback():
+    report = build_default_alpha_simulation_report_v2_data()
+    profiles = {r.get("simulation_gear_preset", {}).get("profile_id") for r in report["progression_audit_rows"]}
+    assert profiles != {"toolbox_hybrid"}
+
+
+def test_valid_formula_budget_rows_not_all_flagged_missing_preset():
+    report = build_default_alpha_simulation_report_v2_data()
+    valid_rows = [r for r in report["progression_audit_rows"] if r.get("assumption_status") == "formula_budget_v1"]
+    assert valid_rows
+    assert any("missing_simulation_gear_preset" not in r.get("audit_flag_ids", []) for r in valid_rows)
