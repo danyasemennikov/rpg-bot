@@ -70,6 +70,13 @@ def test_rich_run_metrics_present_and_raw_runs_enabled_for_v2_default():
     run = report["runs"][0]
     for key in ("end_reason", "player_hp_remaining_pct", "mob_hp_remaining_pct", "guard_action_rate", "normal_attack_rate", "skill_use_rate", "no_progress"):
         assert key in run
+    assert "progression_audit_rows" in report
+    assert "progression_audit_flags" in report
+    assert "progression_audit_flag_counts" in report
+    audit_row = report["progression_audit_rows"][0]
+    assert "assumed_player_level" in audit_row
+    assert "gear_tier" in audit_row
+    assert "audit_flag_ids" in audit_row
 
 
 def test_suspicious_logic_regression_guard():
@@ -100,12 +107,23 @@ def test_markdown_v2_checked_in_has_real_content():
     assert "winner" in content and "end_reason" in content and "turns" in content
     assert ("actions_used" in content) or ("action usage" in content.lower())
     assert ("skills_used" in content) or ("skill usage" in content.lower())
+    assert "Progression Audit Preview" in content
 
 
 def test_v2_renderer_smoke():
     report = build_default_alpha_simulation_report_v2_data()
     md = render_alpha_simulation_report_v2_markdown(report)
     assert "Alpha Route/Class Balance Report v2" in md
+    assert "Progression Audit Preview" in md
+    assert "diagnostic-only and not a tuning verdict" in md
+
+
+def test_v2_progression_audit_preview_hidden_row_disclosure_when_capped():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    if len(report["progression_audit_rows"]) > 20:
+        assert "Showing first 20 of" in md
+        assert "progression audit rows. Hidden rows are not resolved or dismissed." in md
 
 
 def test_v2_suspicious_preview_disclosure_and_transparency():
@@ -226,4 +244,3 @@ def test_representative_trace_selection_is_route_first():
     assert selected_a == selected_b
     routes = {r["route_id"] for r in selected_a}
     assert {"route_a", "route_b", "route_c", "route_d", "route_e"}.issubset(routes)
-

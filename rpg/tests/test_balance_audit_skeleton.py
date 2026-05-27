@@ -5,11 +5,15 @@ from game.balance_audit import (
     FLAG_MISSING_ENCOUNTER_LEVEL,
     FLAG_INVALID_NODE_DEPTH,
     FLAG_MISSING_MOB_ROLE,
+    FLAG_MISSING_SIMULATION_GEAR_PRESET,
+    FLAG_POLICY_FAILURE_GUARD_LOOP,
     FLAG_UNSCALED_TEMPLATE_REUSED_ACROSS_DEPTHS,
     FLAG_WEAK_ROUTE_EXAM_SAMPLE,
+    audit_progression_context_rows,
     audit_repeated_template_depth_scaling,
     audit_route_stage_sample_metadata,
     build_balance_audit_flag,
+    summarize_balance_audit_flags,
 )
 
 
@@ -160,3 +164,74 @@ def test_invalid_node_depth_is_flagged_when_non_empty_and_non_numeric():
 
     flags = audit_repeated_template_depth_scaling(rows)
     assert any(f.flag_id == FLAG_INVALID_NODE_DEPTH for f in flags)
+
+
+def test_summarize_balance_audit_flags_counts():
+    flags = [
+        build_balance_audit_flag("a", "warning", "x", "1", "m"),
+        build_balance_audit_flag("a", "warning", "x", "2", "m"),
+        build_balance_audit_flag("b", "warning", "x", "3", "m"),
+    ]
+    assert summarize_balance_audit_flags(flags) == {"a": 2, "b": 1}
+
+
+def test_audit_progression_context_rows_flags_and_no_mutation():
+    rows = [{"id": "r1", "stage": "route_exam", "assumed_player_level": 95, "target_label": "hard", "mob_role": None, "gear_rarity_assumption": "pending_pr9", "enhancement_assumption": "pending_pr9", "observed_diagnostic_label_v2": "policy_failure", "actions_used": {"guard_fallback": 5}}]
+    before = deepcopy(rows)
+    flags = audit_progression_context_rows(rows)
+    ids = {f.flag_id for f in flags}
+    assert FLAG_MISSING_ENCOUNTER_LEVEL in ids
+    assert FLAG_MISSING_MOB_ROLE in ids
+    assert FLAG_MISSING_SIMULATION_GEAR_PRESET in ids
+    assert FLAG_POLICY_FAILURE_GUARD_LOOP in ids
+    assert rows == before
+
+
+def test_audit_progression_context_rows_malformed_optional_values_do_not_raise():
+    rows = [{"id": "bad_optional", "stage": 123, "assumed_player_level": "", "encounter_level": "", "actions_used": "not_a_dict"}]
+    flags = audit_progression_context_rows(rows)
+    assert isinstance(flags, list)
+
+
+def test_audit_progression_context_rows_non_numeric_guard_values_do_not_raise():
+    rows = [{
+        "id": "bad_guard_values",
+        "stage": "route_exam",
+        "assumed_player_level": 95,
+        "encounter_level": 95,
+        "mob_role": "normal",
+        "observed_diagnostic_label_v2": "policy_failure",
+        "actions_used": {"guard_fallback": "N/A", "guard": "five"},
+        "guard_action_rate": "not-a-number",
+    }]
+    flags = audit_progression_context_rows(rows)
+    assert isinstance(flags, list)
+
+
+def test_audit_progression_context_rows_numeric_string_guard_fallback_flags_guard_loop():
+    rows = [{
+        "id": "guard_string_numeric",
+        "stage": "route_exam",
+        "assumed_player_level": 95,
+        "encounter_level": 95,
+        "mob_role": "normal",
+        "observed_diagnostic_label_v2": "policy_failure",
+        "actions_used": {"guard_fallback": "3", "guard": "0"},
+    }]
+    flags = audit_progression_context_rows(rows)
+    assert any(f.flag_id == FLAG_POLICY_FAILURE_GUARD_LOOP for f in flags)
+
+
+def test_audit_progression_context_rows_malformed_guard_action_rate_does_not_raise():
+    rows = [{
+        "id": "bad_guard_rate",
+        "stage": "route_exam",
+        "assumed_player_level": 95,
+        "encounter_level": 95,
+        "mob_role": "normal",
+        "observed_diagnostic_label_v2": "policy_failure",
+        "actions_used": {},
+        "guard_action_rate": {"bad": "shape"},
+    }]
+    flags = audit_progression_context_rows(rows)
+    assert isinstance(flags, list)

@@ -40,6 +40,13 @@ TTK_TARGET_BANDS = {
     "boss_group": None,
 }
 
+SIMULATION_STAGE_PLAYER_LEVEL_ASSUMPTIONS = {
+    "soft_entry": 10,
+    "identity_visible": 35,
+    "build_testing": 70,
+    "route_exam": 95,
+}
+
 
 def validate_release_level(level: int) -> bool:
     if level < 1:
@@ -73,3 +80,26 @@ def resolve_macro_band_for_level(level: int) -> str:
         if min_level <= level <= max_level:
             return band_name
     raise ValueError(f"No macro band found for level {level}.")
+
+
+def resolve_simulation_stage_player_level(stage: str) -> int | None:
+    return SIMULATION_STAGE_PLAYER_LEVEL_ASSUMPTIONS.get(str(stage or "").strip())
+
+
+def build_simulation_stage_progression_context(stage: str) -> dict[str, str | int | None]:
+    normalized_stage = str(stage or "").strip()
+    assumed_player_level = resolve_simulation_stage_player_level(normalized_stage)
+    macro_band = None
+    gear_tier = None
+    if assumed_player_level is not None:
+        macro_band = resolve_macro_band_for_level(assumed_player_level)
+        gear_tier = resolve_gear_tier_for_level(assumed_player_level)
+    return {
+        "stage": normalized_stage,
+        "assumed_player_level": assumed_player_level,
+        "macro_band": macro_band,
+        "gear_tier": gear_tier,
+        "gear_rarity_assumption": "pending_pr9",
+        "enhancement_assumption": "pending_pr9",
+        "assumption_status": "diagnostic_assumption_not_final_budget",
+    }
