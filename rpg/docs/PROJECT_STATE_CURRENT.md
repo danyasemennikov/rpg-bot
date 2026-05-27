@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR5: Alpha balance report v1
-- Status: alpha route/class balance diagnostic report foundation
-- Confirmed state below reflects current merged `main` after alpha balance report v1
+- PR: PR6: Alpha simulation report v2 diagnostic fidelity
+- Status: alpha simulation/report diagnostic fidelity foundation
+- Confirmed state below reflects current merged `main` after alpha simulation report v2 diagnostic fidelity
 
 ---
 
@@ -128,6 +128,13 @@ Alpha readiness policy:
   - route-stage simulation matrix data can be rendered into a diagnostic alpha route/class balance report;
   - report compares observed simulation pressure labels against route matchup target metadata where mapping exists;
   - report surfaces suspicious matchup candidates and limitations for future tuning;
+  - no route, mob, skill, reward, formula, pack/group matrix, or live AFK/autopilot changes are included.
+- Alpha Simulation Report v2 diagnostic fidelity is implemented:
+  - report v2 exposes scenario/mob cards for representative route-stage samples;
+  - report v2 exposes archetype/power-tier/loadout/skill/policy cards for simulation presets;
+  - report v2 includes richer run and aggregate diagnostic metrics beyond win rate;
+  - report v2 distinguishes death, timeout, no-progress, resource/policy issues where inferable;
+  - report v2 includes capped representative suspicious fight traces;
   - no route, mob, skill, reward, formula, pack/group matrix, or live AFK/autopilot changes are included.
 
 ---
