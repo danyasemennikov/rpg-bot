@@ -1,0 +1,206 @@
+from pathlib import Path
+
+from game.combat_simulation_matrix import RouteStageMatrixConfig, run_route_stage_simulation_matrix
+from game.combat_simulation_report import (
+    SUSPICIOUS_TABLE_LIMIT,
+    TARGET_TABLE_LIMIT,
+    _is_suspicious,
+    build_alpha_balance_report_data,
+    build_default_alpha_balance_report_data,
+    build_default_alpha_simulation_report_v2_data,
+    build_checked_in_alpha_simulation_report_v2_config,
+    build_diagnostic_alpha_simulation_report_v2_config,
+    _select_route_balanced_suspicious_preview,
+    _enrich_run,
+    _label_diagnostic_v2,
+    render_alpha_balance_report_markdown,
+    render_alpha_simulation_report_v2_markdown,
+)
+
+
+def _cfg(stages=("soft_entry", "identity_visible")):
+    return RouteStageMatrixConfig(
+        route_ids=("route_westwild",),
+        stages=stages,
+        archetype_ids=("guardian_shield_1h", "holy_rod_paladin"),
+        seeds=(1,),
+        max_samples_per_route_stage=1,
+        include_raw_runs=True,
+    )
+
+
+def test_v1_renderer_regression_guard():
+    report = build_default_alpha_balance_report_data()
+    md = render_alpha_balance_report_markdown(report)
+    assert "Alpha Route/Class Balance Report v1" in md
+    assert "Target vs Observed Matchup Signals" in md
+    assert "Suspicious candidates by route" in md
+    assert ("normal_strong" in md) or (" normal |" in md)
+    if len(report["suspicious_matchups"]) > SUSPICIOUS_TABLE_LIMIT:
+        assert "route-balanced preview rows" in md
+    if len(report["target_comparisons"]) > TARGET_TABLE_LIMIT:
+        assert "Showing first" in md
+    assert "not a final balance verdict" in md.lower()
+
+
+def test_scenario_cards_fields():
+    report = build_alpha_balance_report_data(run_route_stage_simulation_matrix(_cfg()))
+    card = report["scenario_cards"][0]
+    for key in ("route_id", "stage", "location_id", "mob_id", "spawn_profile", "sample_tags"):
+        assert key in card
+
+
+def test_archetype_cards_per_stage_and_fields():
+    report = build_alpha_balance_report_data(run_route_stage_simulation_matrix(_cfg(stages=("soft_entry", "build_testing"))))
+    tiers = {c["power_tier"] for c in report["archetype_cards"]}
+    assert "soft_entry" in tiers and "build_testing" in tiers
+    assert len(tiers) > 1
+    for card in report["archetype_cards"]:
+        assert card["archetype_id"]
+        assert "hp" in card and "mana" in card
+        assert "skill_levels" in card
+        assert "preferred_policy_id" in card
+
+
+def test_rich_run_metrics_present_and_raw_runs_enabled_for_v2_default():
+    report = build_default_alpha_simulation_report_v2_data()
+    assert report["runs"]
+    assert report["scenario_cards"]
+    run = report["runs"][0]
+    for key in ("end_reason", "player_hp_remaining_pct", "mob_hp_remaining_pct", "guard_action_rate", "normal_attack_rate", "skill_use_rate", "no_progress"):
+        assert key in run
+
+
+def test_suspicious_logic_regression_guard():
+    summary = {"observed_pressure_label": "strong", "timeouts": 0, "runs": 10, "death_rate": 0.1, "win_rate": 0.9}
+    assert "strong_vs_high_target" in _is_suspicious(summary, "hard")
+    summary_timeout = {"observed_pressure_label": "normal", "timeouts": 5, "runs": 10, "death_rate": 0.1, "win_rate": 0.7}
+    assert "timeout_heavy" in _is_suspicious(summary_timeout, "normal")
+    summary_death = {"observed_pressure_label": "very_hard", "timeouts": 0, "runs": 10, "death_rate": 0.7, "win_rate": 0.2}
+    reasons = _is_suspicious(summary_death, "normal")
+    assert "high_death_low_win" in reasons
+    assert "very_hard_vs_low_target" in reasons
+
+
+def test_markdown_v2_checked_in_has_real_content():
+    path = Path(__file__).resolve().parents[1] / "docs" / "ALPHA_ROUTE_CLASS_BALANCE_REPORT_V2.md"
+    assert path.exists()
+    content = path.read_text(encoding="utf-8")
+    assert "Alpha Route/Class Balance Report v2" in content
+    assert ("route_westwild" in content) or ("route_frostspine" in content)
+    assert "spawn_profile" in content
+    assert "sample_tags" in content
+    assert "guardian_shield_1h" in content
+    assert "power_tier" in content
+    assert "skill levels" in content.lower()
+    assert "policy" in content.lower()
+    assert "hp" in content.lower() and "mana" in content.lower()
+    assert "Representative Suspicious Fight Traces" in content
+    assert "winner" in content and "end_reason" in content and "turns" in content
+    assert ("actions_used" in content) or ("action usage" in content.lower())
+    assert ("skills_used" in content) or ("skill usage" in content.lower())
+
+
+def test_v2_renderer_smoke():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "Alpha Route/Class Balance Report v2" in md
+
+
+def test_v2_suspicious_preview_disclosure_and_transparency():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "compact route-balanced suspicious preview" in md
+    assert str(len(report["suspicious_matchups"])) in md
+    assert "Hidden rows are not resolved or dismissed" in md
+
+
+def test_v2_suspicious_preview_route_transparent_when_limit_allows():
+    report = build_default_alpha_simulation_report_v2_data()
+    rows = report["suspicious_matchups"]
+    routes = {r["route_id"] for r in rows}
+    preview = _select_route_balanced_suspicious_preview(rows, SUSPICIOUS_TABLE_LIMIT)
+    preview_routes = {r["route_id"] for r in preview}
+    if len(routes) <= SUSPICIOUS_TABLE_LIMIT and rows:
+        assert routes.issubset(preview_routes)
+
+
+def test_v2_trace_disclosure_and_multiroute_bias_guard():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "Representative Suspicious Fight Traces" in md
+    assert "route-balanced representative suspicious traces" in md
+    assert str(10) in md
+    routes = {r["route_id"] for r in report["suspicious_traces"]}
+    if len(report["suspicious_traces"]) > 1:
+        assert len(routes) > 1
+
+
+def test_v2_config_helper_naming_and_values():
+    checked = build_checked_in_alpha_simulation_report_v2_config()
+    diag = build_diagnostic_alpha_simulation_report_v2_config()
+    assert checked.include_raw_runs is True
+    assert checked.max_samples_per_route_stage == 1
+    assert checked.seeds == (1,)
+    assert diag.seeds == (1, 2, 3)
+    assert diag.max_samples_per_route_stage == 2
+    assert diag.include_raw_runs is True
+
+
+def test_guard_fallback_counts_as_guard_like_action_rate():
+    run = {
+        "route_id": "route_westwild",
+        "stage": "soft_entry",
+        "archetype_id": "guardian_shield_1h",
+        "location_id": "westwild_n1",
+        "mob_id": "forest_wolf",
+        "spawn_profile": "normal",
+        "sample_tags": ["representative"],
+        "winner": "mob",
+        "turns": 50,
+        "terminated_by_max_turns": True,
+        "player_dead": False,
+        "mob_dead": False,
+        "player_hp_remaining": 100,
+        "player_mana_remaining": 50,
+        "mob_hp_remaining": 100,
+        "damage_dealt": 0,
+        "damage_taken": 10,
+        "actions_used": {"guard_fallback": 50, "normal_attack": 0},
+        "skills_used": [],
+    }
+    enriched = _enrich_run(run)
+    assert enriched["guard_action_rate"] >= 0.9
+    assert enriched["normal_attack_rate"] == 0
+    assert enriched["skill_use_rate"] == 0
+
+
+def test_policy_failure_label_from_guard_loop_summary():
+    summary = {
+        "runs": 10,
+        "guard_action_rate": 0.95,
+        "no_progress_rate": 0.8,
+        "win_rate": 0.0,
+        "death_rate": 0.0,
+        "timeout_alive_stall_rate": 1.0,
+    }
+    assert _label_diagnostic_v2(summary) == "policy_failure"
+
+
+def test_actual_report_guard_fallback_policy_failure_signal_present():
+    report = build_default_alpha_simulation_report_v2_data()
+    traces = [
+        t
+        for t in report["suspicious_traces"]
+        if t["archetype_id"] in {"guardian_shield_1h", "holy_rod_paladin"}
+        and t.get("actions_used", {}).get("guard_fallback", 0) >= 40
+    ]
+    if traces:
+        assert any(t.get("observed_diagnostic_label_v2") == "policy_failure" for t in traces)
+
+
+def test_checked_in_report_mentions_policy_failure_when_guard_fallback_traces_present():
+    path = Path(__file__).resolve().parents[1] / "docs" / "ALPHA_ROUTE_CLASS_BALANCE_REPORT_V2.md"
+    content = path.read_text(encoding="utf-8")
+    if "guard_fallback" in content:
+        assert "policy_failure" in content
