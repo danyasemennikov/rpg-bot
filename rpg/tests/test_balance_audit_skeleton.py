@@ -176,13 +176,13 @@ def test_summarize_balance_audit_flags_counts():
 
 
 def test_audit_progression_context_rows_flags_and_no_mutation():
-    rows = [{"id": "r1", "stage": "route_exam", "assumed_player_level": 95, "target_label": "hard", "mob_role": None, "gear_rarity_assumption": "pending_pr9", "enhancement_assumption": "pending_pr9", "observed_diagnostic_label_v2": "policy_failure", "actions_used": {"guard_fallback": 5}}]
+    rows = [{"id": "r1", "stage": "route_exam", "assumed_player_level": 95, "target_label": "hard", "mob_role": None, "gear_rarity_assumption": "rare", "enhancement_assumption": 8, "assumption_status": "formula_budget_v1", "simulation_gear_preset": {"total_budget": 100, "slot_budgets": {"weapon": 10}, "stat_bonuses": {"max_hp_bonus": 1}}, "observed_diagnostic_label_v2": "policy_failure", "actions_used": {"guard_fallback": 5}}]
     before = deepcopy(rows)
     flags = audit_progression_context_rows(rows)
     ids = {f.flag_id for f in flags}
     assert FLAG_MISSING_ENCOUNTER_LEVEL in ids
     assert FLAG_MISSING_MOB_ROLE in ids
-    assert FLAG_MISSING_SIMULATION_GEAR_PRESET in ids
+    assert FLAG_MISSING_SIMULATION_GEAR_PRESET not in ids
     assert FLAG_POLICY_FAILURE_GUARD_LOOP in ids
     assert rows == before
 
@@ -235,3 +235,21 @@ def test_audit_progression_context_rows_malformed_guard_action_rate_does_not_rai
     }]
     flags = audit_progression_context_rows(rows)
     assert isinstance(flags, list)
+
+
+def test_audit_progression_context_rows_formula_status_without_preset_is_flagged():
+    rows = [{"id": "r2", "stage": "route_exam", "assumed_player_level": 95, "encounter_level": 95, "mob_role": "normal", "gear_rarity_assumption": "rare", "enhancement_assumption": 8, "assumption_status": "formula_budget_v1"}]
+    flags = audit_progression_context_rows(rows)
+    assert any(f.flag_id == FLAG_MISSING_SIMULATION_GEAR_PRESET for f in flags)
+
+
+def test_audit_progression_context_rows_formula_status_empty_preset_is_flagged():
+    rows = [{"id": "r3", "stage": "route_exam", "assumed_player_level": 95, "encounter_level": 95, "mob_role": "normal", "gear_rarity_assumption": "rare", "enhancement_assumption": 8, "assumption_status": "formula_budget_v1", "simulation_gear_preset": {}}]
+    flags = audit_progression_context_rows(rows)
+    assert any(f.flag_id == FLAG_MISSING_SIMULATION_GEAR_PRESET for f in flags)
+
+
+def test_audit_progression_context_rows_formula_status_valid_preset_not_flagged():
+    rows = [{"id": "r4", "stage": "route_exam", "assumed_player_level": 95, "encounter_level": 95, "mob_role": "normal", "gear_rarity_assumption": "rare", "enhancement_assumption": 8, "assumption_status": "formula_budget_v1", "simulation_gear_preset": {"total_budget": 10, "slot_budgets": {"weapon": 3}, "stat_bonuses": {"attack_bonus": 1}}}]
+    flags = audit_progression_context_rows(rows)
+    assert all(f.flag_id != FLAG_MISSING_SIMULATION_GEAR_PRESET for f in flags)

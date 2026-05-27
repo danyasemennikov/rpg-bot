@@ -99,7 +99,8 @@ def build_simulation_stage_progression_context(stage: str) -> dict[str, str | in
         "assumed_player_level": assumed_player_level,
         "macro_band": macro_band,
         "gear_tier": gear_tier,
-        "gear_rarity_assumption": "pending_pr9",
-        "enhancement_assumption": "pending_pr9",
-        "assumption_status": "diagnostic_assumption_not_final_budget",
+        "gear_rarity_assumption": None,
+        "enhancement_assumption": None,
+        "assumption_status": None,
+        "simulation_gear_preset": None,
     }

@@ -264,8 +264,17 @@ def audit_progression_context_rows(rows: list[dict[str, Any]]) -> list[BalanceAu
             flags.append(build_balance_audit_flag(FLAG_MISSING_ENCOUNTER_LEVEL, "warning", "sample_row", row_id, "Encounter level is missing in progression audit row.", {"stage": stage}))
         if mob_role in (None, ""):
             flags.append(build_balance_audit_flag(FLAG_MISSING_MOB_ROLE, "warning", "sample_row", row_id, "Mob role is missing in progression audit row.", {"stage": stage}))
-        if gear_rarity == "pending_pr9" or enhancement == "pending_pr9":
-            flags.append(build_balance_audit_flag(FLAG_MISSING_SIMULATION_GEAR_PRESET, "warning", "sample_row", row_id, "Simulation gear preset assumptions are pending PR9.", {"gear_rarity_assumption": gear_rarity, "enhancement_assumption": enhancement}))
+        gear_preset = row.get("simulation_gear_preset")
+        assumption_status = str(row.get("assumption_status") or "")
+        valid_status = assumption_status in {"formula_budget_v1", "formula_budget_v1_toolbox_fallback"}
+        has_valid_preset = False
+        if isinstance(gear_preset, dict):
+            total_budget = gear_preset.get("total_budget")
+            slot_budgets = gear_preset.get("slot_budgets")
+            stat_bonuses = gear_preset.get("stat_bonuses")
+            has_valid_preset = isinstance(total_budget, (int, float)) and total_budget > 0 and isinstance(slot_budgets, dict) and bool(slot_budgets) and isinstance(stat_bonuses, dict) and bool(stat_bonuses)
+        if not (valid_status and has_valid_preset):
+            flags.append(build_balance_audit_flag(FLAG_MISSING_SIMULATION_GEAR_PRESET, "warning", "sample_row", row_id, "Simulation gear preset assumptions are missing formula budget context.", {"gear_rarity_assumption": gear_rarity, "enhancement_assumption": enhancement, "assumption_status": assumption_status, "has_simulation_gear_preset": bool(gear_preset)}))
         if target in {"hard", "very_hard"} and str(mob_role or "").lower() == "normal" and stage in {"build_testing", "route_exam"}:
             flags.append(build_balance_audit_flag(FLAG_HARD_TARGET_TESTED_ON_WEAK_SAMPLE, "warning", "sample_row", row_id, "Hard target appears tested on a normal-role sample in a late stage.", {"stage": stage, "target_label": target}))
         if observed_diag == "policy_failure":

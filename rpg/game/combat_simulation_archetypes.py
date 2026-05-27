@@ -11,6 +11,7 @@ from game.combat_simulation import (
     make_simulation_skill_action,
 )
 from game.skills import get_skill
+from game.equipment_budget import build_simulation_gear_preset
 
 
 REQUIRED_ARCHETYPE_IDS = (
@@ -110,6 +111,25 @@ def _tier_base_stats(power_tier: str) -> dict:
     return base
 
 
+
+
+def _apply_simulation_equipment_bonuses(player: dict, gear_preset: dict) -> None:
+    bonuses = gear_preset.get("stat_bonuses", {})
+    player["simulation_gear_preset"] = gear_preset
+    player["equipment_stat_bonuses"] = dict(bonuses)
+    player["hp"] += int(bonuses.get("max_hp_bonus", 0))
+    player["max_hp"] += int(bonuses.get("max_hp_bonus", 0))
+    player["mana"] += int(bonuses.get("max_mana_bonus", 0))
+    player["max_mana"] += int(bonuses.get("max_mana_bonus", 0))
+    player["weapon_damage"] += int(bonuses.get("attack_bonus", 0))
+    player["equipment_physical_defense_bonus"] += int(bonuses.get("defense_bonus", 0))
+    player["equipment_magic_defense_bonus"] += int(bonuses.get("magic_defense_bonus", 0))
+    player["equipment_accuracy_bonus"] += int(bonuses.get("accuracy_bonus", 0))
+    player["equipment_evasion_bonus"] += int(bonuses.get("evasion_bonus", 0))
+    player["equipment_magic_power_bonus"] += int(bonuses.get("magic_power_bonus", 0))
+    player["equipment_healing_power_bonus"] += int(bonuses.get("healing_power_bonus", 0))
+    player["equipment_block_chance_bonus"] += int(bonuses.get("block_chance_bonus", 0))
+
 def build_archetype_player_preset(archetype_id: str, power_tier: str) -> dict:
     metadata = get_archetype_metadata(archetype_id)
     base = _tier_base_stats(power_tier)
@@ -157,6 +177,8 @@ def build_archetype_player_preset(archetype_id: str, power_tier: str) -> dict:
     elif archetype_id == "pure_support_solo_overlay":
         player.update(wisdom=base["primary_stat"] + 3, vitality=base["secondary_stat"] + 1, mana=base["mana"] + 26, max_mana=base["mana"] + 26, weapon_damage=base["weapon_damage"] - 5, hp=base["hp"] + 10, max_hp=base["hp"] + 10, equipment_magic_power_bonus=gear + 1, equipment_healing_power_bonus=gear + 9, equipment_physical_defense_bonus=max(0, gear - 1), encumbrance=ENCUMBRANCE_BY_LOADOUT["light"])
 
+    gear_preset = build_simulation_gear_preset(archetype_id, power_tier)
+    _apply_simulation_equipment_bonuses(player, gear_preset)
     return player
 
 

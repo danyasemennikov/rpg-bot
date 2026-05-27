@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR8: Progression-aware Simulation Audit
-- Status: progression-aware simulation audit diagnostics
-- Confirmed state below reflects current merged `main` after progression-aware simulation audit diagnostics
+- PR: PR9: Equipment Budget Foundation
+- Status: simulation equipment budget foundation
+- Confirmed state below reflects current merged `main` after simulation equipment budget foundation
 
 ---
 
@@ -159,6 +159,19 @@ Alpha readiness policy:
   - audit flags remain diagnostic-only;
   - gear budget, mob encounter scaling, pack/group simulation, route/mob/skill/reward/formula tuning, and live behavior changes are not included.
 
+
+
+### Equipment Budget Foundation (PR9)
+
+- equipment budget foundation is implemented for simulation/reporting;
+- item level budget formula exists for 1–100;
+- slot budget weights exist;
+- rarity multipliers exist;
+- enhancement multiplier curve exists for +0..+15;
+- archetype allocation profiles exist;
+- simulation gear presets produce real calculated stat bonuses;
+- report v2 exposes formula-budget gear assumptions;
+- live equipment runtime, loot/crafting, mob scaling, tuning, and gameplay behavior are not changed.
 
 ---
 
