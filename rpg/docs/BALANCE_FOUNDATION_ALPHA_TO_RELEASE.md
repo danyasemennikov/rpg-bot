@@ -1,0 +1,185 @@
+# Balance Foundation: Alpha to Release
+
+## A. Purpose and Scope
+This document defines the release-grade balance foundation for **level 1–100** progression.
+
+This is a **specification and audit foundation**, not a live tuning patch. It does **not** change live combat, mobs, rewards, skills, equipment runtime, formulas, travel, PvP, PvE runtime, or player-facing gameplay behavior.
+
+## B. Confirmed Release Cap
+- **Max release level: 100**.
+- Level 150 is future expansion-scale content and is **not** part of the current balance model.
+
+## C. Level Bands and Gear Tiers
+Release foundation uses 10-level gear tier bands:
+- **T1:** 1–10
+- **T2:** 11–20
+- **T3:** 21–30
+- **T4:** 31–40
+- **T5:** 41–50
+- **T6:** 51–60
+- **T7:** 61–70
+- **T8:** 71–80
+- **T9:** 81–90
+- **T10:** 91–100
+
+## D. Macro Progression Bands
+The model uses conservative macro progression bands:
+- **bootstrap:** 1–10
+- **frontier:** 11–20
+- **specialization:** 21–35
+- **structured midgame:** 36–55
+- **late midgame:** 56–75
+- **late game:** 76–90
+- **apex:** 91–100
+
+These are directional foundation bands for reporting and audit interpretation.
+
+## E. HP Scale Philosophy
+HP scale is directional and intentionally approximate (not final formulas):
+- Level 1 average player around **100 HP**.
+- Level 100 average DPS/caster roughly **tens of thousands HP**.
+- Level 100 bruiser/paladin should be materially higher than average DPS/caster.
+- Level 100 real tank with good gear can reach around **45k–60k+ HP**.
+
+Exact final HP formulas are deferred to later tuning and budget PRs.
+
+## F. Damage Scale Philosophy
+Damage must scale with HP so high-level combat does not degrade into long low-pressure 60-turn fights.
+
+Directional expected damage-per-turn behavior:
+- low-level baseline should preserve clarity and readable pacing;
+- midgame should show meaningful build divergence;
+- high-level expected DPT should keep equal-level fights in target TTK ranges;
+- burst windows and sustain windows should both matter;
+- directional targets are not final formulas.
+
+## G. TTK Targets
+Equal-level directional TTK targets:
+- old trivial mob: **1–2 turns**
+- normal mob: **3–6 turns**
+- pressure mob: **5–9 turns**
+- elite solo: **8–15 turns**
+- bad-matchup elite: **12–20 turns**
+- pack: depends on AoE/control/sustain
+- boss/group: separate future scale
+
+## H. Stat Scaling Philosophy
+- Levels **1–30**: stats are very noticeable.
+- Levels **31–70**: stats define build direction.
+- Levels **71–100**: stats still matter, but major power spikes increasingly come from gear quality, enhancement, rolls, item level, and build completion.
+- Soft caps are required for dodge, crit, mitigation, and offensive scaling so late-game balance does not collapse.
+
+## I. Equipment Power Model
+PR7 does not implement the release-grade equipment budget. PR7 records the requirements explicitly.
+
+Missing release-grade equipment budget components:
+- item level budget;
+- slot budget;
+- weapon budget;
+- armor budget;
+- offhand budget;
+- accessory budget;
+- rarity multipliers;
+- enhancement power curve;
+- secondary modifier pools;
+- expected gear by player level;
+- expected gear by content tier;
+- simulation gear presets.
+
+Additional equipment philosophy constraints:
+- gear tiers are 10-level bands;
+- good gear identity can live forward through tier advancement;
+- high-rarity items should be rare and expensive to carry forward;
+- level 100 baseline must not assume full legendary/full +15/unique gear.
+
+### What PR9 must define
+- [ ] item-level budget curve by level band (1–100)
+- [ ] per-slot budget allocations and slot weighting
+- [ ] weapon vs armor vs offhand vs accessory budget split
+- [ ] rarity multiplier ladder and rarity availability assumptions by tier
+- [ ] enhancement power curve targets and expected fail/risk economics
+- [ ] secondary modifier pool families and budget envelopes
+- [ ] expected player gear baselines by level and content tier
+- [ ] simulation gear presets aligned to baseline assumptions
+- [ ] policy for carry-forward identity without invalidating tier upgrades
+- [ ] level 100 baseline package that does not assume full best-in-slot perfection
+
+## J. Enhancement Risk/Reward Philosophy
+Enhancement phase 1 concept is retained as foundation direction:
+- low enhancement should be safe and modest;
+- high enhancement should be risky and meaningful;
+- high + levels should not be cosmetic only;
+- prefer smooth/geometric growth over sudden huge breakpoints.
+
+PR7 does not change enhancement formulas.
+
+## K. Mob Encounter-Level Scaling Philosophy
+Future model direction:
+
+final_mob_stats =
+base_template
+× encounter_level_curve
+× role_multiplier
+× route_pressure_modifier
+× elite/boss modifier
+
+Roles in scope direction:
+- normal
+- pressure
+- elite
+- pack_member
+- pack_leader
+- boss (later)
+
+The same mob template can appear at different depths when final stats scale by encounter level.
+
+## L. Simulation and Audit Requirements
+Future audit/report rows should include:
+- player level
+- expected player band
+- gear tier
+- rarity assumption
+- enhancement assumption
+- skill level
+- mob template
+- encounter level
+- mob role
+- node depth
+- final mob stats
+- expected difficulty
+- observed result
+- reason for mismatch
+
+Future diagnostic flags (planned catalog):
+- underleveled_mob_for_node
+- overleveled_player_for_sample
+- unscaled_template_reused_across_depths
+- hard_target_tested_on_weak_sample
+- overclean_win
+- policy_failure_guard_loop
+- support_overstall
+- missing_pack_sample
+- missing_elite_sample
+
+PR7 delivers only an initial skeleton flag surface, not the full report pipeline.
+
+## M. Release-grade Balance Arc
+Planned future work (not implemented in PR7):
+- **PR8:** Progression-aware Simulation Audit
+- **PR9:** Equipment Budget Foundation
+- **PR10:** Mob Encounter Scaling Foundation
+- **PR11:** Pack/Group Simulation Harness
+- **PR12:** First Real Tuning Pass
+
+These are planned next steps and are not confirmed as implemented in this PR.
+
+## N. Non-goals
+PR7 non-goals:
+- no one-shot rebalance;
+- no route/mob tuning;
+- no skill rebalance;
+- no Combat Core rewrite;
+- no live AFK/autopilot;
+- no targeting;
+- no teleport;
+- no pack/group harness in PR7.
