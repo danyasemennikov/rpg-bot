@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR6: Alpha simulation report v2 diagnostic fidelity
-- Status: alpha simulation/report diagnostic fidelity foundation
-- Confirmed state below reflects current merged `main` after alpha simulation report v2 diagnostic fidelity
+- PR: PR7: Balance Foundation Spec & Audit Skeleton
+- Status: release-grade balance foundation spec and audit skeleton
+- Confirmed state below reflects current merged `main` after balance foundation spec and audit skeleton
 
 ---
 
@@ -136,6 +136,21 @@ Alpha readiness policy:
   - report v2 distinguishes death, timeout, no-progress, resource/policy issues where inferable;
   - report v2 includes capped representative suspicious fight traces;
   - no route, mob, skill, reward, formula, pack/group matrix, or live AFK/autopilot changes are included.
+
+### Balance Foundation Spec & Audit Skeleton (PR7)
+
+- Balance Foundation Spec & Audit Skeleton is implemented:
+  - release cap 100 documented;
+  - T1–T10 gear/level bands documented;
+  - macro progression bands documented;
+  - HP/damage/TTK philosophy documented;
+  - stat scaling philosophy documented;
+  - equipment budget requirements documented;
+  - enhancement risk/reward philosophy documented;
+  - mob encounter-level scaling philosophy documented;
+  - initial diagnostic audit skeleton exists;
+  - no route/mob/skill/reward/formula tuning or live behavior changes included.
+
 
 ---
 
