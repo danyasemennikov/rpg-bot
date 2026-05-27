@@ -13,6 +13,7 @@ from game.combat_simulation_report import (
     _select_route_balanced_suspicious_preview,
     _enrich_run,
     _label_diagnostic_v2,
+    _select_representative_suspicious_traces,
     render_alpha_balance_report_markdown,
     render_alpha_simulation_report_v2_markdown,
 )
@@ -204,3 +205,25 @@ def test_checked_in_report_mentions_policy_failure_when_guard_fallback_traces_pr
     content = path.read_text(encoding="utf-8")
     if "guard_fallback" in content:
         assert "policy_failure" in content
+
+
+def test_representative_trace_selection_is_route_first():
+    rows = [
+        {"route_id": "route_a", "observed_diagnostic_label_v2": "policy_failure", "stage": "s1", "archetype_id": "a1", "location_id": "l1", "mob_id": "m1"},
+        {"route_id": "route_a", "observed_diagnostic_label_v2": "death_blocked", "stage": "s1", "archetype_id": "a1", "location_id": "l2", "mob_id": "m2"},
+        {"route_id": "route_a", "observed_diagnostic_label_v2": "timeout_stall", "stage": "s1", "archetype_id": "a1", "location_id": "l3", "mob_id": "m3"},
+        {"route_id": "route_b", "observed_diagnostic_label_v2": "policy_failure", "stage": "s1", "archetype_id": "a1", "location_id": "l1", "mob_id": "m1"},
+        {"route_id": "route_b", "observed_diagnostic_label_v2": "death_blocked", "stage": "s1", "archetype_id": "a1", "location_id": "l2", "mob_id": "m2"},
+        {"route_id": "route_b", "observed_diagnostic_label_v2": "timeout_stall", "stage": "s1", "archetype_id": "a1", "location_id": "l3", "mob_id": "m3"},
+        {"route_id": "route_c", "observed_diagnostic_label_v2": "policy_failure", "stage": "s1", "archetype_id": "a1", "location_id": "l1", "mob_id": "m1"},
+        {"route_id": "route_d", "observed_diagnostic_label_v2": "policy_failure", "stage": "s1", "archetype_id": "a1", "location_id": "l1", "mob_id": "m1"},
+        {"route_id": "route_e", "observed_diagnostic_label_v2": "policy_failure", "stage": "s1", "archetype_id": "a1", "location_id": "l1", "mob_id": "m1"},
+    ]
+    limit = 6
+    selected_a = _select_representative_suspicious_traces(rows, limit)
+    selected_b = _select_representative_suspicious_traces(rows, limit)
+    assert len(selected_a) <= limit
+    assert selected_a == selected_b
+    routes = {r["route_id"] for r in selected_a}
+    assert {"route_a", "route_b", "route_c", "route_d", "route_e"}.issubset(routes)
+

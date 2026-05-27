@@ -177,27 +177,81 @@ def _select_route_balanced_suspicious_preview(rows: list[dict[str, Any]], limit:
 
 
 def _select_representative_suspicious_traces(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
-    if len(rows) <= limit:
-        return sorted(rows, key=lambda r: (r.get("route_id", ""), r.get("observed_diagnostic_label_v2", ""), r.get("stage", ""), r.get("archetype_id", "")))
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for row in sorted(rows, key=lambda r: (r.get("route_id", ""), r.get("observed_diagnostic_label_v2", ""), r.get("stage", ""), r.get("archetype_id", ""))):
-        grouped[(str(row.get("route_id", "")), str(row.get("observed_diagnostic_label_v2", "")))].append(row)
-    buckets = sorted(grouped.keys())
-    idx = {b: 0 for b in buckets}
-    out: list[dict[str, Any]] = []
-    while len(out) < limit:
+    """Route-first deterministic representative trace selection.
+
+    Priority:
+    1) route coverage (one per route where possible)
+    2) then per-route label diversification in round-robin passes
+    """
+    if limit <= 0 or not rows:
+        return []
+
+    def _sort_key(row: dict[str, Any]) -> tuple[str, str, str, str, str]:
+        return (
+            str(row.get("observed_diagnostic_label_v2", "")),
+            str(row.get("stage", "")),
+            str(row.get("archetype_id", "")),
+            str(row.get("location_id", "")),
+            str(row.get("mob_id", "")),
+        )
+
+    route_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        route_groups[str(row.get("route_id", ""))].append(row)
+
+    route_ids = sorted(route_groups.keys())
+    route_label_buckets: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    route_label_order: dict[str, list[str]] = {}
+
+    for route_id in route_ids:
+        label_buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in sorted(route_groups[route_id], key=_sort_key):
+            label = str(row.get("observed_diagnostic_label_v2", ""))
+            label_buckets[label].append(row)
+        route_label_buckets[route_id] = dict(label_buckets)
+        route_label_order[route_id] = sorted(label_buckets.keys())
+
+    selections: list[dict[str, Any]] = []
+
+    # Pass 1: route coverage first
+    for route_id in route_ids:
+        labels = route_label_order[route_id]
+        if not labels:
+            continue
+        first_label = labels[0]
+        bucket = route_label_buckets[route_id][first_label]
+        if bucket:
+            selections.append(bucket.pop(0))
+            if len(selections) >= limit:
+                return selections
+
+    # Pass 2+: route round-robin; rotate labels per route for diversification
+    route_label_cursor = {route_id: 0 for route_id in route_ids}
+    while len(selections) < limit:
         progressed = False
-        for b in buckets:
-            i = idx[b]
-            if i < len(grouped[b]):
-                out.append(grouped[b][i])
-                idx[b] += 1
-                progressed = True
-                if len(out) >= limit:
+        for route_id in route_ids:
+            labels = route_label_order[route_id]
+            if not labels:
+                continue
+            start = route_label_cursor[route_id]
+            picked = False
+            for offset in range(len(labels)):
+                label = labels[(start + offset) % len(labels)]
+                bucket = route_label_buckets[route_id][label]
+                if bucket:
+                    selections.append(bucket.pop(0))
+                    route_label_cursor[route_id] = (start + offset + 1) % len(labels)
+                    progressed = True
+                    picked = True
                     break
+            if len(selections) >= limit:
+                break
+            if not picked:
+                continue
         if not progressed:
             break
-    return out
+
+    return selections
 
 def _guard_like_action_count(actions: dict[str, Any]) -> int:
     guard_like_keys = {"guard", "guard_fallback", "fallback_guard"}
