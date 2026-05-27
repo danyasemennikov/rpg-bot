@@ -6,6 +6,8 @@ from game.balance_foundation import (
     BALANCE_MACRO_BANDS,
     MAX_RELEASE_LEVEL,
     TTK_TARGET_BANDS,
+    build_simulation_stage_progression_context,
+    resolve_simulation_stage_player_level,
     resolve_gear_tier_for_level,
     resolve_macro_band_for_level,
 )
@@ -74,16 +76,43 @@ def test_balance_foundation_doc_exists_and_contains_required_tokens():
         assert token in text
 
 
-def test_project_state_current_pr7_header_and_no_future_prs_marked_implemented():
+def test_simulation_stage_player_level_assumptions():
+    assert resolve_simulation_stage_player_level("soft_entry") == 10
+    assert resolve_simulation_stage_player_level("identity_visible") == 35
+    assert resolve_simulation_stage_player_level("build_testing") == 70
+    assert resolve_simulation_stage_player_level("route_exam") == 95
+    assert resolve_simulation_stage_player_level("unknown_stage") is None
+
+
+def test_simulation_stage_progression_context_route_exam():
+    ctx = build_simulation_stage_progression_context("route_exam")
+    assert ctx["assumed_player_level"] == 95
+    assert ctx["macro_band"] == "apex"
+    assert ctx["gear_tier"] == "T10"
+    assert ctx["gear_rarity_assumption"] == "pending_pr9"
+    assert ctx["enhancement_assumption"] == "pending_pr9"
+
+
+def test_project_state_current_pr8_header_and_future_prs_not_implemented():
     doc = Path(__file__).resolve().parents[1] / "docs" / "PROJECT_STATE_CURRENT.md"
     text = doc.read_text(encoding="utf-8")
 
-    assert "PR7: Balance Foundation Spec & Audit Skeleton" in text
-    assert "Balance Foundation Spec & Audit Skeleton is implemented" in text
+    pr7_heading = "### Balance Foundation Spec & Audit Skeleton (PR7)"
+    pr8_heading = "### Progression-aware Simulation Audit (PR8)"
+    pr7_detail = "- Balance Foundation Spec & Audit Skeleton is implemented:"
+    pr8_detail = "- Progression-aware simulation audit diagnostics are implemented:"
+
+    assert pr7_heading in text
+    assert pr8_heading in text
+    assert pr7_detail in text
+    assert pr8_detail in text
+
+    assert text.index(pr7_heading) < text.index(pr8_heading)
+    assert text.index(pr7_detail) < text.index(pr8_heading)
+    assert text.index(pr8_detail) > text.index(pr8_heading)
 
     lower = text.lower()
-    assert "pr8" not in lower
-    assert "pr9" not in lower
-    assert "pr10" not in lower
-    assert "pr11" not in lower
-    assert "pr12" not in lower
+    assert "pr9 is implemented" not in lower
+    assert "pr10 is implemented" not in lower
+    assert "pr11 is implemented" not in lower
+    assert "pr12 is implemented" not in lower

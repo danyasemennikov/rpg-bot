@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR7: Balance Foundation Spec & Audit Skeleton
-- Status: release-grade balance foundation spec and audit skeleton
-- Confirmed state below reflects current merged `main` after balance foundation spec and audit skeleton
+- PR: PR8: Progression-aware Simulation Audit
+- Status: progression-aware simulation audit diagnostics
+- Confirmed state below reflects current merged `main` after progression-aware simulation audit diagnostics
 
 ---
 
@@ -150,6 +150,14 @@ Alpha readiness policy:
   - mob encounter-level scaling philosophy documented;
   - initial diagnostic audit skeleton exists;
   - no route/mob/skill/reward/formula tuning or live behavior changes included.
+
+### Progression-aware Simulation Audit (PR8)
+
+- Progression-aware simulation audit diagnostics are implemented:
+  - simulation report data exposes progression-aware audit rows;
+  - report exposes assumed player level, macro band, gear tier, pending gear assumptions, mob/node context, target/observed labels, and audit flags where available;
+  - audit flags remain diagnostic-only;
+  - gear budget, mob encounter scaling, pack/group simulation, route/mob/skill/reward/formula tuning, and live behavior changes are not included.
 
 
 ---

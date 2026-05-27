@@ -144,6 +144,38 @@ Showing 40 route-balanced suspicious preview rows out of 120 suspicious candidat
 ## Suspicious Clusters
 Suspicious rows: 120.
 
+## Progression Audit Preview
+This section is diagnostic-only and not a tuning verdict.
+Flag counts:
+- missing_encounter_level: 280
+- missing_mob_role: 280
+- missing_simulation_gear_preset: 280
+- overclean_win: 80
+- policy_failure_guard_loop: 40
+| route | stage | archetype | assumed_player_level | gear_tier | mob | node_depth | encounter_level | mob_role | target | observed_diagnostic_label_v2 | audit flags |
+|---|---|---|---:|---|---|---:|---|---|---|---|---|
+| route_westwild | soft_entry | guardian_shield_1h | 10 | T1 | crow | 1 | None | None | normal | policy_failure | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset, policy_failure_guard_loop |
+| route_westwild | soft_entry | sword_2h_burst | 10 | T1 | crow | 1 | None | None | normal | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | axe_2h_bruiser | 10 | T1 | crow | 1 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | daggers_venom | 10 | T1 | crow | 1 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | daggers_evasion | 10 | T1 | crow | 1 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | bow_sniper | 10 | T1 | crow | 1 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | bow_ranger | 10 | T1 | crow | 1 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | magic_staff_destruction | 10 | T1 | crow | 1 | None | None | normal | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | magic_staff_control | 10 | T1 | crow | 1 | None | None | normal | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | wand_tempo | 10 | T1 | crow | 1 | None | None | normal | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | holy_staff_solo | 10 | T1 | crow | 1 | None | None | hard | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset, overclean_win |
+| route_westwild | soft_entry | holy_rod_paladin | 10 | T1 | crow | 1 | None | None | normal | policy_failure | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset, policy_failure_guard_loop |
+| route_westwild | soft_entry | tome_toolbox | 10 | T1 | crow | 1 | None | None | normal | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | soft_entry | pure_support_solo_overlay | 10 | T1 | crow | 1 | None | None | hard | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset, overclean_win |
+| route_westwild | identity_visible | guardian_shield_1h | 35 | T4 | forest_boar | 3 | None | None | normal | policy_failure | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset, policy_failure_guard_loop |
+| route_westwild | identity_visible | sword_2h_burst | 35 | T4 | forest_boar | 3 | None | None | normal | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | identity_visible | axe_2h_bruiser | 35 | T4 | forest_boar | 3 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | identity_visible | daggers_venom | 35 | T4 | forest_boar | 3 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | identity_visible | daggers_evasion | 35 | T4 | forest_boar | 3 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+| route_westwild | identity_visible | bow_sniper | 35 | T4 | forest_boar | 3 | None | None | strong | strong_clean | missing_encounter_level, missing_mob_role, missing_simulation_gear_preset |
+Showing first 20 of 280 progression audit rows. Hidden rows are not resolved or dismissed.
+
 ## Representative Suspicious Fight Traces
 Showing up to 10 route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.
 | route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |

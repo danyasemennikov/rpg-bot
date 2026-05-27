@@ -17,6 +17,13 @@ FLAG_MISSING_PRESSURE_SAMPLE = "missing_pressure_sample"
 FLAG_MISSING_ELITE_SAMPLE = "missing_elite_sample"
 FLAG_MISSING_PACK_SAMPLE = "missing_pack_sample"
 FLAG_INVALID_NODE_DEPTH = "invalid_node_depth"
+FLAG_UNDERLEVELED_MOB_FOR_NODE = "underleveled_mob_for_node"
+FLAG_OVERLEVELED_PLAYER_FOR_SAMPLE = "overleveled_player_for_sample"
+FLAG_HARD_TARGET_TESTED_ON_WEAK_SAMPLE = "hard_target_tested_on_weak_sample"
+FLAG_OVERCLEAN_WIN = "overclean_win"
+FLAG_POLICY_FAILURE_GUARD_LOOP = "policy_failure_guard_loop"
+FLAG_SUPPORT_OVERSTALL = "support_overstall"
+FLAG_MISSING_SIMULATION_GEAR_PRESET = "missing_simulation_gear_preset"
 
 PRESSURE_OR_HIGH_ROLES = {"pressure", "elite", "pack_member", "pack_leader", "boss"}
 
@@ -195,4 +202,86 @@ def audit_repeated_template_depth_scaling(rows: list[dict[str, Any]]) -> list[Ba
                     )
                 )
 
+    return flags
+
+
+def summarize_balance_audit_flags(flags: list[BalanceAuditFlag]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for flag in flags:
+        counts[flag.flag_id] = counts.get(flag.flag_id, 0) + 1
+    return counts
+
+
+def _safe_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _safe_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def audit_progression_context_rows(rows: list[dict[str, Any]]) -> list[BalanceAuditFlag]:
+    flags: list[BalanceAuditFlag] = []
+    for idx, row in enumerate(rows):
+        row_id = str(row.get("sample_id") or row.get("id") or f"progression_row_{idx}")
+        stage = str(row.get("stage") or "")
+        player_level = row.get("assumed_player_level", row.get("player_level"))
+        encounter_level = row.get("encounter_level")
+        mob_role = row.get("mob_role")
+        gear_rarity = str(row.get("gear_rarity_assumption") or "")
+        enhancement = str(row.get("enhancement_assumption") or "")
+        target = str(row.get("target_label") or row.get("normalized_target_label") or "").lower()
+        observed_diag = str(row.get("observed_diagnostic_label_v2") or "").lower()
+        actions_used = row.get("actions_used")
+        winner = str(row.get("winner") or "").lower()
+        turns = row.get("turns")
+        damage_dealt = row.get("damage_dealt")
+        archetype_id = str(row.get("archetype_id") or "").lower()
+        clean_win = bool(row.get("clean_win"))
+        if player_level in (None, ""):
+            flags.append(build_balance_audit_flag(FLAG_MISSING_BALANCE_LEVEL, "warning", "sample_row", row_id, "Player level is missing in progression audit row.", {"stage": stage}))
+        if encounter_level in (None, ""):
+            flags.append(build_balance_audit_flag(FLAG_MISSING_ENCOUNTER_LEVEL, "warning", "sample_row", row_id, "Encounter level is missing in progression audit row.", {"stage": stage}))
+        if mob_role in (None, ""):
+            flags.append(build_balance_audit_flag(FLAG_MISSING_MOB_ROLE, "warning", "sample_row", row_id, "Mob role is missing in progression audit row.", {"stage": stage}))
+        if gear_rarity == "pending_pr9" or enhancement == "pending_pr9":
+            flags.append(build_balance_audit_flag(FLAG_MISSING_SIMULATION_GEAR_PRESET, "warning", "sample_row", row_id, "Simulation gear preset assumptions are pending PR9.", {"gear_rarity_assumption": gear_rarity, "enhancement_assumption": enhancement}))
+        if target in {"hard", "very_hard"} and str(mob_role or "").lower() == "normal" and stage in {"build_testing", "route_exam"}:
+            flags.append(build_balance_audit_flag(FLAG_HARD_TARGET_TESTED_ON_WEAK_SAMPLE, "warning", "sample_row", row_id, "Hard target appears tested on a normal-role sample in a late stage.", {"stage": stage, "target_label": target}))
+        if observed_diag == "policy_failure":
+            guard_loop = False
+            if isinstance(actions_used, dict):
+                guard_loop = _safe_int(actions_used.get("guard_fallback", 0)) > 0 or _safe_int(actions_used.get("guard", 0)) > 0
+            if not guard_loop:
+                guard_rate = _safe_float(row.get("guard_action_rate"))
+                guard_loop = bool(guard_rate is not None and guard_rate >= 0.65)
+            if guard_loop:
+                flags.append(build_balance_audit_flag(FLAG_POLICY_FAILURE_GUARD_LOOP, "warning", "sample_row", row_id, "Policy failure row appears guard-loop driven.", {"actions_used": actions_used}))
+        if target in {"hard", "very_hard"} and winner == "player" and clean_win:
+            flags.append(build_balance_audit_flag(FLAG_OVERCLEAN_WIN, "warning", "sample_row", row_id, "Win appears unusually clean against high target difficulty.", {"target_label": target}))
+        if "support" in archetype_id and winner == "player":
+            low_damage = isinstance(damage_dealt, (int, float)) and damage_dealt <= 25
+            long_fight = isinstance(turns, int) and turns >= 35
+            if low_damage and long_fight and clean_win:
+                flags.append(build_balance_audit_flag(FLAG_SUPPORT_OVERSTALL, "warning", "sample_row", row_id, "Support archetype shows a conservative over-stall clean win pattern.", {"turns": turns, "damage_dealt": damage_dealt}))
     return flags

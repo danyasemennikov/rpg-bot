@@ -162,16 +162,27 @@ Future diagnostic flags (planned catalog):
 - missing_elite_sample
 
 PR7 delivers only an initial skeleton flag surface, not the full report pipeline.
+PR8 note (implemented diagnostic layer only):
+- PR8 introduces progression-aware audit context in simulation reports.
+- PR8 does not implement equipment budgets or encounter-level scaling.
+- Gear rarity/enhancement assumptions remain pending PR9.
+- Encounter-level scaling remains pending PR10.
+
 
 ## M. Release-grade Balance Arc
-Planned future work (not implemented in PR7):
+Implemented diagnostic steps:
 - **PR8:** Progression-aware Simulation Audit
+
+Planned future work:
 - **PR9:** Equipment Budget Foundation
 - **PR10:** Mob Encounter Scaling Foundation
 - **PR11:** Pack/Group Simulation Harness
 - **PR12:** First Real Tuning Pass
 
-These are planned next steps and are not confirmed as implemented in this PR.
+PR8 does not implement PR9/PR10/PR11/PR12:
+- equipment budget remains pending PR9;
+- mob encounter scaling remains pending PR10;
+- pack/group simulation remains pending PR11.
 
 ## N. Non-goals
 PR7 non-goals:

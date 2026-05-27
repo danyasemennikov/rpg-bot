@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from game.balance_audit import audit_progression_context_rows, summarize_balance_audit_flags
+from game.balance_foundation import build_simulation_stage_progression_context
 from game.combat_simulation_archetypes import (
     EXECUTABLE_POLICY_REGISTRY,
     build_archetype_player_preset,
@@ -42,6 +44,7 @@ SUSPICIOUS_TABLE_LIMIT = 40
 SCENARIO_PREVIEW_LIMIT = 16
 ARCHETYPE_CARD_PREVIEW_LIMIT = 24
 TRACE_LIMIT = 10
+PROGRESSION_AUDIT_PREVIEW_LIMIT = 20
 
 
 def build_smoke_alpha_balance_report_config() -> RouteStageMatrixConfig:
@@ -360,6 +363,70 @@ def _build_archetype_cards(archetype_ids: list[str], stages: list[str]) -> list[
     return cards
 
 
+def _parse_node_depth_from_location_id(location_id: str) -> int | None:
+    suffix = str(location_id or "").lower().split("_n", 1)
+    if len(suffix) != 2:
+        return None
+    digits = ""
+    for ch in suffix[1]:
+        if ch.isdigit():
+            digits += ch
+        else:
+            break
+    return int(digits) if digits else None
+
+
+def _build_progression_audit_rows(enriched_runs: list[dict[str, Any]], summaries: list[dict[str, Any]], target_comparisons: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summary_map = {(s["route_id"], s["stage"], s["archetype_id"]): s for s in summaries}
+    target_map = {(t["route_id"], t["stage"], t["archetype_id"]): t for t in target_comparisons}
+    rows = []
+    for run in enriched_runs:
+        stage_context = build_simulation_stage_progression_context(str(run.get("stage") or ""))
+        key = (run.get("route_id"), run.get("stage"), run.get("archetype_id"))
+        summary = summary_map.get(key, {})
+        target = target_map.get(key, {})
+        mob = MOBS.get(str(run.get("mob_id") or ""), {})
+        rows.append({
+            "route_id": run.get("route_id"),
+            "stage": run.get("stage"),
+            "archetype_id": run.get("archetype_id"),
+            "location_id": run.get("location_id"),
+            "mob_id": run.get("mob_id"),
+            "mob_template": run.get("mob_id"),
+            "node_depth": _parse_node_depth_from_location_id(str(run.get("location_id") or "")),
+            "assumed_player_level": stage_context.get("assumed_player_level"),
+            "player_level": stage_context.get("assumed_player_level"),
+            "player_macro_band": stage_context.get("macro_band"),
+            "gear_tier": stage_context.get("gear_tier"),
+            "gear_rarity_assumption": stage_context.get("gear_rarity_assumption"),
+            "enhancement_assumption": stage_context.get("enhancement_assumption"),
+            "skill_level_summary": build_archetype_simulation_skill_levels(str(run.get("archetype_id") or ""), str(run.get("stage") or "")),
+            "encounter_level": run.get("encounter_level"),
+            "mob_role": run.get("mob_role"),
+            "spawn_profile": run.get("spawn_profile"),
+            "final_mob_stats": {k: mob[k] for k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense") if k in mob},
+            "target_label": target.get("normalized_target_label") or target.get("target_label"),
+            "observed_label": target.get("observed_label"),
+            "observed_diagnostic_label_v2": summary.get("observed_diagnostic_label_v2"),
+            "winner": run.get("winner"),
+            "end_reason": run.get("end_reason"),
+            "turns": run.get("turns"),
+            "actions_used": dict(run.get("actions_used", {})),
+            "damage_dealt": run.get("damage_dealt"),
+            "clean_win": run.get("clean_win"),
+            "audit_flag_ids": [],
+        })
+    flags = audit_progression_context_rows(rows)
+    row_flags: dict[str, list[str]] = defaultdict(list)
+    for flag in flags:
+        row_flags[flag.subject_id].append(flag.flag_id)
+    for idx, row in enumerate(rows):
+        row_id = f"progression_row_{idx}"
+        row["id"] = row_id
+        row["audit_flag_ids"] = row_flags.get(row_id, [])
+    return rows
+
+
 def build_alpha_balance_report_data(matrix_result: dict | None = None, config: RouteStageMatrixConfig | None = None) -> dict:
     matrix = matrix_result if matrix_result is not None else run_route_stage_simulation_matrix(config)
     enriched_runs = [_enrich_run(run) for run in matrix.get("runs", [])]
@@ -450,6 +517,8 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
             suspicious_traces.append({**run, "observed_diagnostic_label_v2": label})
     suspicious_traces = _select_representative_suspicious_traces(suspicious_traces, TRACE_LIMIT)
 
+    progression_audit_rows = _build_progression_audit_rows(enriched_runs, summaries, target_comparisons)
+    progression_audit_flags = audit_progression_context_rows(progression_audit_rows)
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -468,6 +537,9 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "archetype_cards": archetype_cards,
         "suspicious_traces": suspicious_traces,
         "runs": enriched_runs,
+        "progression_audit_rows": progression_audit_rows,
+        "progression_audit_flags": progression_audit_flags,
+        "progression_audit_flag_counts": summarize_balance_audit_flags(progression_audit_flags),
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -558,6 +630,21 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         lines.append(f"| {row['route_id']} | {row['stage']} | {row['archetype_id']} | {row.get('target_label') or 'n/a'} | {row.get('observed_label')} | {row.get('observed_diagnostic_label_v2')} | {', '.join(row.get('reasons', []))} |")
 
     lines += ["", "## Suspicious Clusters", f"Suspicious rows: {len(suspicious_rows)}."]
+    progression_rows = list(report_data.get("progression_audit_rows", []))
+    progression_counts = dict(report_data.get("progression_audit_flag_counts", {}))
+    lines += ["", "## Progression Audit Preview", "This section is diagnostic-only and not a tuning verdict."]
+    if progression_counts:
+        lines.append("Flag counts:")
+        for flag_id in sorted(progression_counts.keys()):
+            lines.append(f"- {flag_id}: {progression_counts[flag_id]}")
+    else:
+        lines.append("No progression audit flags were emitted.")
+    lines += ["| route | stage | archetype | assumed_player_level | gear_tier | mob | node_depth | encounter_level | mob_role | target | observed_diagnostic_label_v2 | audit flags |", "|---|---|---|---:|---|---|---:|---|---|---|---|---|"]
+    preview = progression_rows[:PROGRESSION_AUDIT_PREVIEW_LIMIT]
+    for row in preview:
+        lines.append(f"| {row.get('route_id')} | {row.get('stage')} | {row.get('archetype_id')} | {row.get('assumed_player_level')} | {row.get('gear_tier')} | {row.get('mob_id')} | {row.get('node_depth')} | {row.get('encounter_level')} | {row.get('mob_role')} | {row.get('target_label')} | {row.get('observed_diagnostic_label_v2')} | {', '.join(row.get('audit_flag_ids', []))} |")
+    if len(progression_rows) > PROGRESSION_AUDIT_PREVIEW_LIMIT:
+        lines.append(f"Showing first {PROGRESSION_AUDIT_PREVIEW_LIMIT} of {len(progression_rows)} progression audit rows. Hidden rows are not resolved or dismissed.")
 
     lines += ["", "## Representative Suspicious Fight Traces"]
     traces = report_data.get("suspicious_traces", [])
