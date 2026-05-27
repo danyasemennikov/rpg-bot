@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR9: Equipment Budget Foundation
-- Status: simulation equipment budget foundation
-- Confirmed state below reflects current merged `main` after simulation equipment budget foundation
+- PR: PR10: Mob Encounter Scaling Foundation
+- Status: simulation mob encounter scaling foundation
+- Confirmed state below reflects current merged `main` after simulation mob encounter scaling foundation
 
 ---
 
@@ -172,6 +172,15 @@ Alpha readiness policy:
 - simulation gear presets produce real calculated stat bonuses;
 - report v2 exposes formula-budget gear assumptions;
 - live equipment runtime, loot/crafting, mob scaling, tuning, and gameplay behavior are not changed.
+
+### Mob Encounter Scaling Foundation (PR10)
+
+- formula-based mob encounter scaling is implemented for simulation/reporting;
+- encounter levels are assigned to route-stage simulation samples;
+- mob roles are assigned for simulation/reporting;
+- scaled final mob stats are produced from base template, encounter level, role, and route pressure modifiers;
+- report v2 exposes scaled mob context;
+- live mob templates/gameplay, rewards, loot/crafting, pack/group simulation, and tuning are not changed.
 
 ---
 

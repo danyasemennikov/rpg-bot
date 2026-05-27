@@ -6,6 +6,8 @@ from game.balance_audit import (
     FLAG_INVALID_NODE_DEPTH,
     FLAG_MISSING_MOB_ROLE,
     FLAG_MISSING_SIMULATION_GEAR_PRESET,
+    FLAG_MISSING_MOB_SCALING_CONTEXT,
+    FLAG_MISSING_FINAL_MOB_STATS,
     FLAG_POLICY_FAILURE_GUARD_LOOP,
     FLAG_UNSCALED_TEMPLATE_REUSED_ACROSS_DEPTHS,
     FLAG_WEAK_ROUTE_EXAM_SAMPLE,
@@ -253,3 +255,18 @@ def test_audit_progression_context_rows_formula_status_valid_preset_not_flagged(
     rows = [{"id": "r4", "stage": "route_exam", "assumed_player_level": 95, "encounter_level": 95, "mob_role": "normal", "gear_rarity_assumption": "rare", "enhancement_assumption": 8, "assumption_status": "formula_budget_v1", "simulation_gear_preset": {"total_budget": 10, "slot_budgets": {"weapon": 3}, "stat_bonuses": {"attack_bonus": 1}}}]
     flags = audit_progression_context_rows(rows)
     assert all(f.flag_id != FLAG_MISSING_SIMULATION_GEAR_PRESET for f in flags)
+
+
+def test_audit_progression_rows_missing_scaling_context_flagged():
+    rows = [{"id": "r_scale_missing", "stage": "route_exam", "assumed_player_level": 95, "encounter_level": 95, "mob_role": "normal", "final_mob_stats": {}}]
+    flags = audit_progression_context_rows(rows)
+    ids = {f.flag_id for f in flags}
+    assert FLAG_MISSING_MOB_SCALING_CONTEXT in ids or FLAG_MISSING_FINAL_MOB_STATS in ids
+
+
+def test_audit_progression_rows_valid_scaling_context_not_flagged():
+    rows = [{"id": "r_scale_ok", "stage": "route_exam", "assumed_player_level": 95, "encounter_level": 95, "mob_role": "normal", "scaling_status": "formula_mob_scaling_v1", "final_mob_stats": {"hp": 999, "damage": 100}}]
+    flags = audit_progression_context_rows(rows)
+    ids = {f.flag_id for f in flags}
+    assert FLAG_MISSING_MOB_SCALING_CONTEXT not in ids
+    assert FLAG_MISSING_FINAL_MOB_STATS not in ids

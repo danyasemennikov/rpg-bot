@@ -277,3 +277,36 @@ def test_valid_formula_budget_rows_not_all_flagged_missing_preset():
     valid_rows = [r for r in report["progression_audit_rows"] if r.get("assumption_status") == "formula_budget_v1"]
     assert valid_rows
     assert any("missing_simulation_gear_preset" not in r.get("audit_flag_ids", []) for r in valid_rows)
+
+
+def test_progression_rows_include_mob_scaling_context_and_stats():
+    report = build_default_alpha_simulation_report_v2_data()
+    rows = report["progression_audit_rows"]
+    assert rows
+    assert all(r.get("encounter_level") is not None for r in rows)
+    assert all(r.get("mob_role") for r in rows)
+    assert all(r.get("scaling_status") == "formula_mob_scaling_v1" for r in rows)
+    exam_normals = [r for r in rows if r.get("stage") == "route_exam" and r.get("mob_role") == "normal"]
+    assert exam_normals
+    assert any((r.get("final_mob_stats", {}).get("hp", 0) > r.get("base_mob_stats", {}).get("hp", 0)) for r in exam_normals)
+
+
+def test_progression_flag_counts_no_global_missing_encounter_or_mob_role():
+    report = build_default_alpha_simulation_report_v2_data()
+    counts = report.get("progression_audit_flag_counts", {})
+    assert counts.get("missing_encounter_level", 0) == 0
+    assert counts.get("missing_mob_role", 0) == 0
+
+
+def test_v2_markdown_contains_scaled_mob_context():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "formula_mob_scaling_v1" in md
+    assert "| route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | role | encounter | scaled_hp | scaled_damage | target | observed_v2 | audit flags |" in md
+
+
+def test_v2_markdown_has_no_known_broken_separator_strings():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "| route | stage | archetype | target | observed_v1 | observed_diagnostic_label_v2 | reasons |\n|---|---|---|---|---|---:|---|---|---|---|" not in md
+    assert "| route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |\n|---|---|---|---|---|---:|---|---|---|---|---:|---|---|" not in md

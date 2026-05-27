@@ -94,28 +94,36 @@ def test_simulation_stage_progression_context_route_exam():
     assert ctx["assumption_status"] is None
 
 
-def test_project_state_current_pr9_header_and_future_prs_not_implemented():
+def test_project_state_current_pr10_header_and_future_prs_not_implemented():
     doc = Path(__file__).resolve().parents[1] / "docs" / "PROJECT_STATE_CURRENT.md"
     text = doc.read_text(encoding="utf-8")
 
     pr7_heading = "### Balance Foundation Spec & Audit Skeleton (PR7)"
     pr8_heading = "### Progression-aware Simulation Audit (PR8)"
     pr9_heading = "### Equipment Budget Foundation (PR9)"
+    pr10_heading = "### Mob Encounter Scaling Foundation (PR10)"
     pr7_detail = "- Balance Foundation Spec & Audit Skeleton is implemented:"
     pr8_detail = "- Progression-aware simulation audit diagnostics are implemented:"
+    pr9_detail = "- equipment budget foundation is implemented for simulation/reporting;"
+    pr10_detail = "- formula-based mob encounter scaling is implemented for simulation/reporting;"
 
     assert pr7_heading in text
     assert pr8_heading in text
     assert pr7_detail in text
     assert pr8_detail in text
     assert pr9_heading in text
+    assert pr10_heading in text
 
     assert text.index(pr7_heading) < text.index(pr8_heading)
     assert text.index(pr7_detail) < text.index(pr8_heading)
     assert text.index(pr8_detail) > text.index(pr8_heading)
+    assert text.index(pr9_heading) < text.index(pr10_heading)
+    assert text.index(pr9_detail) > text.index(pr9_heading)
+    assert text.index(pr9_detail) < text.index(pr10_heading)
+    assert text.index(pr10_detail) > text.index(pr10_heading)
 
     lower = text.lower()
     assert "equipment budget foundation (pr9)" in lower
-    assert "pr10 is implemented" not in lower
+    assert "mob encounter scaling foundation (pr10)" in lower
     assert "pr11 is implemented" not in lower
     assert "pr12 is implemented" not in lower
