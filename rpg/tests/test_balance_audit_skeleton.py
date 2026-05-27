@@ -3,6 +3,7 @@ from copy import deepcopy
 from game.balance_audit import (
     BalanceAuditFlag,
     FLAG_MISSING_ENCOUNTER_LEVEL,
+    FLAG_INVALID_NODE_DEPTH,
     FLAG_MISSING_MOB_ROLE,
     FLAG_UNSCALED_TEMPLATE_REUSED_ACROSS_DEPTHS,
     FLAG_WEAK_ROUTE_EXAM_SAMPLE,
@@ -89,3 +90,73 @@ def test_audit_functions_do_not_mutate_input_rows():
     audit_repeated_template_depth_scaling(rows)
 
     assert rows == rows_before
+
+
+def test_non_numeric_node_depth_does_not_raise():
+    rows = [
+        {
+            "sample_id": "bad_depth",
+            "mob_template": "forest_boar",
+            "node_depth": "N7",
+            "encounter_level": 20,
+            "final_hp": 120,
+            "final_attack": 18,
+            "final_defense": 8,
+        }
+    ]
+
+    flags = audit_repeated_template_depth_scaling(rows)
+    assert isinstance(flags, list)
+
+
+def test_valid_rows_still_audited_when_malformed_depth_row_exists():
+    rows = [
+        {
+            "sample_id": "good_1",
+            "mob_template": "forest_boar",
+            "node_depth": 2,
+            "encounter_level": 20,
+            "final_hp": 120,
+            "final_attack": 18,
+            "final_defense": 8,
+        },
+        {
+            "sample_id": "bad_depth",
+            "mob_template": "forest_boar",
+            "node_depth": "depth_5",
+            "encounter_level": 20,
+            "final_hp": 120,
+            "final_attack": 18,
+            "final_defense": 8,
+        },
+        {
+            "sample_id": "good_2",
+            "mob_template": "forest_boar",
+            "node_depth": 7,
+            "encounter_level": 20,
+            "final_hp": 120,
+            "final_attack": 18,
+            "final_defense": 8,
+        },
+    ]
+
+    flags = audit_repeated_template_depth_scaling(rows)
+    flag_ids = {f.flag_id for f in flags}
+    assert FLAG_UNSCALED_TEMPLATE_REUSED_ACROSS_DEPTHS in flag_ids
+
+
+def test_invalid_node_depth_is_flagged_when_non_empty_and_non_numeric():
+    rows = [
+        {
+            "sample_id": "bad_depth",
+            "mob_template": "forest_boar",
+            "node_depth": "unknown",
+            "encounter_level": 20,
+            "final_hp": 120,
+            "final_attack": 18,
+            "final_defense": 8,
+        }
+    ]
+
+    flags = audit_repeated_template_depth_scaling(rows)
+    assert any(f.flag_id == FLAG_INVALID_NODE_DEPTH for f in flags)

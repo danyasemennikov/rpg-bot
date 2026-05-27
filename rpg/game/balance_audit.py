@@ -16,6 +16,7 @@ FLAG_WEAK_ROUTE_EXAM_SAMPLE = "weak_route_exam_sample"
 FLAG_MISSING_PRESSURE_SAMPLE = "missing_pressure_sample"
 FLAG_MISSING_ELITE_SAMPLE = "missing_elite_sample"
 FLAG_MISSING_PACK_SAMPLE = "missing_pack_sample"
+FLAG_INVALID_NODE_DEPTH = "invalid_node_depth"
 
 PRESSURE_OR_HIGH_ROLES = {"pressure", "elite", "pack_member", "pack_leader", "boss"}
 
@@ -110,15 +111,49 @@ def audit_route_stage_sample_metadata(samples_or_rows: list[dict[str, Any]]) -> 
     return flags
 
 
+def _parse_numeric_depth(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped and stripped.isdigit():
+            return int(stripped)
+        return None
+    return None
+
+
 def audit_repeated_template_depth_scaling(rows: list[dict[str, Any]]) -> list[BalanceAuditFlag]:
     flags: list[BalanceAuditFlag] = []
     grouped: dict[str, list[dict[str, Any]]] = {}
 
-    for row in rows:
+    for idx, row in enumerate(rows):
         template = row.get("mob_template") or row.get("mob_id")
         if not template:
             continue
-        grouped.setdefault(str(template), []).append(row)
+
+        row_id = str(row.get("sample_id") or row.get("id") or f"row_{idx}")
+        raw_depth = row.get("node_depth")
+        parsed_depth = _parse_numeric_depth(raw_depth)
+
+        if raw_depth not in (None, "") and parsed_depth is None:
+            flags.append(
+                build_balance_audit_flag(
+                    FLAG_INVALID_NODE_DEPTH,
+                    "warning",
+                    "sample_row",
+                    row_id,
+                    "Node depth is not numeric and was skipped for repeated-template depth scaling audit.",
+                    {
+                        "mob_template": str(template),
+                        "node_depth": raw_depth,
+                    },
+                )
+            )
+            continue
+
+        grouped.setdefault(str(template), []).append({**row, "_parsed_node_depth": parsed_depth})
 
     for template_id, template_rows in grouped.items():
         if len(template_rows) < 2:
@@ -126,7 +161,9 @@ def audit_repeated_template_depth_scaling(rows: list[dict[str, Any]]) -> list[Ba
 
         stats_signatures: dict[tuple[Any, ...], list[int]] = {}
         for row in template_rows:
-            depth = int(row.get("node_depth") or 0)
+            depth = row.get("_parsed_node_depth")
+            if depth is None:
+                continue
             signature = (
                 row.get("encounter_level"),
                 row.get("final_hp"),
