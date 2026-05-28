@@ -1,5 +1,17 @@
 # Balance Foundation: Alpha to Release
 
+## Balance Instrument V2 PR1 Observability Foundation Note
+
+- Adds simulation/reporting-only observability foundation.
+- Adds compact/expanded balance report mode support.
+- Adds capped suspicious fight turn traces and per-fight observability metrics.
+- Does not change live gameplay/runtime systems.
+- Does not change formulas, equipment budgets, live mob templates, rewards, economy, targeting, teleport, or live group combat.
+- Does not rewrite Combat Core.
+- Does not add live pack/group runtime combat.
+- Does not claim final balance.
+
+
 ## A. Purpose and Scope
 This document defines the release-grade balance foundation for **level 1–100** progression.
 

@@ -66,6 +66,8 @@ class RouteStageMatrixConfig:
     max_samples_per_route_stage: int = 2
     max_turns: int = 50
     include_raw_runs: bool = True
+    include_turn_trace: bool = False
+    max_trace_turns: int = 20
 
 
 def list_alpha_simulation_route_ids() -> list[str]:
@@ -334,7 +336,14 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                             player,
                             mob,
                             policy=build_basic_archetype_simulation_policy(archetype_id, stage),
-                            config=SimulationConfig(seed=seed, max_turns=cfg.max_turns, include_log_tail=False, skill_levels=skill_levels),
+                            config=SimulationConfig(
+                                seed=seed,
+                                max_turns=cfg.max_turns,
+                                include_log_tail=False,
+                                skill_levels=skill_levels,
+                                include_turn_trace=cfg.include_turn_trace,
+                                max_trace_turns=cfg.max_trace_turns,
+                            ),
                         )
                         run_item = {
                             "route_id": route_id, "stage": stage, "archetype_id": archetype_id, "power_tier": stage,
@@ -356,7 +365,10 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                             "mob_hp_remaining": result.mob_hp_remaining,
                             "damage_dealt": result.damage_dealt, "damage_taken": result.damage_taken,
                             "actions_used": dict(result.actions_used), "skills_used": list(result.skills_used),
+                            "observability": dict(result.observability),
                         }
+                        if cfg.include_turn_trace and result.turn_trace:
+                            run_item["turn_trace"] = list(result.turn_trace)
                         runs.append(run_item)
                         metrics["runs"] += 1
                         metrics["wins"] += 1 if result.winner == "player" else 0

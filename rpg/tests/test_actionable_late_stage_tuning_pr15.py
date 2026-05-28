@@ -136,8 +136,8 @@ def test_pr15_accuracy_refinement_reaches_targeted_solo_run():
 def test_project_state_pr15_header_section_and_no_stale_pr14_header():
     content = STATE_PATH.read_text(encoding="utf-8")
     header = content.split("---", 1)[0]
-    assert "PR: PR15: Actionable Late-Stage Underpressure Tuning Pass" in header
-    assert "Status: simulation/reporting actionable late-stage tuning" in header
+    assert "PR: Balance Instrument V2 Observability Foundation" in header
+    assert "Status: simulation/reporting observability foundation" in header
     assert "PR: PR14: Target Expectation Calibration Pass" not in header
     assert "### Actionable Late-Stage Underpressure Tuning Pass (PR15)" in content
     assert "actionable overclean baseline from PR14 was 44" in content
