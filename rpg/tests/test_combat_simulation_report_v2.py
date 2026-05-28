@@ -2,6 +2,7 @@ from pathlib import Path
 
 from game.combat_simulation_matrix import RouteStageMatrixConfig, run_route_stage_simulation_matrix
 from game.combat_simulation_report import (
+    PACK_PREVIEW_LIMIT,
     SUSPICIOUS_TABLE_LIMIT,
     TARGET_TABLE_LIMIT,
     _is_suspicious,
@@ -14,6 +15,7 @@ from game.combat_simulation_report import (
     _enrich_run,
     _label_diagnostic_v2,
     _select_representative_suspicious_traces,
+    _select_route_balanced_pack_preview,
     render_alpha_balance_report_markdown,
     render_alpha_simulation_report_v2_markdown,
 )
@@ -75,6 +77,8 @@ def test_rich_run_metrics_present_and_raw_runs_enabled_for_v2_default():
     assert "progression_audit_rows" in report
     assert "progression_audit_flags" in report
     assert "progression_audit_flag_counts" in report
+    assert "pack_runs" in report
+    assert "pack_rollups" in report
     audit_row = report["progression_audit_rows"][0]
     assert "assumed_player_level" in audit_row
     assert "gear_tier" in audit_row
@@ -113,6 +117,10 @@ def test_markdown_v2_checked_in_has_real_content():
     assert ("skills_used" in content) or ("skill usage" in content.lower())
     assert "Progression Audit Preview" in content
     assert "formula_budget_v1" in content
+    assert "Representative solo samples only" not in content
+    assert "No pack/group runtime simulation matrix yet" not in content
+    assert "No pack/group runtime matrix in this report version" not in content
+    assert "composite_pack_pressure_v1 pack proxy" in content
 
 
 def test_v2_renderer_smoke():
@@ -120,7 +128,58 @@ def test_v2_renderer_smoke():
     md = render_alpha_simulation_report_v2_markdown(report)
     assert "Alpha Route/Class Balance Report v2" in md
     assert "Progression Audit Preview" in md
+    assert "Pack / Group Simulation Preview" in md
+    assert "composite_pack_pressure_v1" in md
+    assert "No pack/group runtime matrix in this report version" not in md
+    assert "composite_pack_pressure_v1 diagnostic proxy" in md
     assert "diagnostic-only and not a tuning verdict" in md
+
+
+def test_solo_matrix_limitations_are_solo_truthful():
+    matrix = run_route_stage_simulation_matrix(_cfg(stages=("soft_entry",)))
+    limitations = matrix.get("limitations", [])
+    joined = " ".join(limitations)
+    assert "Representative solo route-stage samples only." in limitations
+    assert "Pack proxy samples are added at report-data layer, not in solo matrix output." in limitations
+    assert "composite_pack_pressure_v1 pack proxy samples" not in joined
+
+
+def test_pack_preview_observed_and_proxy_semantics_and_route_coverage():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "observed_v2 | proxy_status" in md
+    assert "composite_pack_pressure_v1 | composite_pack_pressure_v1" not in md
+    assert "route_westwild" in md
+    assert "route_frostspine" in md
+    assert "route_ashen_ruins" in md
+    assert "route_mireveil" in md
+    assert "route_sunscar" in md
+    assert "build_testing" in md and "route_exam" in md
+    assert len(report.get("pack_runs", [])) > PACK_PREVIEW_LIMIT
+    assert f"Showing {PACK_PREVIEW_LIMIT} route-stage-balanced pack preview rows out of" in md
+
+
+def test_route_stage_balanced_pack_preview_fills_to_limit():
+    report = build_default_alpha_simulation_report_v2_data()
+    preview = _select_route_balanced_pack_preview(report["pack_runs"], PACK_PREVIEW_LIMIT)
+    assert len(preview) == PACK_PREVIEW_LIMIT
+    routes = {r["route_id"] for r in preview}
+    assert {"route_westwild", "route_frostspine", "route_ashen_ruins", "route_mireveil", "route_sunscar"}.issubset(routes)
+    assert {"build_testing", "route_exam"}.issubset({r["stage"] for r in preview})
+
+
+def test_custom_report_soft_entry_scope_has_no_pack_runs():
+    matrix = run_route_stage_simulation_matrix(_cfg(stages=("soft_entry",)))
+    report = build_alpha_balance_report_data(matrix)
+    assert report.get("pack_runs", []) == []
+
+
+def test_custom_report_build_testing_scope_has_only_build_testing_pack_rows():
+    matrix = run_route_stage_simulation_matrix(_cfg(stages=("build_testing",)))
+    report = build_alpha_balance_report_data(matrix)
+    pack_runs = report.get("pack_runs", [])
+    assert pack_runs
+    assert {r.get("stage") for r in pack_runs} == {"build_testing"}
 
 
 def test_v2_progression_audit_preview_hidden_row_disclosure_when_capped():

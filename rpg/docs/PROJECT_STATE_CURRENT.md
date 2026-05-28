@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR10: Mob Encounter Scaling Foundation
-- Status: simulation mob encounter scaling foundation
-- Confirmed state below reflects current merged `main` after simulation mob encounter scaling foundation
+- PR: PR11: Pack/Group Simulation Harness
+- Status: simulation pack/group pressure harness
+- Confirmed state below reflects current merged main after simulation pack/group pressure harness
 
 ---
 
@@ -182,6 +182,15 @@ Alpha readiness policy:
 - report v2 exposes scaled mob context;
 - live mob templates/gameplay, rewards, loot/crafting, pack/group simulation, and tuning are not changed.
 
+
+### Pack/Group Simulation Harness (PR11)
+
+- simulation/reporting-only pack pressure harness is implemented;
+- pack samples exist for alpha routes at build_testing and route_exam;
+- pack members use formula-based mob scaling;
+- composite pack pressure proxy produces diagnostic final pack stats;
+- report v2 exposes pack/group pressure context;
+- live group combat, targeting, live spawning, rewards, loot/crafting, and tuning are not changed.
 ---
 
 ## Current focus
@@ -202,8 +211,10 @@ Do not treat these as active scope unless a new accepted Decision Packet explici
 - No Combat Core rewrite.
 - No smart autobattle policy.
 - No live AFK/autopilot.
-- No group/pack simulation matrix.
+- No live group/pack combat.
+- No full multi-target runtime pack combat; PR11 only has simulation/reporting composite pack pressure proxy.
 - No targeting rollout.
+- No live spawning changes.
 - No teleport.
 - No direct weapon-route bonuses.
 - No resistance framework.

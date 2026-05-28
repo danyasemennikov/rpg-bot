@@ -292,8 +292,9 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
         "runs": runs if cfg.include_raw_runs else [],
         "summaries": summaries,
         "limitations": [
-            "Representative solo samples only (route-stage mob snapshots).",
-            "No pack/group runtime simulation matrix yet.",
+            "Representative solo route-stage samples only.",
+            "Pack proxy samples are added at report-data layer, not in solo matrix output.",
+            "No live pack/group runtime combat.",
             "No final balance conclusions yet.",
             "No route/mob/skill tuning performed.",
         ],

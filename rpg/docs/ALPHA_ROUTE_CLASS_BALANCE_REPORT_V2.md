@@ -4,7 +4,7 @@
 This is a diagnostic and non-final report for future tuning scope decisions.
 
 ## Methodology
-- Deterministic representative solo route-stage simulations.
+- Deterministic representative solo route-stage simulations plus composite_pack_pressure_v1 pack proxy samples.
 - Routes: route_westwild, route_frostspine, route_ashen_ruins, route_mireveil, route_sunscar
 - Stages: soft_entry, identity_visible, build_testing, route_exam
 - Runs: 280
@@ -13,7 +13,7 @@ This is a diagnostic and non-final report for future tuning scope decisions.
 - No route/mob/skill/reward/formula tuning.
 - No Combat Core rewrite.
 - No smart autobattle and no live AFK/autopilot.
-- No group/pack simulation matrix.
+- No live pack/group runtime combat.
 
 ## Diagnostic Config
 - checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.
@@ -175,6 +175,31 @@ Flag counts:
 | route_westwild | identity_visible | bow_sniper | 35 | T4 | uncommon | +3 | 2040 | bow_dps | forest_boar | normal | 35 | 153 | 12 | strong | strong_clean |  |
 Showing first 20 of 280 progression audit rows. Hidden rows are not resolved or dismissed.
 
+## Pack / Group Simulation Preview
+Showing 20 route-stage-balanced pack preview rows out of 140 pack runs. Hidden rows are not resolved or dismissed.
+| route | stage | pack_id | archetype | members | composite_hp | composite_damage | observed_v2 | proxy_status | winner | turns | audit flags |
+|---|---|---|---|---:|---:|---:|---|---|---|---:|---|
+| route_ashen_ruins | build_testing | ashen_build_undead | axe_2h_bruiser | 3 | 1088 | 106 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_ashen_ruins | route_exam | ashen_exam_knight_host | axe_2h_bruiser | 2 | 1526 | 151 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_frostspine | build_testing | frost_build_wolves | axe_2h_bruiser | 3 | 972 | 80 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_frostspine | route_exam | frost_exam_golem_pack | axe_2h_bruiser | 3 | 2973 | 161 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | axe_2h_bruiser | 3 | 646 | 76 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_mireveil | route_exam | mireveil_exam_serpent | axe_2h_bruiser | 3 | 834 | 84 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | axe_2h_bruiser | 3 | 741 | 108 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_sunscar | route_exam | sunscar_exam_apex | axe_2h_bruiser | 3 | 1539 | 170 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_westwild | build_testing | westwild_build_wolf_boar | axe_2h_bruiser | 3 | 704 | 52 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_westwild | route_exam | westwild_exam_bear_goblins | axe_2h_bruiser | 3 | 1278 | 97 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | bow_ranger | 3 | 1088 | 106 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_frostspine | build_testing | frost_build_wolves | bow_ranger | 3 | 972 | 80 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | bow_ranger | 3 | 646 | 76 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | bow_ranger | 3 | 741 | 108 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_westwild | build_testing | westwild_build_wolf_boar | bow_ranger | 3 | 704 | 52 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | bow_sniper | 3 | 1088 | 106 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_frostspine | build_testing | frost_build_wolves | bow_sniper | 3 | 972 | 80 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 646 | 76 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 741 | 108 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_westwild | build_testing | westwild_build_wolf_boar | bow_sniper | 3 | 704 | 52 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+
 ## Representative Suspicious Fight Traces
 Showing up to 10 route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.
 | route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |
@@ -194,14 +219,15 @@ Showing up to 10 route-balanced representative suspicious traces. Hidden traces 
 strong_clean, strong_but_risky, normal, hard, very_hard, death_blocked, timeout_stall, no_progress_stall, resource_collapse, policy_failure, inconclusive.
 
 ## Limitations
-- Representative solo samples only (route-stage mob snapshots).
-- No pack/group runtime simulation matrix yet.
+- Representative solo route-stage samples only.
+- Pack proxy samples are added at report-data layer, not in solo matrix output.
+- No live pack/group runtime combat.
 - No final balance conclusions yet.
 - No route/mob/skill tuning performed.
 - Alpha diagnostic signal only; not a final balance verdict.
 - Observed-vs-target comparisons are coarse bands, not proof of tuning direction.
 - Missing target metadata rows are treated as inconclusive, not mismatch verdicts.
-- No pack/group runtime matrix in this report version.
+- No full multi-target pack runtime combat; pack section uses composite_pack_pressure_v1 diagnostic proxy.
 
 ## Recommended Next Steps
 - Use this report to scope targeted follow-up tuning PRs only.
