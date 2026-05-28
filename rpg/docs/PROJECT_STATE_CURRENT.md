@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR13: Targeted Alpha Tuning Pass
-- Status: targeted simulation/reporting alpha tuning
-- Confirmed state below reflects current merged main after PR13 targeted pass and includes prior PR12: First Real Tuning Pass baseline context
+- PR: PR14: Target Expectation Calibration Pass
+- Status: simulation/reporting target calibration
+- Confirmed state below reflects current merged main after PR14 target expectation calibration and includes prior PR13 targeted tuning and PR12 first tuning pass baseline context
 
 ---
 
@@ -184,6 +184,15 @@ Alpha readiness policy:
 
 
 
+
+### Target Expectation Calibration Pass (PR14)
+
+- raw global overclean candidate signal remains visible in report data and report markdown;
+- actionable overclean metric was added through target expectation calibration;
+- early-stage target expectation artifact bucket was added for `soft_entry` / `identity_visible`;
+- late-stage actionable underpressure remains visible for `build_testing` / `route_exam`;
+- no live gameplay/runtime systems were changed.
+
 ### Targeted Alpha Tuning Pass (PR13)
 
 - overclean cluster rollups were added to report data (`overclean_rollups`, `overclean_top_clusters`);
@@ -199,6 +208,7 @@ Alpha readiness policy:
 
 ### First Real Tuning Pass (PR12)
 
+- PR12: First Real Tuning Pass remains prior baseline context.
 - simulation policy artifacts were reduced in report/simulation policy handling;
 - guardian_shield_1h and holy_rod_paladin use simulation-only guard_then_attack policy;
 - simulation-stage pressure modifiers were added for first controlled numeric alpha pressure tuning;

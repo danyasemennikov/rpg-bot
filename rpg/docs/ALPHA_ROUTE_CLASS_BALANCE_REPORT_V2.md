@@ -122,6 +122,7 @@ Showing first 24 of 56 archetype cards.
 
 ## PR13 Targeted Tuning Candidates
 Diagnostic compact cluster view; use full report_data for complete candidate selection.
+PR14 target expectation calibration below further separates raw global signal from actionable tuning backlog.
 - global overclean candidates (strong_vs_high_target): 88.
 - late-stage targeted candidates (build_testing/route_exam only): 44.
 - top targeted late-stage clusters shown: 8 (limit=8).
@@ -148,6 +149,22 @@ Diagnostic compact cluster view; use full report_data for complete candidate sel
 - PR13 adds candidate rollups and targeted tuning knobs, but compact global overclean remains unresolved.
 - Remaining known underpressure: compact deterministic route win rates may remain 1.00 and further targeted passes can still be required.
 - No live gameplay/runtime systems changed.
+
+## PR14 Target Expectation Calibration Summary
+- Raw global overclean candidates: 88.
+- Actionable overclean candidates after target calibration: 44.
+- Early-stage target expectation artifacts: 44.
+- Late-stage actionable overclean: 44.
+- Raw/global signal remains visible for transparency; calibration adds actionable separation only.
+- Early-stage artifacts are diagnostic target-expectation mismatches, not resolved balance issues.
+- Late-stage actionable cases remain the tuning backlog.
+- This pass is simulation/reporting-only and does not tune live gameplay/runtime systems.
+| bucket | count | meaning |
+|---|---:|---|
+| raw_global_overclean | 88 | Raw strong_vs_high_target candidates across all stages. |
+| early_stage_target_artifact | 44 | soft_entry/identity_visible high-target overclean artifacts. |
+| actionable_overclean | 44 | Calibrated actionable overclean candidates. |
+| late_stage_actionable | 44 | Actionable overclean in build_testing/route_exam. |
 
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.

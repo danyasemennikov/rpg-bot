@@ -222,3 +222,9 @@ PR13 note (implemented simulation/reporting tuning pass only):
 - PR13 implements targeted simulation/reporting alpha tuning based on PR12 overclean clusters.
 - It does not change live gameplay/runtime systems unless explicitly stated by the PR.
 - It does not implement final balance.
+
+
+PR14 note (implemented simulation/reporting target expectation calibration only):
+- PR14 adds target expectation calibration buckets in simulation/reporting outputs so raw global overclean, actionable overclean, early-stage target artifacts, and late-stage actionable rows are separated.
+- PR14 does not change live gameplay/runtime systems.
+- PR14 does not claim final balance.
