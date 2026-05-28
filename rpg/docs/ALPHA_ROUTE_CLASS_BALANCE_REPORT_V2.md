@@ -317,27 +317,27 @@ Case 1: route_sunscar / route_exam / pure_support_solo_overlay vs air_elemental
 | turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
 |---:|---|---|---|---|
 | 1 | skill:regeneration | 2845/8497 -> 2636/8457 | 4229 -> 4229 | ♻️ Регенерация — ❤️+142/ход на 4 хода 🔵-40; 🩸 🌪️ Воздушный элементаль атакует — <b>209</b> урона. |
-| 2 | normal_attack | 2636/8457 -> 2778/8457 | 4229 -> 4017 | 🌀 Ты уклоняешься от атаки! |
-| 3 | normal_attack | 2778/8457 -> 2636/8457 | 4017 -> 3805 | n/a |
-| 4 | normal_attack | 2636/8457 -> 2569/8457 | 3805 -> 3593 | n/a |
+| 2 | normal_attack | 2636/8457 -> 2778/8457 | 4229 -> 4017 | ♻️ Реген восстанавливает 142 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
+| 3 | normal_attack | 2778/8457 -> 2636/8457 | 4017 -> 3805 | ♻️ Реген восстанавливает 67 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
+| 4 | normal_attack | 2636/8457 -> 2569/8457 | 3805 -> 3593 | ♻️ Реген восстанавливает 142 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
 | 5 | normal_attack | 2569/8457 -> 2502/8457 | 3593 -> 3381 | n/a |
-| 6 | normal_attack | 2502/8457 -> 2293/8457 | 3381 -> 3169 | n/a |
+| 6 | normal_attack | 2502/8457 -> 2293/8457 | 3381 -> 3169 | ⚔️ Ты наносишь <b>212</b> урона.; 🩸 🌪️ Воздушный элементаль атакует — <b>209</b> урона. |
 
 Case 2: route_ashen_ruins / build_testing / guardian_shield_1h vs cursed_knight
 | turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
 |---:|---|---|---|---|
 | 1 | normal_attack | 5113/100 -> 5113/100 | 864 -> 651 | ⚔️ Ты наносишь <b>213</b> урона.; 🌀 Ты уклоняешься от атаки! |
-| 2 | normal_attack | 5113/100 -> 5048/100 | 651 -> 438 | n/a |
+| 2 | normal_attack | 5113/100 -> 5048/100 | 651 -> 438 | ⚔️ Ты наносишь <b>213</b> урона.; 🩸 🛡️ Проклятый рыцарь атакует — <b>65</b> урона. |
 | 3 | guard_fallback | 5048/100 -> 5048/100 | 438 -> 438 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
-| 4 | normal_attack | 5048/100 -> 5020/100 | 438 -> 225 | n/a |
-| 5 | normal_attack | 5020/100 -> 5020/100 | 225 -> 12 | n/a |
+| 4 | normal_attack | 5048/100 -> 5020/100 | 438 -> 225 | ⚔️ Ты наносишь <b>213</b> урона.; 🩸 🛡️ Проклятый рыцарь атакует — <b>28</b> урона. |
+| 5 | normal_attack | 5020/100 -> 5020/100 | 225 -> 12 | ⚔️ Ты наносишь <b>213</b> урона.; 🌀 Ты уклоняешься от атаки! |
 | 6 | guard_fallback | 5020/100 -> 5020/100 | 12 -> 12 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
 
 Case 3: route_ashen_ruins / route_exam / guardian_shield_1h vs ghost
 | turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
 |---:|---|---|---|---|
 | 1 | normal_attack | 11269/130 -> 11269/130 | 541 -> 153 | ⚔️ Ты наносишь <b>388</b> урона.; 🌀 Ты уклоняешься от атаки! |
-| 2 | normal_attack | 11269/130 -> 11269/130 | 153 -> 0 | n/a |
+| 2 | normal_attack | 11269/130 -> 11269/130 | 153 -> 0 | ⚔️ Ты наносишь <b>388</b> урона. |
 
 ## Representative Suspicious Fight Traces
 Showing up to 10 route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.

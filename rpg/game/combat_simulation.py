@@ -176,14 +176,28 @@ def _snapshot_combat_totals(battle_state: dict) -> dict[str, int]:
     }
 
 
-def _safe_log_delta(log_items: list, start_index: int, *, limit: int = 4, max_chars: int = 160) -> list[str]:
+def _sanitize_log_events(log_items: list, *, limit: int = 4, max_chars: int = 160) -> list[str]:
     output: list[str] = []
-    for item in list(log_items)[start_index:start_index + limit]:
+    for item in list(log_items)[:limit]:
         text = str(item).replace("|", "\\|").replace("\n", " ")
         if len(text) > max_chars:
             text = text[: max_chars - 3] + "..."
         output.append(text)
     return output
+
+
+def _safe_current_turn_log_events(before: list, after: list, *, limit: int = 4, max_chars: int = 160) -> list[str]:
+    after_items = list(after or [])
+    if not after_items:
+        return []
+
+    before_items = list(before or [])
+    if len(after_items) >= len(before_items) and after_items[:len(before_items)] == before_items:
+        events = after_items[len(before_items):]
+    else:
+        events = after_items
+
+    return _sanitize_log_events(events, limit=limit, max_chars=max_chars)
 
 
 def _build_observability_summary(
@@ -277,7 +291,7 @@ def simulate_single_combat(
 
             turn_number = int(battle_state.get("turn", 1))
             trace_before = _snapshot_combat_totals(battle_state)
-            trace_log_start = len(battle_state.get("log", []))
+            log_before = list(battle_state.get("log", []))
             trace_after_player_action = dict(trace_before)
             chosen_action = action_policy.choose_action(turn=turn_number, battle_state=battle_state)
             action = chosen_action
@@ -427,7 +441,7 @@ def simulate_single_combat(
                     "player_mana_delta": trace_after_enemy_action["mana"] - trace_before["mana"],
                     "mob_hp_delta": trace_after_enemy_action["mob_hp"] - trace_before["mob_hp"],
                     "cooldowns_after": dict(simulation_cooldowns),
-                    "log_events": _safe_log_delta(battle_state.get("log", []), trace_log_start),
+                    "log_events": _safe_current_turn_log_events(log_before, battle_state.get("log", [])),
                 })
 
             _tick_skill_cooldowns()

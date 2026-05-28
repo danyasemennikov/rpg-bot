@@ -6,6 +6,7 @@ from game.combat_simulation import (
     SimulationConfig,
     build_simulation_mob_preset,
     build_simulation_player_preset,
+    _safe_current_turn_log_events,
     make_simulation_skill_action,
     simulate_single_combat,
 )
@@ -76,6 +77,28 @@ def test_turn_trace_enabled_is_capped_and_does_not_mutate_inputs():
     assert player == original_player
     assert mob == original_mob
 
+
+
+
+def test_current_turn_log_helper_handles_replaced_or_capped_logs():
+    assert _safe_current_turn_log_events(["old1", "old2", "old3"], ["new current event"]) == ["new current event"]
+    assert _safe_current_turn_log_events(["old1"], ["old1", "new event"]) == ["new event"]
+    assert _safe_current_turn_log_events([], ["a|b\nnext"]) == ["a\\|b next"]
+
+
+def test_multi_turn_trace_keeps_current_turn_log_events_after_first_turn():
+    player = build_simulation_player_preset(weapon_damage=1, strength=1, agility=1, hp=500, max_hp=500)
+    mob = build_simulation_mob_preset("forest_boar")
+    mob.update({"hp": 200, "damage": 1})
+
+    result = simulate_single_combat(
+        player,
+        mob,
+        config=SimulationConfig(seed=1, max_turns=5, include_turn_trace=True, max_trace_turns=5),
+    )
+
+    assert len(result.turn_trace) >= 3
+    assert any(row["log_events"] for row in result.turn_trace[1:])
 
 
 def test_unavailable_skill_trace_resolves_to_actual_fallback_normal_attack():
