@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 
 from game.balance_audit import audit_progression_context_rows, summarize_balance_audit_flags
@@ -48,11 +49,56 @@ ARCHETYPE_CARD_PREVIEW_LIMIT = 24
 TRACE_LIMIT = 10
 PROGRESSION_AUDIT_PREVIEW_LIMIT = 20
 PACK_PREVIEW_LIMIT = 20
+OBSERVABILITY_PREVIEW_LIMIT = 8
+OBSERVABILITY_TRACE_CASE_LIMIT = 3
 PR13_TOP_CLUSTER_LIMIT = 8
 LATE_STAGE_TARGETED_STAGES = {"build_testing", "route_exam"}
 EARLY_TARGET_CALIBRATION_STAGES = {"soft_entry", "identity_visible"}
 ACTIONABLE_TARGET_STAGES = {"build_testing", "route_exam"}
 
+
+
+@dataclass(frozen=True)
+class BalanceReportMode:
+    name: str
+    matrix_config: RouteStageMatrixConfig
+    description: str
+
+
+def build_balance_report_mode(name: str = "compact_regression") -> BalanceReportMode:
+    if name == "compact_regression":
+        return BalanceReportMode(
+            name="compact_regression",
+            matrix_config=RouteStageMatrixConfig(
+                route_ids=tuple(list_alpha_simulation_route_ids()),
+                stages=tuple(list_route_simulation_stages()),
+                archetype_ids=tuple(list_alpha_archetype_ids()),
+                seeds=(1,),
+                max_samples_per_route_stage=1,
+                max_turns=50,
+                include_raw_runs=True,
+                include_turn_trace=True,
+                max_trace_turns=6,
+            ),
+            description="Fast checked-in compact regression mode with capped suspicious fight traces.",
+        )
+    if name == "expanded_balance":
+        return BalanceReportMode(
+            name="expanded_balance",
+            matrix_config=RouteStageMatrixConfig(
+                route_ids=tuple(list_alpha_simulation_route_ids()),
+                stages=tuple(list_route_simulation_stages()),
+                archetype_ids=tuple(list_alpha_archetype_ids()),
+                seeds=(1, 2, 3, 4, 5),
+                max_samples_per_route_stage=2,
+                max_turns=50,
+                include_raw_runs=True,
+                include_turn_trace=True,
+                max_trace_turns=12,
+            ),
+            description="Expanded balance review mode with more seeds and capped traces; not used for the checked-in compact markdown by default.",
+        )
+    raise ValueError(f"Unknown balance report mode: {name}")
 
 def build_smoke_alpha_balance_report_config() -> RouteStageMatrixConfig:
     return RouteStageMatrixConfig(
@@ -83,15 +129,7 @@ def build_checked_in_alpha_balance_report_config() -> RouteStageMatrixConfig:
 
 
 def build_checked_in_alpha_simulation_report_v2_config() -> RouteStageMatrixConfig:
-    return RouteStageMatrixConfig(
-        route_ids=tuple(list_alpha_simulation_route_ids()),
-        stages=tuple(list_route_simulation_stages()),
-        archetype_ids=tuple(list_alpha_archetype_ids()),
-        seeds=(1,),
-        max_samples_per_route_stage=1,
-        max_turns=50,
-        include_raw_runs=True,
-    )
+    return build_balance_report_mode("compact_regression").matrix_config
 
 
 def resolve_archetype_matchup_key(archetype_id: str) -> str | None:
@@ -346,9 +384,10 @@ def _enrich_run(run: dict[str, Any]) -> dict[str, Any]:
     guard_action_rate = guard_like_count / total_actions
     normal_attack_rate = actions.get("normal_attack", 0) / total_actions
     skill_use_rate = len(run.get("skills_used", [])) / total_actions
+    observability = dict(run.get("observability", {}))
     return {
         **run,
-        "end_reason": "timeout" if run.get("terminated_by_max_turns") else ("player_death" if run.get("player_dead") else "mob_death"),
+        "end_reason": observability.get("end_reason") or ("timeout" if run.get("terminated_by_max_turns") else ("player_death" if run.get("player_dead") else "player_win")),
         "player_hp_remaining_pct": (run.get("player_hp_remaining", 0) / player_hp_max) if player_hp_max else None,
         "player_mana_remaining_pct": (run.get("player_mana_remaining", 0) / player_mana_max) if player_mana_max else None,
         "mob_hp_remaining_pct": (run.get("mob_hp_remaining", 0) / mob_hp_max) if mob_hp_max else None,
@@ -748,6 +787,10 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "pack_rollups": pack_matrix.get("pack_rollups", {}),
         "pack_audit_flags": pack_matrix.get("pack_audit_flags", []),
         "pack_audit_flag_counts": pack_matrix.get("pack_audit_flag_counts", {}),
+        "report_modes": {
+            "compact_regression": build_balance_report_mode("compact_regression").description,
+            "expanded_balance": build_balance_report_mode("expanded_balance").description,
+        },
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -949,12 +992,16 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         "## PR15 Actionable Late-Stage Tuning Summary",
         f"- Previous PR14 actionable overclean baseline: {pr15_baseline}.",
         f"- Current actionable overclean candidates: {actionable_candidates}.",
+        f"- Actionable overclean candidates after PR15: {actionable_candidates}.",
         f"- Current early-stage target artifacts: {early_stage_artifacts}.",
+        f"- Early-stage target artifacts remain separated: {early_stage_artifacts}.",
         f"- Current raw/global overclean candidates: {raw_global_candidates}.",
+        f"- Raw/global overclean candidates still visible: {raw_global_candidates}.",
         f"- Improvement vs PR14 actionable baseline: {'yes' if pr15_improved else 'no'}.",
         "- Changed knobs: bounded simulation/reporting-only late-stage route-stage pressure overrides plus one solo-matrix actionable role refinement for the repeated Sunscar route_exam support overclean cluster.",
         f"- Top remaining actionable clusters preview: {preview_count} of {actionable_candidates}; full list available in report_data.",
         "- No live gameplay/runtime changes.",
+        "- No live gameplay/runtime systems were changed.",
     ]
     if overpressure_traces:
         risk_items = [
@@ -1008,6 +1055,49 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         final_stats = run.get("final_pack_stats", {})
         lines.append(f"| {run.get('route_id')} | {run.get('stage')} | {run.get('pack_id')} | {run.get('archetype_id')} | {run.get('pack_member_count')} | {final_stats.get('hp')} | {final_stats.get('damage')} | {run.get('observed_diagnostic_label_v2', 'inconclusive')} | {run.get('pack_simulation_status')} | {run.get('winner')} | {run.get('turns')} | {', '.join(report_data.get('pack_audit_flag_counts', {}).keys()) or 'none'} |")
 
+    observability_rows = _build_observability_preview_rows(report_data)
+    lines += [
+        "",
+        "## Balance Instrument V2 Observability Preview",
+        "Simulation/reporting-only preview with capped turn traces; this does not tune formulas, equipment budgets, live mob templates, rewards/economy, targeting, teleport, or live group combat.",
+        "Report modes available in code/report-data builders: compact_regression and expanded_balance.",
+        "Per-fight percentage metrics are 0..1 fractions.",
+        f"Showing {len(observability_rows)} capped representative observability rows out of {len(report_data.get('runs', []))} raw compact runs.",
+        "| route | stage | archetype | mob | winner | end_reason | turns | damage_dealt | damage_taken | player_hp_remaining_pct | player_mana_remaining_pct | action_sequence |",
+        "|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|",
+    ]
+    if not observability_rows:
+        lines.append("No observability preview rows are available for this report data object.")
+    for run in observability_rows:
+        obs = dict(run.get("observability", {}))
+        lines.append(
+            f"| {run.get('route_id')} | {run.get('stage')} | {run.get('archetype_id')} | {run.get('mob_id')} | "
+            f"{run.get('winner')} | {obs.get('end_reason') or run.get('end_reason')} | {run.get('turns')} | "
+            f"{obs.get('damage_dealt', run.get('damage_dealt'))} | {obs.get('damage_taken', run.get('damage_taken'))} | "
+            f"{_format_pct(obs.get('player_hp_remaining_pct'))} | {_format_pct(obs.get('player_mana_remaining_pct'))} | {_format_action_sequence(run)} |"
+        )
+
+    trace_cases = [run for run in observability_rows if run.get("turn_trace")][:OBSERVABILITY_TRACE_CASE_LIMIT]
+    lines += ["", f"Capped turn trace preview ({len(trace_cases)} cases, max rows already capped by SimulationConfig.max_trace_turns):"]
+    for idx, run in enumerate(trace_cases, start=1):
+        lines += [
+            "",
+            f"Case {idx}: {run.get('route_id')} / {run.get('stage')} / {run.get('archetype_id')} vs {run.get('mob_id')}",
+            "| turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |",
+            "|---:|---|---|---|---|",
+        ]
+        for row in list(run.get("turn_trace", [])):
+            pb = row.get("player_before", {})
+            pa = row.get("player_after_enemy_action", {})
+            mb = row.get("mob_before", {})
+            ma = row.get("mob_after_enemy_action", {})
+            log_summary = "; ".join(str(event) for event in row.get("log_events", [])[:2]) or "n/a"
+            lines.append(
+                f"| {row.get('turn')} | {row.get('resolved_action') or row.get('chosen_action')} | "
+                f"{pb.get('hp')}/{pb.get('mana')} -> {pa.get('hp')}/{pa.get('mana')} | "
+                f"{mb.get('hp')} -> {ma.get('hp')} | {log_summary} |"
+            )
+
     lines += ["", "## Representative Suspicious Fight Traces"]
     traces = report_data.get("suspicious_traces", [])
     lines.append(f"Showing up to {TRACE_LIMIT} route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.")
@@ -1024,6 +1114,95 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines += ["", "## Recommended Next Steps", "- Use this report to scope targeted follow-up tuning PRs only.", "", "## Raw Data Pointers", "- Source module: `game.combat_simulation_matrix.run_route_stage_simulation_matrix`.", f"- Raw runs included in current report data object: {report_data.get('raw_data_pointers', {}).get('raw_runs_included', False)}."]
     return "\n".join(lines) + "\n"
 
+
+
+def _format_pct(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _format_action_sequence(run: dict[str, Any]) -> str:
+    trace = list(run.get("turn_trace", []))
+    if trace:
+        actions = [str(row.get("resolved_action") or row.get("chosen_action") or "") for row in trace[:6]]
+        suffix = "..." if int(run.get("turns", 0) or 0) > len(actions) else ""
+        return ", ".join(a for a in actions if a) + suffix
+    actions_used = dict(run.get("actions_used", {}))
+    return ", ".join(f"{k}×{v}" for k, v in sorted(actions_used.items()) if int(v or 0) > 0) or "n/a"
+
+
+def _build_observability_preview_rows(report_data: dict) -> list[dict[str, Any]]:
+    suspicious = list(report_data.get("suspicious_traces", []))
+    runs = list(report_data.get("runs", []))
+    selected: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    def row_key(row: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            row.get("route_id"),
+            row.get("stage"),
+            row.get("archetype_id"),
+            row.get("location_id"),
+            row.get("mob_id"),
+            row.get("seed"),
+        )
+
+    def add_row(row: dict[str, Any]) -> bool:
+        if len(selected) >= OBSERVABILITY_PREVIEW_LIMIT:
+            return False
+        key = row_key(row)
+        if key in seen:
+            return False
+        selected.append(row)
+        seen.add(key)
+        return True
+
+    def add_route_stage_balanced(rows: list[dict[str, Any]]) -> None:
+        buckets: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            buckets[(str(row.get("route_id", "")), str(row.get("stage", "")))].append(row)
+        bucket_keys = sorted(buckets.keys())
+        index_by_bucket = {key: 0 for key in bucket_keys}
+        while len(selected) < OBSERVABILITY_PREVIEW_LIMIT:
+            progressed = False
+            for bucket_key in bucket_keys:
+                bucket = buckets[bucket_key]
+                while index_by_bucket[bucket_key] < len(bucket):
+                    row = bucket[index_by_bucket[bucket_key]]
+                    index_by_bucket[bucket_key] += 1
+                    if add_row(row):
+                        progressed = True
+                        break
+                if len(selected) >= OBSERVABILITY_PREVIEW_LIMIT:
+                    break
+            if not progressed:
+                break
+
+    # 1) Start with explicitly suspicious/overpressure rows.
+    for run in suspicious:
+        add_row(run)
+        if len(selected) >= OBSERVABILITY_PREVIEW_LIMIT:
+            return selected
+
+    # 2) Prefer actionable late-stage examples next.
+    late_stage_runs = [run for run in runs if str(run.get("stage", "")) in ACTIONABLE_TARGET_STAGES]
+    add_route_stage_balanced(late_stage_runs)
+    if len(selected) >= OBSERVABILITY_PREVIEW_LIMIT:
+        return selected
+
+    # 3) Fill with route/stage-balanced examples across all available routes.
+    add_route_stage_balanced(runs)
+    if len(selected) >= OBSERVABILITY_PREVIEW_LIMIT:
+        return selected
+
+    # 4) Final deterministic fallback to first raw runs.
+    for run in runs:
+        add_row(run)
+        if len(selected) >= OBSERVABILITY_PREVIEW_LIMIT:
+            break
+    return selected
 
 def build_default_alpha_balance_report_data() -> dict:
     return build_alpha_balance_report_data(config=build_checked_in_alpha_balance_report_config())

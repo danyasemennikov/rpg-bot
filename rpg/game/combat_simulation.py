@@ -28,6 +28,8 @@ class SimulationConfig:
     lang: str = "ru"
     include_log_tail: bool = True
     skill_levels: dict[str, int] = field(default_factory=dict)
+    include_turn_trace: bool = False
+    max_trace_turns: int = 20
 
 
 @dataclass
@@ -47,6 +49,8 @@ class SimulationResult:
     damage_taken: int
     final_battle_state: dict
     log_tail: list[str] = field(default_factory=list)
+    turn_trace: list[dict] = field(default_factory=list)
+    observability: dict = field(default_factory=dict)
 
 
 class AlwaysAttackPolicy:
@@ -163,6 +167,70 @@ def build_simulation_battle_state(player: dict, mob: dict) -> dict:
     return battle_state
 
 
+
+def _snapshot_combat_totals(battle_state: dict) -> dict[str, int]:
+    return {
+        "hp": int(battle_state.get("player_hp", 0)),
+        "mana": int(battle_state.get("player_mana", 0)),
+        "mob_hp": int(battle_state.get("mob_hp", 0)),
+    }
+
+
+def _safe_log_delta(log_items: list, start_index: int, *, limit: int = 4, max_chars: int = 160) -> list[str]:
+    output: list[str] = []
+    for item in list(log_items)[start_index:start_index + limit]:
+        text = str(item).replace("|", "\\|").replace("\n", " ")
+        if len(text) > max_chars:
+            text = text[: max_chars - 3] + "..."
+        output.append(text)
+    return output
+
+
+def _build_observability_summary(
+    *,
+    winner: str,
+    turns: int,
+    terminated_by_max_turns: bool,
+    player_local: dict,
+    mob_local: dict,
+    battle_state: dict,
+    actions_used: dict[str, int],
+    skills_used: list[str],
+    damage_dealt: int,
+    damage_taken: int,
+) -> dict:
+    player_max_hp = max(1, int(player_local.get("max_hp") or player_local.get("hp") or 1))
+    player_max_mana = max(1, int(player_local.get("max_mana") or player_local.get("mana") or 1))
+    mob_start_hp = max(1, int(mob_local.get("hp") or 1))
+    player_hp_remaining = max(0, int(battle_state.get("player_hp", 0)))
+    player_mana_remaining = max(0, int(battle_state.get("player_mana", 0)))
+    mob_hp_remaining = max(0, int(battle_state.get("mob_hp", 0)))
+
+    if winner == "player":
+        end_reason = "player_win"
+    elif winner == "mob":
+        end_reason = "player_death"
+    elif terminated_by_max_turns:
+        end_reason = "timeout"
+    else:
+        end_reason = "no_winner"
+
+    safe_turns = max(1, int(turns))
+    return {
+        "damage_dealt": int(damage_dealt),
+        "damage_taken": int(damage_taken),
+        "damage_dealt_per_turn": int(damage_dealt) / safe_turns,
+        "damage_taken_per_turn": int(damage_taken) / safe_turns,
+        "player_hp_remaining_pct": min(1.0, max(0.0, player_hp_remaining / player_max_hp)),
+        "player_mana_remaining_pct": min(1.0, max(0.0, player_mana_remaining / player_max_mana)),
+        "mob_hp_removed_pct": min(1.0, max(0.0, (mob_start_hp - mob_hp_remaining) / mob_start_hp)),
+        "mana_spent": max(0, int(player_local.get("mana", 0)) - player_mana_remaining),
+        "skills_used_count": len(skills_used),
+        "normal_attacks_used": int(actions_used.get(SIM_ACTION_NORMAL_ATTACK, 0)),
+        "guard_used": int(actions_used.get(SIM_ACTION_GUARD_FALLBACK, 0)),
+        "end_reason": end_reason,
+    }
+
 def _run_with_seed(seed: int, fn: Callable[[], SimulationResult]) -> SimulationResult:
     previous_state = random.getstate()
     random.seed(seed)
@@ -188,6 +256,8 @@ def simulate_single_combat(
 
     actions_used = {SIM_ACTION_NORMAL_ATTACK: 0, SIM_ACTION_GUARD_FALLBACK: 0}
     simulation_cooldowns: dict[str, int] = {}
+    turn_trace: list[dict] = []
+    max_trace_turns = max(0, int(cfg.max_trace_turns))
 
     def _tick_skill_cooldowns() -> None:
         for sid, turns in list(simulation_cooldowns.items()):
@@ -206,10 +276,15 @@ def simulate_single_combat(
                 break
 
             turn_number = int(battle_state.get("turn", 1))
-            action = action_policy.choose_action(turn=turn_number, battle_state=battle_state)
-            requested_skill_id = parse_simulation_skill_action(action)
+            trace_before = _snapshot_combat_totals(battle_state)
+            trace_log_start = len(battle_state.get("log", []))
+            trace_after_player_action = dict(trace_before)
+            chosen_action = action_policy.choose_action(turn=turn_number, battle_state=battle_state)
+            action = chosen_action
+            requested_skill_id = parse_simulation_skill_action(chosen_action)
             if action not in actions_used and requested_skill_id is None:
                 action = SIM_ACTION_NORMAL_ATTACK
+            resolved_action = "no_player_action"
 
             if action == SIM_ACTION_NORMAL_ATTACK:
                 if battle_state.get("player_goes_first", True):
@@ -220,6 +295,8 @@ def simulate_single_combat(
                         lang=cfg.lang,
                     )
                     actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                    resolved_action = SIM_ACTION_NORMAL_ATTACK
+                    trace_after_player_action = _snapshot_combat_totals(battle_state)
                     if battle_state.get("mob_hp", 0) > 0:
                         process_enemy_side_turn(
                             mob_local,
@@ -247,10 +324,16 @@ def simulate_single_combat(
                             lang=cfg.lang,
                         )
                         actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                        resolved_action = SIM_ACTION_NORMAL_ATTACK
+                        trace_after_player_action = _snapshot_combat_totals(battle_state)
+                    else:
+                        resolved_action = "enemy_first_player_dead"
                     battle_state["turn"] = int(battle_state.get("turn", 0)) + 1
             elif action == SIM_ACTION_GUARD_FALLBACK:
                 apply_timeout_fallback_guard(battle_state, lang=cfg.lang)
                 actions_used[SIM_ACTION_GUARD_FALLBACK] += 1
+                resolved_action = SIM_ACTION_GUARD_FALLBACK
+                trace_after_player_action = _snapshot_combat_totals(battle_state)
                 process_enemy_side_turn(
                     mob_local,
                     player_local,
@@ -282,14 +365,18 @@ def simulate_single_combat(
                         )
                         if skill_turn.get("success"):
                             actions_used[action_key] += 1
+                            resolved_action = action_key
                             battle_state.setdefault("skills_used", []).append(requested_skill_id)
                             simulation_cooldowns[requested_skill_id] = int(skill_def.get("cooldown", 0))
                         else:
                             process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                             actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                            resolved_action = SIM_ACTION_NORMAL_ATTACK
                     else:
                         process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                         actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                        resolved_action = SIM_ACTION_NORMAL_ATTACK
+                    trace_after_player_action = _snapshot_combat_totals(battle_state)
                     if battle_state.get("mob_hp", 0) > 0:
                         process_enemy_side_turn(mob_local, player_local, battle_state, lang=cfg.lang, tick_player_post_action_buffs=True, tick_timed_trigger_buffs=True, increment_turn=True)
                     else:
@@ -307,15 +394,41 @@ def simulate_single_combat(
                             )
                             if skill_turn.get("success"):
                                 actions_used[action_key] += 1
+                                resolved_action = action_key
                                 battle_state.setdefault("skills_used", []).append(requested_skill_id)
                                 simulation_cooldowns[requested_skill_id] = int(skill_def.get("cooldown", 0))
                             else:
                                 process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                                 actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                                resolved_action = SIM_ACTION_NORMAL_ATTACK
                         else:
                             process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                             actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
+                            resolved_action = SIM_ACTION_NORMAL_ATTACK
+                    else:
+                        resolved_action = "enemy_first_player_dead"
+                    trace_after_player_action = _snapshot_combat_totals(battle_state)
                     battle_state["turn"] = int(battle_state.get("turn", 0)) + 1
+
+            trace_after_enemy_action = _snapshot_combat_totals(battle_state)
+            if cfg.include_turn_trace and len(turn_trace) < max_trace_turns:
+                turn_trace.append({
+                    "turn": turn_number,
+                    "chosen_action": chosen_action,
+                    "resolved_action": resolved_action,
+                    "requested_skill_id": requested_skill_id,
+                    "player_before": {"hp": trace_before["hp"], "mana": trace_before["mana"]},
+                    "mob_before": {"hp": trace_before["mob_hp"]},
+                    "player_after_player_action": {"hp": trace_after_player_action["hp"], "mana": trace_after_player_action["mana"]},
+                    "mob_after_player_action": {"hp": trace_after_player_action["mob_hp"]},
+                    "player_after_enemy_action": {"hp": trace_after_enemy_action["hp"], "mana": trace_after_enemy_action["mana"]},
+                    "mob_after_enemy_action": {"hp": trace_after_enemy_action["mob_hp"]},
+                    "player_hp_delta": trace_after_enemy_action["hp"] - trace_before["hp"],
+                    "player_mana_delta": trace_after_enemy_action["mana"] - trace_before["mana"],
+                    "mob_hp_delta": trace_after_enemy_action["mob_hp"] - trace_before["mob_hp"],
+                    "cooldowns_after": dict(simulation_cooldowns),
+                    "log_events": _safe_log_delta(battle_state.get("log", []), trace_log_start),
+                })
 
             _tick_skill_cooldowns()
             executed_turns += 1
@@ -335,6 +448,21 @@ def simulate_single_combat(
         else:
             winner = "none"
 
+        skills_used = list(battle_state.get("skills_used", []))
+        damage_dealt = max(0, int(mob_local.get("hp", 0)) - int(battle_state.get("mob_hp", 0)))
+        damage_taken = max(0, int(player_local.get("hp", 0)) - int(battle_state.get("player_hp", 0)))
+        observability = _build_observability_summary(
+            winner=winner,
+            turns=executed_turns,
+            terminated_by_max_turns=terminated_by_max_turns,
+            player_local=player_local,
+            mob_local=mob_local,
+            battle_state=battle_state,
+            actions_used=actions_used,
+            skills_used=skills_used,
+            damage_dealt=damage_dealt,
+            damage_taken=damage_taken,
+        )
         return SimulationResult(
             winner=winner,
             turns=executed_turns,
@@ -346,11 +474,13 @@ def simulate_single_combat(
             mob_dead=mob_dead,
             seed=cfg.seed,
             actions_used=dict(actions_used),
-            skills_used=list(battle_state.get("skills_used", [])),
-            damage_dealt=max(0, int(mob_local.get("hp", 0)) - int(battle_state.get("mob_hp", 0))),
-            damage_taken=max(0, int(player_local.get("hp", 0)) - int(battle_state.get("player_hp", 0))),
+            skills_used=skills_used,
+            damage_dealt=damage_dealt,
+            damage_taken=damage_taken,
             final_battle_state=copy.deepcopy(battle_state),
             log_tail=list(battle_state.get("log", []))[-6:] if cfg.include_log_tail else [],
+            turn_trace=copy.deepcopy(turn_trace) if cfg.include_turn_trace else [],
+            observability=observability,
         )
 
     return _run_with_seed(cfg.seed, _run)

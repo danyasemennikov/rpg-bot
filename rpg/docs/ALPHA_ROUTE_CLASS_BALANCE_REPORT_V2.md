@@ -169,12 +169,16 @@ PR14 target expectation calibration below further separates raw global signal fr
 ## PR15 Actionable Late-Stage Tuning Summary
 - Previous PR14 actionable overclean baseline: 44.
 - Current actionable overclean candidates: 43.
+- Actionable overclean candidates after PR15: 43.
 - Current early-stage target artifacts: 44.
+- Early-stage target artifacts remain separated: 44.
 - Current raw/global overclean candidates: 87.
+- Raw/global overclean candidates still visible: 87.
 - Improvement vs PR14 actionable baseline: yes.
 - Changed knobs: bounded simulation/reporting-only late-stage route-stage pressure overrides plus one solo-matrix actionable role refinement for the repeated Sunscar route_exam support overclean cluster.
 - Top remaining actionable clusters preview: 8 of 43; full list available in report_data.
 - No live gameplay/runtime changes.
+- No live gameplay/runtime systems were changed.
 - New overpressure risk: route_sunscar / route_exam / pure_support_solo_overlay player_death observed in representative suspicious traces; PR15 is not presented as a clean/final balance pass.
 | top_remaining_cluster_preview | count |
 |---|---:|
@@ -290,6 +294,50 @@ Showing 20 route-stage-balanced pack preview rows out of 140 pack runs. Hidden r
 | route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 882 | 100 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 | route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 950 | 174 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | bow_sniper | 3 | 860 | 68 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+
+## Balance Instrument V2 Observability Preview
+Simulation/reporting-only preview with capped turn traces; this does not tune formulas, equipment budgets, live mob templates, rewards/economy, targeting, teleport, or live group combat.
+Report modes available in code/report-data builders: compact_regression and expanded_balance.
+Per-fight percentage metrics are 0..1 fractions.
+Showing 8 capped representative observability rows out of 280 raw compact runs.
+| route | stage | archetype | mob | winner | end_reason | turns | damage_dealt | damage_taken | player_hp_remaining_pct | player_mana_remaining_pct | action_sequence |
+|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|
+| route_sunscar | route_exam | pure_support_solo_overlay | air_elemental | mob | player_death | 19 | 3816 | 2845 | 0.00 | 1.00 | skill:regeneration, normal_attack, normal_attack, normal_attack, normal_attack, normal_attack... |
+| route_ashen_ruins | build_testing | guardian_shield_1h | cursed_knight | player | player_win | 7 | 864 | 93 | 0.98 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_ashen_ruins | route_exam | guardian_shield_1h | ghost | player | player_win | 2 | 541 | 0 | 1.00 | 1.00 | normal_attack, normal_attack |
+| route_frostspine | build_testing | guardian_shield_1h | mountain_stone_golem | player | player_win | 13 | 1691 | 347 | 0.93 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_frostspine | route_exam | guardian_shield_1h | ice_troll | player | player_win | 8 | 1942 | 373 | 0.97 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_mireveil | build_testing | guardian_shield_1h | giant_leech | player | player_win | 4 | 586 | 52 | 0.99 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack |
+| route_mireveil | route_exam | guardian_shield_1h | old_witch | player | player_win | 8 | 1647 | 454 | 0.96 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_sunscar | build_testing | guardian_shield_1h | desert_elephant | player | player_win | 8 | 1193 | 168 | 0.97 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+
+Capped turn trace preview (3 cases, max rows already capped by SimulationConfig.max_trace_turns):
+
+Case 1: route_sunscar / route_exam / pure_support_solo_overlay vs air_elemental
+| turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
+|---:|---|---|---|---|
+| 1 | skill:regeneration | 2845/8497 -> 2636/8457 | 4229 -> 4229 | ♻️ Регенерация — ❤️+142/ход на 4 хода 🔵-40; 🩸 🌪️ Воздушный элементаль атакует — <b>209</b> урона. |
+| 2 | normal_attack | 2636/8457 -> 2778/8457 | 4229 -> 4017 | 🌀 Ты уклоняешься от атаки! |
+| 3 | normal_attack | 2778/8457 -> 2636/8457 | 4017 -> 3805 | n/a |
+| 4 | normal_attack | 2636/8457 -> 2569/8457 | 3805 -> 3593 | n/a |
+| 5 | normal_attack | 2569/8457 -> 2502/8457 | 3593 -> 3381 | n/a |
+| 6 | normal_attack | 2502/8457 -> 2293/8457 | 3381 -> 3169 | n/a |
+
+Case 2: route_ashen_ruins / build_testing / guardian_shield_1h vs cursed_knight
+| turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
+|---:|---|---|---|---|
+| 1 | normal_attack | 5113/100 -> 5113/100 | 864 -> 651 | ⚔️ Ты наносишь <b>213</b> урона.; 🌀 Ты уклоняешься от атаки! |
+| 2 | normal_attack | 5113/100 -> 5048/100 | 651 -> 438 | n/a |
+| 3 | guard_fallback | 5048/100 -> 5048/100 | 438 -> 438 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
+| 4 | normal_attack | 5048/100 -> 5020/100 | 438 -> 225 | n/a |
+| 5 | normal_attack | 5020/100 -> 5020/100 | 225 -> 12 | n/a |
+| 6 | guard_fallback | 5020/100 -> 5020/100 | 12 -> 12 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
+
+Case 3: route_ashen_ruins / route_exam / guardian_shield_1h vs ghost
+| turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
+|---:|---|---|---|---|
+| 1 | normal_attack | 11269/130 -> 11269/130 | 541 -> 153 | ⚔️ Ты наносишь <b>388</b> урона.; 🌀 Ты уклоняешься от атаки! |
+| 2 | normal_attack | 11269/130 -> 11269/130 | 153 -> 0 | n/a |
 
 ## Representative Suspicious Fight Traces
 Showing up to 10 route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.

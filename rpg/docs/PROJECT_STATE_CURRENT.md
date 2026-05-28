@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR15: Actionable Late-Stage Underpressure Tuning Pass
-- Status: simulation/reporting actionable late-stage tuning
-- Confirmed state below reflects current merged main after PR15 actionable late-stage tuning and includes prior PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
+- PR: Balance Instrument V2 Observability Foundation
+- Status: simulation/reporting observability foundation
+- Confirmed state below reflects current merged main after Balance Instrument V2 Observability Foundation and includes prior PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
 
 ---
 
@@ -185,6 +185,15 @@ Alpha readiness policy:
 
 
 
+
+### Balance Instrument V2 Observability Foundation
+
+- compact/expanded balance report modes exist;
+- capped turn-by-turn suspicious fight traces are available in simulation/reporting;
+- per-fight observability metrics are exposed for balance review;
+- checked-in compact report still preserves PR15 diagnostic values: raw/global overclean 87, actionable overclean 43, early-stage target artifacts 44, and representative overpressure risk `route_sunscar / route_exam / pure_support_solo_overlay player_death`;
+- no live gameplay/runtime systems were changed;
+- no tuning/formula/equipment/live mob changes were made.
 
 ### Actionable Late-Stage Underpressure Tuning Pass (PR15)
 

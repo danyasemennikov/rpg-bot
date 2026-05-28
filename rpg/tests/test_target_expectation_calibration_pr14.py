@@ -49,10 +49,11 @@ def test_pr14_markdown_and_project_state_updates_exist_and_honest():
     assert "policy_failure_guard_loop count: 0" in report_doc
 
     state_doc = (Path(__file__).resolve().parents[1] / "docs" / "PROJECT_STATE_CURRENT.md").read_text(encoding="utf-8")
-    assert "PR15: Actionable Late-Stage Underpressure Tuning Pass" in state_doc
+    assert "Actionable Late-Stage Underpressure Tuning Pass (PR15)" in state_doc
     assert "Target Expectation Calibration Pass (PR14)" in state_doc
     header = state_doc.split("---", 1)[0]
-    assert "after PR15 actionable late-stage tuning" in header
+    assert "Balance Instrument V2 Observability Foundation" in header
+    assert "prior PR15 actionable late-stage tuning" in header
     assert "after PR14 target expectation calibration" not in header
 
 
