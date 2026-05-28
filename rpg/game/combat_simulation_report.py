@@ -693,7 +693,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
 
 
 def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
-    lines = ["# Alpha Route/Class Balance Report v2", "", "## Summary", "This is a diagnostic and non-final report for future tuning scope decisions.", "", "## Methodology", "- Deterministic representative solo route-stage simulations plus composite_pack_pressure_v1 pack proxy samples.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Runs: {report_data.get('run_count', 0)}", "", "## Scope and Non-goals", "- No route/mob/skill/reward/formula tuning.", "- No Combat Core rewrite.", "- No smart autobattle and no live AFK/autopilot.", "- No live pack/group runtime combat.", "", "## Diagnostic Config", "- checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.", "", "## Scenario Cards", "| route_id | stage | location_id | mob_id | role | lvl | scaling | spawn_profile | sample_tags | final_mob_stats |", "|---|---|---|---|---|---:|---|---|---|---|"]
+    lines = ["# Alpha Route/Class Balance Report v2", "", "## Summary", "This is a diagnostic and non-final report for future tuning scope decisions.", "", "## Methodology", "- Deterministic representative solo route-stage simulations plus composite_pack_pressure_v1 pack proxy samples.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Runs: {report_data.get('run_count', 0)}", "", "## Scope and Non-goals", "- No live route/mob/skill/reward/formula tuning.", "- PR12 includes simulation/reporting-only stage pressure tuning.", "- No Combat Core rewrite.", "- No smart autobattle and no live AFK/autopilot.", "- No live pack/group runtime combat.", "", "## Diagnostic Config", "- checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.", "", "## Scenario Cards", "| route_id | stage | location_id | mob_id | role | lvl | scaling | spawn_profile | sample_tags | final_mob_stats |", "|---|---|---|---|---|---:|---|---|---|---|"]
     scenario_cards = report_data.get("scenario_cards", [])
     for card in scenario_cards[:SCENARIO_PREVIEW_LIMIT]:
         lines.append(f"| {card['route_id']} | {card['stage']} | {card['location_id']} | {card['mob_id']} | {card.get('mob_role','normal')} | {card.get('encounter_level','')} | {card.get('scaling_status','')} | {card['spawn_profile']} | {', '.join(card.get('sample_tags', []))} | {card.get('final_mob_stats', {})} |")
@@ -717,6 +717,37 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         runs = max(1, rollup["runs"])
         lines.append(f"| {archetype_id} | {rollup['runs']} | {rollup['wins']/runs:.2f} | {rollup['timeouts']/runs:.2f} |")
 
+    progression_counts = dict(report_data.get("progression_audit_flag_counts", {}))
+    policy_guard_count = int(progression_counts.get("policy_failure_guard_loop", 0))
+    overclean_count = int(progression_counts.get("overclean_win", 0))
+    suspicious_count = len(report_data.get("suspicious_matchups", []))
+    lines += [
+        "",
+        "## PR12 First Tuning Pass Summary",
+        "- Pass status: first controlled tuning pass (not final balance).",
+        "- Changed policy assumptions:",
+        "  - defensive guard-loop simulation policy replaced with simulation-only guard-then-attack fallback for guardian_shield_1h and holy_rod_paladin.",
+        "- Changed numeric knobs:",
+        "  - added simulation-stage pressure modifiers:",
+        "    - soft_entry: baseline unchanged;",
+        "    - identity_visible: mild hp/damage pressure;",
+        "    - build_testing: moderate hp/damage pressure;",
+        "    - route_exam: stronger late-stage pressure.",
+        "  - simulation-only role escalation for hard/very_hard build_testing/route_exam matchup samples (pressure, and elite where elite_available on route_exam very_hard samples).",
+        "  - no live mob templates or live combat formulas changed.",
+        "- Policy artifact status:",
+        f"  - policy_failure_guard_loop count: {policy_guard_count} (diagnostic simulation policy artifact, not a direct route tuning verdict).",
+        f"  - overclean_win count: {overclean_count}.",
+        "  - previous policy-sanity-only overclean baseline: 88.",
+        f"  - overclean improved vs baseline: {'yes' if overclean_count < 88 else 'no'}.",
+        f"  - suspicious rows: {suspicious_count}.",
+        "  - route win rates in compact deterministic run may still remain 1.00; treat this as remaining underpressure signal if observed.",
+        "- Remaining known issues:",
+        "  - broad overclean/underpressure signals may still remain and require route/archetype targeted follow-up tuning passes.",
+        "- Pack proxy status:",
+        "  - composite_pack_pressure_v1 remains active as simulation/reporting-only proxy; no live group combat/targeting added.",
+    ]
+
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
     lines += ["", "## Target vs Observed v2 Signals", "This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix."]
@@ -730,8 +761,8 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
 
     lines += ["", "## Suspicious Clusters", f"Suspicious rows: {len(suspicious_rows)}."]
     progression_rows = list(report_data.get("progression_audit_rows", []))
-    progression_counts = dict(report_data.get("progression_audit_flag_counts", {}))
     lines += ["", "## Progression Audit Preview", "This section is diagnostic-only and not a tuning verdict.", "Gear assumptions use formula_budget_v1 simulation presets where available."]
+    lines.append("policy_failure_guard_loop is a simulation policy artifact flag, not a direct route tuning verdict.")
     if progression_counts:
         lines.append("Flag counts:")
         for flag_id in sorted(progression_counts.keys()):
@@ -756,11 +787,11 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
 
     lines += ["", "## Representative Suspicious Fight Traces"]
     traces = report_data.get("suspicious_traces", [])
+    lines.append(f"Showing up to {TRACE_LIMIT} route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.")
+    lines += ["| route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |", "|---|---|---|---|---|---|---|---:|---|---|"]
     if not traces:
         lines.append("No suspicious traces were detected for this deterministic compact run.")
     else:
-        lines.append(f"Showing up to {TRACE_LIMIT} route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.")
-        lines += ["| route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |", "|---|---|---|---|---|---|---|---:|---|---|"]
         for trace in traces[:TRACE_LIMIT]:
             lines.append(f"| {trace['route_id']} | {trace['stage']} | {trace['archetype_id']} | {trace['location_id']} | {trace['mob_id']} | {trace['winner']} | {trace['end_reason']} | {trace['turns']} | {trace.get('actions_used', {})} | {trace.get('skills_used', [])} |")
 

@@ -69,7 +69,7 @@ def test_all_archetypes_can_run_identity_visible_smoke_simulation_without_reward
 
 
 def test_executable_policy_registry_uses_only_safe_existing_policy_actions():
-    safe_ids = {"always_attack", "always_guard_fallback", "scripted_smoke"}
+    safe_ids = {"always_attack", "always_guard_fallback", "guard_then_attack", "scripted_smoke"}
     executable_ids = {
         policy_id for policy_id, item in EXECUTABLE_POLICY_REGISTRY.items() if item.get("executable") is True
     }

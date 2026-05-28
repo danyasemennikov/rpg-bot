@@ -3,6 +3,7 @@ from copy import deepcopy
 import pytest
 
 from game.mob_scaling import (
+    SIMULATION_STAGE_PRESSURE_MODIFIERS,
     build_scaled_mob_for_simulation,
     build_scaled_mob_stats,
     calculate_encounter_level_from_stage,
@@ -64,3 +65,32 @@ def test_build_scaled_mob_for_simulation_does_not_mutate_mobs_and_has_metadata()
     assert scaled["scaling_status"] == "formula_mob_scaling_v1"
     assert isinstance(scaled.get("base_mob_stats"), dict)
     assert isinstance(scaled.get("final_mob_stats"), dict)
+
+
+def test_stage_pressure_modifiers_exist_and_ordered():
+    for stage in ("soft_entry", "identity_visible", "build_testing", "route_exam"):
+        assert stage in SIMULATION_STAGE_PRESSURE_MODIFIERS
+    hp = [SIMULATION_STAGE_PRESSURE_MODIFIERS[s]["hp"] for s in ("soft_entry", "identity_visible", "build_testing", "route_exam")]
+    dmg = [SIMULATION_STAGE_PRESSURE_MODIFIERS[s]["damage"] for s in ("soft_entry", "identity_visible", "build_testing", "route_exam")]
+    assert hp[3] > hp[2] > hp[1] >= hp[0]
+    assert dmg[3] > dmg[2] > dmg[1] >= dmg[0]
+
+
+def test_stage_pressure_applies_to_scaled_stats_and_exposed_in_scale_components():
+    base = {"id": "x", "hp": 100, "damage": 20, "accuracy": 10, "defense": 10, "magic_defense": 10, "evasion": 10}
+    no_stage = build_scaled_mob_stats(base, encounter_level=70, mob_role="normal", route_id="route_westwild")
+    build = build_scaled_mob_stats(base, encounter_level=70, mob_role="normal", route_id="route_westwild", stage="build_testing")
+    exam = build_scaled_mob_stats(base, encounter_level=70, mob_role="normal", route_id="route_westwild", stage="route_exam")
+    assert build["hp"] > no_stage["hp"]
+    assert build["damage"] > no_stage["damage"]
+    assert exam["hp"] > build["hp"]
+    assert exam["damage"] > build["damage"]
+    assert "stage_pressure_modifier" in build["scale_components"]
+
+
+def test_soft_entry_stage_pressure_is_baseline():
+    base = {"id": "x", "hp": 100, "damage": 20}
+    no_stage = build_scaled_mob_stats(base, encounter_level=35, mob_role="normal", route_id="route_westwild")
+    soft = build_scaled_mob_stats(base, encounter_level=35, mob_role="normal", route_id="route_westwild", stage="soft_entry")
+    assert soft["hp"] == no_stage["hp"]
+    assert soft["damage"] == no_stage["damage"]
