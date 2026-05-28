@@ -105,6 +105,29 @@ def test_pr15_solo_role_refinement_is_not_pack_pressure():
     assert "full list available in report_data" in REPORT_PATH.read_text(encoding="utf-8")
 
 
+def test_pr15_accuracy_refinement_reaches_targeted_solo_run():
+    target = ("route_sunscar", "route_exam", "pure_support_solo_overlay")
+    assert PR15_ACTIONABLE_ROLE_REFINEMENTS[target].get("accuracy") == 1.08
+
+    report = build_default_alpha_simulation_report_v2_data()
+    runs = [
+        run
+        for run in report.get("runs", [])
+        if (run.get("route_id"), run.get("stage"), run.get("archetype_id")) == target
+    ]
+    assert runs
+    for run in runs:
+        scale_components = run.get("scale_components", {})
+        applied = scale_components.get("pr15_actionable_role_refinement", {})
+        skipped = scale_components.get("pr15_actionable_role_refinement_skipped", {})
+        final_stats = run.get("final_mob_stats", {})
+        assert applied.get("accuracy") == 1.08
+        assert "accuracy" in final_stats
+        assert final_stats["accuracy"] > 0
+        assert "accuracy" not in skipped
+        assert not skipped
+
+
 def test_project_state_pr15_header_section_and_no_stale_pr14_header():
     content = STATE_PATH.read_text(encoding="utf-8")
     header = content.split("---", 1)[0]

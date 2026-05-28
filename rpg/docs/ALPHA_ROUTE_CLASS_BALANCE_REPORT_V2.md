@@ -295,7 +295,7 @@ Showing 20 route-stage-balanced pack preview rows out of 140 pack runs. Hidden r
 Showing up to 10 route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.
 | route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |
 |---|---|---|---|---|---|---|---:|---|---|
-| route_sunscar | route_exam | pure_support_solo_overlay | sunscar_n10 | air_elemental | mob | player_death | 21 | {'normal_attack': 20, 'guard_fallback': 0, 'skill:regeneration': 1} | ['regeneration'] |
+| route_sunscar | route_exam | pure_support_solo_overlay | sunscar_n10 | air_elemental | mob | player_death | 20 | {'normal_attack': 19, 'guard_fallback': 0, 'skill:regeneration': 1} | ['regeneration'] |
 
 ## Diagnostic Label Definitions
 strong_clean, strong_but_risky, normal, hard, very_hard, death_blocked, timeout_stall, no_progress_stall, resource_collapse, policy_failure, inconclusive.

@@ -255,6 +255,22 @@ PR15_ACTIONABLE_ROLE_REFINEMENTS: dict[tuple[str, str, str], dict[str, float]] =
 }
 
 
+def _pr15_accuracy_fallback_baseline(scaled_mob: dict) -> int:
+    """Neutral combat accuracy rating contribution when mob accuracy is absent.
+
+    Live combat treats absent mob["accuracy"] as an additive 0 and still resolves
+    enemy hit chance from 100 + mob level * 2.  The PR15 refinement is
+    simulation/reporting-only, so when accuracy is configured but absent from the
+    sampled mob template we convert the multiplier into an additive accuracy
+    value based on that neutral enemy accuracy rating.
+    """
+    try:
+        mob_level = int(scaled_mob.get("level", 1) or 1)
+    except (TypeError, ValueError):
+        mob_level = 1
+    return 100 + mob_level * 2
+
+
 def _apply_pr15_actionable_role_refinement(scaled_mob: dict, route_id: str, stage: str, archetype_id: str) -> dict:
     multipliers = PR15_ACTIONABLE_ROLE_REFINEMENTS.get((route_id, stage, archetype_id))
     if not multipliers:
@@ -262,10 +278,20 @@ def _apply_pr15_actionable_role_refinement(scaled_mob: dict, route_id: str, stag
     adjusted = dict(scaled_mob)
     final_stats = dict(adjusted.get("final_mob_stats", {}))
     applied: dict[str, float] = {}
+    skipped: dict[str, str] = {}
     for stat_key, multiplier in multipliers.items():
-        if stat_key not in final_stats or not isinstance(final_stats.get(stat_key), (int, float)):
+        source_value = final_stats.get(stat_key)
+        if isinstance(source_value, (int, float)):
+            value = int(round(source_value * multiplier))
+        elif isinstance(adjusted.get(stat_key), (int, float)):
+            source_value = adjusted[stat_key]
+            value = int(round(source_value * multiplier))
+        elif stat_key == "accuracy":
+            baseline = _pr15_accuracy_fallback_baseline(adjusted)
+            value = int(round(baseline * (float(multiplier) - 1.0)))
+        else:
+            skipped[stat_key] = "missing_final_stat_and_top_level_value"
             continue
-        value = int(round(final_stats[stat_key] * multiplier))
         final_stats[stat_key] = max(1, value)
         adjusted[stat_key] = final_stats[stat_key]
         applied[stat_key] = multiplier
@@ -274,6 +300,7 @@ def _apply_pr15_actionable_role_refinement(scaled_mob: dict, route_id: str, stag
         adjusted["damage_max"] = adjusted["damage"]
     scale_components = dict(adjusted.get("scale_components", {}))
     scale_components["pr15_actionable_role_refinement"] = applied
+    scale_components["pr15_actionable_role_refinement_skipped"] = skipped
     adjusted["scale_components"] = scale_components
     adjusted["final_mob_stats"] = final_stats
     return adjusted
