@@ -257,6 +257,23 @@ def _select_representative_suspicious_traces(rows: list[dict[str, Any]], limit: 
 
     return selections
 
+
+
+def _resolve_mob_hp_max_for_diagnostics(run: dict[str, Any]) -> tuple[int | float | None, str]:
+    final_hp = (run.get("final_mob_stats") or {}).get("hp")
+    if isinstance(final_hp, (int, float)) and final_hp > 0:
+        return final_hp, "final_mob_stats"
+
+    base_hp = (run.get("base_mob_stats") or {}).get("hp")
+    if isinstance(base_hp, (int, float)) and base_hp > 0:
+        return base_hp, "base_mob_stats"
+
+    template_hp = (MOBS.get(run.get("mob_id"), {}) or {}).get("hp")
+    if isinstance(template_hp, (int, float)) and template_hp > 0:
+        return template_hp, "mobs_template"
+
+    return None, "missing"
+
 def _guard_like_action_count(actions: dict[str, Any]) -> int:
     guard_like_keys = {"guard", "guard_fallback", "fallback_guard"}
     total = 0
@@ -270,7 +287,7 @@ def _enrich_run(run: dict[str, Any]) -> dict[str, Any]:
     actions = run.get("actions_used", {}) or {}
     total_actions = max(1, sum(int(v) for v in actions.values()))
     player = build_archetype_player_preset(run["archetype_id"], run["stage"])
-    mob_hp_max = (MOBS.get(run["mob_id"], {}) or {}).get("hp")
+    mob_hp_max, mob_hp_source = _resolve_mob_hp_max_for_diagnostics(run)
     player_hp_max = player.get("max_hp")
     player_mana_max = player.get("max_mana")
     guard_like_count = _guard_like_action_count(actions)
@@ -283,13 +300,15 @@ def _enrich_run(run: dict[str, Any]) -> dict[str, Any]:
         "player_hp_remaining_pct": (run.get("player_hp_remaining", 0) / player_hp_max) if player_hp_max else None,
         "player_mana_remaining_pct": (run.get("player_mana_remaining", 0) / player_mana_max) if player_mana_max else None,
         "mob_hp_remaining_pct": (run.get("mob_hp_remaining", 0) / mob_hp_max) if mob_hp_max else None,
+        "mob_hp_max_for_diagnostics": mob_hp_max,
+        "mob_hp_max_source": mob_hp_source,
         "guard_action_rate": guard_action_rate,
         "guard_like_action_rate": guard_action_rate,
         "normal_attack_rate": normal_attack_rate,
         "skill_use_rate": skill_use_rate,
         "clean_win": run.get("winner") == "player" and run.get("player_hp_remaining", 0) >= (player_hp_max or 1) * 0.6,
         "low_hp_win": run.get("winner") == "player" and run.get("player_hp_remaining", 0) <= (player_hp_max or 1) * 0.2,
-        "no_progress": run.get("winner") != "player" and run.get("damage_dealt", 0) <= max(8, (mob_hp_max or 40) * 0.2),
+        "no_progress": run.get("winner") != "player" and run.get("damage_dealt", 0) <= (max(8, mob_hp_max * 0.2) if mob_hp_max else 8),
         "timeout_alive_stall": run.get("terminated_by_max_turns") and not run.get("player_dead") and not run.get("mob_dead"),
     }
 

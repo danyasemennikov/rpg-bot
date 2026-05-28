@@ -310,3 +310,59 @@ def test_v2_markdown_has_no_known_broken_separator_strings():
     md = render_alpha_simulation_report_v2_markdown(report)
     assert "| route | stage | archetype | target | observed_v1 | observed_diagnostic_label_v2 | reasons |\n|---|---|---|---|---|---:|---|---|---|---|" not in md
     assert "| route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |\n|---|---|---|---|---|---:|---|---|---|---|---:|---|---|" not in md
+
+
+def test_enrich_run_uses_final_scaled_hp_for_diagnostics():
+    run = {
+        "route_id": "route_westwild",
+        "stage": "route_exam",
+        "archetype_id": "guardian_shield_1h",
+        "location_id": "westwild_n10",
+        "mob_id": "bear",
+        "winner": "mob",
+        "terminated_by_max_turns": False,
+        "player_dead": True,
+        "mob_dead": False,
+        "player_hp_remaining": 0,
+        "player_mana_remaining": 20,
+        "mob_hp_remaining": 500,
+        "damage_dealt": 60,
+        "actions_used": {"normal_attack": 10},
+        "skills_used": [],
+        "final_mob_stats": {"hp": 659, "damage": 65},
+        "base_mob_stats": {"hp": 95},
+    }
+    enriched = _enrich_run(run)
+    assert enriched["mob_hp_remaining_pct"] == 500 / 659
+    assert enriched["no_progress"] is True
+    assert enriched["mob_hp_max_source"] == "final_mob_stats"
+
+
+def test_enrich_run_legacy_fallback_to_template_hp():
+    run = {
+        "route_id": "route_westwild",
+        "stage": "soft_entry",
+        "archetype_id": "guardian_shield_1h",
+        "location_id": "westwild_n1",
+        "mob_id": "bear",
+        "winner": "mob",
+        "terminated_by_max_turns": False,
+        "player_dead": True,
+        "mob_dead": False,
+        "player_hp_remaining": 0,
+        "player_mana_remaining": 0,
+        "mob_hp_remaining": 95,
+        "damage_dealt": 5,
+        "actions_used": {"normal_attack": 1},
+        "skills_used": [],
+    }
+    enriched = _enrich_run(run)
+    assert enriched["mob_hp_max_source"] == "mobs_template"
+    assert enriched["mob_hp_remaining_pct"] is not None
+
+
+def test_default_report_runs_have_sane_mob_hp_remaining_pct_bound():
+    report = build_default_alpha_simulation_report_v2_data()
+    values = [r.get("mob_hp_remaining_pct") for r in report.get("runs", []) if isinstance(r.get("mob_hp_remaining_pct"), (int, float))]
+    assert values
+    assert all(v <= 1.05 for v in values)
