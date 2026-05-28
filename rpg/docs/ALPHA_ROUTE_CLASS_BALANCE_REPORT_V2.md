@@ -19,24 +19,24 @@ This is a diagnostic and non-final report for future tuning scope decisions.
 - checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.
 
 ## Scenario Cards
-| route_id | stage | location_id | mob_id | spawn_profile | sample_tags | mob_stats |
-|---|---|---|---|---|---|---|
-| route_westwild | soft_entry | westwild_n1 | crow | normal | representative, solo, normal_spawn | {'hp': 18} |
-| route_westwild | identity_visible | westwild_n3 | forest_boar | normal | representative, solo, normal_spawn | {'hp': 60} |
-| route_westwild | build_testing | westwild_n6 | bear | normal | representative, solo, normal_spawn | {'hp': 95} |
-| route_westwild | route_exam | westwild_n10 | bear | normal | representative, solo, normal_spawn | {'hp': 95} |
-| route_frostspine | soft_entry | frostspine_n1 | mountain_rabbit | normal | representative, solo, normal_spawn | {'hp': 24} |
-| route_frostspine | identity_visible | frostspine_n3 | cave_bat | normal | representative, solo, normal_spawn | {'hp': 25} |
-| route_frostspine | build_testing | frostspine_n6 | mountain_stone_golem | normal | representative, solo, normal_spawn, elite_available | {'hp': 245} |
-| route_frostspine | route_exam | frostspine_n10 | ice_troll | normal | representative, solo, normal_spawn | {'hp': 178} |
-| route_ashen_ruins | soft_entry | ashen_n1 | skeleton_warrior | normal | representative, solo, normal_spawn | {'hp': 58} |
-| route_ashen_ruins | identity_visible | ashen_n3 | skeleton_mage | normal | representative, solo, normal_spawn | {'hp': 48} |
-| route_ashen_ruins | build_testing | ashen_n3b1 | cursed_knight | normal | representative, solo, normal_spawn, stage_override, elite_available | {'hp': 146} |
-| route_ashen_ruins | route_exam | ashen_n3b2a1 | ghost | normal | representative, solo, normal_spawn, stage_override | {'hp': 60} |
-| route_mireveil | soft_entry | mireveil_n1 | leech | normal | representative, solo, normal_spawn | {'hp': 38} |
-| route_mireveil | identity_visible | mireveil_n3 | swamp_spider | normal | representative, solo, normal_spawn | {'hp': 46} |
-| route_mireveil | build_testing | mireveil_n6 | giant_leech | normal | representative, solo, normal_spawn | {'hp': 85} |
-| route_mireveil | route_exam | mireveil_n10 | old_witch | normal | representative, solo, normal_spawn, elite_available | {'hp': 154} |
+| route_id | stage | location_id | mob_id | role | lvl | scaling | spawn_profile | sample_tags | final_mob_stats |
+|---|---|---|---|---|---:|---|---|---|---|
+| route_westwild | soft_entry | westwild_n1 | crow | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 25, 'damage': 4} |
+| route_westwild | identity_visible | westwild_n3 | forest_boar | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 153, 'damage': 12} |
+| route_westwild | build_testing | westwild_n6 | bear | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 461, 'damage': 47} |
+| route_westwild | route_exam | westwild_n10 | bear | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 659, 'damage': 65} |
+| route_frostspine | soft_entry | frostspine_n1 | mountain_rabbit | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 36, 'damage': 4} |
+| route_frostspine | identity_visible | frostspine_n3 | cave_bat | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 69, 'damage': 12} |
+| route_frostspine | build_testing | frostspine_n6 | mountain_stone_golem | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1283, 'damage': 84} |
+| route_frostspine | route_exam | frostspine_n10 | ice_troll | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 1334, 'damage': 125} |
+| route_ashen_ruins | soft_entry | ashen_n1 | skeleton_warrior | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 79, 'damage': 14} |
+| route_ashen_ruins | identity_visible | ashen_n3 | skeleton_mage | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 123, 'damage': 31} |
+| route_ashen_ruins | build_testing | ashen_n3b1 | cursed_knight | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override, elite_available | {'hp': 708, 'damage': 90} |
+| route_ashen_ruins | route_exam | ashen_n3b2a1 | ghost | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override | {'hp': 416, 'damage': 80} |
+| route_mireveil | soft_entry | mireveil_n1 | leech | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 54, 'damage': 9} |
+| route_mireveil | identity_visible | mireveil_n3 | swamp_spider | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 122, 'damage': 22} |
+| route_mireveil | build_testing | mireveil_n6 | giant_leech | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 429, 'damage': 61} |
+| route_mireveil | route_exam | mireveil_n10 | old_witch | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1111, 'damage': 168} |
 Showing first 16 of 20 scenario cards.
 
 ## Archetype Cards
@@ -71,7 +71,7 @@ Showing first 24 of 56 archetype cards.
 ## Route Overview
 | route_id | runs | win_rate | timeout_rate |
 |---|---:|---:|---:|
-| route_ashen_ruins | 56 | 0.86 | 0.14 |
+| route_ashen_ruins | 56 | 0.86 | 0.11 |
 | route_frostspine | 56 | 0.86 | 0.14 |
 | route_mireveil | 56 | 0.86 | 0.14 |
 | route_sunscar | 56 | 0.86 | 0.14 |
@@ -85,8 +85,8 @@ Showing first 24 of 56 archetype cards.
 | bow_sniper | 20 | 1.00 | 0.00 |
 | daggers_evasion | 20 | 1.00 | 0.00 |
 | daggers_venom | 20 | 1.00 | 0.00 |
-| guardian_shield_1h | 20 | 0.00 | 1.00 |
-| holy_rod_paladin | 20 | 0.00 | 1.00 |
+| guardian_shield_1h | 20 | 0.00 | 0.95 |
+| holy_rod_paladin | 20 | 0.00 | 0.95 |
 | holy_staff_solo | 20 | 1.00 | 0.00 |
 | magic_staff_control | 20 | 1.00 | 0.00 |
 | magic_staff_destruction | 20 | 1.00 | 0.00 |
@@ -148,32 +148,31 @@ Suspicious rows: 120.
 This section is diagnostic-only and not a tuning verdict.
 Gear assumptions use formula_budget_v1 simulation presets where available.
 Flag counts:
-- missing_encounter_level: 280
-- missing_mob_role: 280
+- hard_target_tested_on_weak_sample: 44
 - overclean_win: 80
 - policy_failure_guard_loop: 40
-| route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | target | observed_v2 | audit flags |
-|---|---|---|---:|---|---|---:|---:|---|---|---|---|---|
-| route_westwild | soft_entry | guardian_shield_1h | 10 | T1 | common | +0 | 287 | tank | crow | normal | policy_failure | missing_encounter_level, missing_mob_role, policy_failure_guard_loop |
-| route_westwild | soft_entry | sword_2h_burst | 10 | T1 | common | +0 | 287 | physical_dps | crow | normal | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | axe_2h_bruiser | 10 | T1 | common | +0 | 287 | bruiser | crow | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | daggers_venom | 10 | T1 | common | +0 | 287 | evasion_dps | crow | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | daggers_evasion | 10 | T1 | common | +0 | 287 | evasion_dps | crow | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | bow_sniper | 10 | T1 | common | +0 | 287 | bow_dps | crow | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | bow_ranger | 10 | T1 | common | +0 | 287 | bow_dps | crow | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | magic_staff_destruction | 10 | T1 | common | +0 | 287 | magic_dps | crow | normal | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | magic_staff_control | 10 | T1 | common | +0 | 287 | control_caster | crow | normal | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | wand_tempo | 10 | T1 | common | +0 | 287 | magic_dps | crow | normal | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | holy_staff_solo | 10 | T1 | common | +0 | 287 | healer_support | crow | hard | strong_clean | missing_encounter_level, missing_mob_role, overclean_win |
-| route_westwild | soft_entry | holy_rod_paladin | 10 | T1 | common | +0 | 287 | paladin_hybrid | crow | normal | policy_failure | missing_encounter_level, missing_mob_role, policy_failure_guard_loop |
-| route_westwild | soft_entry | tome_toolbox | 10 | T1 | common | +0 | 287 | toolbox_hybrid | crow | normal | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | soft_entry | pure_support_solo_overlay | 10 | T1 | common | +0 | 287 | healer_support | crow | hard | strong_clean | missing_encounter_level, missing_mob_role, overclean_win |
-| route_westwild | identity_visible | guardian_shield_1h | 35 | T4 | uncommon | +3 | 2040 | tank | forest_boar | normal | policy_failure | missing_encounter_level, missing_mob_role, policy_failure_guard_loop |
-| route_westwild | identity_visible | sword_2h_burst | 35 | T4 | uncommon | +3 | 2040 | physical_dps | forest_boar | normal | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | identity_visible | axe_2h_bruiser | 35 | T4 | uncommon | +3 | 2040 | bruiser | forest_boar | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | identity_visible | daggers_venom | 35 | T4 | uncommon | +3 | 2040 | evasion_dps | forest_boar | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | identity_visible | daggers_evasion | 35 | T4 | uncommon | +3 | 2040 | evasion_dps | forest_boar | strong | strong_clean | missing_encounter_level, missing_mob_role |
-| route_westwild | identity_visible | bow_sniper | 35 | T4 | uncommon | +3 | 2040 | bow_dps | forest_boar | strong | strong_clean | missing_encounter_level, missing_mob_role |
+| route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | role | encounter | scaled_hp | scaled_damage | target | observed_v2 | audit flags |
+|---|---|---|---:|---|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|
+| route_westwild | soft_entry | guardian_shield_1h | 10 | T1 | common | +0 | 287 | tank | crow | normal | 10 | 25 | 4 | normal | policy_failure | policy_failure_guard_loop |
+| route_westwild | soft_entry | sword_2h_burst | 10 | T1 | common | +0 | 287 | physical_dps | crow | normal | 10 | 25 | 4 | normal | strong_clean |  |
+| route_westwild | soft_entry | axe_2h_bruiser | 10 | T1 | common | +0 | 287 | bruiser | crow | normal | 10 | 25 | 4 | strong | strong_clean |  |
+| route_westwild | soft_entry | daggers_venom | 10 | T1 | common | +0 | 287 | evasion_dps | crow | normal | 10 | 25 | 4 | strong | strong_clean |  |
+| route_westwild | soft_entry | daggers_evasion | 10 | T1 | common | +0 | 287 | evasion_dps | crow | normal | 10 | 25 | 4 | strong | strong_clean |  |
+| route_westwild | soft_entry | bow_sniper | 10 | T1 | common | +0 | 287 | bow_dps | crow | normal | 10 | 25 | 4 | strong | strong_clean |  |
+| route_westwild | soft_entry | bow_ranger | 10 | T1 | common | +0 | 287 | bow_dps | crow | normal | 10 | 25 | 4 | strong | strong_clean |  |
+| route_westwild | soft_entry | magic_staff_destruction | 10 | T1 | common | +0 | 287 | magic_dps | crow | normal | 10 | 25 | 4 | normal | strong_clean |  |
+| route_westwild | soft_entry | magic_staff_control | 10 | T1 | common | +0 | 287 | control_caster | crow | normal | 10 | 25 | 4 | normal | strong_clean |  |
+| route_westwild | soft_entry | wand_tempo | 10 | T1 | common | +0 | 287 | magic_dps | crow | normal | 10 | 25 | 4 | normal | strong_clean |  |
+| route_westwild | soft_entry | holy_staff_solo | 10 | T1 | common | +0 | 287 | healer_support | crow | normal | 10 | 25 | 4 | hard | strong_clean | overclean_win |
+| route_westwild | soft_entry | holy_rod_paladin | 10 | T1 | common | +0 | 287 | paladin_hybrid | crow | normal | 10 | 25 | 4 | normal | policy_failure | policy_failure_guard_loop |
+| route_westwild | soft_entry | tome_toolbox | 10 | T1 | common | +0 | 287 | toolbox_hybrid | crow | normal | 10 | 25 | 4 | normal | strong_clean |  |
+| route_westwild | soft_entry | pure_support_solo_overlay | 10 | T1 | common | +0 | 287 | healer_support | crow | normal | 10 | 25 | 4 | hard | strong_clean | overclean_win |
+| route_westwild | identity_visible | guardian_shield_1h | 35 | T4 | uncommon | +3 | 2040 | tank | forest_boar | normal | 35 | 153 | 12 | normal | policy_failure | policy_failure_guard_loop |
+| route_westwild | identity_visible | sword_2h_burst | 35 | T4 | uncommon | +3 | 2040 | physical_dps | forest_boar | normal | 35 | 153 | 12 | normal | strong_clean |  |
+| route_westwild | identity_visible | axe_2h_bruiser | 35 | T4 | uncommon | +3 | 2040 | bruiser | forest_boar | normal | 35 | 153 | 12 | strong | strong_clean |  |
+| route_westwild | identity_visible | daggers_venom | 35 | T4 | uncommon | +3 | 2040 | evasion_dps | forest_boar | normal | 35 | 153 | 12 | strong | strong_clean |  |
+| route_westwild | identity_visible | daggers_evasion | 35 | T4 | uncommon | +3 | 2040 | evasion_dps | forest_boar | normal | 35 | 153 | 12 | strong | strong_clean |  |
+| route_westwild | identity_visible | bow_sniper | 35 | T4 | uncommon | +3 | 2040 | bow_dps | forest_boar | normal | 35 | 153 | 12 | strong | strong_clean |  |
 Showing first 20 of 280 progression audit rows. Hidden rows are not resolved or dismissed.
 
 ## Representative Suspicious Fight Traces

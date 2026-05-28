@@ -166,21 +166,19 @@ PR8 note (implemented diagnostic layer only):
 - PR8 introduces progression-aware audit context in simulation reports.
 - PR8 does not implement equipment budgets or encounter-level scaling.
 - Gear rarity/enhancement assumptions were pending PR9 in PR8 and are now implemented in PR9 simulation/reporting scope.
-- Encounter-level scaling remains pending PR10.
 
 
 ## M. Release-grade Balance Arc
 Implemented diagnostic/foundation steps:
 - **PR8:** Progression-aware Simulation Audit
 - **PR9:** Equipment Budget Foundation
+- **PR10:** Mob Encounter Scaling Foundation
 
 Planned future work:
-- **PR10:** Mob Encounter Scaling Foundation
 - **PR11:** Pack/Group Simulation Harness
 - **PR12:** First Real Tuning Pass
 
-PR9 does not implement PR10/PR11/PR12:
-- mob encounter scaling remains pending PR10;
+PR10 does not implement PR11/PR12:
 - pack/group simulation remains pending PR11;
 - first real tuning pass remains pending PR12.
 
@@ -199,4 +197,13 @@ PR7 non-goals:
 PR9 note (implemented simulation/reporting foundation only):
 - PR9 implements item-level budget, slot weights, rarity multipliers, enhancement multipliers, archetype allocation profiles, and simulation gear presets for headless simulation/reporting.
 - PR9 does not change live equipment runtime, loot/crafting/drop behavior, or player DB/equipment migration.
-- PR9 does not implement mob encounter scaling; PR10 remains responsible for encounter-level scaling.
+- PR9 did not implement mob encounter scaling; PR10 later implemented simulation/reporting encounter scaling.
+
+
+PR10 note (implemented simulation/reporting foundation only):
+- PR10 implements formula-based mob encounter scaling for simulation/reporting.
+- Final simulation mob stats now use base template × encounter level curve × mob role multiplier × route pressure modifier.
+- PR10 does not change live mob templates or live gameplay behavior.
+- PR10 does not change rewards, loot/crafting, equipment runtime, or player DB.
+- PR10 does not implement pack/group simulation; PR11 remains responsible.
+- PR10 is not the first real tuning pass; PR12 remains responsible.

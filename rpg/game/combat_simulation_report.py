@@ -257,6 +257,23 @@ def _select_representative_suspicious_traces(rows: list[dict[str, Any]], limit: 
 
     return selections
 
+
+
+def _resolve_mob_hp_max_for_diagnostics(run: dict[str, Any]) -> tuple[int | float | None, str]:
+    final_hp = (run.get("final_mob_stats") or {}).get("hp")
+    if isinstance(final_hp, (int, float)) and final_hp > 0:
+        return final_hp, "final_mob_stats"
+
+    base_hp = (run.get("base_mob_stats") or {}).get("hp")
+    if isinstance(base_hp, (int, float)) and base_hp > 0:
+        return base_hp, "base_mob_stats"
+
+    template_hp = (MOBS.get(run.get("mob_id"), {}) or {}).get("hp")
+    if isinstance(template_hp, (int, float)) and template_hp > 0:
+        return template_hp, "mobs_template"
+
+    return None, "missing"
+
 def _guard_like_action_count(actions: dict[str, Any]) -> int:
     guard_like_keys = {"guard", "guard_fallback", "fallback_guard"}
     total = 0
@@ -270,7 +287,7 @@ def _enrich_run(run: dict[str, Any]) -> dict[str, Any]:
     actions = run.get("actions_used", {}) or {}
     total_actions = max(1, sum(int(v) for v in actions.values()))
     player = build_archetype_player_preset(run["archetype_id"], run["stage"])
-    mob_hp_max = (MOBS.get(run["mob_id"], {}) or {}).get("hp")
+    mob_hp_max, mob_hp_source = _resolve_mob_hp_max_for_diagnostics(run)
     player_hp_max = player.get("max_hp")
     player_mana_max = player.get("max_mana")
     guard_like_count = _guard_like_action_count(actions)
@@ -283,13 +300,15 @@ def _enrich_run(run: dict[str, Any]) -> dict[str, Any]:
         "player_hp_remaining_pct": (run.get("player_hp_remaining", 0) / player_hp_max) if player_hp_max else None,
         "player_mana_remaining_pct": (run.get("player_mana_remaining", 0) / player_mana_max) if player_mana_max else None,
         "mob_hp_remaining_pct": (run.get("mob_hp_remaining", 0) / mob_hp_max) if mob_hp_max else None,
+        "mob_hp_max_for_diagnostics": mob_hp_max,
+        "mob_hp_max_source": mob_hp_source,
         "guard_action_rate": guard_action_rate,
         "guard_like_action_rate": guard_action_rate,
         "normal_attack_rate": normal_attack_rate,
         "skill_use_rate": skill_use_rate,
         "clean_win": run.get("winner") == "player" and run.get("player_hp_remaining", 0) >= (player_hp_max or 1) * 0.6,
         "low_hp_win": run.get("winner") == "player" and run.get("player_hp_remaining", 0) <= (player_hp_max or 1) * 0.2,
-        "no_progress": run.get("winner") != "player" and run.get("damage_dealt", 0) <= max(8, (mob_hp_max or 40) * 0.2),
+        "no_progress": run.get("winner") != "player" and run.get("damage_dealt", 0) <= (max(8, mob_hp_max * 0.2) if mob_hp_max else 8),
         "timeout_alive_stall": run.get("terminated_by_max_turns") and not run.get("player_dead") and not run.get("mob_dead"),
     }
 
@@ -328,7 +347,7 @@ def _build_scenario_cards(matrix: dict) -> list[dict[str, Any]]:
             seen.add(key)
             loc = WORLD_LOCATIONS.get(run["location_id"], {})
             mob = MOBS.get(run["mob_id"], {})
-            cards.append({"route_id": run["route_id"], "stage": run["stage"], "location_id": run["location_id"], "mob_id": run["mob_id"], "spawn_profile": run.get("spawn_profile", "normal"), "sample_tags": list(run.get("sample_tags", [])), "location_name": loc.get("name") or loc.get("display_name"), "mob_stats": {k: mob[k] for k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense", "aggression") if k in mob}})
+            cards.append({"route_id": run["route_id"], "stage": run["stage"], "location_id": run["location_id"], "mob_id": run["mob_id"], "spawn_profile": run.get("spawn_profile", "normal"), "sample_tags": list(run.get("sample_tags", [])), "location_name": loc.get("name") or loc.get("display_name"), "mob_role": run.get("mob_role"), "encounter_level": run.get("encounter_level"), "scaling_status": run.get("scaling_status"), "base_mob_stats": run.get("base_mob_stats", {}), "final_mob_stats": run.get("final_mob_stats", {}), "mob_stats": {k: mob[k] for k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense", "aggression") if k in mob}})
     if cards:
         return cards
     # fallback when raw runs are unavailable
@@ -420,7 +439,10 @@ def _build_progression_audit_rows(enriched_runs: list[dict[str, Any]], summaries
             "encounter_level": run.get("encounter_level"),
             "mob_role": run.get("mob_role"),
             "spawn_profile": run.get("spawn_profile"),
-            "final_mob_stats": {k: mob[k] for k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense") if k in mob},
+            "scaling_status": run.get("scaling_status"),
+            "base_mob_stats": dict(run.get("base_mob_stats", {})),
+            "final_mob_stats": dict(run.get("final_mob_stats", {})),
+            "route_pressure_modifier": dict((run.get("scale_components") or {}).get("route_modifier", {})),
             "target_label": target.get("normalized_target_label") or target.get("target_label"),
             "observed_label": target.get("observed_label"),
             "observed_diagnostic_label_v2": summary.get("observed_diagnostic_label_v2"),
@@ -610,10 +632,10 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
 
 
 def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
-    lines = ["# Alpha Route/Class Balance Report v2", "", "## Summary", "This is a diagnostic and non-final report for future tuning scope decisions.", "", "## Methodology", "- Deterministic representative solo route-stage simulations.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Runs: {report_data.get('run_count', 0)}", "", "## Scope and Non-goals", "- No route/mob/skill/reward/formula tuning.", "- No Combat Core rewrite.", "- No smart autobattle and no live AFK/autopilot.", "- No group/pack simulation matrix.", "", "## Diagnostic Config", "- checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.", "", "## Scenario Cards", "| route_id | stage | location_id | mob_id | spawn_profile | sample_tags | mob_stats |", "|---|---|---|---|---|---|---|"]
+    lines = ["# Alpha Route/Class Balance Report v2", "", "## Summary", "This is a diagnostic and non-final report for future tuning scope decisions.", "", "## Methodology", "- Deterministic representative solo route-stage simulations.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Runs: {report_data.get('run_count', 0)}", "", "## Scope and Non-goals", "- No route/mob/skill/reward/formula tuning.", "- No Combat Core rewrite.", "- No smart autobattle and no live AFK/autopilot.", "- No group/pack simulation matrix.", "", "## Diagnostic Config", "- checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.", "", "## Scenario Cards", "| route_id | stage | location_id | mob_id | role | lvl | scaling | spawn_profile | sample_tags | final_mob_stats |", "|---|---|---|---|---|---:|---|---|---|---|"]
     scenario_cards = report_data.get("scenario_cards", [])
     for card in scenario_cards[:SCENARIO_PREVIEW_LIMIT]:
-        lines.append(f"| {card['route_id']} | {card['stage']} | {card['location_id']} | {card['mob_id']} | {card['spawn_profile']} | {', '.join(card.get('sample_tags', []))} | {card.get('mob_stats', {})} |")
+        lines.append(f"| {card['route_id']} | {card['stage']} | {card['location_id']} | {card['mob_id']} | {card.get('mob_role','normal')} | {card.get('encounter_level','')} | {card.get('scaling_status','')} | {card['spawn_profile']} | {', '.join(card.get('sample_tags', []))} | {card.get('final_mob_stats', {})} |")
     if len(scenario_cards) > SCENARIO_PREVIEW_LIMIT:
         lines.append(f"Showing first {SCENARIO_PREVIEW_LIMIT} of {len(scenario_cards)} scenario cards.")
 
@@ -655,11 +677,12 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
             lines.append(f"- {flag_id}: {progression_counts[flag_id]}")
     else:
         lines.append("No progression audit flags were emitted.")
-    lines += ["| route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | target | observed_v2 | audit flags |", "|---|---|---|---:|---|---|---:|---:|---|---|---|---|---|"]
+    lines += ["| route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | role | encounter | scaled_hp | scaled_damage | target | observed_v2 | audit flags |", "|---|---|---|---:|---|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|"]
     preview = progression_rows[:PROGRESSION_AUDIT_PREVIEW_LIMIT]
     for row in preview:
         gp = row.get('simulation_gear_preset') or {}
-        lines.append(f"| {row.get('route_id')} | {row.get('stage')} | {row.get('archetype_id')} | {row.get('assumed_player_level')} | {row.get('gear_tier')} | {row.get('gear_rarity_assumption')} | +{row.get('enhancement_assumption')} | {gp.get('total_budget')} | {gp.get('profile_id')} | {row.get('mob_id')} | {row.get('target_label')} | {row.get('observed_diagnostic_label_v2')} | {', '.join(row.get('audit_flag_ids', []))} |")
+        scaled = row.get('final_mob_stats') or {}
+        lines.append(f"| {row.get('route_id')} | {row.get('stage')} | {row.get('archetype_id')} | {row.get('assumed_player_level')} | {row.get('gear_tier')} | {row.get('gear_rarity_assumption')} | +{row.get('enhancement_assumption')} | {gp.get('total_budget')} | {gp.get('profile_id')} | {row.get('mob_id')} | {row.get('mob_role')} | {row.get('encounter_level')} | {scaled.get('hp')} | {scaled.get('damage')} | {row.get('target_label')} | {row.get('observed_diagnostic_label_v2')} | {', '.join(row.get('audit_flag_ids', []))} |")
     if len(progression_rows) > PROGRESSION_AUDIT_PREVIEW_LIMIT:
         lines.append(f"Showing first {PROGRESSION_AUDIT_PREVIEW_LIMIT} of {len(progression_rows)} progression audit rows. Hidden rows are not resolved or dismissed.")
 

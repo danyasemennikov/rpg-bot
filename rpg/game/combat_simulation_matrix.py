@@ -21,6 +21,12 @@ from game.combat_simulation_archetypes import (
 )
 from game.locations import WORLD_LOCATIONS
 from game.mobs import MOBS
+from game.mob_scaling import (
+    ROLE_ELITE,
+    ROLE_NORMAL,
+    SCALING_STATUS_FORMULA_V1,
+    build_scaled_mob_for_simulation,
+)
 
 ALPHA_SIMULATION_ROUTE_IDS = (
     "route_westwild",
@@ -186,6 +192,13 @@ def _label_observed_pressure(summary: dict[str, Any]) -> str:
     return "inconclusive"
 
 
+def _resolve_sample_mob_role(sample: RouteStageMobSample) -> str:
+    tags = {str(t).lower() for t in sample.sample_tags}
+    if str(sample.spawn_profile).lower() == "elite" and "elite" in tags:
+        return ROLE_ELITE
+    return ROLE_NORMAL
+
+
 def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = None) -> dict:
     cfg = config or RouteStageMatrixConfig()
     runs: list[dict[str, Any]] = []
@@ -205,7 +218,10 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                 for sample in samples:
                     for seed in cfg.seeds:
                         player = build_archetype_player_preset(archetype_id, power_tier=stage)
+                        mob_role = _resolve_sample_mob_role(sample)
+                        scaled_mob = build_scaled_mob_for_simulation(sample.mob_id, route_id, stage, mob_role=mob_role)
                         mob = build_simulation_mob_preset(sample.mob_id)
+                        mob.update({k: v for k, v in scaled_mob.items() if k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense", "damage_min", "damage_max")})
                         skill_levels = build_archetype_simulation_skill_levels(archetype_id, power_tier=stage)
                         result = simulate_single_combat(
                             player,
@@ -219,6 +235,12 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                             "spawn_profile": sample.spawn_profile,
                             "sample_tags": list(sample.sample_tags),
                             "sample_source_route_id": str((WORLD_LOCATIONS.get(sample.location_id) or {}).get("route_id") or ""),
+                            "encounter_level": scaled_mob.get("encounter_level"),
+                            "mob_role": mob_role,
+                            "scaling_status": scaled_mob.get("scaling_status", SCALING_STATUS_FORMULA_V1),
+                            "base_mob_stats": dict(scaled_mob.get("base_mob_stats", {})),
+                            "final_mob_stats": dict(scaled_mob.get("final_mob_stats", {})),
+                            "scale_components": dict(scaled_mob.get("scale_components", {})),
                             "winner": result.winner, "turns": result.turns,
                             "terminated_by_max_turns": result.terminated_by_max_turns,
                             "player_dead": result.player_dead, "mob_dead": result.mob_dead,

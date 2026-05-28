@@ -24,6 +24,8 @@ FLAG_OVERCLEAN_WIN = "overclean_win"
 FLAG_POLICY_FAILURE_GUARD_LOOP = "policy_failure_guard_loop"
 FLAG_SUPPORT_OVERSTALL = "support_overstall"
 FLAG_MISSING_SIMULATION_GEAR_PRESET = "missing_simulation_gear_preset"
+FLAG_MISSING_MOB_SCALING_CONTEXT = "missing_mob_scaling_context"
+FLAG_MISSING_FINAL_MOB_STATS = "missing_final_mob_stats"
 
 PRESSURE_OR_HIGH_ROLES = {"pressure", "elite", "pack_member", "pack_leader", "boss"}
 
@@ -264,6 +266,12 @@ def audit_progression_context_rows(rows: list[dict[str, Any]]) -> list[BalanceAu
             flags.append(build_balance_audit_flag(FLAG_MISSING_ENCOUNTER_LEVEL, "warning", "sample_row", row_id, "Encounter level is missing in progression audit row.", {"stage": stage}))
         if mob_role in (None, ""):
             flags.append(build_balance_audit_flag(FLAG_MISSING_MOB_ROLE, "warning", "sample_row", row_id, "Mob role is missing in progression audit row.", {"stage": stage}))
+        scaling_status = row.get("scaling_status")
+        final_mob_stats = row.get("final_mob_stats")
+        if scaling_status != "formula_mob_scaling_v1":
+            flags.append(build_balance_audit_flag(FLAG_MISSING_MOB_SCALING_CONTEXT, "warning", "sample_row", row_id, "Mob scaling context is missing or not formula_mob_scaling_v1.", {"stage": stage, "scaling_status": scaling_status}))
+        if not isinstance(final_mob_stats, dict) or not final_mob_stats:
+            flags.append(build_balance_audit_flag(FLAG_MISSING_FINAL_MOB_STATS, "warning", "sample_row", row_id, "Final scaled mob stats are missing in progression audit row.", {"stage": stage}))
         gear_preset = row.get("simulation_gear_preset")
         assumption_status = str(row.get("assumption_status") or "")
         valid_status = assumption_status in {"formula_budget_v1", "formula_budget_v1_toolbox_fallback"}

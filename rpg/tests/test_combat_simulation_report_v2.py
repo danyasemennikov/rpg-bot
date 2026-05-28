@@ -277,3 +277,92 @@ def test_valid_formula_budget_rows_not_all_flagged_missing_preset():
     valid_rows = [r for r in report["progression_audit_rows"] if r.get("assumption_status") == "formula_budget_v1"]
     assert valid_rows
     assert any("missing_simulation_gear_preset" not in r.get("audit_flag_ids", []) for r in valid_rows)
+
+
+def test_progression_rows_include_mob_scaling_context_and_stats():
+    report = build_default_alpha_simulation_report_v2_data()
+    rows = report["progression_audit_rows"]
+    assert rows
+    assert all(r.get("encounter_level") is not None for r in rows)
+    assert all(r.get("mob_role") for r in rows)
+    assert all(r.get("scaling_status") == "formula_mob_scaling_v1" for r in rows)
+    exam_normals = [r for r in rows if r.get("stage") == "route_exam" and r.get("mob_role") == "normal"]
+    assert exam_normals
+    assert any((r.get("final_mob_stats", {}).get("hp", 0) > r.get("base_mob_stats", {}).get("hp", 0)) for r in exam_normals)
+
+
+def test_progression_flag_counts_no_global_missing_encounter_or_mob_role():
+    report = build_default_alpha_simulation_report_v2_data()
+    counts = report.get("progression_audit_flag_counts", {})
+    assert counts.get("missing_encounter_level", 0) == 0
+    assert counts.get("missing_mob_role", 0) == 0
+
+
+def test_v2_markdown_contains_scaled_mob_context():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "formula_mob_scaling_v1" in md
+    assert "| route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | role | encounter | scaled_hp | scaled_damage | target | observed_v2 | audit flags |" in md
+
+
+def test_v2_markdown_has_no_known_broken_separator_strings():
+    report = build_default_alpha_simulation_report_v2_data()
+    md = render_alpha_simulation_report_v2_markdown(report)
+    assert "| route | stage | archetype | target | observed_v1 | observed_diagnostic_label_v2 | reasons |\n|---|---|---|---|---|---:|---|---|---|---|" not in md
+    assert "| route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |\n|---|---|---|---|---|---:|---|---|---|---|---:|---|---|" not in md
+
+
+def test_enrich_run_uses_final_scaled_hp_for_diagnostics():
+    run = {
+        "route_id": "route_westwild",
+        "stage": "route_exam",
+        "archetype_id": "guardian_shield_1h",
+        "location_id": "westwild_n10",
+        "mob_id": "bear",
+        "winner": "mob",
+        "terminated_by_max_turns": False,
+        "player_dead": True,
+        "mob_dead": False,
+        "player_hp_remaining": 0,
+        "player_mana_remaining": 20,
+        "mob_hp_remaining": 500,
+        "damage_dealt": 60,
+        "actions_used": {"normal_attack": 10},
+        "skills_used": [],
+        "final_mob_stats": {"hp": 659, "damage": 65},
+        "base_mob_stats": {"hp": 95},
+    }
+    enriched = _enrich_run(run)
+    assert enriched["mob_hp_remaining_pct"] == 500 / 659
+    assert enriched["no_progress"] is True
+    assert enriched["mob_hp_max_source"] == "final_mob_stats"
+
+
+def test_enrich_run_legacy_fallback_to_template_hp():
+    run = {
+        "route_id": "route_westwild",
+        "stage": "soft_entry",
+        "archetype_id": "guardian_shield_1h",
+        "location_id": "westwild_n1",
+        "mob_id": "bear",
+        "winner": "mob",
+        "terminated_by_max_turns": False,
+        "player_dead": True,
+        "mob_dead": False,
+        "player_hp_remaining": 0,
+        "player_mana_remaining": 0,
+        "mob_hp_remaining": 95,
+        "damage_dealt": 5,
+        "actions_used": {"normal_attack": 1},
+        "skills_used": [],
+    }
+    enriched = _enrich_run(run)
+    assert enriched["mob_hp_max_source"] == "mobs_template"
+    assert enriched["mob_hp_remaining_pct"] is not None
+
+
+def test_default_report_runs_have_sane_mob_hp_remaining_pct_bound():
+    report = build_default_alpha_simulation_report_v2_data()
+    values = [r.get("mob_hp_remaining_pct") for r in report.get("runs", []) if isinstance(r.get("mob_hp_remaining_pct"), (int, float))]
+    assert values
+    assert all(v <= 1.05 for v in values)
