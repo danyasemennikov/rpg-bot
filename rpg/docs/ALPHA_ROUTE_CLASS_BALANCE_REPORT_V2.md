@@ -194,11 +194,11 @@ Showing 20 route-stage-balanced pack preview rows out of 140 pack runs. Hidden r
 | route_mireveil | build_testing | mireveil_build_swarm | bow_ranger | 3 | 646 | 76 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
 | route_sunscar | build_testing | sunscar_build_scorpion | bow_ranger | 3 | 741 | 108 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | bow_ranger | 3 | 704 | 52 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
-| route_ashen_ruins | build_testing | ashen_build_undead | bow_sniper | 3 | 1088 | 106 | strong_clean | composite_pack_pressure_v1 | player | 5 | none |
-| route_frostspine | build_testing | frost_build_wolves | bow_sniper | 3 | 972 | 80 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 646 | 76 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 741 | 108 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_westwild | build_testing | westwild_build_wolf_boar | bow_sniper | 3 | 704 | 52 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | bow_sniper | 3 | 1088 | 106 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_frostspine | build_testing | frost_build_wolves | bow_sniper | 3 | 972 | 80 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 646 | 76 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 741 | 108 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_westwild | build_testing | westwild_build_wolf_boar | bow_sniper | 3 | 704 | 52 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 
 ## Representative Suspicious Fight Traces
 Showing up to 10 route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.

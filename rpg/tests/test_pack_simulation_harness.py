@@ -37,6 +37,11 @@ def test_build_composite_pack_positive_and_metadata_and_no_mutation():
     mob = build_composite_pack_mob_for_simulation(sample)
     assert mob["hp"] > 0 and mob["damage"] > 0
     assert mob["pack_simulation_status"] == PACK_SIMULATION_STATUS_COMPOSITE_V1
+    assert mob["damage"] == mob["final_pack_stats"]["damage"]
+    assert mob["damage_min"] == mob["damage"] == mob["damage_max"]
+    assert mob["final_pack_stats"]["damage_min"] == mob["damage_min"]
+    assert mob["final_pack_stats"]["damage_max"] == mob["damage_max"]
+    assert mob["pack_aggregation"]["damage_range_source"] == "deterministic_composite_damage"
     assert MOBS == before
 
 
@@ -58,3 +63,13 @@ def test_pack_audit_coverage_default_has_no_missing_pack_sample():
     samples = [s.__dict__ for s in list_alpha_pack_samples()]
     flags = audit_pack_sample_coverage(samples, ["route_westwild", "route_frostspine", "route_ashen_ruins", "route_mireveil", "route_sunscar"], PACK_REQUIRED_STAGES)
     assert FLAG_MISSING_PACK_SAMPLE not in {f.flag_id for f in flags}
+
+
+def test_composite_damage_range_not_inherited_from_first_member_template():
+    sample = next(s for s in list_alpha_pack_samples() if s.pack_id == "westwild_build_wolf_boar")
+    mob = build_composite_pack_mob_for_simulation(sample)
+    first_member = MOBS[sample.members[0].mob_id]
+    inherited_min = first_member.get("damage_min")
+    inherited_max = first_member.get("damage_max")
+    if mob["damage"] != int(round((inherited_min + inherited_max) / 2)):
+        assert (mob["damage_min"], mob["damage_max"]) != (inherited_min, inherited_max)

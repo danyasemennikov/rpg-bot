@@ -28,6 +28,11 @@ class PackSimulationSample:
     tags: tuple[str, ...] = ()
 
 
+def _build_composite_damage_range(composite_damage: int) -> tuple[int, int]:
+    damage = max(1, int(composite_damage))
+    return damage, damage
+
+
 def list_alpha_pack_samples() -> list[PackSimulationSample]:
     return [
         PackSimulationSample("westwild_build_wolf_boar", "route_westwild", "build_testing", "westwild_n7", (PackMemberSpec("forest_wolf", count=2), PackMemberSpec("forest_boar", role=ROLE_PACK_LEADER))),
@@ -56,12 +61,13 @@ def build_composite_pack_mob_for_simulation(sample: PackSimulationSample) -> dic
     hp = sum(m["final_mob_stats"].get("hp", 0) for m in member_stats)
     raw_damage = sum(m["final_mob_stats"].get("damage", 0) for m in member_stats)
     dmg = max(1, int(round(raw_damage * PACK_SIMULTANEITY_DAMAGE_FACTOR)))
+    damage_min, damage_max = _build_composite_damage_range(dmg)
     acc = max((m["final_mob_stats"].get("accuracy", 0) for m in member_stats), default=0)
     ev = max((m["final_mob_stats"].get("evasion", 0) for m in member_stats), default=0)
     df = int(round(sum(m["final_mob_stats"].get("defense", 0) for m in member_stats) / max(1, len(member_stats))))
     mdf = int(round(sum(m["final_mob_stats"].get("magic_defense", 0) for m in member_stats) / max(1, len(member_stats))))
     mob = build_simulation_mob_preset(member_stats[0]["mob_id"])
-    mob.update({"id": f"pack::{sample.pack_id}", "name": f"Pack {sample.pack_id}", "hp": max(1, hp), "damage": dmg, "accuracy": acc, "evasion": ev, "defense": df, "magic_defense": mdf})
+    mob.update({"id": f"pack::{sample.pack_id}", "name": f"Pack {sample.pack_id}", "hp": max(1, hp), "damage": dmg, "damage_min": damage_min, "damage_max": damage_max, "accuracy": acc, "evasion": ev, "defense": df, "magic_defense": mdf})
     mob["pack_id"] = sample.pack_id
     mob["route_id"] = sample.route_id
     mob["stage"] = sample.stage
@@ -70,8 +76,8 @@ def build_composite_pack_mob_for_simulation(sample: PackSimulationSample) -> dic
     mob["pack_members"] = [{"mob_id": s.mob_id, "role": s.role, "count": s.count} for s in sample.members]
     mob["pack_member_final_stats"] = member_stats
     mob["pack_simulation_status"] = PACK_SIMULATION_STATUS_COMPOSITE_V1
-    mob["pack_aggregation"] = {"method": "composite_pressure_v1", "damage_factor": PACK_SIMULTANEITY_DAMAGE_FACTOR, "defense_aggregation": "average", "magic_defense_aggregation": "average", "accuracy_aggregation": "max", "evasion_aggregation": "max"}
-    mob["final_pack_stats"] = {"hp": mob["hp"], "damage": mob["damage"], "accuracy": acc, "evasion": ev, "defense": df, "magic_defense": mdf}
+    mob["pack_aggregation"] = {"method": "composite_pressure_v1", "damage_factor": PACK_SIMULTANEITY_DAMAGE_FACTOR, "damage_range_source": "deterministic_composite_damage", "defense_aggregation": "average", "magic_defense_aggregation": "average", "accuracy_aggregation": "max", "evasion_aggregation": "max"}
+    mob["final_pack_stats"] = {"hp": mob["hp"], "damage": mob["damage"], "damage_min": mob["damage_min"], "damage_max": mob["damage_max"], "accuracy": acc, "evasion": ev, "defense": df, "magic_defense": mdf}
     return mob
 
 
