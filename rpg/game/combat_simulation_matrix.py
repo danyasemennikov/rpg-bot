@@ -259,13 +259,13 @@ def _pr15_accuracy_fallback_baseline(scaled_mob: dict) -> int:
     """Neutral combat accuracy rating contribution when mob accuracy is absent.
 
     Live combat treats absent mob["accuracy"] as an additive 0 and still resolves
-    enemy hit chance from 100 + mob level * 2.  The PR15 refinement is
-    simulation/reporting-only, so when accuracy is configured but absent from the
-    sampled mob template we convert the multiplier into an additive accuracy
-    value based on that neutral enemy accuracy rating.
+    enemy hit chance from 100 + level * 2.  Because PR15 refinement is
+    simulation/reporting-only and operates on scaled route-stage samples, prefer
+    encounter_level before falling back to template level and finally level 1.
     """
+    raw_level = scaled_mob.get("encounter_level", scaled_mob.get("level", 1))
     try:
-        mob_level = int(scaled_mob.get("level", 1) or 1)
+        mob_level = int(raw_level or 1)
     except (TypeError, ValueError):
         mob_level = 1
     return 100 + mob_level * 2

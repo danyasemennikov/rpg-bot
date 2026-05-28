@@ -121,9 +121,14 @@ def test_pr15_accuracy_refinement_reaches_targeted_solo_run():
         applied = scale_components.get("pr15_actionable_role_refinement", {})
         skipped = scale_components.get("pr15_actionable_role_refinement_skipped", {})
         final_stats = run.get("final_mob_stats", {})
+        encounter_level = int(run.get("encounter_level") or 0)
+        expected_accuracy = int(round((100 + encounter_level * 2) * (1.08 - 1.0)))
+        level_one_fallback_accuracy = int(round((100 + 1 * 2) * (1.08 - 1.0)))
+        assert encounter_level > 1
         assert applied.get("accuracy") == 1.08
         assert "accuracy" in final_stats
-        assert final_stats["accuracy"] > 0
+        assert final_stats["accuracy"] == expected_accuracy
+        assert final_stats["accuracy"] > level_one_fallback_accuracy
         assert "accuracy" not in skipped
         assert not skipped
 
