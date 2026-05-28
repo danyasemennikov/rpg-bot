@@ -228,3 +228,9 @@ PR14 note (implemented simulation/reporting target expectation calibration only)
 - PR14 adds target expectation calibration buckets in simulation/reporting outputs so raw global overclean, actionable overclean, early-stage target artifacts, and late-stage actionable rows are separated.
 - PR14 does not change live gameplay/runtime systems.
 - PR14 does not claim final balance.
+
+PR15 note (implemented actionable late-stage simulation/reporting tuning only):
+- PR15 implements simulation/reporting-only actionable late-stage tuning based on PR14 calibrated actionable overclean.
+- PR15 does not change live gameplay/runtime systems.
+- PR15 does not claim final balance.
+

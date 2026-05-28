@@ -903,7 +903,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         f"- Current global overclean candidates: {global_candidates}.",
         f"- Current late-stage overclean audit flags: {pr13_overclean}.",
         "- Late-stage audit scope: build_testing / route_exam only.",
-        "- Global overclean did not improve yet and remains a known underpressure signal in compact deterministic output.",
+        "- Global overclean remains a known underpressure signal in compact deterministic output; PR15 success is measured against calibrated actionable late-stage count.",
         "- Selected tuning targets: repeated build_testing/route_exam overclean clusters from route+stage rollups.",
         "- Changed knobs (simulation/reporting-only): targeted route-stage pressure overrides in mob scaling, preserving route identity.",
         "- PR13 adds candidate rollups and targeted tuning knobs, but compact global overclean remains unresolved.",
@@ -934,6 +934,43 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         f"| actionable_overclean | {actionable_candidates} | Calibrated actionable overclean candidates. |",
         f"| late_stage_actionable | {late_stage_actionable} | Actionable overclean in build_testing/route_exam. |",
     ]
+
+    pr15_baseline = 44
+    pr15_improved = actionable_candidates < pr15_baseline
+    remaining_backlog = list(report_data.get("actionable_overclean_top_clusters", []))
+    overpressure_traces = [
+        trace
+        for trace in report_data.get("suspicious_traces", [])
+        if trace.get("winner") == "mob" and trace.get("end_reason") == "player_death"
+    ]
+    preview_count = min(len(remaining_backlog), PR13_TOP_CLUSTER_LIMIT)
+    lines += [
+        "",
+        "## PR15 Actionable Late-Stage Tuning Summary",
+        f"- Previous PR14 actionable overclean baseline: {pr15_baseline}.",
+        f"- Current actionable overclean candidates: {actionable_candidates}.",
+        f"- Current early-stage target artifacts: {early_stage_artifacts}.",
+        f"- Current raw/global overclean candidates: {raw_global_candidates}.",
+        f"- Improvement vs PR14 actionable baseline: {'yes' if pr15_improved else 'no'}.",
+        "- Changed knobs: bounded simulation/reporting-only late-stage route-stage pressure overrides plus one solo-matrix actionable role refinement for the repeated Sunscar route_exam support overclean cluster.",
+        f"- Top remaining actionable clusters preview: {preview_count} of {actionable_candidates}; full list available in report_data.",
+        "- No live gameplay/runtime changes.",
+    ]
+    if overpressure_traces:
+        risk_items = [
+            f"{trace.get('route_id')} / {trace.get('stage')} / {trace.get('archetype_id')} player_death"
+            for trace in overpressure_traces[:3]
+        ]
+        lines.append(f"- New overpressure risk: {', '.join(risk_items)} observed in representative suspicious traces; PR15 is not presented as a clean/final balance pass.")
+    else:
+        lines.append("- New overpressure risk: none observed in representative suspicious traces.")
+    lines += ["| top_remaining_cluster_preview | count |", "|---|---:|"]
+    if remaining_backlog:
+        for cluster in remaining_backlog[:PR13_TOP_CLUSTER_LIMIT]:
+            lines.append(f"| {' / '.join(cluster.get('key', []))} | {cluster.get('count', 0)} |")
+    else:
+        lines.append("| n/a | 0 |")
+
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
     lines += ["", "## Target vs Observed v2 Signals", "This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix."]

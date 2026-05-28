@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR14: Target Expectation Calibration Pass
-- Status: simulation/reporting target calibration
-- Confirmed state below reflects current merged main after PR14 target expectation calibration and includes prior PR13 targeted tuning and PR12 first tuning pass baseline context
+- PR: PR15: Actionable Late-Stage Underpressure Tuning Pass
+- Status: simulation/reporting actionable late-stage tuning
+- Confirmed state below reflects current merged main after PR15 actionable late-stage tuning and includes prior PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
 
 ---
 
@@ -185,6 +185,20 @@ Alpha readiness policy:
 
 
 
+
+### Actionable Late-Stage Underpressure Tuning Pass (PR15)
+
+- actionable overclean baseline from PR14 was 44;
+- current checked-in compact report shows raw/global overclean candidates: 87;
+- current actionable overclean after PR15 is 43;
+- early-stage target artifacts remain 44;
+- early-stage target artifacts remain separated and visible;
+- raw global overclean signal remains visible for transparency;
+- representative overpressure risk remains visible: route_sunscar / route_exam / pure_support_solo_overlay player_death;
+- PR15 is not a final/clean balance pass;
+- PR15 changed only simulation/reporting targeted late-stage pressure knobs;
+- no live gameplay/runtime systems were changed.
+
 ### Target Expectation Calibration Pass (PR14)
 
 - raw global overclean candidate signal remains visible in report data and report markdown;
@@ -198,10 +212,10 @@ Alpha readiness policy:
 - overclean cluster rollups were added to report data (`overclean_rollups`, `overclean_top_clusters`);
 - selected route/stage/archetype tuning targets are surfaced in the v2 report `PR13 Targeted Tuning Candidates` section;
 - targeted simulation-only route-stage pressure overrides were added for late-stage underpressure clusters;
-- PR13 separates global overclean candidates from late-stage targeted overclean audit flags;
-- current checked-in compact report shows global overclean candidates remain 88;
-- late-stage targeted overclean audit flags are 43;
-- global overclean remains unresolved and is a known underpressure signal;
+- PR13 introduced the global-vs-late-stage overclean split and late-stage-only targeted candidate table;
+- at PR13 time, the compact report baseline showed global overclean candidates 88 and late-stage targeted overclean audit flags 43;
+- later PR14/PR15 report current calibrated/current counts are tracked in the PR14/PR15 sections;
+- global overclean remains a known underpressure signal;
 - targeted route-stage pressure overrides were added for simulation/reporting-only late-stage tuning;
 - pack proxy remains active as simulation/reporting-only (`composite_pack_pressure_v1`);
 - no live group combat, no targeting, no teleport, no economy overhaul, and no Combat Core rewrite were implemented.

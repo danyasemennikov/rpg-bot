@@ -44,13 +44,14 @@ TARGETED_ROUTE_STAGE_PRESSURE_OVERRIDES: dict[tuple[str, str], dict[str, float]]
     # Keep changes bounded and route-identity aligned.
     ("route_frostspine", "build_testing"): {"hp": 1.08, "damage": 1.00, "accuracy": 1.00, "evasion": 1.00, "defense": 1.08, "magic_defense": 1.06},
     ("route_frostspine", "route_exam"): {"hp": 1.12, "damage": 1.00, "accuracy": 1.00, "evasion": 1.00, "defense": 1.10, "magic_defense": 1.08},
-    ("route_sunscar", "build_testing"): {"hp": 1.00, "damage": 1.10, "accuracy": 1.06, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.00},
-    ("route_sunscar", "route_exam"): {"hp": 1.00, "damage": 1.12, "accuracy": 1.08, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.00},
-    ("route_mireveil", "build_testing"): {"hp": 1.06, "damage": 1.00, "accuracy": 1.00, "evasion": 1.05, "defense": 1.00, "magic_defense": 1.00},
-    ("route_mireveil", "route_exam"): {"hp": 1.08, "damage": 1.02, "accuracy": 1.00, "evasion": 1.06, "defense": 1.00, "magic_defense": 1.02},
-    ("route_westwild", "route_exam"): {"hp": 1.03, "damage": 1.02, "accuracy": 1.00, "evasion": 1.00, "defense": 1.02, "magic_defense": 1.02},
-    ("route_ashen_ruins", "build_testing"): {"hp": 1.00, "damage": 1.04, "accuracy": 1.02, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.04},
-    ("route_ashen_ruins", "route_exam"): {"hp": 1.00, "damage": 1.06, "accuracy": 1.04, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.06},
+    ("route_sunscar", "build_testing"): {"hp": 1.05, "damage": 1.22, "accuracy": 1.10, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.00},
+    # PR15 P1: bounded actionable late-stage pressure, simulation/reporting-only.
+    ("route_sunscar", "route_exam"): {"hp": 1.32, "damage": 1.28, "accuracy": 1.12, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.00},
+    ("route_mireveil", "build_testing"): {"hp": 1.12, "damage": 1.02, "accuracy": 1.00, "evasion": 1.10, "defense": 1.00, "magic_defense": 1.02},
+    ("route_mireveil", "route_exam"): {"hp": 1.14, "damage": 1.04, "accuracy": 1.00, "evasion": 1.12, "defense": 1.00, "magic_defense": 1.04},
+    ("route_westwild", "route_exam"): {"hp": 1.04, "damage": 1.03, "accuracy": 1.00, "evasion": 1.00, "defense": 1.03, "magic_defense": 1.03},
+    ("route_ashen_ruins", "build_testing"): {"hp": 1.00, "damage": 1.08, "accuracy": 1.08, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.12},
+    ("route_ashen_ruins", "route_exam"): {"hp": 1.00, "damage": 1.10, "accuracy": 1.10, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.14},
 }
 
 
