@@ -10,7 +10,8 @@ def test_pr13_sections_and_rollups_exist():
     assert "## PR13 Targeted Alpha Tuning Summary" in md
     assert "overclean_rollups" not in md  # internal key, not raw dump
     assert "overclean_rollups" in str(report.keys())
-    assert "overclean_top_clusters" in report
+    assert "global_overclean_top_clusters" in report
+    assert "late_stage_targeted_top_clusters" in report
     assert "global_overclean_candidate_count" in report
     assert "late_stage_overclean_candidate_count" in report
 
@@ -47,7 +48,8 @@ def test_global_vs_late_stage_counts_and_candidate_section_consistency():
     assert global_count >= late_stage_count
     assert f"global overclean candidates (strong_vs_high_target): {global_count}." in md
     assert f"late-stage targeted candidates (build_testing/route_exam only): {late_stage_count}." in md
-    assert "selected targeted clusters are limited to build_testing / route_exam" in md
+    assert "top targeted late-stage clusters shown:" in md
+    assert "global diagnostic clusters are available in report_data as global_overclean_top_clusters." in md
 
 
 def test_soft_entry_not_selected_targeted_and_route_identity_documented():
@@ -57,4 +59,28 @@ def test_soft_entry_not_selected_targeted_and_route_identity_documented():
     assert by_stage.get("soft_entry", 0) <= by_stage.get("build_testing", 0)
     content = (Path(__file__).resolve().parents[1] / "docs" / "ALPHA_ROUTE_CLASS_BALANCE_REPORT_V2.md").read_text(encoding="utf-8")
     assert "targeted route-stage pressure overrides" in content
-    assert "soft_entry/identity_visible rows shown here are global diagnostics only." in content
+    assert "global diagnostic clusters are available in report_data as global_overclean_top_clusters." in content
+
+
+def test_late_stage_targeted_top_clusters_stage_scope_and_non_empty():
+    report = build_default_alpha_simulation_report_v2_data()
+    late_count = int(report.get("late_stage_overclean_candidate_count", 0))
+    top = list(report.get("late_stage_targeted_top_clusters", []))
+    if late_count > 0:
+        assert top
+    for cluster in top:
+        key = list(cluster.get("key", []))
+        assert len(key) >= 2
+        assert key[1] in {"build_testing", "route_exam"}
+
+
+def test_checked_in_targeted_candidates_table_has_no_early_stage_rows():
+    content = (Path(__file__).resolve().parents[1] / "docs" / "ALPHA_ROUTE_CLASS_BALANCE_REPORT_V2.md").read_text(encoding="utf-8")
+    marker = "## PR13 Targeted Tuning Candidates"
+    start = content.find(marker)
+    assert start != -1
+    end = content.find("## PR13 Targeted Alpha Tuning Summary", start)
+    assert end != -1
+    section = content[start:end]
+    assert "soft_entry" not in section
+    assert "identity_visible" not in section

@@ -124,18 +124,18 @@ Showing first 24 of 56 archetype cards.
 Diagnostic compact cluster view; use full report_data for complete candidate selection.
 - global overclean candidates (strong_vs_high_target): 88.
 - late-stage targeted candidates (build_testing/route_exam only): 44.
-- top global clusters shown: 8 (limit=8).
-- selected targeted clusters are limited to build_testing / route_exam; soft_entry/identity_visible rows shown here are global diagnostics only.
+- top targeted late-stage clusters shown: 8 (limit=8).
+- global diagnostic clusters are available in report_data as global_overclean_top_clusters.
 | cluster_type | cluster_key | count |
 |---|---|---:|
 | route+stage | route_sunscar / build_testing | 8 |
-| route+stage | route_sunscar / identity_visible | 8 |
 | route+stage | route_sunscar / route_exam | 8 |
-| route+stage | route_sunscar / soft_entry | 8 |
 | route+stage | route_frostspine / build_testing | 6 |
-| route+stage | route_frostspine / identity_visible | 6 |
 | route+stage | route_frostspine / route_exam | 6 |
-| route+stage | route_frostspine / soft_entry | 6 |
+| route+stage | route_ashen_ruins / build_testing | 4 |
+| route+stage | route_ashen_ruins / route_exam | 4 |
+| route+stage | route_mireveil / build_testing | 2 |
+| route+stage | route_mireveil / route_exam | 2 |
 
 ## PR13 Targeted Alpha Tuning Summary
 - Previous PR12 global overclean baseline: 86.

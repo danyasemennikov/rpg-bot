@@ -603,6 +603,10 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
     global_overclean_candidate_count = len(overclean_candidates)
     late_stage_overclean_candidate_count = sum(1 for row in overclean_candidates if str(row.get("stage", "")) in LATE_STAGE_TARGETED_STAGES)
 
+    late_stage_overclean_candidates = [
+        row for row in overclean_candidates if str(row.get("stage", "")) in LATE_STAGE_TARGETED_STAGES
+    ]
+
     overclean_rollups = {
         "by_route": _rollup(overclean_candidates, ("route_id",)),
         "by_stage": _rollup(overclean_candidates, ("stage",)),
@@ -611,7 +615,11 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "by_route_archetype": _rollup(overclean_candidates, ("route_id", "archetype_id")),
         "by_target_label": _rollup(overclean_candidates, ("normalized_target_label",)),
     }
-    overclean_top_clusters = overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
+    late_stage_overclean_rollups = {
+        "by_route_stage": _rollup(late_stage_overclean_candidates, ("route_id", "stage")),
+    }
+    global_overclean_top_clusters = overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
+    late_stage_targeted_top_clusters = late_stage_overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
 
     limitations = list(matrix.get("limitations", [])) + [
         "Alpha diagnostic signal only; not a final balance verdict.",
@@ -666,7 +674,9 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "global_overclean_candidate_count": global_overclean_candidate_count,
         "late_stage_overclean_candidate_count": late_stage_overclean_candidate_count,
         "overclean_rollups": overclean_rollups,
-        "overclean_top_clusters": overclean_top_clusters,
+        "global_overclean_top_clusters": global_overclean_top_clusters,
+        "late_stage_targeted_top_clusters": late_stage_targeted_top_clusters,
+        "overclean_top_clusters": late_stage_targeted_top_clusters,
         "pack_runs": pack_matrix.get("pack_runs", []),
         "pack_samples": pack_matrix.get("pack_samples", []),
         "pack_rollups": pack_matrix.get("pack_rollups", {}),
@@ -781,14 +791,14 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         "  - composite_pack_pressure_v1 remains active as simulation/reporting-only proxy; no live group combat/targeting added.",
     ]
     overclean_rollups = dict(report_data.get("overclean_rollups", {}))
-    top_clusters = list(report_data.get("overclean_top_clusters", []))
+    top_clusters = list(report_data.get("late_stage_targeted_top_clusters", []))
     lines += ["", "## PR13 Targeted Tuning Candidates", "Diagnostic compact cluster view; use full report_data for complete candidate selection."]
     global_candidates = int(report_data.get("global_overclean_candidate_count", 0))
     late_stage_candidates = int(report_data.get("late_stage_overclean_candidate_count", 0))
     lines.append(f"- global overclean candidates (strong_vs_high_target): {global_candidates}.")
     lines.append(f"- late-stage targeted candidates (build_testing/route_exam only): {late_stage_candidates}.")
-    lines.append(f"- top global clusters shown: {min(len(top_clusters), PR13_TOP_CLUSTER_LIMIT)} (limit={PR13_TOP_CLUSTER_LIMIT}).")
-    lines.append("- selected targeted clusters are limited to build_testing / route_exam; soft_entry/identity_visible rows shown here are global diagnostics only.")
+    lines.append(f"- top targeted late-stage clusters shown: {min(len(top_clusters), PR13_TOP_CLUSTER_LIMIT)} (limit={PR13_TOP_CLUSTER_LIMIT}).")
+    lines.append("- global diagnostic clusters are available in report_data as global_overclean_top_clusters.")
     lines += ["| cluster_type | cluster_key | count |", "|---|---|---:|"]
     if not top_clusters:
         lines.append("| route+stage | n/a | 0 |")
