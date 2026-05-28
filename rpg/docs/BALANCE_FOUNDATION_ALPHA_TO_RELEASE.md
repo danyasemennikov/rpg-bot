@@ -216,3 +216,9 @@ PR12 note (implemented first controlled tuning pass):
 - PR12 applies limited report-backed alpha tuning only, including simulation-stage pressure modifiers (soft_entry baseline, identity/build/route_exam pressure lift).
 - PR12 does not implement Combat Core rewrite, targeting, live group combat, teleport, economy overhaul, or broad weapon-family rebalance.
 
+
+
+PR13 note (implemented simulation/reporting tuning pass only):
+- PR13 implements targeted simulation/reporting alpha tuning based on PR12 overclean clusters.
+- It does not change live gameplay/runtime systems unless explicitly stated by the PR.
+- It does not implement final balance.

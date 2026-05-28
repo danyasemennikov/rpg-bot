@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR12: First Real Tuning Pass
-- Status: first controlled alpha tuning pass
-- Confirmed state below reflects current merged main after PR12 first controlled tuning pass
+- PR: PR13: Targeted Alpha Tuning Pass
+- Status: targeted simulation/reporting alpha tuning
+- Confirmed state below reflects current merged main after PR13 targeted pass and includes prior PR12: First Real Tuning Pass baseline context
 
 ---
 
@@ -182,6 +182,20 @@ Alpha readiness policy:
 - report v2 exposes scaled mob context;
 - live mob templates/gameplay, rewards, loot/crafting, pack/group simulation, and tuning are not changed.
 
+
+
+### Targeted Alpha Tuning Pass (PR13)
+
+- overclean cluster rollups were added to report data (`overclean_rollups`, `overclean_top_clusters`);
+- selected route/stage/archetype tuning targets are surfaced in the v2 report `PR13 Targeted Tuning Candidates` section;
+- targeted simulation-only route-stage pressure overrides were added for late-stage underpressure clusters;
+- PR13 separates global overclean candidates from late-stage targeted overclean audit flags;
+- current checked-in compact report shows global overclean candidates remain 88;
+- late-stage targeted overclean audit flags are 43;
+- global overclean remains unresolved and is a known underpressure signal;
+- targeted route-stage pressure overrides were added for simulation/reporting-only late-stage tuning;
+- pack proxy remains active as simulation/reporting-only (`composite_pack_pressure_v1`);
+- no live group combat, no targeting, no teleport, no economy overhaul, and no Combat Core rewrite were implemented.
 
 ### First Real Tuning Pass (PR12)
 

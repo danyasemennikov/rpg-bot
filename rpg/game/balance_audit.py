@@ -313,7 +313,7 @@ def audit_progression_context_rows(rows: list[dict[str, Any]]) -> list[BalanceAu
                 guard_loop = bool(guard_rate is not None and guard_rate >= 0.65)
             if guard_loop:
                 flags.append(build_balance_audit_flag(FLAG_POLICY_FAILURE_GUARD_LOOP, "warning", "sample_row", row_id, "Policy failure row appears guard-loop driven.", {"actions_used": actions_used}))
-        if target in {"hard", "very_hard"} and winner == "player" and clean_win:
+        if target in {"hard", "very_hard"} and stage in {"build_testing", "route_exam"} and winner == "player" and clean_win:
             flags.append(build_balance_audit_flag(FLAG_OVERCLEAN_WIN, "warning", "sample_row", row_id, "Win appears unusually clean against high target difficulty.", {"target_label": target}))
         if "support" in archetype_id and winner == "player":
             low_damage = isinstance(damage_dealt, (int, float)) and damage_dealt <= 25

@@ -39,6 +39,20 @@ SIMULATION_STAGE_PRESSURE_MODIFIERS: dict[str, dict[str, float]] = {
     "route_exam": {"hp": 1.30, "damage": 1.50, "accuracy": 1.05, "evasion": 1.02, "defense": 1.10, "magic_defense": 1.10},
 }
 
+TARGETED_ROUTE_STAGE_PRESSURE_OVERRIDES: dict[tuple[str, str], dict[str, float]] = {
+    # PR13 targeted simulation-only alpha tuning pass.
+    # Keep changes bounded and route-identity aligned.
+    ("route_frostspine", "build_testing"): {"hp": 1.08, "damage": 1.00, "accuracy": 1.00, "evasion": 1.00, "defense": 1.08, "magic_defense": 1.06},
+    ("route_frostspine", "route_exam"): {"hp": 1.12, "damage": 1.00, "accuracy": 1.00, "evasion": 1.00, "defense": 1.10, "magic_defense": 1.08},
+    ("route_sunscar", "build_testing"): {"hp": 1.00, "damage": 1.10, "accuracy": 1.06, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.00},
+    ("route_sunscar", "route_exam"): {"hp": 1.00, "damage": 1.12, "accuracy": 1.08, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.00},
+    ("route_mireveil", "build_testing"): {"hp": 1.06, "damage": 1.00, "accuracy": 1.00, "evasion": 1.05, "defense": 1.00, "magic_defense": 1.00},
+    ("route_mireveil", "route_exam"): {"hp": 1.08, "damage": 1.02, "accuracy": 1.00, "evasion": 1.06, "defense": 1.00, "magic_defense": 1.02},
+    ("route_westwild", "route_exam"): {"hp": 1.03, "damage": 1.02, "accuracy": 1.00, "evasion": 1.00, "defense": 1.02, "magic_defense": 1.02},
+    ("route_ashen_ruins", "build_testing"): {"hp": 1.00, "damage": 1.04, "accuracy": 1.02, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.04},
+    ("route_ashen_ruins", "route_exam"): {"hp": 1.00, "damage": 1.06, "accuracy": 1.04, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.06},
+}
+
 
 def calculate_encounter_level_from_stage(stage: str) -> int | None:
     return resolve_simulation_stage_player_level(stage)
@@ -74,12 +88,14 @@ def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: st
     route_modifier = ROUTE_PRESSURE_MODIFIERS.get(str(route_id or ""), ROUTE_PRESSURE_MODIFIERS["route_westwild"])
     stage_key = str(stage or "")
     stage_modifier = SIMULATION_STAGE_PRESSURE_MODIFIERS.get(stage_key, SIMULATION_STAGE_PRESSURE_MODIFIERS["soft_entry"])
+    targeted_override = TARGETED_ROUTE_STAGE_PRESSURE_OVERRIDES.get((str(route_id or ""), stage_key), {})
+    final_stage_modifier = {k: stage_modifier.get(k, 1.0) * float(targeted_override.get(k, 1.0)) for k in SCALED_MOB_STAT_KEYS}
 
     scaled = deepcopy(base_mob)
     base_stats = {k: base_mob.get(k) for k in SCALED_MOB_STAT_KEYS if k in base_mob}
     final_stats: dict[str, int] = {}
     for key in SCALED_MOB_STAT_KEYS:
-        val = _scaled_value(base_mob.get(key), level_scale[key], role_multiplier[key], route_modifier[key], stage_modifier[key])
+        val = _scaled_value(base_mob.get(key), level_scale[key], role_multiplier[key], route_modifier[key], final_stage_modifier[key])
         if val is not None:
             final_stats[key] = val
             scaled[key] = val
@@ -88,9 +104,9 @@ def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: st
         dmin = base_mob.get("damage_min")
         dmax = base_mob.get("damage_max")
         if isinstance(dmin, (int, float)):
-            scaled["damage_min"] = _scaled_value(dmin, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"], stage_modifier["damage"])
+            scaled["damage_min"] = _scaled_value(dmin, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"], final_stage_modifier["damage"])
         if isinstance(dmax, (int, float)):
-            scaled["damage_max"] = _scaled_value(dmax, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"], stage_modifier["damage"])
+            scaled["damage_max"] = _scaled_value(dmax, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"], final_stage_modifier["damage"])
         if isinstance(scaled.get("damage_min"), int) and isinstance(scaled.get("damage_max"), int):
             scaled["damage"] = int(round((scaled["damage_min"] + scaled["damage_max"]) / 2))
             final_stats["damage"] = scaled["damage"]
@@ -108,6 +124,8 @@ def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: st
         "role_multiplier": role_multiplier,
         "route_modifier": route_modifier,
         "stage_pressure_modifier": stage_modifier,
+        "targeted_route_stage_override": targeted_override,
+        "effective_stage_pressure_modifier": final_stage_modifier,
     }
     return scaled
 
