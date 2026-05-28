@@ -94,7 +94,7 @@ def test_simulation_stage_progression_context_route_exam():
     assert ctx["assumption_status"] is None
 
 
-def test_project_state_current_pr10_header_and_future_prs_not_implemented():
+def test_project_state_current_pr11_header_and_future_prs_not_implemented():
     doc = Path(__file__).resolve().parents[1] / "docs" / "PROJECT_STATE_CURRENT.md"
     text = doc.read_text(encoding="utf-8")
 
@@ -125,5 +125,6 @@ def test_project_state_current_pr10_header_and_future_prs_not_implemented():
     lower = text.lower()
     assert "equipment budget foundation (pr9)" in lower
     assert "mob encounter scaling foundation (pr10)" in lower
-    assert "pr11 is implemented" not in lower
+    assert "pack/group simulation harness (pr11)" in lower
+    assert "- no group/pack simulation matrix." not in lower
     assert "pr12 is implemented" not in lower

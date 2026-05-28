@@ -173,14 +173,16 @@ Implemented diagnostic/foundation steps:
 - **PR8:** Progression-aware Simulation Audit
 - **PR9:** Equipment Budget Foundation
 - **PR10:** Mob Encounter Scaling Foundation
+- **PR11:** Pack/Group Simulation Harness
 
 Planned future work:
-- **PR11:** Pack/Group Simulation Harness
 - **PR12:** First Real Tuning Pass
 
-PR10 does not implement PR11/PR12:
-- pack/group simulation remains pending PR11;
-- first real tuning pass remains pending PR12.
+PR11 note (implemented simulation/reporting foundation only):
+- PR11 implements simulation/reporting-only pack/group pressure harness.
+- It uses `composite_pack_pressure_v1` proxy.
+- It does not implement live group combat, targeting, live spawning, tuning, rewards, loot, or Combat Core rewrite.
+- PR12 remains responsible for first real tuning pass.
 
 ## N. Non-goals
 PR7 non-goals:
@@ -205,5 +207,5 @@ PR10 note (implemented simulation/reporting foundation only):
 - Final simulation mob stats now use base template × encounter level curve × mob role multiplier × route pressure modifier.
 - PR10 does not change live mob templates or live gameplay behavior.
 - PR10 does not change rewards, loot/crafting, equipment runtime, or player DB.
-- PR10 does not implement pack/group simulation; PR11 remains responsible.
+- PR10 did not implement pack/group simulation; PR11 later implemented simulation/reporting composite pack pressure harness.
 - PR10 is not the first real tuning pass; PR12 remains responsible.

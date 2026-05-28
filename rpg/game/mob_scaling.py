@@ -20,6 +20,8 @@ MOB_ROLE_MULTIPLIERS: dict[str, dict[str, float]] = {
     ROLE_PRESSURE: {"hp": 1.20, "damage": 1.12, "accuracy": 1.05, "evasion": 1.04, "defense": 1.08, "magic_defense": 1.08},
     ROLE_ELITE: {"hp": 1.85, "damage": 1.35, "accuracy": 1.10, "evasion": 1.08, "defense": 1.18, "magic_defense": 1.18},
     ROLE_BOSS: {"hp": 3.20, "damage": 1.65, "accuracy": 1.16, "evasion": 1.10, "defense": 1.28, "magic_defense": 1.28},
+    ROLE_PACK_MEMBER: {"hp": 0.78, "damage": 0.82, "accuracy": 0.98, "evasion": 1.00, "defense": 0.94, "magic_defense": 0.94},
+    ROLE_PACK_LEADER: {"hp": 1.25, "damage": 1.12, "accuracy": 1.04, "evasion": 1.02, "defense": 1.06, "magic_defense": 1.06},
 }
 
 ROUTE_PRESSURE_MODIFIERS: dict[str, dict[str, float]] = {

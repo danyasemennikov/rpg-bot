@@ -214,6 +214,25 @@ def summarize_balance_audit_flags(flags: list[BalanceAuditFlag]) -> dict[str, in
     return counts
 
 
+def audit_pack_sample_coverage(pack_samples: list[dict[str, Any]], route_ids: list[str] | tuple[str, ...], required_stages: list[str] | tuple[str, ...]) -> list[BalanceAuditFlag]:
+    flags: list[BalanceAuditFlag] = []
+    for route_id in route_ids:
+        for stage in required_stages:
+            has_sample = any(str(s.get("route_id")) == str(route_id) and str(s.get("stage")) == str(stage) for s in pack_samples)
+            if not has_sample:
+                flags.append(
+                    build_balance_audit_flag(
+                        FLAG_MISSING_PACK_SAMPLE,
+                        "warning",
+                        "pack_route_stage",
+                        f"{route_id}:{stage}",
+                        "Missing required pack sample coverage.",
+                        {"route_id": route_id, "stage": stage},
+                    )
+                )
+    return flags
+
+
 def _safe_int(value: Any) -> int:
     if isinstance(value, bool):
         return 0

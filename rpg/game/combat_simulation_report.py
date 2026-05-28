@@ -22,6 +22,7 @@ from game.combat_simulation_matrix import (
 from game.locations import ROUTE_MATCHUP_TARGET_PROFILES, WORLD_LOCATIONS
 from game.equipment_budget import build_simulation_gear_preset
 from game.mobs import MOBS
+from game.pack_simulation import PACK_REQUIRED_STAGES, run_pack_simulation_matrix
 
 ARCHETYPE_MATCHUP_KEY_MAP = {
     "guardian_shield_1h": "shield_defensive_1h",
@@ -46,6 +47,7 @@ SCENARIO_PREVIEW_LIMIT = 16
 ARCHETYPE_CARD_PREVIEW_LIMIT = 24
 TRACE_LIMIT = 10
 PROGRESSION_AUDIT_PREVIEW_LIMIT = 20
+PACK_PREVIEW_LIMIT = 20
 
 
 def build_smoke_alpha_balance_report_config() -> RouteStageMatrixConfig:
@@ -256,6 +258,52 @@ def _select_representative_suspicious_traces(rows: list[dict[str, Any]], limit: 
             break
 
     return selections
+
+
+def _select_route_balanced_pack_preview(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    if len(rows) <= limit:
+        return list(rows)
+    selected: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    sorted_rows = sorted(rows, key=lambda r: (r.get("route_id", ""), r.get("stage", ""), r.get("archetype_id", ""), r.get("pack_id", "")))
+    bucketed: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in sorted_rows:
+        bucketed[(str(row.get("route_id", "")), str(row.get("stage", "")))].append(row)
+
+    # Pass 1: guarantee route+stage coverage where possible.
+    for bucket_key in sorted(bucketed.keys()):
+        if len(selected) >= limit:
+            break
+        row = bucketed[bucket_key][0]
+        row_key = (str(row.get("route_id", "")), str(row.get("stage", "")), str(row.get("archetype_id", "")), str(row.get("pack_id", "")))
+        if row_key not in seen:
+            selected.append(row)
+            seen.add(row_key)
+
+    # Pass 2: route-balanced fill for remaining slots.
+    grouped_by_route: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in sorted_rows:
+        grouped_by_route[str(row.get("route_id", ""))].append(row)
+    routes = sorted(grouped_by_route.keys())
+    idx_by_route = {route: 0 for route in routes}
+    while len(selected) < limit:
+        progressed = False
+        for route in routes:
+            while idx_by_route[route] < len(grouped_by_route[route]):
+                row = grouped_by_route[route][idx_by_route[route]]
+                idx_by_route[route] += 1
+                row_key = (str(row.get("route_id", "")), str(row.get("stage", "")), str(row.get("archetype_id", "")), str(row.get("pack_id", "")))
+                if row_key in seen:
+                    continue
+                selected.append(row)
+                seen.add(row_key)
+                progressed = True
+                break
+            if len(selected) >= limit:
+                break
+        if not progressed:
+            break
+    return selected
 
 
 
@@ -540,7 +588,7 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "Alpha diagnostic signal only; not a final balance verdict.",
         "Observed-vs-target comparisons are coarse bands, not proof of tuning direction.",
         "Missing target metadata rows are treated as inconclusive, not mismatch verdicts.",
-        "No pack/group runtime matrix in this report version.",
+        "No full multi-target pack runtime combat; pack section uses composite_pack_pressure_v1 diagnostic proxy.",
     ]
 
     scenario_cards = _build_scenario_cards({**matrix, "runs": enriched_runs})
@@ -557,6 +605,14 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
 
     progression_audit_rows = _build_progression_audit_rows(enriched_runs, summaries, target_comparisons)
     progression_audit_flags = audit_progression_context_rows(progression_audit_rows)
+    pack_route_ids = tuple(matrix.get("routes", []))
+    pack_archetype_ids = tuple(matrix.get("archetypes", []))
+    scoped_pack_stages = tuple(s for s in matrix.get("stages", []) if s in PACK_REQUIRED_STAGES)
+    pack_matrix = run_pack_simulation_matrix(
+        route_ids=pack_route_ids if pack_route_ids else tuple(list_alpha_simulation_route_ids()),
+        stages=scoped_pack_stages if scoped_pack_stages else tuple(),
+        archetype_ids=pack_archetype_ids if pack_archetype_ids else tuple(list_alpha_archetype_ids()),
+    )
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -578,13 +634,18 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "progression_audit_rows": progression_audit_rows,
         "progression_audit_flags": progression_audit_flags,
         "progression_audit_flag_counts": summarize_balance_audit_flags(progression_audit_flags),
+        "pack_runs": pack_matrix.get("pack_runs", []),
+        "pack_samples": pack_matrix.get("pack_samples", []),
+        "pack_rollups": pack_matrix.get("pack_rollups", {}),
+        "pack_audit_flags": pack_matrix.get("pack_audit_flags", []),
+        "pack_audit_flag_counts": pack_matrix.get("pack_audit_flag_counts", {}),
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
 
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
-    lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- No pack/group runtime matrix yet.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
+    lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
     for route_id, rollup in sorted(report_data.get("route_rollups", {}).items()):
         runs = max(1, rollup["runs"])
         lines.append(f"| {route_id} | {rollup['runs']} | {rollup['wins'] / runs:.2f} | {rollup['timeouts'] / runs:.2f} |")
@@ -627,12 +688,12 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines += ["", "## 9. Route Notes", "- Route notes should be used as directional investigation signals, not final conclusions.", "", "## 10. Archetype Notes", "- Archetype notes should guide follow-up targeted testing and tuning PR scope only.", "", "## 11. Limitations"]
     for item in report_data.get("limitations", []):
         lines.append(f"- {item}")
-    lines += ["", "## 12. Recommended Next Steps", "- Add pack/group simulation matrix before final balance decisions.", "- Increase seed/sample breadth for suspicious candidates.", "- Use targeted follow-up PRs for any actual tuning decisions.", "", "## 13. Raw Data Pointers", "- Source module: `game.combat_simulation_matrix.run_route_stage_simulation_matrix`.", f"- Raw runs included in current report data object: {report_data.get('raw_data_pointers', {}).get('raw_runs_included', False)}."]
+    lines += ["", "## 12. Recommended Next Steps", "- Expand pack proxy fidelity and targeted tuning follow-ups using v2 pack diagnostics.", "- Increase seed/sample breadth for suspicious candidates.", "- Use targeted follow-up PRs for any actual tuning decisions.", "", "## 13. Raw Data Pointers", "- Source module: `game.combat_simulation_matrix.run_route_stage_simulation_matrix`.", f"- Raw runs included in current report data object: {report_data.get('raw_data_pointers', {}).get('raw_runs_included', False)}."]
     return "\n".join(lines) + "\n"
 
 
 def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
-    lines = ["# Alpha Route/Class Balance Report v2", "", "## Summary", "This is a diagnostic and non-final report for future tuning scope decisions.", "", "## Methodology", "- Deterministic representative solo route-stage simulations.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Runs: {report_data.get('run_count', 0)}", "", "## Scope and Non-goals", "- No route/mob/skill/reward/formula tuning.", "- No Combat Core rewrite.", "- No smart autobattle and no live AFK/autopilot.", "- No group/pack simulation matrix.", "", "## Diagnostic Config", "- checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.", "", "## Scenario Cards", "| route_id | stage | location_id | mob_id | role | lvl | scaling | spawn_profile | sample_tags | final_mob_stats |", "|---|---|---|---|---|---:|---|---|---|---|"]
+    lines = ["# Alpha Route/Class Balance Report v2", "", "## Summary", "This is a diagnostic and non-final report for future tuning scope decisions.", "", "## Methodology", "- Deterministic representative solo route-stage simulations plus composite_pack_pressure_v1 pack proxy samples.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Runs: {report_data.get('run_count', 0)}", "", "## Scope and Non-goals", "- No route/mob/skill/reward/formula tuning.", "- No Combat Core rewrite.", "- No smart autobattle and no live AFK/autopilot.", "- No live pack/group runtime combat.", "", "## Diagnostic Config", "- checked-in compact config: seeds=(1), max_samples_per_route_stage=1, max_turns=50, include_raw_runs=True.", "", "## Scenario Cards", "| route_id | stage | location_id | mob_id | role | lvl | scaling | spawn_profile | sample_tags | final_mob_stats |", "|---|---|---|---|---|---:|---|---|---|---|"]
     scenario_cards = report_data.get("scenario_cards", [])
     for card in scenario_cards[:SCENARIO_PREVIEW_LIMIT]:
         lines.append(f"| {card['route_id']} | {card['stage']} | {card['location_id']} | {card['mob_id']} | {card.get('mob_role','normal')} | {card.get('encounter_level','')} | {card.get('scaling_status','')} | {card['spawn_profile']} | {', '.join(card.get('sample_tags', []))} | {card.get('final_mob_stats', {})} |")
@@ -685,6 +746,13 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         lines.append(f"| {row.get('route_id')} | {row.get('stage')} | {row.get('archetype_id')} | {row.get('assumed_player_level')} | {row.get('gear_tier')} | {row.get('gear_rarity_assumption')} | +{row.get('enhancement_assumption')} | {gp.get('total_budget')} | {gp.get('profile_id')} | {row.get('mob_id')} | {row.get('mob_role')} | {row.get('encounter_level')} | {scaled.get('hp')} | {scaled.get('damage')} | {row.get('target_label')} | {row.get('observed_diagnostic_label_v2')} | {', '.join(row.get('audit_flag_ids', []))} |")
     if len(progression_rows) > PROGRESSION_AUDIT_PREVIEW_LIMIT:
         lines.append(f"Showing first {PROGRESSION_AUDIT_PREVIEW_LIMIT} of {len(progression_rows)} progression audit rows. Hidden rows are not resolved or dismissed.")
+
+    pack_runs = list(report_data.get("pack_runs", []))
+    pack_preview_rows = _select_route_balanced_pack_preview(pack_runs, PACK_PREVIEW_LIMIT)
+    lines += ["", "## Pack / Group Simulation Preview", f"Showing {len(pack_preview_rows)} route-stage-balanced pack preview rows out of {len(pack_runs)} pack runs. Hidden rows are not resolved or dismissed.", "| route | stage | pack_id | archetype | members | composite_hp | composite_damage | observed_v2 | proxy_status | winner | turns | audit flags |", "|---|---|---|---|---:|---:|---:|---|---|---|---:|---|"]
+    for run in pack_preview_rows:
+        final_stats = run.get("final_pack_stats", {})
+        lines.append(f"| {run.get('route_id')} | {run.get('stage')} | {run.get('pack_id')} | {run.get('archetype_id')} | {run.get('pack_member_count')} | {final_stats.get('hp')} | {final_stats.get('damage')} | {run.get('observed_diagnostic_label_v2', 'inconclusive')} | {run.get('pack_simulation_status')} | {run.get('winner')} | {run.get('turns')} | {', '.join(report_data.get('pack_audit_flag_counts', {}).keys()) or 'none'} |")
 
     lines += ["", "## Representative Suspicious Fight Traces"]
     traces = report_data.get("suspicious_traces", [])
