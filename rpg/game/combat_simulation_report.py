@@ -48,6 +48,8 @@ ARCHETYPE_CARD_PREVIEW_LIMIT = 24
 TRACE_LIMIT = 10
 PROGRESSION_AUDIT_PREVIEW_LIMIT = 20
 PACK_PREVIEW_LIMIT = 20
+PR13_TOP_CLUSTER_LIMIT = 8
+LATE_STAGE_TARGETED_STAGES = {"build_testing", "route_exam"}
 
 
 def build_smoke_alpha_balance_report_config() -> RouteStageMatrixConfig:
@@ -583,6 +585,41 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         reasons = _is_suspicious(summary, normalized_target)
         if reasons:
             suspicious_matchups.append({**row, "reasons": reasons})
+    overclean_candidates = [
+        row
+        for row in target_comparisons
+        if str(row.get("observed_label")) == "strong" and str(row.get("normalized_target_label")) in {"hard", "very_hard"}
+    ]
+
+    def _rollup(rows: list[dict[str, Any]], keys: tuple[str, ...]) -> list[dict[str, Any]]:
+        grouped: dict[tuple[str, ...], int] = defaultdict(int)
+        for row in rows:
+            grouped[tuple(str(row.get(k, "")) for k in keys)] += 1
+        output = []
+        for group_key, count in sorted(grouped.items(), key=lambda item: (-item[1], item[0])):
+            output.append({"group_by": keys, "key": group_key, "count": count})
+        return output
+
+    global_overclean_candidate_count = len(overclean_candidates)
+    late_stage_overclean_candidate_count = sum(1 for row in overclean_candidates if str(row.get("stage", "")) in LATE_STAGE_TARGETED_STAGES)
+
+    late_stage_overclean_candidates = [
+        row for row in overclean_candidates if str(row.get("stage", "")) in LATE_STAGE_TARGETED_STAGES
+    ]
+
+    overclean_rollups = {
+        "by_route": _rollup(overclean_candidates, ("route_id",)),
+        "by_stage": _rollup(overclean_candidates, ("stage",)),
+        "by_archetype": _rollup(overclean_candidates, ("archetype_id",)),
+        "by_route_stage": _rollup(overclean_candidates, ("route_id", "stage")),
+        "by_route_archetype": _rollup(overclean_candidates, ("route_id", "archetype_id")),
+        "by_target_label": _rollup(overclean_candidates, ("normalized_target_label",)),
+    }
+    late_stage_overclean_rollups = {
+        "by_route_stage": _rollup(late_stage_overclean_candidates, ("route_id", "stage")),
+    }
+    global_overclean_top_clusters = overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
+    late_stage_targeted_top_clusters = late_stage_overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
 
     limitations = list(matrix.get("limitations", [])) + [
         "Alpha diagnostic signal only; not a final balance verdict.",
@@ -634,6 +671,12 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "progression_audit_rows": progression_audit_rows,
         "progression_audit_flags": progression_audit_flags,
         "progression_audit_flag_counts": summarize_balance_audit_flags(progression_audit_flags),
+        "global_overclean_candidate_count": global_overclean_candidate_count,
+        "late_stage_overclean_candidate_count": late_stage_overclean_candidate_count,
+        "overclean_rollups": overclean_rollups,
+        "global_overclean_top_clusters": global_overclean_top_clusters,
+        "late_stage_targeted_top_clusters": late_stage_targeted_top_clusters,
+        "overclean_top_clusters": late_stage_targeted_top_clusters,
         "pack_runs": pack_matrix.get("pack_runs", []),
         "pack_samples": pack_matrix.get("pack_samples", []),
         "pack_rollups": pack_matrix.get("pack_rollups", {}),
@@ -737,15 +780,46 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         "  - no live mob templates or live combat formulas changed.",
         "- Policy artifact status:",
         f"  - policy_failure_guard_loop count: {policy_guard_count} (diagnostic simulation policy artifact, not a direct route tuning verdict).",
-        f"  - overclean_win count: {overclean_count}.",
-        "  - previous policy-sanity-only overclean baseline: 88.",
-        f"  - overclean improved vs baseline: {'yes' if overclean_count < 88 else 'no'}.",
+        f"  - current late-stage overclean audit flag count: {overclean_count}.",
+        "  - previous PR12 policy-sanity global overclean baseline: 88.",
+        "  - this late-stage scoped flag count is not a comparable global overclean improvement metric.",
         f"  - suspicious rows: {suspicious_count}.",
         "  - route win rates in compact deterministic run may still remain 1.00; treat this as remaining underpressure signal if observed.",
         "- Remaining known issues:",
         "  - broad overclean/underpressure signals may still remain and require route/archetype targeted follow-up tuning passes.",
         "- Pack proxy status:",
         "  - composite_pack_pressure_v1 remains active as simulation/reporting-only proxy; no live group combat/targeting added.",
+    ]
+    overclean_rollups = dict(report_data.get("overclean_rollups", {}))
+    top_clusters = list(report_data.get("late_stage_targeted_top_clusters", []))
+    lines += ["", "## PR13 Targeted Tuning Candidates", "Diagnostic compact cluster view; use full report_data for complete candidate selection."]
+    global_candidates = int(report_data.get("global_overclean_candidate_count", 0))
+    late_stage_candidates = int(report_data.get("late_stage_overclean_candidate_count", 0))
+    lines.append(f"- global overclean candidates (strong_vs_high_target): {global_candidates}.")
+    lines.append(f"- late-stage targeted candidates (build_testing/route_exam only): {late_stage_candidates}.")
+    lines.append(f"- top targeted late-stage clusters shown: {min(len(top_clusters), PR13_TOP_CLUSTER_LIMIT)} (limit={PR13_TOP_CLUSTER_LIMIT}).")
+    lines.append("- global diagnostic clusters are available in report_data as global_overclean_top_clusters.")
+    lines += ["| cluster_type | cluster_key | count |", "|---|---|---:|"]
+    if not top_clusters:
+        lines.append("| route+stage | n/a | 0 |")
+    else:
+        for cluster in top_clusters:
+            lines.append(f"| route+stage | {' / '.join(cluster.get('key', []))} | {cluster.get('count', 0)} |")
+
+    pr13_overclean = int(progression_counts.get("overclean_win", 0))
+    lines += [
+        "",
+        "## PR13 Targeted Alpha Tuning Summary",
+        "- Previous PR12 global overclean baseline: 86.",
+        f"- Current global overclean candidates: {global_candidates}.",
+        f"- Current late-stage overclean audit flags: {pr13_overclean}.",
+        "- Late-stage audit scope: build_testing / route_exam only.",
+        "- Global overclean did not improve yet and remains a known underpressure signal in compact deterministic output.",
+        "- Selected tuning targets: repeated build_testing/route_exam overclean clusters from route+stage rollups.",
+        "- Changed knobs (simulation/reporting-only): targeted route-stage pressure overrides in mob scaling, preserving route identity.",
+        "- PR13 adds candidate rollups and targeted tuning knobs, but compact global overclean remains unresolved.",
+        "- Remaining known underpressure: compact deterministic route win rates may remain 1.00 and further targeted passes can still be required.",
+        "- No live gameplay/runtime systems changed.",
     ]
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))

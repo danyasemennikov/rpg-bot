@@ -11,8 +11,8 @@ def test_pr12_summary_section_exists():
     assert "added simulation-stage pressure modifiers" in md
     assert "Changed numeric knobs:" in md
     assert "none in live systems" not in md
-    assert "previous policy-sanity-only overclean baseline: 88" in md
-    assert "overclean improved vs baseline: yes" in md
+    assert "previous PR12 policy-sanity global overclean baseline: 88" in md
+    assert "this late-stage scoped flag count is not a comparable global overclean improvement metric." in md
 
 
 def test_guardian_and_paladin_no_50_turn_guard_only_traces_in_checked_in_report():
@@ -58,6 +58,9 @@ def test_project_state_mentions_pr12_and_non_goals():
     assert "No targeting rollout" in content
     assert "No live route/mob/skill/reward/formula tuning outside accepted tuning PRs." in content
     assert "PR12 includes simulation/reporting-only stage pressure tuning; live templates/runtime remain unchanged." in content
+    assert "overclean moved from 86 to 43" not in content
+    assert "global overclean candidates remain 88" in content
+    assert "late-stage targeted overclean audit flags are 43" in content
 
 
 def test_checked_in_report_scope_wording_uses_live_qualification():
