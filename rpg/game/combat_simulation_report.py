@@ -50,6 +50,8 @@ PROGRESSION_AUDIT_PREVIEW_LIMIT = 20
 PACK_PREVIEW_LIMIT = 20
 PR13_TOP_CLUSTER_LIMIT = 8
 LATE_STAGE_TARGETED_STAGES = {"build_testing", "route_exam"}
+EARLY_TARGET_CALIBRATION_STAGES = {"soft_entry", "identity_visible"}
+ACTIONABLE_TARGET_STAGES = {"build_testing", "route_exam"}
 
 
 def build_smoke_alpha_balance_report_config() -> RouteStageMatrixConfig:
@@ -515,6 +517,36 @@ def _build_progression_audit_rows(enriched_runs: list[dict[str, Any]], summaries
     return rows
 
 
+def calibrate_target_expectation_row(row: dict[str, Any]) -> dict[str, Any]:
+    stage = str(row.get("stage", ""))
+    observed_label = str(row.get("observed_label", ""))
+    normalized_target = str(row.get("normalized_target_label", ""))
+    is_overclean_candidate = observed_label == "strong" and normalized_target in {"hard", "very_hard"}
+
+    status = "not_applicable"
+    actionable = False
+    calibrated_target = normalized_target
+    if is_overclean_candidate:
+        if stage in EARLY_TARGET_CALIBRATION_STAGES:
+            status = "early_stage_target_expectation_artifact"
+        elif stage in ACTIONABLE_TARGET_STAGES:
+            status = "actionable_overclean"
+            actionable = True
+        else:
+            status = "non_actionable_stage"
+    elif normalized_target in TARGET_LABEL_TO_SCORE:
+        status = "comparable_non_overclean"
+
+    return {
+        **row,
+        "raw_target_label": row.get("target_label"),
+        "calibrated_target_label": calibrated_target,
+        "actionable_target_label": calibrated_target if actionable else None,
+        "target_calibration_status": status,
+        "is_actionable_overclean": actionable,
+    }
+
+
 def build_alpha_balance_report_data(matrix_result: dict | None = None, config: RouteStageMatrixConfig | None = None) -> dict:
     matrix = matrix_result if matrix_result is not None else run_route_stage_simulation_matrix(config)
     enriched_runs = [_enrich_run(run) for run in matrix.get("runs", [])]
@@ -590,6 +622,11 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         for row in target_comparisons
         if str(row.get("observed_label")) == "strong" and str(row.get("normalized_target_label")) in {"hard", "very_hard"}
     ]
+    calibrated_target_comparisons = [calibrate_target_expectation_row(row) for row in target_comparisons]
+    actionable_overclean_candidates = [row for row in calibrated_target_comparisons if row.get("is_actionable_overclean")]
+    early_stage_target_artifacts = [
+        row for row in calibrated_target_comparisons if row.get("target_calibration_status") == "early_stage_target_expectation_artifact"
+    ]
 
     def _rollup(rows: list[dict[str, Any]], keys: tuple[str, ...]) -> list[dict[str, Any]]:
         grouped: dict[tuple[str, ...], int] = defaultdict(int)
@@ -601,7 +638,12 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         return output
 
     global_overclean_candidate_count = len(overclean_candidates)
+    actionable_overclean_candidate_count = len(actionable_overclean_candidates)
+    early_stage_target_artifact_count = len(early_stage_target_artifacts)
     late_stage_overclean_candidate_count = sum(1 for row in overclean_candidates if str(row.get("stage", "")) in LATE_STAGE_TARGETED_STAGES)
+    late_stage_actionable_overclean_count = sum(
+        1 for row in actionable_overclean_candidates if str(row.get("stage", "")) in LATE_STAGE_TARGETED_STAGES
+    )
 
     late_stage_overclean_candidates = [
         row for row in overclean_candidates if str(row.get("stage", "")) in LATE_STAGE_TARGETED_STAGES
@@ -620,6 +662,20 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
     }
     global_overclean_top_clusters = overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
     late_stage_targeted_top_clusters = late_stage_overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
+    actionable_overclean_rollups = {
+        "by_route": _rollup(actionable_overclean_candidates, ("route_id",)),
+        "by_stage": _rollup(actionable_overclean_candidates, ("stage",)),
+        "by_archetype": _rollup(actionable_overclean_candidates, ("archetype_id",)),
+        "by_route_stage": _rollup(actionable_overclean_candidates, ("route_id", "stage")),
+    }
+    early_stage_target_artifact_rollups = {
+        "by_route": _rollup(early_stage_target_artifacts, ("route_id",)),
+        "by_stage": _rollup(early_stage_target_artifacts, ("stage",)),
+        "by_archetype": _rollup(early_stage_target_artifacts, ("archetype_id",)),
+        "by_route_stage": _rollup(early_stage_target_artifacts, ("route_id", "stage")),
+    }
+    actionable_overclean_top_clusters = actionable_overclean_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
+    early_stage_target_artifact_top_clusters = early_stage_target_artifact_rollups["by_route_stage"][:PR13_TOP_CLUSTER_LIMIT]
 
     limitations = list(matrix.get("limitations", [])) + [
         "Alpha diagnostic signal only; not a final balance verdict.",
@@ -658,7 +714,7 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "sample_count": int(matrix.get("sample_count", 0)),
         "limitations": limitations,
         "summaries": summaries,
-        "target_comparisons": target_comparisons,
+        "target_comparisons": calibrated_target_comparisons,
         "suspicious_matchups": suspicious_matchups,
         "inconclusive_matchups": inconclusive_matchups,
         "missing_target_matchups": missing_target_matchups,
@@ -672,11 +728,21 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "progression_audit_flags": progression_audit_flags,
         "progression_audit_flag_counts": summarize_balance_audit_flags(progression_audit_flags),
         "global_overclean_candidate_count": global_overclean_candidate_count,
+        "raw_global_overclean_candidate_count": global_overclean_candidate_count,
+        "actionable_overclean_candidate_count": actionable_overclean_candidate_count,
+        "early_stage_target_artifact_count": early_stage_target_artifact_count,
         "late_stage_overclean_candidate_count": late_stage_overclean_candidate_count,
+        "late_stage_actionable_overclean_count": late_stage_actionable_overclean_count,
         "overclean_rollups": overclean_rollups,
         "global_overclean_top_clusters": global_overclean_top_clusters,
         "late_stage_targeted_top_clusters": late_stage_targeted_top_clusters,
         "overclean_top_clusters": late_stage_targeted_top_clusters,
+        "actionable_overclean_top_clusters": actionable_overclean_top_clusters,
+        "early_stage_target_artifact_top_clusters": early_stage_target_artifact_top_clusters,
+        "target_calibration_rollups": {
+            "actionable_overclean": actionable_overclean_rollups,
+            "early_stage_target_artifact": early_stage_target_artifact_rollups,
+        },
         "pack_runs": pack_matrix.get("pack_runs", []),
         "pack_samples": pack_matrix.get("pack_samples", []),
         "pack_rollups": pack_matrix.get("pack_rollups", {}),
@@ -710,7 +776,30 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines += ["| Route | Stage | Archetype | Target | Observed | Alignment |", "|---|---|---|---|---|---|"]
     for row in target_rows[:TARGET_TABLE_LIMIT]:
         lines.append(f"| {row['route_id']} | {row['stage']} | {row['archetype_id']} | {row.get('target_label') or 'n/a'} | {row.get('observed_label') or 'n/a'} | {row.get('alignment') or 'n/a'} |")
+    raw_global_candidates = int(report_data.get("global_overclean_candidate_count", 0))
+    actionable_candidates = int(report_data.get("actionable_overclean_candidate_count", 0))
+    early_stage_artifacts = int(report_data.get("early_stage_target_artifact_count", 0))
+    late_stage_actionable = int(report_data.get("late_stage_actionable_overclean_count", 0))
+    lines += [
+        "",
+        "## PR14 Target Expectation Calibration Summary",
+        f"- Raw global overclean candidates: {raw_global_candidates}.",
+        f"- Actionable overclean candidates after target calibration: {actionable_candidates}.",
+        f"- Early-stage target expectation artifacts: {early_stage_artifacts}.",
+        f"- Late-stage actionable overclean: {late_stage_actionable}.",
+        "- Raw/global signal remains visible for transparency; calibration adds actionable separation only.",
+        "- Early-stage artifacts are diagnostic target-expectation mismatches, not resolved balance issues.",
+        "- Late-stage actionable cases remain the tuning backlog.",
+        "- This pass is simulation/reporting-only and does not tune live gameplay/runtime systems.",
+        "| bucket | count | meaning |",
+        "|---|---:|---|",
+        f"| raw_global_overclean | {raw_global_candidates} | Raw strong_vs_high_target candidates across all stages. |",
+        f"| early_stage_target_artifact | {early_stage_artifacts} | soft_entry/identity_visible high-target overclean artifacts. |",
+        f"| actionable_overclean | {actionable_candidates} | Calibrated actionable overclean candidates. |",
+        f"| late_stage_actionable | {late_stage_actionable} | Actionable overclean in build_testing/route_exam. |",
+    ]
     lines += ["", "## 8. Suspicious Matchup Candidates"]
+
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
     for row in suspicious_rows:
@@ -792,7 +881,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     ]
     overclean_rollups = dict(report_data.get("overclean_rollups", {}))
     top_clusters = list(report_data.get("late_stage_targeted_top_clusters", []))
-    lines += ["", "## PR13 Targeted Tuning Candidates", "Diagnostic compact cluster view; use full report_data for complete candidate selection."]
+    lines += ["", "## PR13 Targeted Tuning Candidates", "Diagnostic compact cluster view; use full report_data for complete candidate selection.", "PR14 target expectation calibration below further separates raw global signal from actionable tuning backlog."]
     global_candidates = int(report_data.get("global_overclean_candidate_count", 0))
     late_stage_candidates = int(report_data.get("late_stage_overclean_candidate_count", 0))
     lines.append(f"- global overclean candidates (strong_vs_high_target): {global_candidates}.")
@@ -822,6 +911,29 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         "- No live gameplay/runtime systems changed.",
     ]
 
+
+    raw_global_candidates = int(report_data.get("global_overclean_candidate_count", 0))
+    actionable_candidates = int(report_data.get("actionable_overclean_candidate_count", 0))
+    early_stage_artifacts = int(report_data.get("early_stage_target_artifact_count", 0))
+    late_stage_actionable = int(report_data.get("late_stage_actionable_overclean_count", 0))
+    lines += [
+        "",
+        "## PR14 Target Expectation Calibration Summary",
+        f"- Raw global overclean candidates: {raw_global_candidates}.",
+        f"- Actionable overclean candidates after target calibration: {actionable_candidates}.",
+        f"- Early-stage target expectation artifacts: {early_stage_artifacts}.",
+        f"- Late-stage actionable overclean: {late_stage_actionable}.",
+        "- Raw/global signal remains visible for transparency; calibration adds actionable separation only.",
+        "- Early-stage artifacts are diagnostic target-expectation mismatches, not resolved balance issues.",
+        "- Late-stage actionable cases remain the tuning backlog.",
+        "- This pass is simulation/reporting-only and does not tune live gameplay/runtime systems.",
+        "| bucket | count | meaning |",
+        "|---|---:|---|",
+        f"| raw_global_overclean | {raw_global_candidates} | Raw strong_vs_high_target candidates across all stages. |",
+        f"| early_stage_target_artifact | {early_stage_artifacts} | soft_entry/identity_visible high-target overclean artifacts. |",
+        f"| actionable_overclean | {actionable_candidates} | Calibrated actionable overclean candidates. |",
+        f"| late_stage_actionable | {late_stage_actionable} | Actionable overclean in build_testing/route_exam. |",
+    ]
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
     lines += ["", "## Target vs Observed v2 Signals", "This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix."]
