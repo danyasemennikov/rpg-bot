@@ -5,9 +5,9 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: PR11: Pack/Group Simulation Harness
-- Status: simulation pack/group pressure harness
-- Confirmed state below reflects current merged main after simulation pack/group pressure harness
+- PR: PR12: First Real Tuning Pass
+- Status: first controlled alpha tuning pass
+- Confirmed state below reflects current merged main after PR12 first controlled tuning pass
 
 ---
 
@@ -183,6 +183,17 @@ Alpha readiness policy:
 - live mob templates/gameplay, rewards, loot/crafting, pack/group simulation, and tuning are not changed.
 
 
+### First Real Tuning Pass (PR12)
+
+- simulation policy artifacts were reduced in report/simulation policy handling;
+- guardian_shield_1h and holy_rod_paladin use simulation-only guard_then_attack policy;
+- simulation-stage pressure modifiers were added for first controlled numeric alpha pressure tuning;
+- report v2 now includes `PR12 First Tuning Pass Summary` with changed policy assumptions and diagnostic counts;
+- changed policy and numeric knobs are documented in the report summary;
+- pack proxy remains active as simulation/reporting-only (`composite_pack_pressure_v1`);
+- no live group combat, no targeting, no teleport, no economy overhaul, and no Combat Core rewrite were implemented;
+- no live gameplay runtime systems (loot/crafting/equipment runtime/economy) were changed by PR12.
+
 ### Pack/Group Simulation Harness (PR11)
 
 - simulation/reporting-only pack pressure harness is implemented;
@@ -207,7 +218,8 @@ Alpha readiness policy:
 
 Do not treat these as active scope unless a new accepted Decision Packet explicitly changes them:
 
-- No route/mob/skill/reward/formula tuning.
+- No live route/mob/skill/reward/formula tuning outside accepted tuning PRs.
+- PR12 includes simulation/reporting-only stage pressure tuning; live templates/runtime remain unchanged.
 - No Combat Core rewrite.
 - No smart autobattle policy.
 - No live AFK/autopilot.

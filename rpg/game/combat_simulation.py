@@ -59,6 +59,22 @@ class AlwaysGuardFallbackPolicy:
         return SIM_ACTION_GUARD_FALLBACK
 
 
+class GuardThenAttackPolicy:
+    """Simulation-only defensive policy.
+
+    Uses periodic guard as a tactical action but avoids guard-only loops by
+    defaulting to normal attacks on most turns.
+    """
+
+    def __init__(self, guard_every_n_turns: int = 3):
+        self.guard_every_n_turns = max(2, int(guard_every_n_turns))
+
+    def choose_action(self, *, turn: int, battle_state: dict) -> str:
+        if turn % self.guard_every_n_turns == 0:
+            return SIM_ACTION_GUARD_FALLBACK
+        return SIM_ACTION_NORMAL_ATTACK
+
+
 class ScriptedActionPolicy:
     def __init__(self, actions: list[str]):
         self.actions = list(actions)

@@ -19,7 +19,7 @@ from game.combat_simulation_archetypes import (
     get_archetype_metadata,
     list_alpha_archetype_ids,
 )
-from game.locations import WORLD_LOCATIONS
+from game.locations import ROUTE_MATCHUP_TARGET_PROFILES, WORLD_LOCATIONS
 from game.mobs import MOBS
 from game.mob_scaling import (
     ROLE_ELITE,
@@ -199,6 +199,53 @@ def _resolve_sample_mob_role(sample: RouteStageMobSample) -> str:
     return ROLE_NORMAL
 
 
+_ARCHETYPE_MATCHUP_KEY_MAP = {
+    "guardian_shield_1h": "shield_defensive_1h",
+    "sword_2h_burst": "sword_2h",
+    "axe_2h_bruiser": "axe_2h",
+    "daggers_venom": "daggers_venom",
+    "daggers_evasion": "daggers_evasion",
+    "bow_sniper": "bow_sniper",
+    "bow_ranger": "bow_ranger",
+    "magic_staff_destruction": "magic_staff_destruction",
+    "magic_staff_control": "magic_staff_control",
+    "wand_tempo": "wand",
+    "holy_staff_solo": "holy_staff_solo_support",
+    "holy_rod_paladin": "holy_rod_paladin",
+    "tome_toolbox": "tome_toolbox",
+    "pure_support_solo_overlay": "pure_support_solo_overlay",
+}
+
+
+def _normalize_target_label(label: str) -> str:
+    norm = str(label or "").strip().lower()
+    aliases = {
+        "normal_strong": "normal",
+        "normal_hard": "hard",
+        "hard_very_hard": "very_hard",
+        "very_hard_playable": "very_hard",
+        "normal_hard_split": "hard",
+    }
+    return aliases.get(norm, norm)
+
+
+def _resolve_tuned_sample_mob_role(route_id: str, stage: str, archetype_id: str, sample: RouteStageMobSample) -> str:
+    baseline = _resolve_sample_mob_role(sample)
+    if stage not in {"build_testing", "route_exam"}:
+        return baseline
+    matchup_key = _ARCHETYPE_MATCHUP_KEY_MAP.get(archetype_id)
+    if not matchup_key:
+        return baseline
+    target_raw = ((ROUTE_MATCHUP_TARGET_PROFILES.get(route_id, {}) or {}).get("target_matchups", {}) or {}).get(matchup_key, "")
+    target = _normalize_target_label(target_raw)
+    if target not in {"hard", "very_hard"}:
+        return baseline
+    tags = {str(t).lower() for t in sample.sample_tags}
+    if stage == "route_exam" and target == "very_hard" and "elite_available" in tags:
+        return ROLE_ELITE
+    return "pressure"
+
+
 def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = None) -> dict:
     cfg = config or RouteStageMatrixConfig()
     runs: list[dict[str, Any]] = []
@@ -218,7 +265,7 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                 for sample in samples:
                     for seed in cfg.seeds:
                         player = build_archetype_player_preset(archetype_id, power_tier=stage)
-                        mob_role = _resolve_sample_mob_role(sample)
+                        mob_role = _resolve_tuned_sample_mob_role(route_id, stage, archetype_id, sample)
                         scaled_mob = build_scaled_mob_for_simulation(sample.mob_id, route_id, stage, mob_role=mob_role)
                         mob = build_simulation_mob_preset(sample.mob_id)
                         mob.update({k: v for k, v in scaled_mob.items() if k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense", "damage_min", "damage_max")})
@@ -296,7 +343,8 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
             "Pack proxy samples are added at report-data layer, not in solo matrix output.",
             "No live pack/group runtime combat.",
             "No final balance conclusions yet.",
-            "No route/mob/skill tuning performed.",
+            "No live route/mob/skill tuning performed.",
+            "Simulation-stage pressure tuning is diagnostic/reporting-only.",
         ],
     }
 

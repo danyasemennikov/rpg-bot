@@ -331,6 +331,14 @@ def test_progression_rows_not_all_toolbox_fallback():
     assert profiles != {"toolbox_hybrid"}
 
 
+def test_build_and_exam_rows_include_escalated_roles_when_targets_hard():
+    report = build_default_alpha_simulation_report_v2_data()
+    rows = report["progression_audit_rows"]
+    scoped = [r for r in rows if r.get("stage") in {"build_testing", "route_exam"}]
+    assert scoped
+    assert any(str(r.get("mob_role")) in {"pressure", "elite"} for r in scoped)
+
+
 def test_valid_formula_budget_rows_not_all_flagged_missing_preset():
     report = build_default_alpha_simulation_report_v2_data()
     valid_rows = [r for r in report["progression_audit_rows"] if r.get("assumption_status") == "formula_budget_v1"]

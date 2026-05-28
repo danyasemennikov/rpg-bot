@@ -175,7 +175,7 @@ Implemented diagnostic/foundation steps:
 - **PR10:** Mob Encounter Scaling Foundation
 - **PR11:** Pack/Group Simulation Harness
 
-Planned future work:
+Implemented tuning work:
 - **PR12:** First Real Tuning Pass
 
 PR11 note (implemented simulation/reporting foundation only):
@@ -209,3 +209,10 @@ PR10 note (implemented simulation/reporting foundation only):
 - PR10 does not change rewards, loot/crafting, equipment runtime, or player DB.
 - PR10 did not implement pack/group simulation; PR11 later implemented simulation/reporting composite pack pressure harness.
 - PR10 is not the first real tuning pass; PR12 remains responsible.
+
+PR12 note (implemented first controlled tuning pass):
+- PR12 reduces simulation policy artifacts (guard-loop fallback behavior) before drawing tuning conclusions.
+- PR12 adds a dedicated report summary section for changed policy assumptions/knobs and diagnostic counts.
+- PR12 applies limited report-backed alpha tuning only, including simulation-stage pressure modifiers (soft_entry baseline, identity/build/route_exam pressure lift).
+- PR12 does not implement Combat Core rewrite, targeting, live group combat, teleport, economy overhaul, or broad weapon-family rebalance.
+

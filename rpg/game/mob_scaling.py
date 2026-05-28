@@ -32,6 +32,13 @@ ROUTE_PRESSURE_MODIFIERS: dict[str, dict[str, float]] = {
     "route_sunscar": {"hp": 1.00, "damage": 1.10, "accuracy": 1.06, "evasion": 1.02, "defense": 1.00, "magic_defense": 1.00},
 }
 
+SIMULATION_STAGE_PRESSURE_MODIFIERS: dict[str, dict[str, float]] = {
+    "soft_entry": {"hp": 1.00, "damage": 1.00, "accuracy": 1.00, "evasion": 1.00, "defense": 1.00, "magic_defense": 1.00},
+    "identity_visible": {"hp": 1.08, "damage": 1.06, "accuracy": 1.01, "evasion": 1.00, "defense": 1.02, "magic_defense": 1.02},
+    "build_testing": {"hp": 1.22, "damage": 1.30, "accuracy": 1.03, "evasion": 1.01, "defense": 1.06, "magic_defense": 1.06},
+    "route_exam": {"hp": 1.30, "damage": 1.50, "accuracy": 1.05, "evasion": 1.02, "defense": 1.10, "magic_defense": 1.10},
+}
+
 
 def calculate_encounter_level_from_stage(stage: str) -> int | None:
     return resolve_simulation_stage_player_level(stage)
@@ -52,25 +59,27 @@ def calculate_mob_level_scale(encounter_level: int) -> dict[str, float]:
     }
 
 
-def _scaled_value(base_value: Any, level_scale: float, role_scale: float, route_scale: float) -> int | None:
+def _scaled_value(base_value: Any, level_scale: float, role_scale: float, route_scale: float, stage_scale: float) -> int | None:
     if not isinstance(base_value, (int, float)):
         return None
-    return int(round(base_value * level_scale * role_scale * route_scale))
+    return int(round(base_value * level_scale * role_scale * route_scale * stage_scale))
 
 
-def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: str, route_id: str | None = None) -> dict:
+def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: str, route_id: str | None = None, stage: str | None = None) -> dict:
     role = str(mob_role or ROLE_NORMAL).lower()
     if role not in MOB_ROLE_MULTIPLIERS:
         role = ROLE_NORMAL
     level_scale = calculate_mob_level_scale(encounter_level)
     role_multiplier = MOB_ROLE_MULTIPLIERS[role]
     route_modifier = ROUTE_PRESSURE_MODIFIERS.get(str(route_id or ""), ROUTE_PRESSURE_MODIFIERS["route_westwild"])
+    stage_key = str(stage or "")
+    stage_modifier = SIMULATION_STAGE_PRESSURE_MODIFIERS.get(stage_key, SIMULATION_STAGE_PRESSURE_MODIFIERS["soft_entry"])
 
     scaled = deepcopy(base_mob)
     base_stats = {k: base_mob.get(k) for k in SCALED_MOB_STAT_KEYS if k in base_mob}
     final_stats: dict[str, int] = {}
     for key in SCALED_MOB_STAT_KEYS:
-        val = _scaled_value(base_mob.get(key), level_scale[key], role_multiplier[key], route_modifier[key])
+        val = _scaled_value(base_mob.get(key), level_scale[key], role_multiplier[key], route_modifier[key], stage_modifier[key])
         if val is not None:
             final_stats[key] = val
             scaled[key] = val
@@ -79,9 +88,9 @@ def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: st
         dmin = base_mob.get("damage_min")
         dmax = base_mob.get("damage_max")
         if isinstance(dmin, (int, float)):
-            scaled["damage_min"] = _scaled_value(dmin, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"])
+            scaled["damage_min"] = _scaled_value(dmin, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"], stage_modifier["damage"])
         if isinstance(dmax, (int, float)):
-            scaled["damage_max"] = _scaled_value(dmax, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"])
+            scaled["damage_max"] = _scaled_value(dmax, level_scale["damage"], role_multiplier["damage"], route_modifier["damage"], stage_modifier["damage"])
         if isinstance(scaled.get("damage_min"), int) and isinstance(scaled.get("damage_max"), int):
             scaled["damage"] = int(round((scaled["damage_min"] + scaled["damage_max"]) / 2))
             final_stats["damage"] = scaled["damage"]
@@ -89,6 +98,7 @@ def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: st
     scaled["encounter_level"] = encounter_level
     scaled["mob_role"] = role
     scaled["route_id"] = route_id
+    scaled["stage"] = stage
     scaled["scaling_status"] = SCALING_STATUS_FORMULA_V1
     scaled["base_template_id"] = base_mob.get("id")
     scaled["base_mob_stats"] = base_stats
@@ -97,6 +107,7 @@ def build_scaled_mob_stats(base_mob: dict, *, encounter_level: int, mob_role: st
         "level_scale": level_scale,
         "role_multiplier": role_multiplier,
         "route_modifier": route_modifier,
+        "stage_pressure_modifier": stage_modifier,
     }
     return scaled
 
@@ -108,4 +119,4 @@ def build_scaled_mob_for_simulation(mob_id: str, route_id: str, stage: str, mob_
     encounter_level = calculate_encounter_level_from_stage(stage)
     if encounter_level is None:
         raise ValueError(f"Unknown stage for encounter level resolution: {stage}")
-    return build_scaled_mob_stats(base, encounter_level=encounter_level, mob_role=mob_role, route_id=route_id)
+    return build_scaled_mob_stats(base, encounter_level=encounter_level, mob_role=mob_role, route_id=route_id, stage=stage)
