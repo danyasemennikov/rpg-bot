@@ -59,8 +59,8 @@ def test_project_state_mentions_pr12_and_non_goals():
     assert "No live route/mob/skill/reward/formula tuning outside accepted tuning PRs." in content
     assert "PR12 includes simulation/reporting-only stage pressure tuning; live templates/runtime remain unchanged." in content
     assert "overclean moved from 86 to 43" not in content
-    assert "global overclean candidates remain 88" in content
-    assert "late-stage targeted overclean audit flags are 43" in content
+    assert "at PR13 time, the compact report baseline showed global overclean candidates 88" in content
+    assert "late-stage targeted overclean audit flags 43" in content
 
 
 def test_checked_in_report_scope_wording_uses_live_qualification():

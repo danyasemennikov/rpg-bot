@@ -246,6 +246,38 @@ def _resolve_tuned_sample_mob_role(route_id: str, stage: str, archetype_id: str,
     return "pressure"
 
 
+
+PR15_ACTIONABLE_ROLE_REFINEMENTS: dict[tuple[str, str, str], dict[str, float]] = {
+    # Simulation/reporting-only solo matrix refinement for the repeated Sunscar
+    # route_exam actionable support overclean cluster. Pack proxy construction does
+    # not use this layer, so it cannot inflate composite pack stats.
+    ("route_sunscar", "route_exam", "pure_support_solo_overlay"): {"hp": 1.60, "damage": 1.22, "accuracy": 1.08},
+}
+
+
+def _apply_pr15_actionable_role_refinement(scaled_mob: dict, route_id: str, stage: str, archetype_id: str) -> dict:
+    multipliers = PR15_ACTIONABLE_ROLE_REFINEMENTS.get((route_id, stage, archetype_id))
+    if not multipliers:
+        return scaled_mob
+    adjusted = dict(scaled_mob)
+    final_stats = dict(adjusted.get("final_mob_stats", {}))
+    applied: dict[str, float] = {}
+    for stat_key, multiplier in multipliers.items():
+        if stat_key not in final_stats or not isinstance(final_stats.get(stat_key), (int, float)):
+            continue
+        value = int(round(final_stats[stat_key] * multiplier))
+        final_stats[stat_key] = max(1, value)
+        adjusted[stat_key] = final_stats[stat_key]
+        applied[stat_key] = multiplier
+    if "damage" in applied:
+        adjusted["damage_min"] = adjusted["damage"]
+        adjusted["damage_max"] = adjusted["damage"]
+    scale_components = dict(adjusted.get("scale_components", {}))
+    scale_components["pr15_actionable_role_refinement"] = applied
+    adjusted["scale_components"] = scale_components
+    adjusted["final_mob_stats"] = final_stats
+    return adjusted
+
 def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = None) -> dict:
     cfg = config or RouteStageMatrixConfig()
     runs: list[dict[str, Any]] = []
@@ -267,6 +299,7 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                         player = build_archetype_player_preset(archetype_id, power_tier=stage)
                         mob_role = _resolve_tuned_sample_mob_role(route_id, stage, archetype_id, sample)
                         scaled_mob = build_scaled_mob_for_simulation(sample.mob_id, route_id, stage, mob_role=mob_role)
+                        scaled_mob = _apply_pr15_actionable_role_refinement(scaled_mob, route_id, stage, archetype_id)
                         mob = build_simulation_mob_preset(sample.mob_id)
                         mob.update({k: v for k, v in scaled_mob.items() if k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense", "damage_min", "damage_max")})
                         skill_levels = build_archetype_simulation_skill_levels(archetype_id, power_tier=stage)

@@ -25,19 +25,19 @@ This is a diagnostic and non-final report for future tuning scope decisions.
 | route_westwild | soft_entry | westwild_n1 | crow | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 25, 'damage': 4} |
 | route_westwild | identity_visible | westwild_n3 | forest_boar | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 166, 'damage': 12} |
 | route_westwild | build_testing | westwild_n6 | bear | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 562, 'damage': 62} |
-| route_westwild | route_exam | westwild_n10 | bear | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 882, 'damage': 99} |
+| route_westwild | route_exam | westwild_n10 | bear | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 891, 'damage': 100} |
 | route_frostspine | soft_entry | frostspine_n1 | mountain_rabbit | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 36, 'damage': 4} |
 | route_frostspine | identity_visible | frostspine_n3 | cave_bat | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 75, 'damage': 12} |
 | route_frostspine | build_testing | frostspine_n6 | mountain_stone_golem | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1691, 'damage': 108} |
 | route_frostspine | route_exam | frostspine_n10 | ice_troll | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 1942, 'damage': 188} |
 | route_ashen_ruins | soft_entry | ashen_n1 | skeleton_warrior | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 79, 'damage': 14} |
 | route_ashen_ruins | identity_visible | ashen_n3 | skeleton_mage | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 133, 'damage': 33} |
-| route_ashen_ruins | build_testing | ashen_n3b1 | cursed_knight | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override, elite_available | {'hp': 864, 'damage': 122} |
-| route_ashen_ruins | route_exam | ashen_n3b2a1 | ghost | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override | {'hp': 541, 'damage': 126} |
+| route_ashen_ruins | build_testing | ashen_n3b1 | cursed_knight | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override, elite_available | {'hp': 864, 'damage': 127} |
+| route_ashen_ruins | route_exam | ashen_n3b2a1 | ghost | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override | {'hp': 541, 'damage': 131} |
 | route_mireveil | soft_entry | mireveil_n1 | leech | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 54, 'damage': 9} |
 | route_mireveil | identity_visible | mireveil_n3 | swamp_spider | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 132, 'damage': 24} |
-| route_mireveil | build_testing | mireveil_n6 | giant_leech | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 554, 'damage': 80} |
-| route_mireveil | route_exam | mireveil_n10 | old_witch | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1560, 'damage': 258} |
+| route_mireveil | build_testing | mireveil_n6 | giant_leech | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 586, 'damage': 81} |
+| route_mireveil | route_exam | mireveil_n10 | old_witch | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1647, 'damage': 262} |
 Showing first 16 of 20 scenario cards.
 
 ## Archetype Cards
@@ -75,7 +75,7 @@ Showing first 24 of 56 archetype cards.
 | route_ashen_ruins | 56 | 1.00 | 0.00 |
 | route_frostspine | 56 | 1.00 | 0.00 |
 | route_mireveil | 56 | 1.00 | 0.00 |
-| route_sunscar | 56 | 1.00 | 0.00 |
+| route_sunscar | 56 | 0.98 | 0.00 |
 | route_westwild | 56 | 1.00 | 0.00 |
 
 ## Archetype Overview
@@ -91,7 +91,7 @@ Showing first 24 of 56 archetype cards.
 | holy_staff_solo | 20 | 1.00 | 0.00 |
 | magic_staff_control | 20 | 1.00 | 0.00 |
 | magic_staff_destruction | 20 | 1.00 | 0.00 |
-| pure_support_solo_overlay | 20 | 1.00 | 0.00 |
+| pure_support_solo_overlay | 20 | 0.95 | 0.00 |
 | sword_2h_burst | 20 | 1.00 | 0.00 |
 | tome_toolbox | 20 | 1.00 | 0.00 |
 | wand_tempo | 20 | 1.00 | 0.00 |
@@ -110,7 +110,7 @@ Showing first 24 of 56 archetype cards.
   - no live mob templates or live combat formulas changed.
 - Policy artifact status:
   - policy_failure_guard_loop count: 0 (diagnostic simulation policy artifact, not a direct route tuning verdict).
-  - current late-stage overclean audit flag count: 43.
+  - current late-stage overclean audit flag count: 41.
   - previous PR12 policy-sanity global overclean baseline: 88.
   - this late-stage scoped flag count is not a comparable global overclean improvement metric.
   - suspicious rows: 88.
@@ -123,14 +123,14 @@ Showing first 24 of 56 archetype cards.
 ## PR13 Targeted Tuning Candidates
 Diagnostic compact cluster view; use full report_data for complete candidate selection.
 PR14 target expectation calibration below further separates raw global signal from actionable tuning backlog.
-- global overclean candidates (strong_vs_high_target): 88.
-- late-stage targeted candidates (build_testing/route_exam only): 44.
+- global overclean candidates (strong_vs_high_target): 87.
+- late-stage targeted candidates (build_testing/route_exam only): 43.
 - top targeted late-stage clusters shown: 8 (limit=8).
 - global diagnostic clusters are available in report_data as global_overclean_top_clusters.
 | cluster_type | cluster_key | count |
 |---|---|---:|
 | route+stage | route_sunscar / build_testing | 8 |
-| route+stage | route_sunscar / route_exam | 8 |
+| route+stage | route_sunscar / route_exam | 7 |
 | route+stage | route_frostspine / build_testing | 6 |
 | route+stage | route_frostspine / route_exam | 6 |
 | route+stage | route_ashen_ruins / build_testing | 4 |
@@ -140,10 +140,10 @@ PR14 target expectation calibration below further separates raw global signal fr
 
 ## PR13 Targeted Alpha Tuning Summary
 - Previous PR12 global overclean baseline: 86.
-- Current global overclean candidates: 88.
-- Current late-stage overclean audit flags: 43.
+- Current global overclean candidates: 87.
+- Current late-stage overclean audit flags: 41.
 - Late-stage audit scope: build_testing / route_exam only.
-- Global overclean did not improve yet and remains a known underpressure signal in compact deterministic output.
+- Global overclean remains a known underpressure signal in compact deterministic output; PR15 success is measured against calibrated actionable late-stage count.
 - Selected tuning targets: repeated build_testing/route_exam overclean clusters from route+stage rollups.
 - Changed knobs (simulation/reporting-only): targeted route-stage pressure overrides in mob scaling, preserving route identity.
 - PR13 adds candidate rollups and targeted tuning knobs, but compact global overclean remains unresolved.
@@ -151,20 +151,41 @@ PR14 target expectation calibration below further separates raw global signal fr
 - No live gameplay/runtime systems changed.
 
 ## PR14 Target Expectation Calibration Summary
-- Raw global overclean candidates: 88.
-- Actionable overclean candidates after target calibration: 44.
+- Raw global overclean candidates: 87.
+- Actionable overclean candidates after target calibration: 43.
 - Early-stage target expectation artifacts: 44.
-- Late-stage actionable overclean: 44.
+- Late-stage actionable overclean: 43.
 - Raw/global signal remains visible for transparency; calibration adds actionable separation only.
 - Early-stage artifacts are diagnostic target-expectation mismatches, not resolved balance issues.
 - Late-stage actionable cases remain the tuning backlog.
 - This pass is simulation/reporting-only and does not tune live gameplay/runtime systems.
 | bucket | count | meaning |
 |---|---:|---|
-| raw_global_overclean | 88 | Raw strong_vs_high_target candidates across all stages. |
+| raw_global_overclean | 87 | Raw strong_vs_high_target candidates across all stages. |
 | early_stage_target_artifact | 44 | soft_entry/identity_visible high-target overclean artifacts. |
-| actionable_overclean | 44 | Calibrated actionable overclean candidates. |
-| late_stage_actionable | 44 | Actionable overclean in build_testing/route_exam. |
+| actionable_overclean | 43 | Calibrated actionable overclean candidates. |
+| late_stage_actionable | 43 | Actionable overclean in build_testing/route_exam. |
+
+## PR15 Actionable Late-Stage Tuning Summary
+- Previous PR14 actionable overclean baseline: 44.
+- Current actionable overclean candidates: 43.
+- Current early-stage target artifacts: 44.
+- Current raw/global overclean candidates: 87.
+- Improvement vs PR14 actionable baseline: yes.
+- Changed knobs: bounded simulation/reporting-only late-stage route-stage pressure overrides plus one solo-matrix actionable role refinement for the repeated Sunscar route_exam support overclean cluster.
+- Top remaining actionable clusters preview: 8 of 43; full list available in report_data.
+- No live gameplay/runtime changes.
+- New overpressure risk: route_sunscar / route_exam / pure_support_solo_overlay player_death observed in representative suspicious traces; PR15 is not presented as a clean/final balance pass.
+| top_remaining_cluster_preview | count |
+|---|---:|
+| route_sunscar / build_testing | 8 |
+| route_sunscar / route_exam | 7 |
+| route_frostspine / build_testing | 6 |
+| route_frostspine / route_exam | 6 |
+| route_ashen_ruins / build_testing | 4 |
+| route_ashen_ruins / route_exam | 4 |
+| route_mireveil / build_testing | 2 |
+| route_mireveil / route_exam | 2 |
 
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
@@ -220,7 +241,7 @@ This section is diagnostic-only and not a tuning verdict.
 Gear assumptions use formula_budget_v1 simulation presets where available.
 policy_failure_guard_loop is a simulation policy artifact flag, not a direct route tuning verdict.
 Flag counts:
-- overclean_win: 43
+- overclean_win: 41
 | route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | role | encounter | scaled_hp | scaled_damage | target | observed_v2 | audit flags |
 |---|---|---|---:|---|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|
 | route_westwild | soft_entry | guardian_shield_1h | 10 | T1 | common | +0 | 287 | tank | crow | normal | 10 | 25 | 4 | normal | strong_clean |  |
@@ -249,32 +270,32 @@ Showing first 20 of 280 progression audit rows. Hidden rows are not resolved or 
 Showing 20 route-stage-balanced pack preview rows out of 140 pack runs. Hidden rows are not resolved or dismissed.
 | route | stage | pack_id | archetype | members | composite_hp | composite_damage | observed_v2 | proxy_status | winner | turns | audit flags |
 |---|---|---|---|---:|---:|---:|---|---|---|---:|---|
-| route_ashen_ruins | build_testing | ashen_build_undead | axe_2h_bruiser | 3 | 1326 | 142 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_ashen_ruins | route_exam | ashen_exam_knight_host | axe_2h_bruiser | 2 | 1984 | 238 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | axe_2h_bruiser | 3 | 1326 | 149 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_ashen_ruins | route_exam | ashen_exam_knight_host | axe_2h_bruiser | 2 | 1984 | 248 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 | route_frostspine | build_testing | frost_build_wolves | axe_2h_bruiser | 3 | 1280 | 102 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
 | route_frostspine | route_exam | frost_exam_golem_pack | axe_2h_bruiser | 3 | 4329 | 241 | strong_clean | composite_pack_pressure_v1 | player | 5 | none |
-| route_mireveil | build_testing | mireveil_build_swarm | axe_2h_bruiser | 3 | 835 | 99 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_mireveil | route_exam | mireveil_exam_serpent | axe_2h_bruiser | 3 | 1170 | 126 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
-| route_sunscar | build_testing | sunscar_build_scorpion | axe_2h_bruiser | 3 | 906 | 156 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_sunscar | route_exam | sunscar_exam_apex | axe_2h_bruiser | 3 | 2000 | 286 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | axe_2h_bruiser | 3 | 882 | 100 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_mireveil | route_exam | mireveil_exam_serpent | axe_2h_bruiser | 3 | 1235 | 129 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | axe_2h_bruiser | 3 | 950 | 174 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_sunscar | route_exam | sunscar_exam_apex | axe_2h_bruiser | 3 | 2640 | 329 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | axe_2h_bruiser | 3 | 860 | 68 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_westwild | route_exam | westwild_exam_bear_goblins | axe_2h_bruiser | 3 | 1711 | 150 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_ashen_ruins | build_testing | ashen_build_undead | bow_ranger | 3 | 1326 | 142 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_westwild | route_exam | westwild_exam_bear_goblins | axe_2h_bruiser | 3 | 1728 | 150 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | bow_ranger | 3 | 1326 | 149 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
 | route_frostspine | build_testing | frost_build_wolves | bow_ranger | 3 | 1280 | 102 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_mireveil | build_testing | mireveil_build_swarm | bow_ranger | 3 | 835 | 99 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
-| route_sunscar | build_testing | sunscar_build_scorpion | bow_ranger | 3 | 906 | 156 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | bow_ranger | 3 | 882 | 100 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | bow_ranger | 3 | 950 | 174 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | bow_ranger | 3 | 860 | 68 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
-| route_ashen_ruins | build_testing | ashen_build_undead | bow_sniper | 3 | 1326 | 142 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | bow_sniper | 3 | 1326 | 149 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
 | route_frostspine | build_testing | frost_build_wolves | bow_sniper | 3 | 1280 | 102 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 835 | 99 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 906 | 156 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 882 | 100 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 950 | 174 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | bow_sniper | 3 | 860 | 68 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 
 ## Representative Suspicious Fight Traces
 Showing up to 10 route-balanced representative suspicious traces. Hidden traces are not resolved or dismissed.
 | route_id | stage | archetype_id | location_id | mob_id | winner | end_reason | turns | actions_used | skills_used |
 |---|---|---|---|---|---|---|---:|---|---|
-No suspicious traces were detected for this deterministic compact run.
+| route_sunscar | route_exam | pure_support_solo_overlay | sunscar_n10 | air_elemental | mob | player_death | 21 | {'normal_attack': 20, 'guard_fallback': 0, 'skill:regeneration': 1} | ['regeneration'] |
 
 ## Diagnostic Label Definitions
 strong_clean, strong_but_risky, normal, hard, very_hard, death_blocked, timeout_stall, no_progress_stall, resource_collapse, policy_failure, inconclusive.

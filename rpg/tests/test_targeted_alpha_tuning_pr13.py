@@ -32,7 +32,7 @@ def test_checked_in_report_pr13_baseline_and_scope_wording():
     assert "Current global overclean candidates:" in content
     assert "Current late-stage overclean audit flags:" in content
     assert "Late-stage audit scope: build_testing / route_exam only." in content
-    assert "Global overclean did not improve yet" in content
+    assert "Global overclean remains a known underpressure signal" in content
     assert "86 -> 43" not in content
     assert "overclean improved vs baseline: yes" not in content
     assert "policy_failure_guard_loop count: 0" in content
