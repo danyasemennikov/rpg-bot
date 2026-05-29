@@ -22,6 +22,7 @@ from game.combat_simulation_matrix import (
 )
 from game.locations import ROUTE_MATCHUP_TARGET_PROFILES, WORLD_LOCATIONS
 from game.equipment_budget import build_simulation_gear_preset
+from game.mob_scaling import PR3_LATE_STAGE_MOB_PRESSURE_REFINEMENTS
 from game.mobs import MOBS
 from game.pack_simulation import PACK_REQUIRED_STAGES, run_pack_simulation_matrix
 
@@ -666,11 +667,11 @@ def _classify_pressure_attribution_run(run: dict[str, Any], target_row: dict[str
     damage_taken = int(evidence.get("damage_taken") or 0)
     hp_left = evidence.get("player_hp_remaining_pct")
     mana_left = evidence.get("player_mana_remaining_pct")
-    mob_hp_removed = evidence.get("mob_hp_removed_pct")
     sample_tags = {str(tag) for tag in evidence.get("sample_tags", [])}
     mob_role = str(evidence.get("mob_role") or "")
     has_high_target = target_label in {"hard", "very_hard"}
-    is_overclean = observed_label == "strong" and has_high_target and winner == "player"
+    is_player_win = winner == "player"
+    is_overclean = observed_label == "strong" and has_high_target and is_player_win
 
     if (
         route_id == "route_sunscar"
@@ -684,11 +685,16 @@ def _classify_pressure_attribution_run(run: dict[str, Any], target_row: dict[str
         labels.append("policy_artifact")
 
     if is_overclean:
-        if turns <= 3 or (mob_hp_removed is not None and mob_hp_removed >= 0.95):
+        # A player victory usually removes 100% of mob HP, so mob_hp_removed_pct
+        # is not enough by itself to prove low mob HP. Use fast-win pressure
+        # instead so bounded PR3 HP/pressure tuning can move this classifier.
+        fast_win_turn_limit = {"build_testing": 4, "route_exam": 5}.get(stage, 3)
+        is_fast_win = 0 < turns <= fast_win_turn_limit
+        if is_fast_win:
             labels.extend(["mob_hp_too_low", "player_damage_too_high"])
-        if hp_left is not None and hp_left >= 0.85 and damage_taken <= 40:
+        if is_player_win and hp_left is not None and hp_left >= 0.85 and damage_taken <= 40 and has_high_target:
             labels.append("mob_damage_too_low")
-        if mana_left is not None and mana_left >= 0.9:
+        if is_player_win and mana_left is not None and mana_left >= 0.9 and has_high_target:
             labels.append("resource_pressure_missing")
         if damage_taken > 40 and hp_left is not None and hp_left >= 0.7 and any("heal" in s or "regen" in s for s in run.get("skills_used", [])):
             labels.append("player_sustain_too_high")
@@ -1007,6 +1013,58 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
     }
 
 
+
+
+def _format_pr3_refinement_summary() -> list[str]:
+    if not PR3_LATE_STAGE_MOB_PRESSURE_REFINEMENTS:
+        return ["- none"]
+    lines: list[str] = []
+    for (route_id, stage), knobs in sorted(PR3_LATE_STAGE_MOB_PRESSURE_REFINEMENTS.items()):
+        changed = ", ".join(
+            f"{key} +{(float(value) - 1.0) * 100:.0f}%"
+            for key, value in sorted(knobs.items())
+            if abs(float(value) - 1.0) > 0.0001
+        )
+        lines.append(f"- {route_id} / {stage}: {changed or 'identity preserved with neutral knobs'}.")
+    return lines
+
+
+def _pr3_top_remaining_mob_pressure_clusters(report_data: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for cluster in list(report_data.get("recommended_lane_top_clusters", [])):
+        key = tuple(str(part) for part in cluster.get("key", ()))
+        if key and key[-1] == "mob_pressure_lane":
+            lines.append(f"- {cluster.get('cluster_type')} / {' / '.join(key)}: {cluster.get('count', 0)}")
+        if len(lines) >= 6:
+            break
+    return lines or ["- none"]
+
+
+def _pr3_overpressure_risk_summary(report_data: dict[str, Any]) -> str:
+    deaths = [
+        trace
+        for trace in report_data.get("suspicious_traces", [])
+        if trace.get("winner") == "mob" and trace.get("end_reason") == "player_death"
+    ]
+    if not deaths:
+        return "- New overpressure/death risk: none observed in representative suspicious traces."
+    known = []
+    other = []
+    for trace in deaths:
+        item = f"{trace.get('route_id')} / {trace.get('stage')} / {trace.get('archetype_id')} player_death"
+        if (
+            trace.get("route_id") == "route_sunscar"
+            and trace.get("stage") == "route_exam"
+            and trace.get("archetype_id") == "pure_support_solo_overlay"
+        ):
+            known.append(item)
+        else:
+            other.append(item)
+    if other:
+        return f"- New overpressure/death risk: {', '.join(other[:3])}; known bad-matchup signal remains {', '.join(known[:1]) or 'not present in preview'}."
+    return f"- New overpressure/death risk: no broad new death wall observed; known bad-matchup signal remains {', '.join(known[:1])}."
+
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -1054,6 +1112,38 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
         f"| late_stage_actionable | {late_stage_actionable} | Actionable overclean in build_testing/route_exam. |",
     ]
     lines += ["", "## 8. Suspicious Matchup Candidates"]
+
+    pr2_mob_pressure_baseline = 43
+    current_lane_counts = dict(report_data.get("recommended_lane_counts", {}))
+    current_mob_pressure = int(current_lane_counts.get("mob_pressure_lane", 0))
+    current_route_expectation = int(current_lane_counts.get("route_expectation_lane", 0))
+    current_bad_matchup = int(current_lane_counts.get("bad_matchup_review_lane", 0))
+    pr3_moved = current_mob_pressure < pr2_mob_pressure_baseline
+    pr3_result_explanation = (
+        "- Current result explanation: classifier moved after semantic cleanup; mob_hp_too_low now uses turn-speed/clean-win pressure instead of mob_hp_removed_pct=1.00 alone."
+        if pr3_moved
+        else "- Current result explanation: bounded route-stage pressure refinements are applied, but remaining mob_pressure rows are based on turn-speed/clean-win pressure rather than mob_hp_removed_pct=1.00 alone."
+    )
+    lines += [
+        "",
+        "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary",
+        f"- Previous PR2 mob_pressure_lane baseline: {pr2_mob_pressure_baseline}.",
+        f"- Current mob_pressure_lane count: {current_mob_pressure}.",
+        f"- Current route_expectation_lane count: {current_route_expectation}.",
+        f"- Current bad_matchup_review_lane count: {current_bad_matchup}.",
+        f"- Classifier movement vs PR2 baseline: {'decreased' if pr3_moved else 'unchanged'}.",
+        pr3_result_explanation,
+        "- This pass is simulation/reporting-only and makes no final balance claim.",
+        "- No live gameplay/runtime systems, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting runtime, targeting, teleport, or live group combat were changed.",
+        "- Early-stage soft_entry / identity_visible target expectation artifacts remain separated and are not tuned as direct mob pressure backlog.",
+        "- Sunscar pure_support_solo_overlay route_exam remains treated as bad matchup review, not an automatic support buff or Sunscar nerf.",
+        "",
+        "Changed PR3 knobs (multipliers above existing simulation/reporting rails):",
+    ]
+    lines.extend(_format_pr3_refinement_summary())
+    lines += ["", "Top remaining mob_pressure_lane clusters:"]
+    lines.extend(_pr3_top_remaining_mob_pressure_clusters(report_data))
+    lines += ["", "New overpressure/death risk summary:", _pr3_overpressure_risk_summary(report_data)]
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -1229,6 +1319,38 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
             lines.append(f"| {' / '.join(cluster.get('key', []))} | {cluster.get('count', 0)} |")
     else:
         lines.append("| n/a | 0 |")
+
+    pr2_mob_pressure_baseline = 43
+    current_lane_counts = dict(report_data.get("recommended_lane_counts", {}))
+    current_mob_pressure = int(current_lane_counts.get("mob_pressure_lane", 0))
+    current_route_expectation = int(current_lane_counts.get("route_expectation_lane", 0))
+    current_bad_matchup = int(current_lane_counts.get("bad_matchup_review_lane", 0))
+    pr3_moved = current_mob_pressure < pr2_mob_pressure_baseline
+    pr3_result_explanation = (
+        "- Current result explanation: classifier moved after semantic cleanup; mob_hp_too_low now uses turn-speed/clean-win pressure instead of mob_hp_removed_pct=1.00 alone."
+        if pr3_moved
+        else "- Current result explanation: bounded route-stage pressure refinements are applied, but remaining mob_pressure rows are based on turn-speed/clean-win pressure rather than mob_hp_removed_pct=1.00 alone."
+    )
+    lines += [
+        "",
+        "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary",
+        f"- Previous PR2 mob_pressure_lane baseline: {pr2_mob_pressure_baseline}.",
+        f"- Current mob_pressure_lane count: {current_mob_pressure}.",
+        f"- Current route_expectation_lane count: {current_route_expectation}.",
+        f"- Current bad_matchup_review_lane count: {current_bad_matchup}.",
+        f"- Classifier movement vs PR2 baseline: {'decreased' if pr3_moved else 'unchanged'}.",
+        pr3_result_explanation,
+        "- This pass is simulation/reporting-only and makes no final balance claim.",
+        "- No live gameplay/runtime systems, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting runtime, targeting, teleport, or live group combat were changed.",
+        "- Early-stage soft_entry / identity_visible target expectation artifacts remain separated and are not tuned as direct mob pressure backlog.",
+        "- Sunscar pure_support_solo_overlay route_exam remains treated as bad matchup review, not an automatic support buff or Sunscar nerf.",
+        "",
+        "Changed PR3 knobs (multipliers above existing simulation/reporting rails):",
+    ]
+    lines.extend(_format_pr3_refinement_summary())
+    lines += ["", "Top remaining mob_pressure_lane clusters:"]
+    lines.extend(_pr3_top_remaining_mob_pressure_clusters(report_data))
+    lines += ["", "New overpressure/death risk summary:", _pr3_overpressure_risk_summary(report_data)]
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)

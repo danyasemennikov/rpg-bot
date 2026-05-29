@@ -1,5 +1,14 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Pass Note
+
+- Implements controlled simulation/reporting-only late-stage mob pressure tuning.
+- Uses PR2 pressure attribution lanes.
+- Does not tune route expectation artifacts.
+- Does not automatically fix Sunscar pure support bad matchup.
+- Does not change live gameplay/runtime, formulas, equipment budgets, live mob templates, rewards/economy, targeting, teleport, or live group combat.
+- Does not claim final balance.
+
 ## Balance Instrument V2 PR1 Observability Foundation Note
 
 - Adds simulation/reporting-only observability foundation.

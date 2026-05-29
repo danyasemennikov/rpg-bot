@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from game.combat_simulation_report import (
+    _classify_pressure_attribution_run,
     build_default_alpha_simulation_report_v2_data,
     render_alpha_simulation_report_v2_markdown,
 )
@@ -9,6 +10,63 @@ DOCS_ROOT = Path(__file__).resolve().parents[1] / "docs"
 REPORT_PATH = DOCS_ROOT / "ALPHA_ROUTE_CLASS_BALANCE_REPORT_V2.md"
 STATE_PATH = DOCS_ROOT / "PROJECT_STATE_CURRENT.md"
 FOUNDATION_PATH = DOCS_ROOT / "BALANCE_FOUNDATION_ALPHA_TO_RELEASE.md"
+
+
+def _synthetic_pressure_run(*, stage: str, turns: int, hp_left: float = 0.70, mana_left: float = 0.50, damage_taken: int = 180) -> dict:
+    return {
+        "route_id": "route_frostspine",
+        "stage": stage,
+        "archetype_id": "bow_ranger",
+        "mob_id": "ice_troll",
+        "winner": "player",
+        "end_reason": "mob_defeated",
+        "turns": turns,
+        "mob_role": "pressure",
+        "encounter_level": 85,
+        "sample_tags": ["representative", "solo", "normal_spawn"],
+        "skills_used": [],
+        "observability": {
+            "damage_dealt": 9999,
+            "damage_taken": damage_taken,
+            "player_hp_remaining_pct": hp_left,
+            "player_mana_remaining_pct": mana_left,
+            "mob_hp_removed_pct": 1.0,
+        },
+    }
+
+
+def _synthetic_high_target_row() -> dict:
+    return {
+        "target_label": "hard",
+        "normalized_target_label": "hard",
+        "observed_label": "strong",
+        "target_calibration_status": "actionable_overclean",
+        "observed_diagnostic_label_v2": "strong_clean",
+        "is_actionable_overclean": True,
+    }
+
+
+def test_mob_hp_removed_pct_alone_does_not_force_mob_hp_too_low():
+    row = _classify_pressure_attribution_run(
+        _synthetic_pressure_run(stage="route_exam", turns=8, hp_left=0.70, mana_left=0.50, damage_taken=180),
+        _synthetic_high_target_row(),
+    )
+    assert row is not None
+    assert row["evidence"]["mob_hp_removed_pct"] == 1.0
+    assert "mob_hp_too_low" not in row["attribution_labels"]
+    assert "player_damage_too_high" not in row["attribution_labels"]
+    assert row["recommended_lane"] != "mob_pressure_lane"
+
+
+def test_fast_late_stage_clean_win_still_flags_mob_pressure_lane():
+    row = _classify_pressure_attribution_run(
+        _synthetic_pressure_run(stage="build_testing", turns=4, hp_left=0.80, mana_left=0.50, damage_taken=150),
+        _synthetic_high_target_row(),
+    )
+    assert row is not None
+    assert "mob_hp_too_low" in row["attribution_labels"]
+    assert "player_damage_too_high" in row["attribution_labels"]
+    assert row["recommended_lane"] == "mob_pressure_lane"
 
 
 def test_pressure_attribution_report_data_shape():

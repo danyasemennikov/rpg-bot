@@ -5,13 +5,26 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Balance Instrument V2 Pressure Attribution / Lane Classifier
-- Status: simulation/reporting pressure attribution diagnostics
-- Confirmed state below reflects current merged main after Balance Instrument V2 Pressure Attribution / Lane Classifier and includes prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
+- PR: Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass
+- Status: simulation/reporting late-stage mob pressure tuning
+- Confirmed state below reflects current merged main after Balance V2 PR3 controlled late-stage mob pressure tuning and includes prior Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
 
 ---
 
 ## Confirmed merged state
+
+### Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass
+
+- controlled simulation/reporting-only late-stage mob pressure tuning was applied to PR2 mob_pressure_lane clusters;
+- PR3 classifier cleanup made mob_hp_too_low use turn-speed/clean-win pressure instead of player-win mob_hp_removed_pct = 1.00 alone;
+- current mob_pressure_lane count after PR3 classifier cleanup is 41; route_expectation_lane count is 44; bad_matchup_review_lane count is 1;
+- PR3 moved the classifier after semantic cleanup from the PR2 mob_pressure_lane baseline of 43 to 41;
+- tuning uses bounded route-stage pressure adjustments rather than formula/equipment/live mob template changes;
+- early-stage route expectation artifacts remain separated from late-stage actionable pressure;
+- Sunscar pure support overpressure remains treated as bad matchup review, not automatic support buff or Sunscar nerf;
+- report markdown preserves PR12–PR15, Observability, and Pressure Attribution sections;
+- no live gameplay/runtime systems were changed;
+- no formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made.
 
 ### World / Travel
 
