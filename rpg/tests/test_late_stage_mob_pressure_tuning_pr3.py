@@ -1,7 +1,12 @@
 import re
 from pathlib import Path
 
-from game.combat_simulation_report import build_default_alpha_simulation_report_v2_data, render_alpha_simulation_report_v2_markdown
+from game.combat_simulation_report import (
+    build_default_alpha_balance_report_data,
+    build_default_alpha_simulation_report_v2_data,
+    render_alpha_balance_report_markdown,
+    render_alpha_simulation_report_v2_markdown,
+)
 from game.mob_scaling import PR3_LATE_STAGE_MOB_PRESSURE_REFINEMENTS
 
 DOCS_ROOT = Path(__file__).resolve().parents[1] / "docs"
@@ -20,6 +25,32 @@ def _section(content: str, heading: str, next_heading: str | None = None) -> str
     return content[start:end]
 
 
+def test_pr3_v1_renderer_does_not_fake_zero_count_success_when_raw_runs_absent():
+    report = build_default_alpha_balance_report_data()
+    assert report.get("raw_data_pointers", {}).get("raw_runs_included") is False
+    assert report.get("pressure_attribution_available") is False
+
+    md = render_alpha_balance_report_markdown(report)
+    section = _section(md, "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary", "Suspicious candidates by route:")
+    assert "Current mob_pressure_lane count: 0." not in section
+    assert "Classifier movement vs PR2 baseline: decreased." not in section
+    assert "unavailable" in section
+    assert "raw runs are not included" in section
+
+
+def test_pr3_v2_renderer_reports_authoritative_counts_when_raw_runs_available():
+    report = build_default_alpha_simulation_report_v2_data()
+    assert report.get("pressure_attribution_available") is True
+
+    md = render_alpha_simulation_report_v2_markdown(report)
+    section = _section(md, "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary", "## Target vs Observed v2 Signals")
+    assert "Previous PR2 mob_pressure_lane baseline: 43." in section
+    assert "Current mob_pressure_lane count: 41." in section
+    assert "Current route_expectation_lane count: 44." in section
+    assert "Current bad_matchup_review_lane count: 1." in section
+    assert "Classifier movement vs PR2 baseline: decreased." in section
+
+
 def test_pr3_report_section_checked_in_and_rendered_non_final():
     report = build_default_alpha_simulation_report_v2_data()
     rendered = render_alpha_simulation_report_v2_markdown(report)
@@ -34,6 +65,7 @@ def test_pr3_report_section_checked_in_and_rendered_non_final():
 
 def test_pr3_lane_preservation_and_sunscar_bad_matchup_visibility():
     report = build_default_alpha_simulation_report_v2_data()
+    assert report.get("pressure_attribution_available") is True
     assert "pressure_attribution_rows" in report
     assert "recommended_lane_counts" in report
     counts = report["recommended_lane_counts"]

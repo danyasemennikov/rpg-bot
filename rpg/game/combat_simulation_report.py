@@ -979,6 +979,7 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "progression_audit_rows": progression_audit_rows,
         "progression_audit_flags": progression_audit_flags,
         "progression_audit_flag_counts": summarize_balance_audit_flags(progression_audit_flags),
+        "pressure_attribution_available": bool(enriched_runs),
         "pressure_attribution_rows": pressure_attribution_rows,
         "pressure_attribution_counts": pressure_attribution_counts,
         "recommended_lane_counts": recommended_lane_counts,
@@ -1065,6 +1066,50 @@ def _pr3_overpressure_risk_summary(report_data: dict[str, Any]) -> str:
     return f"- New overpressure/death risk: no broad new death wall observed; known bad-matchup signal remains {', '.join(known[:1])}."
 
 
+def _render_pr3_lane_summary_lines(report_data: dict[str, Any]) -> list[str]:
+    lines = ["", "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary"]
+    pressure_available = bool(report_data.get("pressure_attribution_available"))
+    if not pressure_available:
+        lines += [
+            "- PR3 pressure attribution lane counts are unavailable in this report config because raw runs are not included.",
+            "- Use build_default_alpha_simulation_report_v2_data() / v2 report data with raw runs included for authoritative PR3 lane counts.",
+            "- This pass remains simulation/reporting-only and makes no final balance claim.",
+            "- No live gameplay/runtime systems, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting runtime, targeting, teleport, or live group combat were changed.",
+        ]
+        return lines
+
+    pr2_mob_pressure_baseline = 43
+    current_lane_counts = dict(report_data.get("recommended_lane_counts", {}))
+    current_mob_pressure = int(current_lane_counts.get("mob_pressure_lane", 0))
+    current_route_expectation = int(current_lane_counts.get("route_expectation_lane", 0))
+    current_bad_matchup = int(current_lane_counts.get("bad_matchup_review_lane", 0))
+    pr3_moved = current_mob_pressure < pr2_mob_pressure_baseline
+    pr3_result_explanation = (
+        "- Current result explanation: classifier moved after semantic cleanup; mob_hp_too_low now uses turn-speed/clean-win pressure instead of mob_hp_removed_pct=1.00 alone."
+        if pr3_moved
+        else "- Current result explanation: bounded route-stage pressure refinements are applied, but remaining mob_pressure rows are based on turn-speed/clean-win pressure rather than mob_hp_removed_pct=1.00 alone."
+    )
+    lines += [
+        f"- Previous PR2 mob_pressure_lane baseline: {pr2_mob_pressure_baseline}.",
+        f"- Current mob_pressure_lane count: {current_mob_pressure}.",
+        f"- Current route_expectation_lane count: {current_route_expectation}.",
+        f"- Current bad_matchup_review_lane count: {current_bad_matchup}.",
+        f"- Classifier movement vs PR2 baseline: {'decreased' if pr3_moved else 'unchanged'}.",
+        pr3_result_explanation,
+        "- This pass is simulation/reporting-only and makes no final balance claim.",
+        "- No live gameplay/runtime systems, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting runtime, targeting, teleport, or live group combat were changed.",
+        "- Early-stage soft_entry / identity_visible target expectation artifacts remain separated and are not tuned as direct mob pressure backlog.",
+        "- Sunscar pure_support_solo_overlay route_exam remains treated as bad matchup review, not an automatic support buff or Sunscar nerf.",
+        "",
+        "Changed PR3 knobs (multipliers above existing simulation/reporting rails):",
+    ]
+    lines.extend(_format_pr3_refinement_summary())
+    lines += ["", "Top remaining mob_pressure_lane clusters:"]
+    lines.extend(_pr3_top_remaining_mob_pressure_clusters(report_data))
+    lines += ["", "New overpressure/death risk summary:", _pr3_overpressure_risk_summary(report_data)]
+    return lines
+
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -1113,37 +1158,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     ]
     lines += ["", "## 8. Suspicious Matchup Candidates"]
 
-    pr2_mob_pressure_baseline = 43
-    current_lane_counts = dict(report_data.get("recommended_lane_counts", {}))
-    current_mob_pressure = int(current_lane_counts.get("mob_pressure_lane", 0))
-    current_route_expectation = int(current_lane_counts.get("route_expectation_lane", 0))
-    current_bad_matchup = int(current_lane_counts.get("bad_matchup_review_lane", 0))
-    pr3_moved = current_mob_pressure < pr2_mob_pressure_baseline
-    pr3_result_explanation = (
-        "- Current result explanation: classifier moved after semantic cleanup; mob_hp_too_low now uses turn-speed/clean-win pressure instead of mob_hp_removed_pct=1.00 alone."
-        if pr3_moved
-        else "- Current result explanation: bounded route-stage pressure refinements are applied, but remaining mob_pressure rows are based on turn-speed/clean-win pressure rather than mob_hp_removed_pct=1.00 alone."
-    )
-    lines += [
-        "",
-        "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary",
-        f"- Previous PR2 mob_pressure_lane baseline: {pr2_mob_pressure_baseline}.",
-        f"- Current mob_pressure_lane count: {current_mob_pressure}.",
-        f"- Current route_expectation_lane count: {current_route_expectation}.",
-        f"- Current bad_matchup_review_lane count: {current_bad_matchup}.",
-        f"- Classifier movement vs PR2 baseline: {'decreased' if pr3_moved else 'unchanged'}.",
-        pr3_result_explanation,
-        "- This pass is simulation/reporting-only and makes no final balance claim.",
-        "- No live gameplay/runtime systems, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting runtime, targeting, teleport, or live group combat were changed.",
-        "- Early-stage soft_entry / identity_visible target expectation artifacts remain separated and are not tuned as direct mob pressure backlog.",
-        "- Sunscar pure_support_solo_overlay route_exam remains treated as bad matchup review, not an automatic support buff or Sunscar nerf.",
-        "",
-        "Changed PR3 knobs (multipliers above existing simulation/reporting rails):",
-    ]
-    lines.extend(_format_pr3_refinement_summary())
-    lines += ["", "Top remaining mob_pressure_lane clusters:"]
-    lines.extend(_pr3_top_remaining_mob_pressure_clusters(report_data))
-    lines += ["", "New overpressure/death risk summary:", _pr3_overpressure_risk_summary(report_data)]
+    lines.extend(_render_pr3_lane_summary_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -1320,37 +1335,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     else:
         lines.append("| n/a | 0 |")
 
-    pr2_mob_pressure_baseline = 43
-    current_lane_counts = dict(report_data.get("recommended_lane_counts", {}))
-    current_mob_pressure = int(current_lane_counts.get("mob_pressure_lane", 0))
-    current_route_expectation = int(current_lane_counts.get("route_expectation_lane", 0))
-    current_bad_matchup = int(current_lane_counts.get("bad_matchup_review_lane", 0))
-    pr3_moved = current_mob_pressure < pr2_mob_pressure_baseline
-    pr3_result_explanation = (
-        "- Current result explanation: classifier moved after semantic cleanup; mob_hp_too_low now uses turn-speed/clean-win pressure instead of mob_hp_removed_pct=1.00 alone."
-        if pr3_moved
-        else "- Current result explanation: bounded route-stage pressure refinements are applied, but remaining mob_pressure rows are based on turn-speed/clean-win pressure rather than mob_hp_removed_pct=1.00 alone."
-    )
-    lines += [
-        "",
-        "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary",
-        f"- Previous PR2 mob_pressure_lane baseline: {pr2_mob_pressure_baseline}.",
-        f"- Current mob_pressure_lane count: {current_mob_pressure}.",
-        f"- Current route_expectation_lane count: {current_route_expectation}.",
-        f"- Current bad_matchup_review_lane count: {current_bad_matchup}.",
-        f"- Classifier movement vs PR2 baseline: {'decreased' if pr3_moved else 'unchanged'}.",
-        pr3_result_explanation,
-        "- This pass is simulation/reporting-only and makes no final balance claim.",
-        "- No live gameplay/runtime systems, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting runtime, targeting, teleport, or live group combat were changed.",
-        "- Early-stage soft_entry / identity_visible target expectation artifacts remain separated and are not tuned as direct mob pressure backlog.",
-        "- Sunscar pure_support_solo_overlay route_exam remains treated as bad matchup review, not an automatic support buff or Sunscar nerf.",
-        "",
-        "Changed PR3 knobs (multipliers above existing simulation/reporting rails):",
-    ]
-    lines.extend(_format_pr3_refinement_summary())
-    lines += ["", "Top remaining mob_pressure_lane clusters:"]
-    lines.extend(_pr3_top_remaining_mob_pressure_clusters(report_data))
-    lines += ["", "New overpressure/death risk summary:", _pr3_overpressure_risk_summary(report_data)]
+    lines.extend(_render_pr3_lane_summary_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
