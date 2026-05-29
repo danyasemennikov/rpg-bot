@@ -235,6 +235,7 @@ No new tuning knobs were added.
 
 Lane comparison table:
 Multi-seed totals are raw totals across seeds; interpretation is normalized per seed.
+PR4 confidence uses the active report scope. Checked-in v2 uses full compact alpha scope; scoped callers get scoped confidence diagnostics, not full-alpha totals.
 | lane | compact PR3 | PR4 multi-seed total | expected total | per-seed avg | delta vs expected | interpretation |
 |---|---:|---:|---:|---:|---:|---|
 | bad_matchup_review_lane | 1 | 3 | 3 | 1.0 | 0 | stable_across_seeds |
@@ -262,6 +263,7 @@ Unstable/noisy clusters preview:
 PR4 confidence notes:
 - Diagnostic-only: PR4 does not tune balance numbers or replace compact PR3 regression counts.
 - Compact PR3 lane counts remain authoritative for checked-in regression comparisons.
+- PR4 confidence uses the active report scope; checked-in v2 uses full compact alpha scope, and scoped callers get scoped confidence diagnostics instead of full-alpha totals.
 - Bounded multi-seed config: seeds=(1, 2, 3), max_samples_per_route_stage=1, include_raw_runs=True, include_turn_trace=False.
 - No live runtime, Combat Core, formula, equipment budget, live mob template, economy/reward/loot/crafting, targeting, teleport, or live group combat changes are made by this report layer.
 

@@ -1,6 +1,9 @@
 from pathlib import Path
 
+from game.combat_simulation_archetypes import list_alpha_archetype_ids
+from game.combat_simulation_matrix import RouteStageMatrixConfig, run_route_stage_simulation_matrix
 from game.combat_simulation_report import (
+    build_alpha_balance_report_data,
     build_default_alpha_balance_report_data,
     build_default_alpha_simulation_report_v2_data,
     render_alpha_balance_report_markdown,
@@ -60,6 +63,116 @@ def test_pr4_compact_pr3_baseline_preserved():
     assert compact["mob_pressure_lane"] == 41
     assert compact["route_expectation_lane"] == 44
     assert compact["bad_matchup_review_lane"] == 1
+
+
+def test_pr4_default_multiseed_totals_and_scope_metadata_are_preserved():
+    _, confidence = _pr4_data()
+    totals = confidence["multiseed_lane_counts"]
+    assert totals["mob_pressure_lane"] == 125
+    assert totals["route_expectation_lane"] == 132
+    assert totals["bad_matchup_review_lane"] == 3
+    assert totals["inconclusive_lane"] == 4
+    scope = confidence["scope"]
+    assert scope["route_ids"]
+    assert scope["stages"]
+    assert scope["archetype_ids"]
+    assert scope["max_samples_per_route_stage"] == 1
+    assert scope["scope_source"] == "config"
+
+
+def _cluster_route_ids(confidence):
+    route_ids = set()
+    for key in ("stable_clusters", "unstable_clusters", "high_confidence_remaining_clusters"):
+        route_ids.update(str(cluster.get("route_id")) for cluster in confidence.get(key, []) if cluster.get("route_id"))
+    return route_ids
+
+
+def test_pr4_scoped_route_report_uses_scoped_multiseed_confidence_not_full_alpha_totals():
+    scoped_config = RouteStageMatrixConfig(
+        route_ids=("route_sunscar",),
+        stages=("build_testing", "route_exam"),
+        archetype_ids=tuple(list_alpha_archetype_ids()),
+        seeds=(1,),
+        max_samples_per_route_stage=1,
+        max_turns=50,
+        include_raw_runs=True,
+        include_turn_trace=False,
+    )
+    report = build_alpha_balance_report_data(config=scoped_config, include_pr4_confidence=True)
+    confidence = report["pr4_multiseed_confidence"]
+    assert confidence["available"] is True
+    assert confidence["scope"]["route_ids"] == ["route_sunscar"]
+    assert confidence["scope"]["stages"] == ["build_testing", "route_exam"]
+    assert confidence["scope"]["scope_source"] == "config"
+    assert _cluster_route_ids(confidence) == {"route_sunscar"}
+    scoped_totals = confidence["multiseed_lane_counts"]
+    assert (
+        scoped_totals.get("mob_pressure_lane"),
+        scoped_totals.get("route_expectation_lane"),
+        scoped_totals.get("bad_matchup_review_lane"),
+    ) != (125, 132, 3)
+    for lane, compact_count in report["recommended_lane_counts"].items():
+        assert confidence["lane_deltas"][lane]["compact"] == compact_count
+        assert confidence["lane_deltas"][lane]["expected_multiseed_total"] == compact_count * 3
+
+
+def test_pr4_stage_and_archetype_subset_scope_is_not_broadened():
+    scoped_config = RouteStageMatrixConfig(
+        route_ids=("route_sunscar",),
+        stages=("route_exam",),
+        archetype_ids=("pure_support_solo_overlay",),
+        seeds=(1,),
+        max_samples_per_route_stage=1,
+        max_turns=50,
+        include_raw_runs=True,
+        include_turn_trace=False,
+    )
+    report = build_alpha_balance_report_data(config=scoped_config, include_pr4_confidence=True)
+    confidence = report["pr4_multiseed_confidence"]
+    assert confidence["scope"]["route_ids"] == ["route_sunscar"]
+    assert confidence["scope"]["stages"] == ["route_exam"]
+    assert confidence["scope"]["archetype_ids"] == ["pure_support_solo_overlay"]
+    assert {cluster.get("stage") for cluster in confidence["stable_clusters"] + confidence["unstable_clusters"]} <= {"route_exam"}
+    assert {cluster.get("archetype_id") for cluster in confidence["archetype_stability_clusters"]} <= {"pure_support_solo_overlay"}
+
+
+def test_pr4_two_sample_scope_preserves_max_samples_per_route_stage():
+    scoped_config = RouteStageMatrixConfig(
+        route_ids=("route_ashen_ruins",),
+        stages=("build_testing",),
+        archetype_ids=("guardian_shield_1h", "sword_2h_burst"),
+        seeds=(1,),
+        max_samples_per_route_stage=2,
+        max_turns=50,
+        include_raw_runs=True,
+        include_turn_trace=False,
+    )
+    report = build_alpha_balance_report_data(config=scoped_config, include_pr4_confidence=True)
+    confidence = report["pr4_multiseed_confidence"]
+    assert confidence["scope"]["max_samples_per_route_stage"] == 2
+    assert confidence["sample_count"] == report["sample_count"]
+    assert confidence["run_count"] == report["run_count"] * 3
+
+
+def test_pr4_matrix_result_without_config_derives_scope_metadata_from_matrix():
+    matrix_config = RouteStageMatrixConfig(
+        route_ids=("route_mireveil",),
+        stages=("route_exam",),
+        archetype_ids=("guardian_shield_1h",),
+        seeds=(1,),
+        max_samples_per_route_stage=1,
+        max_turns=50,
+        include_raw_runs=True,
+        include_turn_trace=False,
+    )
+    matrix = run_route_stage_simulation_matrix(matrix_config)
+    report = build_alpha_balance_report_data(matrix_result=matrix, include_pr4_confidence=True)
+    confidence = report["pr4_multiseed_confidence"]
+    assert confidence["scope"]["route_ids"] == ["route_mireveil"]
+    assert confidence["scope"]["stages"] == ["route_exam"]
+    assert confidence["scope"]["archetype_ids"] == ["guardian_shield_1h"]
+    assert confidence["scope"]["scope_source"] == "matrix_result_fallback"
+    assert any("derived from matrix_result" in note for note in confidence["notes"])
 
 
 def test_pr4_lane_deltas_use_normalized_multiseed_fields():
