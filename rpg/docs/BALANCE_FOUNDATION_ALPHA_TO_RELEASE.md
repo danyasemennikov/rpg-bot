@@ -246,3 +246,11 @@ PR15 note (implemented actionable late-stage simulation/reporting tuning only):
 - PR15 does not change live gameplay/runtime systems.
 - PR15 does not claim final balance.
 
+
+PR2 Balance Instrument V2 pressure attribution note (implemented simulation/reporting diagnostics only):
+- Adds simulation/reporting-only pressure attribution / lane classifier.
+- Uses PR1 observability metrics to classify likely causes.
+- Labels are diagnostic likely causes, not final balance verdicts.
+- Does not change live gameplay/runtime systems.
+- Does not change formulas, equipment budget, live mob templates, rewards/economy, targeting, teleport, or live group combat.
+- Does not claim final balance.
