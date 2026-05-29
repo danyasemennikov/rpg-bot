@@ -52,8 +52,9 @@ def test_pr14_markdown_and_project_state_updates_exist_and_honest():
     assert "Actionable Late-Stage Underpressure Tuning Pass (PR15)" in state_doc
     assert "Target Expectation Calibration Pass (PR14)" in state_doc
     header = state_doc.split("---", 1)[0]
-    assert "Balance Instrument V2 Observability Foundation" in header
-    assert "prior PR15 actionable late-stage tuning" in header
+    assert "Balance Instrument V2 Pressure Attribution / Lane Classifier" in header
+    assert "prior Balance Instrument V2 observability" in header
+    assert "PR15 actionable late-stage tuning" in header
     assert "after PR14 target expectation calibration" not in header
 
 

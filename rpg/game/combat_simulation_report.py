@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
@@ -51,6 +51,8 @@ PROGRESSION_AUDIT_PREVIEW_LIMIT = 20
 PACK_PREVIEW_LIMIT = 20
 OBSERVABILITY_PREVIEW_LIMIT = 8
 OBSERVABILITY_TRACE_CASE_LIMIT = 3
+PRESSURE_ATTRIBUTION_ROW_LIMIT = 40
+PRESSURE_ATTRIBUTION_CLUSTER_LIMIT = 12
 PR13_TOP_CLUSTER_LIMIT = 8
 LATE_STAGE_TARGETED_STAGES = {"build_testing", "route_exam"}
 EARLY_TARGET_CALIBRATION_STAGES = {"soft_entry", "identity_visible"}
@@ -586,6 +588,181 @@ def calibrate_target_expectation_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def _compact_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return round(float(value), 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pressure_evidence_for_run(run: dict[str, Any]) -> dict[str, Any]:
+    observability = dict(run.get("observability", {}))
+    return {
+        "turns": int(run.get("turns") or 0),
+        "damage_dealt": int(observability.get("damage_dealt", run.get("damage_dealt") or 0)),
+        "damage_taken": int(observability.get("damage_taken", run.get("damage_taken") or 0)),
+        "player_hp_remaining_pct": _compact_float(observability.get("player_hp_remaining_pct", run.get("player_hp_remaining_pct"))),
+        "player_mana_remaining_pct": _compact_float(observability.get("player_mana_remaining_pct", run.get("player_mana_remaining_pct"))),
+        "mob_hp_removed_pct": _compact_float(observability.get("mob_hp_removed_pct", 1.0 - (run.get("mob_hp_remaining_pct") or 0.0))),
+        "sample_tags": list(run.get("sample_tags", []))[:5],
+        "mob_role": run.get("mob_role"),
+        "encounter_level": run.get("encounter_level"),
+    }
+
+
+def _format_pressure_evidence(evidence: dict[str, Any]) -> str:
+    return (
+        f"turns={evidence.get('turns')}, "
+        f"hp_left={_format_pct(evidence.get('player_hp_remaining_pct'))}, "
+        f"mana_left={_format_pct(evidence.get('player_mana_remaining_pct'))}, "
+        f"mob_hp_removed={_format_pct(evidence.get('mob_hp_removed_pct'))}, "
+        f"dmg_taken={evidence.get('damage_taken')}, "
+        f"role={evidence.get('mob_role')}, lvl={evidence.get('encounter_level')}"
+    )
+
+
+def _primary_lane_for_pressure_labels(labels: list[str], evidence: dict[str, Any] | None = None, stage: str = "") -> str:
+    label_set = set(labels)
+    evidence = evidence or {}
+    mob_role = str(evidence.get("mob_role") or "")
+    is_late_pressure_role = stage in LATE_STAGE_TARGETED_STAGES and mob_role in {"pressure", "elite"}
+    if "bad_matchup_overpressure" in label_set:
+        return "bad_matchup_review_lane"
+    if "policy_artifact" in label_set:
+        return "archetype_policy_lane"
+    if "target_expectation_mismatch" in label_set:
+        return "route_expectation_lane"
+    if "formula_signal" in label_set:
+        return "formula_review_lane"
+    if is_late_pressure_role and label_set & {"mob_hp_too_low", "mob_damage_too_low", "mob_accuracy_too_low", "resource_pressure_missing"}:
+        return "mob_pressure_lane"
+    if "sample_too_soft" in label_set:
+        return "sample_selection_lane"
+    if label_set & {"mob_hp_too_low", "mob_damage_too_low", "mob_accuracy_too_low", "resource_pressure_missing"}:
+        return "mob_pressure_lane"
+    if label_set & {"player_damage_too_high", "player_sustain_too_high"}:
+        return "equipment_budget_lane"
+    return "inconclusive_lane"
+
+
+def _classify_pressure_attribution_run(run: dict[str, Any], target_row: dict[str, Any] | None) -> dict[str, Any] | None:
+    target_row = target_row or {}
+    stage = str(run.get("stage", ""))
+    route_id = str(run.get("route_id", ""))
+    archetype_id = str(run.get("archetype_id", ""))
+    target_label = str(target_row.get("normalized_target_label") or target_row.get("target_label") or "")
+    observed_label = str(target_row.get("observed_label") or "")
+    calibration_status = str(target_row.get("target_calibration_status") or "")
+    diagnostic_label = str(target_row.get("observed_diagnostic_label_v2") or "")
+    evidence = _pressure_evidence_for_run(run)
+    labels: list[str] = []
+
+    winner = str(run.get("winner", ""))
+    end_reason = str(run.get("end_reason", ""))
+    turns = int(evidence.get("turns") or 0)
+    damage_taken = int(evidence.get("damage_taken") or 0)
+    hp_left = evidence.get("player_hp_remaining_pct")
+    mana_left = evidence.get("player_mana_remaining_pct")
+    mob_hp_removed = evidence.get("mob_hp_removed_pct")
+    sample_tags = {str(tag) for tag in evidence.get("sample_tags", [])}
+    mob_role = str(evidence.get("mob_role") or "")
+    has_high_target = target_label in {"hard", "very_hard"}
+    is_overclean = observed_label == "strong" and has_high_target and winner == "player"
+
+    if (
+        route_id == "route_sunscar"
+        and stage == "route_exam"
+        and archetype_id == "pure_support_solo_overlay"
+        and end_reason == "player_death"
+    ):
+        labels.append("bad_matchup_overpressure")
+
+    if diagnostic_label == "policy_failure" or run.get("guard_action_rate", 0.0) >= 0.65:
+        labels.append("policy_artifact")
+
+    if is_overclean:
+        if turns <= 3 or (mob_hp_removed is not None and mob_hp_removed >= 0.95):
+            labels.extend(["mob_hp_too_low", "player_damage_too_high"])
+        if hp_left is not None and hp_left >= 0.85 and damage_taken <= 40:
+            labels.append("mob_damage_too_low")
+        if mana_left is not None and mana_left >= 0.9:
+            labels.append("resource_pressure_missing")
+        if damage_taken > 40 and hp_left is not None and hp_left >= 0.7 and any("heal" in s or "regen" in s for s in run.get("skills_used", [])):
+            labels.append("player_sustain_too_high")
+        explicit_soft_sample = bool(sample_tags & {"soft_sample", "weak_sample", "low_pressure_sample"})
+        late_normal_role_sample = stage in LATE_STAGE_TARGETED_STAGES and mob_role not in {"pressure", "elite"} and "normal_spawn" in sample_tags
+        if late_normal_role_sample or explicit_soft_sample:
+            labels.append("sample_too_soft")
+        if calibration_status == "early_stage_target_expectation_artifact" or stage in EARLY_TARGET_CALIBRATION_STAGES:
+            labels.extend(["target_expectation_mismatch", "sample_too_soft"])
+
+    if not labels and target_row.get("is_actionable_overclean"):
+        labels.append("inconclusive")
+    if not labels:
+        return None
+
+    labels = sorted(set(labels))
+    if "bad_matchup_overpressure" in labels or "policy_artifact" in labels:
+        confidence = "high"
+    elif "target_expectation_mismatch" in labels or len(labels) >= 2:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    return {
+        "route_id": route_id,
+        "stage": stage,
+        "archetype_id": archetype_id,
+        "mob_id": run.get("mob_id"),
+        "target_label": target_row.get("target_label") or target_label or None,
+        "observed_label": observed_label or None,
+        "winner": winner,
+        "end_reason": end_reason,
+        "attribution_labels": labels,
+        "recommended_lane": _primary_lane_for_pressure_labels(labels, evidence, stage),
+        "confidence": confidence,
+        "evidence": evidence,
+    }
+
+
+def _count_pressure_attributions(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in rows:
+        counts.update(str(label) for label in row.get("attribution_labels", []))
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
+def _count_recommended_lanes(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts = Counter(str(row.get("recommended_lane", "inconclusive_lane")) for row in rows)
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
+def _build_pressure_attribution_top_clusters(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    clusters: Counter[tuple[str, ...]] = Counter()
+    for row in rows:
+        for label in row.get("attribution_labels", []):
+            clusters[("route_stage_attribution", str(row.get("route_id")), str(row.get("stage")), str(label))] += 1
+            clusters[("archetype_attribution", str(row.get("archetype_id")), str(label))] += 1
+    return [
+        {"cluster_type": key[0], "key": key[1:], "count": count}
+        for key, count in sorted(clusters.items(), key=lambda item: (-item[1], item[0]))[:PRESSURE_ATTRIBUTION_CLUSTER_LIMIT]
+    ]
+
+
+def _build_recommended_lane_top_clusters(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    clusters: Counter[tuple[str, ...]] = Counter()
+    for row in rows:
+        lane = str(row.get("recommended_lane", "inconclusive_lane"))
+        clusters[("route_stage_lane", str(row.get("route_id")), str(row.get("stage")), lane)] += 1
+        clusters[("archetype_lane", str(row.get("archetype_id")), lane)] += 1
+    return [
+        {"cluster_type": key[0], "key": key[1:], "count": count}
+        for key, count in sorted(clusters.items(), key=lambda item: (-item[1], item[0]))[:PRESSURE_ATTRIBUTION_CLUSTER_LIMIT]
+    ]
+
 def build_alpha_balance_report_data(matrix_result: dict | None = None, config: RouteStageMatrixConfig | None = None) -> dict:
     matrix = matrix_result if matrix_result is not None else run_route_stage_simulation_matrix(config)
     enriched_runs = [_enrich_run(run) for run in matrix.get("runs", [])]
@@ -666,6 +843,36 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
     early_stage_target_artifacts = [
         row for row in calibrated_target_comparisons if row.get("target_calibration_status") == "early_stage_target_expectation_artifact"
     ]
+
+    target_by_key = {
+        (str(row.get("route_id")), str(row.get("stage")), str(row.get("archetype_id"))): row
+        for row in calibrated_target_comparisons
+    }
+    pressure_attribution_rows = [
+        row
+        for row in (
+            _classify_pressure_attribution_run(
+                run,
+                target_by_key.get((str(run.get("route_id")), str(run.get("stage")), str(run.get("archetype_id")))),
+            )
+            for run in enriched_runs
+        )
+        if row is not None
+    ]
+    pressure_attribution_rows = sorted(
+        pressure_attribution_rows,
+        key=lambda row: (
+            str(row.get("route_id")),
+            str(row.get("stage")),
+            str(row.get("archetype_id")),
+            str(row.get("mob_id")),
+            str(row.get("recommended_lane")),
+        ),
+    )
+    pressure_attribution_counts = _count_pressure_attributions(pressure_attribution_rows)
+    recommended_lane_counts = _count_recommended_lanes(pressure_attribution_rows)
+    pressure_attribution_top_clusters = _build_pressure_attribution_top_clusters(pressure_attribution_rows)
+    recommended_lane_top_clusters = _build_recommended_lane_top_clusters(pressure_attribution_rows)
 
     def _rollup(rows: list[dict[str, Any]], keys: tuple[str, ...]) -> list[dict[str, Any]]:
         grouped: dict[tuple[str, ...], int] = defaultdict(int)
@@ -766,6 +973,11 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         "progression_audit_rows": progression_audit_rows,
         "progression_audit_flags": progression_audit_flags,
         "progression_audit_flag_counts": summarize_balance_audit_flags(progression_audit_flags),
+        "pressure_attribution_rows": pressure_attribution_rows,
+        "pressure_attribution_counts": pressure_attribution_counts,
+        "recommended_lane_counts": recommended_lane_counts,
+        "pressure_attribution_top_clusters": pressure_attribution_top_clusters,
+        "recommended_lane_top_clusters": recommended_lane_top_clusters,
         "global_overclean_candidate_count": global_overclean_candidate_count,
         "raw_global_overclean_candidate_count": global_overclean_candidate_count,
         "actionable_overclean_candidate_count": actionable_overclean_candidate_count,
@@ -1097,6 +1309,58 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
                 f"{pb.get('hp')}/{pb.get('mana')} -> {pa.get('hp')}/{pa.get('mana')} | "
                 f"{mb.get('hp')} -> {ma.get('hp')} | {log_summary} |"
             )
+
+    pressure_rows = list(report_data.get("pressure_attribution_rows", []))
+    pressure_preview = pressure_rows[:PRESSURE_ATTRIBUTION_ROW_LIMIT]
+    lines += [
+        "",
+        "## Balance Instrument V2 Pressure Attribution Preview",
+        "Simulation/reporting-only diagnostic preview. Labels are diagnostic likely causes, not final balance verdicts, and do not directly tune formulas, equipment budgets, live mob templates, rewards/economy, targeting, teleport, or live group combat.",
+        "This classifier points future review toward tuning lanes; it does not claim final balance or prescribe automatic support buffs/Sunscar nerfs.",
+        "",
+        "Attribution counts:",
+    ]
+    attribution_counts = dict(report_data.get("pressure_attribution_counts", {}))
+    if attribution_counts:
+        for label, count in attribution_counts.items():
+            lines.append(f"- {label}: {count}")
+    else:
+        lines.append("- none: 0")
+    lines += ["", "Recommended tuning lane counts:"]
+    lane_counts = dict(report_data.get("recommended_lane_counts", {}))
+    if lane_counts:
+        for lane, count in lane_counts.items():
+            lines.append(f"- {lane}: {count}")
+    else:
+        lines.append("- none: 0")
+
+    lines += ["", "Top attribution clusters:"]
+    for cluster in list(report_data.get("pressure_attribution_top_clusters", []))[:PRESSURE_ATTRIBUTION_CLUSTER_LIMIT]:
+        lines.append(f"- {cluster.get('cluster_type')} / {' / '.join(cluster.get('key', ())) }: {cluster.get('count')}")
+    if not report_data.get("pressure_attribution_top_clusters"):
+        lines.append("- none")
+
+    lines += ["", "Top recommended lane clusters:"]
+    for cluster in list(report_data.get("recommended_lane_top_clusters", []))[:PRESSURE_ATTRIBUTION_CLUSTER_LIMIT]:
+        lines.append(f"- {cluster.get('cluster_type')} / {' / '.join(cluster.get('key', ())) }: {cluster.get('count')}")
+    if not report_data.get("recommended_lane_top_clusters"):
+        lines.append("- none")
+
+    lines += [
+        "",
+        f"Representative attribution rows ({len(pressure_preview)} shown of {len(pressure_rows)}):",
+        "| route | stage | archetype | mob | target | observed | winner | labels | recommended_lane | confidence | evidence |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    if not pressure_preview:
+        lines.append("No pressure attribution rows triggered current heuristic rules.")
+    for row in pressure_preview:
+        labels = ", ".join(row.get("attribution_labels", []))
+        lines.append(
+            f"| {row.get('route_id')} | {row.get('stage')} | {row.get('archetype_id')} | {row.get('mob_id')} | "
+            f"{row.get('target_label')} | {row.get('observed_label')} | {row.get('winner')} | {labels} | "
+            f"{row.get('recommended_lane')} | {row.get('confidence')} | {_format_pressure_evidence(row.get('evidence', {}))} |"
+        )
 
     lines += ["", "## Representative Suspicious Fight Traces"]
     traces = report_data.get("suspicious_traces", [])
