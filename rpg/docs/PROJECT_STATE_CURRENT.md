@@ -5,13 +5,25 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass
-- Status: simulation/reporting late-stage mob pressure tuning
-- Confirmed state below reflects current merged main after Balance V2 PR3 controlled late-stage mob pressure tuning and includes prior Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
+- PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass
+- Status: simulation/reporting multi-seed balance confidence diagnostics
+- Confirmed state below reflects current merged main after Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics and includes prior Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
 
 ---
 
 ## Confirmed merged state
+
+### Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass
+
+- added simulation/reporting-only multi-seed confidence diagnostics for remaining PR3 pressure-lane signals;
+- compact PR3 lane counts remain visible as the regression baseline;
+- PR4 compares compact lane counts against bounded multi-seed confidence counts;
+- report markdown shows high-confidence and unstable remaining clusters;
+- Sunscar pure support overpressure remains separated as bad matchup review, not automatic support buff or Sunscar nerf;
+- no new tuning knobs were added;
+- no live gameplay/runtime systems were changed;
+- no Combat Core/formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made;
+- PR4 does not claim final balance.
 
 ### Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass
 

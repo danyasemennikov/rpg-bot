@@ -1,5 +1,15 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR4 Expanded Sampling / Multi-seed Confidence Pass Note
+
+- Adds simulation/reporting-only multi-seed confidence diagnostics for remaining PR3 pressure-lane signals.
+- Does not tune balance numbers.
+- No new tuning knobs are added.
+- Does not replace the compact PR3 regression baseline.
+- Does not change live gameplay/runtime, formulas, equipment budget, live mob templates, economy/rewards, targeting, teleport, or live group combat.
+- No live gameplay/runtime, formula, equipment budget, live mob template, economy/reward, targeting, teleport, or live group combat changes are made.
+- Does not claim final balance.
+
 ## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Pass Note
 
 - Implements controlled simulation/reporting-only late-stage mob pressure tuning.
