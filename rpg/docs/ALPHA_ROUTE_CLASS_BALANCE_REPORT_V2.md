@@ -28,16 +28,16 @@ This is a diagnostic and non-final report for future tuning scope decisions.
 | route_westwild | route_exam | westwild_n10 | bear | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 891, 'damage': 100} |
 | route_frostspine | soft_entry | frostspine_n1 | mountain_rabbit | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 36, 'damage': 4} |
 | route_frostspine | identity_visible | frostspine_n3 | cave_bat | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 75, 'damage': 12} |
-| route_frostspine | build_testing | frostspine_n6 | mountain_stone_golem | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1691, 'damage': 108} |
-| route_frostspine | route_exam | frostspine_n10 | ice_troll | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 1942, 'damage': 188} |
+| route_frostspine | build_testing | frostspine_n6 | mountain_stone_golem | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1860, 'damage': 112} |
+| route_frostspine | route_exam | frostspine_n10 | ice_troll | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 2136, 'damage': 195} |
 | route_ashen_ruins | soft_entry | ashen_n1 | skeleton_warrior | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 79, 'damage': 14} |
 | route_ashen_ruins | identity_visible | ashen_n3 | skeleton_mage | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 133, 'damage': 33} |
-| route_ashen_ruins | build_testing | ashen_n3b1 | cursed_knight | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override, elite_available | {'hp': 864, 'damage': 127} |
-| route_ashen_ruins | route_exam | ashen_n3b2a1 | ghost | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override | {'hp': 541, 'damage': 131} |
+| route_ashen_ruins | build_testing | ashen_n3b1 | cursed_knight | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override, elite_available | {'hp': 950, 'damage': 132} |
+| route_ashen_ruins | route_exam | ashen_n3b2a1 | ghost | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, stage_override | {'hp': 595, 'damage': 138} |
 | route_mireveil | soft_entry | mireveil_n1 | leech | normal | 10 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 54, 'damage': 9} |
 | route_mireveil | identity_visible | mireveil_n3 | swamp_spider | normal | 35 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 132, 'damage': 24} |
-| route_mireveil | build_testing | mireveil_n6 | giant_leech | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 586, 'damage': 81} |
-| route_mireveil | route_exam | mireveil_n10 | old_witch | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1647, 'damage': 262} |
+| route_mireveil | build_testing | mireveil_n6 | giant_leech | normal | 70 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn | {'hp': 644, 'damage': 82} |
+| route_mireveil | route_exam | mireveil_n10 | old_witch | normal | 95 | formula_mob_scaling_v1 | normal | representative, solo, normal_spawn, elite_available | {'hp': 1811, 'damage': 270} |
 Showing first 16 of 20 scenario cards.
 
 ## Archetype Cards
@@ -110,7 +110,7 @@ Showing first 24 of 56 archetype cards.
   - no live mob templates or live combat formulas changed.
 - Policy artifact status:
   - policy_failure_guard_loop count: 0 (diagnostic simulation policy artifact, not a direct route tuning verdict).
-  - current late-stage overclean audit flag count: 41.
+  - current late-stage overclean audit flag count: 40.
   - previous PR12 policy-sanity global overclean baseline: 88.
   - this late-stage scoped flag count is not a comparable global overclean improvement metric.
   - suspicious rows: 88.
@@ -141,7 +141,7 @@ PR14 target expectation calibration below further separates raw global signal fr
 ## PR13 Targeted Alpha Tuning Summary
 - Previous PR12 global overclean baseline: 86.
 - Current global overclean candidates: 87.
-- Current late-stage overclean audit flags: 41.
+- Current late-stage overclean audit flags: 40.
 - Late-stage audit scope: build_testing / route_exam only.
 - Global overclean remains a known underpressure signal in compact deterministic output; PR15 success is measured against calibrated actionable late-stage count.
 - Selected tuning targets: repeated build_testing/route_exam overclean clusters from route+stage rollups.
@@ -191,6 +191,39 @@ PR14 target expectation calibration below further separates raw global signal fr
 | route_mireveil / build_testing | 2 |
 | route_mireveil / route_exam | 2 |
 
+## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary
+- Previous PR2 mob_pressure_lane baseline: 43.
+- Current mob_pressure_lane count: 41.
+- Current route_expectation_lane count: 44.
+- Current bad_matchup_review_lane count: 1.
+- Classifier movement vs PR2 baseline: decreased.
+- Current result explanation: classifier moved after semantic cleanup; mob_hp_too_low now uses turn-speed/clean-win pressure instead of mob_hp_removed_pct=1.00 alone.
+- This pass is simulation/reporting-only and makes no final balance claim.
+- No live gameplay/runtime systems, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting runtime, targeting, teleport, or live group combat were changed.
+- Early-stage soft_entry / identity_visible target expectation artifacts remain separated and are not tuned as direct mob pressure backlog.
+- Sunscar pure_support_solo_overlay route_exam remains treated as bad matchup review, not an automatic support buff or Sunscar nerf.
+
+Changed PR3 knobs (multipliers above existing simulation/reporting rails):
+- route_ashen_ruins / build_testing: accuracy +4%, damage +4%, hp +10%, magic_defense +6%.
+- route_ashen_ruins / route_exam: accuracy +5%, damage +5%, hp +10%, magic_defense +6%.
+- route_frostspine / build_testing: damage +3%, defense +6%, hp +10%, magic_defense +6%.
+- route_frostspine / route_exam: damage +4%, defense +6%, hp +10%, magic_defense +6%.
+- route_mireveil / build_testing: damage +2%, evasion +6%, hp +10%, magic_defense +3%.
+- route_mireveil / route_exam: damage +3%, evasion +6%, hp +10%, magic_defense +4%.
+- route_sunscar / build_testing: accuracy +3%, damage +3%, hp +6%.
+- route_sunscar / route_exam: accuracy +2%, damage +2%, hp +3%.
+
+Top remaining mob_pressure_lane clusters:
+- route_stage_lane / route_sunscar / build_testing / mob_pressure_lane: 8
+- route_stage_lane / route_sunscar / route_exam / mob_pressure_lane: 7
+- route_stage_lane / route_frostspine / route_exam / mob_pressure_lane: 6
+- archetype_lane / daggers_venom / mob_pressure_lane: 5
+- route_stage_lane / route_frostspine / build_testing / mob_pressure_lane: 5
+- archetype_lane / axe_2h_bruiser / mob_pressure_lane: 4
+
+New overpressure/death risk summary:
+- New overpressure/death risk: no broad new death wall observed; known bad-matchup signal remains route_sunscar / route_exam / pure_support_solo_overlay player_death.
+
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
 Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidates. Full target comparison data is available from build_alpha_balance_report_data(). Hidden rows are not resolved or dismissed.
@@ -219,7 +252,7 @@ Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidate
 | route_ashen_ruins | identity_visible | axe_2h_bruiser | hard | strong | strong_clean | strong_vs_high_target |
 | route_frostspine | build_testing | magic_staff_destruction | normal_hard | strong | strong_clean | strong_vs_high_target |
 | route_mireveil | route_exam | bow_sniper | hard | strong | strong_clean | strong_vs_high_target |
-| route_sunscar | build_testing | holy_staff_solo | hard_very_hard | strong | strong_clean | strong_vs_high_target |
+| route_sunscar | build_testing | holy_staff_solo | hard_very_hard | strong | strong_but_risky | strong_vs_high_target |
 | route_westwild | route_exam | holy_staff_solo | normal_hard | strong | strong_clean | strong_vs_high_target |
 | route_ashen_ruins | identity_visible | bow_sniper | normal_hard | strong | strong_clean | strong_vs_high_target |
 | route_frostspine | build_testing | wand_tempo | hard | strong | strong_clean | strong_vs_high_target |
@@ -245,7 +278,7 @@ This section is diagnostic-only and not a tuning verdict.
 Gear assumptions use formula_budget_v1 simulation presets where available.
 policy_failure_guard_loop is a simulation policy artifact flag, not a direct route tuning verdict.
 Flag counts:
-- overclean_win: 41
+- overclean_win: 40
 | route | stage | archetype | lvl | gear | rarity | + | budget | profile | mob | role | encounter | scaled_hp | scaled_damage | target | observed_v2 | audit flags |
 |---|---|---|---:|---|---|---:|---:|---|---|---|---:|---:|---:|---|---|---|
 | route_westwild | soft_entry | guardian_shield_1h | 10 | T1 | common | +0 | 287 | tank | crow | normal | 10 | 25 | 4 | normal | strong_clean |  |
@@ -274,25 +307,25 @@ Showing first 20 of 280 progression audit rows. Hidden rows are not resolved or 
 Showing 20 route-stage-balanced pack preview rows out of 140 pack runs. Hidden rows are not resolved or dismissed.
 | route | stage | pack_id | archetype | members | composite_hp | composite_damage | observed_v2 | proxy_status | winner | turns | audit flags |
 |---|---|---|---|---:|---:|---:|---|---|---|---:|---|
-| route_ashen_ruins | build_testing | ashen_build_undead | axe_2h_bruiser | 3 | 1326 | 149 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_ashen_ruins | route_exam | ashen_exam_knight_host | axe_2h_bruiser | 2 | 1984 | 248 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_frostspine | build_testing | frost_build_wolves | axe_2h_bruiser | 3 | 1280 | 102 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_frostspine | route_exam | frost_exam_golem_pack | axe_2h_bruiser | 3 | 4329 | 241 | strong_clean | composite_pack_pressure_v1 | player | 5 | none |
-| route_mireveil | build_testing | mireveil_build_swarm | axe_2h_bruiser | 3 | 882 | 100 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_mireveil | route_exam | mireveil_exam_serpent | axe_2h_bruiser | 3 | 1235 | 129 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
-| route_sunscar | build_testing | sunscar_build_scorpion | axe_2h_bruiser | 3 | 950 | 174 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_sunscar | route_exam | sunscar_exam_apex | axe_2h_bruiser | 3 | 2640 | 329 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | axe_2h_bruiser | 3 | 1460 | 156 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_ashen_ruins | route_exam | ashen_exam_knight_host | axe_2h_bruiser | 2 | 2182 | 261 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_frostspine | build_testing | frost_build_wolves | axe_2h_bruiser | 3 | 1407 | 106 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_frostspine | route_exam | frost_exam_golem_pack | axe_2h_bruiser | 3 | 4761 | 251 | strong_clean | composite_pack_pressure_v1 | player | 5 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | axe_2h_bruiser | 3 | 970 | 102 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_mireveil | route_exam | mireveil_exam_serpent | axe_2h_bruiser | 3 | 1360 | 132 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | axe_2h_bruiser | 3 | 1008 | 178 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_sunscar | route_exam | sunscar_exam_apex | axe_2h_bruiser | 3 | 2719 | 334 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | axe_2h_bruiser | 3 | 860 | 68 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 | route_westwild | route_exam | westwild_exam_bear_goblins | axe_2h_bruiser | 3 | 1728 | 150 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_ashen_ruins | build_testing | ashen_build_undead | bow_ranger | 3 | 1326 | 149 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_frostspine | build_testing | frost_build_wolves | bow_ranger | 3 | 1280 | 102 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_mireveil | build_testing | mireveil_build_swarm | bow_ranger | 3 | 882 | 100 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
-| route_sunscar | build_testing | sunscar_build_scorpion | bow_ranger | 3 | 950 | 174 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | bow_ranger | 3 | 1460 | 156 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_frostspine | build_testing | frost_build_wolves | bow_ranger | 3 | 1407 | 106 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | bow_ranger | 3 | 970 | 102 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | bow_ranger | 3 | 1008 | 178 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | bow_ranger | 3 | 860 | 68 | strong_clean | composite_pack_pressure_v1 | player | 2 | none |
-| route_ashen_ruins | build_testing | ashen_build_undead | bow_sniper | 3 | 1326 | 149 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_frostspine | build_testing | frost_build_wolves | bow_sniper | 3 | 1280 | 102 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
-| route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 882 | 100 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
-| route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 950 | 174 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_ashen_ruins | build_testing | ashen_build_undead | bow_sniper | 3 | 1460 | 156 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_frostspine | build_testing | frost_build_wolves | bow_sniper | 3 | 1407 | 106 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
+| route_mireveil | build_testing | mireveil_build_swarm | bow_sniper | 3 | 970 | 102 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
+| route_sunscar | build_testing | sunscar_build_scorpion | bow_sniper | 3 | 1008 | 178 | strong_clean | composite_pack_pressure_v1 | player | 4 | none |
 | route_westwild | build_testing | westwild_build_wolf_boar | bow_sniper | 3 | 860 | 68 | strong_clean | composite_pack_pressure_v1 | player | 3 | none |
 
 ## Balance Instrument V2 Observability Preview
@@ -303,114 +336,116 @@ Showing 8 capped representative observability rows out of 280 raw compact runs.
 | route | stage | archetype | mob | winner | end_reason | turns | damage_dealt | damage_taken | player_hp_remaining_pct | player_mana_remaining_pct | action_sequence |
 |---|---|---|---|---|---|---:|---:|---:|---:|---:|---|
 | route_sunscar | route_exam | pure_support_solo_overlay | air_elemental | mob | player_death | 19 | 3816 | 2845 | 0.00 | 1.00 | skill:regeneration, normal_attack, normal_attack, normal_attack, normal_attack, normal_attack... |
-| route_ashen_ruins | build_testing | guardian_shield_1h | cursed_knight | player | player_win | 7 | 864 | 93 | 0.98 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
-| route_ashen_ruins | route_exam | guardian_shield_1h | ghost | player | player_win | 2 | 541 | 0 | 1.00 | 1.00 | normal_attack, normal_attack |
-| route_frostspine | build_testing | guardian_shield_1h | mountain_stone_golem | player | player_win | 13 | 1691 | 347 | 0.93 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
-| route_frostspine | route_exam | guardian_shield_1h | ice_troll | player | player_win | 8 | 1942 | 373 | 0.97 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
-| route_mireveil | build_testing | guardian_shield_1h | giant_leech | player | player_win | 4 | 586 | 52 | 0.99 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack |
-| route_mireveil | route_exam | guardian_shield_1h | old_witch | player | player_win | 8 | 1647 | 454 | 0.96 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
-| route_sunscar | build_testing | guardian_shield_1h | desert_elephant | player | player_win | 8 | 1193 | 168 | 0.97 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_ashen_ruins | build_testing | guardian_shield_1h | cursed_knight | player | player_win | 7 | 950 | 95 | 0.98 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_ashen_ruins | route_exam | guardian_shield_1h | ghost | player | player_win | 2 | 595 | 0 | 1.00 | 1.00 | normal_attack, normal_attack |
+| route_frostspine | build_testing | guardian_shield_1h | mountain_stone_golem | player | player_win | 11 | 1860 | 215 | 0.96 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_frostspine | route_exam | guardian_shield_1h | ice_troll | player | player_win | 8 | 2136 | 385 | 0.97 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_mireveil | build_testing | guardian_shield_1h | giant_leech | player | player_win | 7 | 644 | 157 | 0.97 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_mireveil | route_exam | guardian_shield_1h | old_witch | player | player_win | 7 | 1811 | 194 | 0.98 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
+| route_sunscar | build_testing | guardian_shield_1h | desert_elephant | player | player_win | 8 | 1264 | 172 | 0.97 | 1.00 | normal_attack, normal_attack, guard_fallback, normal_attack, normal_attack, guard_fallback... |
 
 Capped turn trace preview (3 cases, max rows already capped by SimulationConfig.max_trace_turns):
 
 Case 1: route_sunscar / route_exam / pure_support_solo_overlay vs air_elemental
 | turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
 |---:|---|---|---|---|
-| 1 | skill:regeneration | 2845/8497 -> 2636/8457 | 4229 -> 4229 | ♻️ Регенерация — ❤️+142/ход на 4 хода 🔵-40; 🩸 🌪️ Воздушный элементаль атакует — <b>209</b> урона. |
-| 2 | normal_attack | 2636/8457 -> 2778/8457 | 4229 -> 4017 | ♻️ Реген восстанавливает 142 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
-| 3 | normal_attack | 2778/8457 -> 2636/8457 | 4017 -> 3805 | ♻️ Реген восстанавливает 67 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
-| 4 | normal_attack | 2636/8457 -> 2569/8457 | 3805 -> 3593 | ♻️ Реген восстанавливает 142 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
-| 5 | normal_attack | 2569/8457 -> 2502/8457 | 3593 -> 3381 | n/a |
-| 6 | normal_attack | 2502/8457 -> 2293/8457 | 3381 -> 3169 | ⚔️ Ты наносишь <b>212</b> урона.; 🩸 🌪️ Воздушный элементаль атакует — <b>209</b> урона. |
+| 1 | skill:regeneration | 2845/8497 -> 2631/8457 | 4355 -> 4355 | ♻️ Регенерация — ❤️+142/ход на 4 хода 🔵-40; 🩸 🌪️ Воздушный элементаль атакует — <b>214</b> урона. |
+| 2 | normal_attack | 2631/8457 -> 2773/8457 | 4355 -> 4143 | ♻️ Реген восстанавливает 142 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
+| 3 | normal_attack | 2773/8457 -> 2631/8457 | 4143 -> 3931 | ♻️ Реген восстанавливает 72 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
+| 4 | normal_attack | 2631/8457 -> 2559/8457 | 3931 -> 3719 | ♻️ Реген восстанавливает 142 HP.; ⚔️ Ты наносишь <b>212</b> урона. |
+| 5 | normal_attack | 2559/8457 -> 2487/8457 | 3719 -> 3507 | n/a |
+| 6 | normal_attack | 2487/8457 -> 2273/8457 | 3507 -> 3295 | ⚔️ Ты наносишь <b>212</b> урона.; 🩸 🌪️ Воздушный элементаль атакует — <b>214</b> урона. |
 
 Case 2: route_ashen_ruins / build_testing / guardian_shield_1h vs cursed_knight
 | turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
 |---:|---|---|---|---|
-| 1 | normal_attack | 5113/100 -> 5113/100 | 864 -> 651 | ⚔️ Ты наносишь <b>213</b> урона.; 🌀 Ты уклоняешься от атаки! |
-| 2 | normal_attack | 5113/100 -> 5048/100 | 651 -> 438 | ⚔️ Ты наносишь <b>213</b> урона.; 🩸 🛡️ Проклятый рыцарь атакует — <b>65</b> урона. |
-| 3 | guard_fallback | 5048/100 -> 5048/100 | 438 -> 438 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
-| 4 | normal_attack | 5048/100 -> 5020/100 | 438 -> 225 | ⚔️ Ты наносишь <b>213</b> урона.; 🩸 🛡️ Проклятый рыцарь атакует — <b>28</b> урона. |
-| 5 | normal_attack | 5020/100 -> 5020/100 | 225 -> 12 | ⚔️ Ты наносишь <b>213</b> урона.; 🌀 Ты уклоняешься от атаки! |
-| 6 | guard_fallback | 5020/100 -> 5020/100 | 12 -> 12 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
+| 1 | normal_attack | 5113/100 -> 5113/100 | 950 -> 737 | ⚔️ Ты наносишь <b>213</b> урона.; 🌀 Ты уклоняешься от атаки! |
+| 2 | normal_attack | 5113/100 -> 5047/100 | 737 -> 524 | ⚔️ Ты наносишь <b>213</b> урона.; 🩸 🛡️ Проклятый рыцарь атакует — <b>66</b> урона. |
+| 3 | guard_fallback | 5047/100 -> 5047/100 | 524 -> 524 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
+| 4 | normal_attack | 5047/100 -> 5018/100 | 524 -> 311 | ⚔️ Ты наносишь <b>213</b> урона.; 🩸 🛡️ Проклятый рыцарь атакует — <b>29</b> урона. |
+| 5 | normal_attack | 5018/100 -> 5018/100 | 311 -> 98 | ⚔️ Ты наносишь <b>213</b> урона.; 🌀 Ты уклоняешься от атаки! |
+| 6 | guard_fallback | 5018/100 -> 5018/100 | 98 -> 98 | 🛡️ Ты входишь в защитную стойку (авто-защита).; 🌀 Ты уклоняешься от атаки! |
 
 Case 3: route_ashen_ruins / route_exam / guardian_shield_1h vs ghost
 | turn | action | player hp/mana before -> after | mob hp before -> after | log/event summary |
 |---:|---|---|---|---|
-| 1 | normal_attack | 11269/130 -> 11269/130 | 541 -> 153 | ⚔️ Ты наносишь <b>388</b> урона.; 🌀 Ты уклоняешься от атаки! |
-| 2 | normal_attack | 11269/130 -> 11269/130 | 153 -> 0 | ⚔️ Ты наносишь <b>388</b> урона. |
+| 1 | normal_attack | 11269/130 -> 11269/130 | 595 -> 207 | ⚔️ Ты наносишь <b>388</b> урона.; 🌀 Ты уклоняешься от атаки! |
+| 2 | normal_attack | 11269/130 -> 11269/130 | 207 -> 0 | ⚔️ Ты наносишь <b>388</b> урона. |
 
 ## Balance Instrument V2 Pressure Attribution Preview
 Simulation/reporting-only diagnostic preview. Labels are diagnostic likely causes, not final balance verdicts, and do not directly tune formulas, equipment budgets, live mob templates, rewards/economy, targeting, teleport, or live group combat.
 This classifier points future review toward tuning lanes; it does not claim final balance or prescribe automatic support buffs/Sunscar nerfs.
 
 Attribution counts:
-- mob_hp_too_low: 87
-- player_damage_too_high: 87
+- mob_hp_too_low: 69
+- player_damage_too_high: 69
 - resource_pressure_missing: 56
 - mob_damage_too_low: 50
 - sample_too_soft: 44
 - target_expectation_mismatch: 44
+- inconclusive: 2
 - player_sustain_too_high: 2
 - bad_matchup_overpressure: 1
 
 Recommended tuning lane counts:
 - route_expectation_lane: 44
-- mob_pressure_lane: 43
+- mob_pressure_lane: 41
+- inconclusive_lane: 2
 - bad_matchup_review_lane: 1
 
 Top attribution clusters:
-- archetype_attribution / daggers_venom / mob_hp_too_low: 12
-- archetype_attribution / daggers_venom / player_damage_too_high: 12
 - archetype_attribution / daggers_venom / mob_damage_too_low: 11
+- archetype_attribution / daggers_venom / mob_hp_too_low: 11
+- archetype_attribution / daggers_venom / player_damage_too_high: 11
 - archetype_attribution / axe_2h_bruiser / mob_hp_too_low: 8
 - archetype_attribution / axe_2h_bruiser / player_damage_too_high: 8
 - archetype_attribution / axe_2h_bruiser / resource_pressure_missing: 8
-- archetype_attribution / bow_sniper / mob_hp_too_low: 8
-- archetype_attribution / bow_sniper / player_damage_too_high: 8
-- archetype_attribution / daggers_evasion / mob_hp_too_low: 8
-- archetype_attribution / daggers_evasion / player_damage_too_high: 8
 - archetype_attribution / daggers_evasion / resource_pressure_missing: 8
-- archetype_attribution / holy_staff_solo / mob_hp_too_low: 8
+- archetype_attribution / magic_staff_destruction / mob_hp_too_low: 8
+- archetype_attribution / magic_staff_destruction / player_damage_too_high: 8
+- route_stage_attribution / route_sunscar / identity_visible / mob_damage_too_low: 8
+- route_stage_attribution / route_sunscar / identity_visible / sample_too_soft: 8
+- route_stage_attribution / route_sunscar / identity_visible / target_expectation_mismatch: 8
 
 Top recommended lane clusters:
 - route_stage_lane / route_sunscar / build_testing / mob_pressure_lane: 8
 - route_stage_lane / route_sunscar / identity_visible / route_expectation_lane: 8
 - route_stage_lane / route_sunscar / soft_entry / route_expectation_lane: 8
 - route_stage_lane / route_sunscar / route_exam / mob_pressure_lane: 7
-- archetype_lane / daggers_venom / mob_pressure_lane: 6
 - archetype_lane / daggers_venom / route_expectation_lane: 6
-- route_stage_lane / route_frostspine / build_testing / mob_pressure_lane: 6
 - route_stage_lane / route_frostspine / identity_visible / route_expectation_lane: 6
 - route_stage_lane / route_frostspine / route_exam / mob_pressure_lane: 6
 - route_stage_lane / route_frostspine / soft_entry / route_expectation_lane: 6
+- archetype_lane / daggers_venom / mob_pressure_lane: 5
+- route_stage_lane / route_frostspine / build_testing / mob_pressure_lane: 5
 - archetype_lane / axe_2h_bruiser / mob_pressure_lane: 4
 - archetype_lane / axe_2h_bruiser / route_expectation_lane: 4
 
 Representative attribution rows (40 shown of 88):
 | route | stage | archetype | mob | target | observed | winner | labels | recommended_lane | confidence | evidence |
 |---|---|---|---|---|---|---|---|---|---|---|
-| route_ashen_ruins | build_testing | axe_2h_bruiser | cursed_knight | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=3, hp_left=0.98, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=70, role=pressure, lvl=70 |
-| route_ashen_ruins | build_testing | bow_sniper | cursed_knight | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high | mob_pressure_lane | medium | turns=5, hp_left=0.90, mana_left=0.78, mob_hp_removed=1.00, dmg_taken=170, role=pressure, lvl=70 |
-| route_ashen_ruins | build_testing | daggers_evasion | cursed_knight | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=5, hp_left=0.91, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=170, role=pressure, lvl=70 |
+| route_ashen_ruins | build_testing | axe_2h_bruiser | cursed_knight | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=3, hp_left=0.98, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=72, role=pressure, lvl=70 |
+| route_ashen_ruins | build_testing | bow_sniper | cursed_knight | normal_hard | strong | player | inconclusive | inconclusive_lane | low | turns=5, hp_left=0.89, mana_left=0.78, mob_hp_removed=1.00, dmg_taken=176, role=pressure, lvl=70 |
+| route_ashen_ruins | build_testing | daggers_evasion | cursed_knight | normal_hard | strong | player | resource_pressure_missing | mob_pressure_lane | low | turns=5, hp_left=0.91, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=176, role=pressure, lvl=70 |
 | route_ashen_ruins | build_testing | daggers_venom | cursed_knight | very_hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high | mob_pressure_lane | medium | turns=4, hp_left=1.00, mana_left=0.84, mob_hp_removed=1.00, dmg_taken=0, role=pressure, lvl=70 |
 | route_ashen_ruins | identity_visible | axe_2h_bruiser | skeleton_mage | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=1, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=normal, lvl=35 |
 | route_ashen_ruins | identity_visible | bow_sniper | skeleton_mage | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=3, hp_left=0.90, mana_left=0.72, mob_hp_removed=1.00, dmg_taken=43, role=normal, lvl=35 |
 | route_ashen_ruins | identity_visible | daggers_evasion | skeleton_mage | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=3, hp_left=0.91, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=43, role=normal, lvl=35 |
 | route_ashen_ruins | identity_visible | daggers_venom | skeleton_mage | very_hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=2, hp_left=1.00, mana_left=0.80, mob_hp_removed=1.00, dmg_taken=0, role=normal, lvl=35 |
 | route_ashen_ruins | route_exam | axe_2h_bruiser | ghost | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=1, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=pressure, lvl=95 |
-| route_ashen_ruins | route_exam | bow_sniper | ghost | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high | mob_pressure_lane | medium | turns=3, hp_left=0.97, mana_left=0.82, mob_hp_removed=1.00, dmg_taken=119, role=pressure, lvl=95 |
-| route_ashen_ruins | route_exam | daggers_evasion | ghost | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=3, hp_left=0.97, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=119, role=pressure, lvl=95 |
+| route_ashen_ruins | route_exam | bow_sniper | ghost | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high | mob_pressure_lane | medium | turns=3, hp_left=0.96, mana_left=0.82, mob_hp_removed=1.00, dmg_taken=124, role=pressure, lvl=95 |
+| route_ashen_ruins | route_exam | daggers_evasion | ghost | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=3, hp_left=0.97, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=123, role=pressure, lvl=95 |
 | route_ashen_ruins | route_exam | daggers_venom | ghost | very_hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high | mob_pressure_lane | medium | turns=2, hp_left=1.00, mana_left=0.87, mob_hp_removed=1.00, dmg_taken=0, role=pressure, lvl=95 |
 | route_ashen_ruins | soft_entry | axe_2h_bruiser | skeleton_warrior | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=2, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=normal, lvl=10 |
-| route_ashen_ruins | soft_entry | bow_sniper | skeleton_warrior | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=4, hp_left=0.76, mana_left=0.64, mob_hp_removed=1.00, dmg_taken=33, role=normal, lvl=10 |
-| route_ashen_ruins | soft_entry | daggers_evasion | skeleton_warrior | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=4, hp_left=0.75, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=33, role=normal, lvl=10 |
+| route_ashen_ruins | soft_entry | bow_sniper | skeleton_warrior | normal_hard | strong | player | sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=4, hp_left=0.76, mana_left=0.64, mob_hp_removed=1.00, dmg_taken=33, role=normal, lvl=10 |
+| route_ashen_ruins | soft_entry | daggers_evasion | skeleton_warrior | normal_hard | strong | player | resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=4, hp_left=0.75, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=33, role=normal, lvl=10 |
 | route_ashen_ruins | soft_entry | daggers_venom | skeleton_warrior | very_hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=3, hp_left=0.91, mana_left=0.73, mob_hp_removed=1.00, dmg_taken=13, role=normal, lvl=10 |
-| route_frostspine | build_testing | bow_ranger | mountain_stone_golem | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=5, hp_left=0.97, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=42, role=pressure, lvl=70 |
-| route_frostspine | build_testing | daggers_evasion | mountain_stone_golem | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=6, hp_left=0.92, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=144, role=pressure, lvl=70 |
-| route_frostspine | build_testing | daggers_venom | mountain_stone_golem | normal_hard_split | strong | player | mob_hp_too_low, player_damage_too_high | mob_pressure_lane | medium | turns=5, hp_left=0.98, mana_left=0.84, mob_hp_removed=1.00, dmg_taken=42, role=pressure, lvl=70 |
-| route_frostspine | build_testing | magic_staff_control | mountain_stone_golem | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=4, hp_left=0.88, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=123, role=pressure, lvl=70 |
-| route_frostspine | build_testing | magic_staff_destruction | mountain_stone_golem | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=4, hp_left=0.87, mana_left=0.99, mob_hp_removed=1.00, dmg_taken=167, role=pressure, lvl=70 |
-| route_frostspine | build_testing | wand_tempo | mountain_stone_golem | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=3, hp_left=0.95, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=70, role=pressure, lvl=70 |
+| route_frostspine | build_testing | bow_ranger | mountain_stone_golem | hard | strong | player | resource_pressure_missing | mob_pressure_lane | low | turns=5, hp_left=0.97, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=44, role=pressure, lvl=70 |
+| route_frostspine | build_testing | daggers_evasion | mountain_stone_golem | hard | strong | player | resource_pressure_missing | mob_pressure_lane | low | turns=6, hp_left=0.92, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=148, role=pressure, lvl=70 |
+| route_frostspine | build_testing | daggers_venom | mountain_stone_golem | normal_hard_split | strong | player | inconclusive | inconclusive_lane | low | turns=5, hp_left=0.98, mana_left=0.84, mob_hp_removed=1.00, dmg_taken=44, role=pressure, lvl=70 |
+| route_frostspine | build_testing | magic_staff_control | mountain_stone_golem | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=4, hp_left=0.88, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=125, role=pressure, lvl=70 |
+| route_frostspine | build_testing | magic_staff_destruction | mountain_stone_golem | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=4, hp_left=0.87, mana_left=0.99, mob_hp_removed=1.00, dmg_taken=170, role=pressure, lvl=70 |
+| route_frostspine | build_testing | wand_tempo | mountain_stone_golem | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=4, hp_left=0.89, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=143, role=pressure, lvl=70 |
 | route_frostspine | identity_visible | bow_ranger | cave_bat | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=1, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=normal, lvl=35 |
 | route_frostspine | identity_visible | daggers_evasion | cave_bat | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=2, hp_left=0.99, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=6, role=normal, lvl=35 |
 | route_frostspine | identity_visible | daggers_venom | cave_bat | normal_hard_split | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=2, hp_left=1.00, mana_left=0.80, mob_hp_removed=1.00, dmg_taken=0, role=normal, lvl=35 |
@@ -418,10 +453,10 @@ Representative attribution rows (40 shown of 88):
 | route_frostspine | identity_visible | magic_staff_destruction | cave_bat | normal_hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=2, hp_left=0.97, mana_left=0.97, mob_hp_removed=1.00, dmg_taken=9, role=normal, lvl=35 |
 | route_frostspine | identity_visible | wand_tempo | cave_bat | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=1, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=normal, lvl=35 |
 | route_frostspine | route_exam | bow_ranger | ice_troll | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=4, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=pressure, lvl=95 |
-| route_frostspine | route_exam | daggers_evasion | ice_troll | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=5, hp_left=0.96, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=182, role=pressure, lvl=95 |
+| route_frostspine | route_exam | daggers_evasion | ice_troll | hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=5, hp_left=0.95, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=188, role=pressure, lvl=95 |
 | route_frostspine | route_exam | daggers_venom | ice_troll | normal_hard_split | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high | mob_pressure_lane | medium | turns=4, hp_left=1.00, mana_left=0.87, mob_hp_removed=1.00, dmg_taken=0, role=pressure, lvl=95 |
 | route_frostspine | route_exam | magic_staff_control | ice_troll | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=2, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=pressure, lvl=95 |
-| route_frostspine | route_exam | magic_staff_destruction | ice_troll | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=3, hp_left=0.94, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=180, role=pressure, lvl=95 |
+| route_frostspine | route_exam | magic_staff_destruction | ice_troll | normal_hard | strong | player | mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=3, hp_left=0.93, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=186, role=pressure, lvl=95 |
 | route_frostspine | route_exam | wand_tempo | ice_troll | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing | mob_pressure_lane | medium | turns=2, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=pressure, lvl=95 |
 | route_frostspine | soft_entry | bow_ranger | mountain_rabbit | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=1, hp_left=1.00, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=0, role=normal, lvl=10 |
 | route_frostspine | soft_entry | daggers_evasion | mountain_rabbit | hard | strong | player | mob_damage_too_low, mob_hp_too_low, player_damage_too_high, resource_pressure_missing, sample_too_soft, target_expectation_mismatch | route_expectation_lane | medium | turns=3, hp_left=0.95, mana_left=1.00, mob_hp_removed=1.00, dmg_taken=7, role=normal, lvl=10 |
