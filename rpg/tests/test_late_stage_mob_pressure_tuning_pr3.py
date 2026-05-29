@@ -154,8 +154,8 @@ def test_pr3_docs_state_header_foundation_note_and_non_goals():
     state = STATE_PATH.read_text(encoding="utf-8")
     foundation = FOUNDATION_PATH.read_text(encoding="utf-8")
     header = state.split("---", 1)[0]
-    assert "PR: Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass" in header
-    assert "Status: simulation/reporting late-stage mob pressure tuning" in header
+    assert "PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass" in header
+    assert "Status: simulation/reporting multi-seed balance confidence diagnostics" in header
     assert "### Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass" in state
     assert "controlled simulation/reporting-only late-stage mob pressure tuning was applied" in state
     assert "current mob_pressure_lane count after PR3 classifier cleanup is 41" in state

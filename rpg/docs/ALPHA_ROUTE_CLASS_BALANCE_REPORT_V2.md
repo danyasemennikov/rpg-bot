@@ -224,6 +224,49 @@ Top remaining mob_pressure_lane clusters:
 New overpressure/death risk summary:
 - New overpressure/death risk: no broad new death wall observed; known bad-matchup signal remains route_sunscar / route_exam / pure_support_solo_overlay player_death.
 
+## Balance V2 PR4 Expanded Sampling / Multi-seed Confidence Summary
+This section is diagnostic-only and does not tune balance numbers. Compact PR3 counts remain the checked-in regression baseline; PR4 confidence data is used to guide future tuning scope.
+No final balance claim is made. No live runtime, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting, targeting, teleport, or live group combat changes are made here.
+Sunscar pure_support_solo_overlay route_exam overpressure remains separated as bad_matchup_review_lane, not an automatic support buff or Sunscar nerf.
+No new tuning knobs were added.
+- Seeds: 1, 2, 3.
+- Compact PR3 lane counts: mob_pressure_lane=41, route_expectation_lane=44, bad_matchup_review_lane=1.
+- Multi-seed lane counts: mob_pressure_lane=125, route_expectation_lane=132, bad_matchup_review_lane=3, inconclusive_lane=4.
+
+Lane comparison table:
+Multi-seed totals are raw totals across seeds; interpretation is normalized per seed.
+PR4 confidence uses the active report scope. Checked-in v2 uses full compact alpha scope; scoped callers get scoped confidence diagnostics, not full-alpha totals.
+| lane | compact PR3 | PR4 multi-seed total | expected total | per-seed avg | delta vs expected | interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| bad_matchup_review_lane | 1 | 3 | 3 | 1.0 | 0 | stable_across_seeds |
+| inconclusive_lane | 2 | 4 | 6 | 1.33 | -2 | lower_per_seed |
+| mob_pressure_lane | 41 | 125 | 123 | 41.67 | 2 | stable_across_seeds |
+| route_expectation_lane | 44 | 132 | 132 | 44.0 | 0 | stable_across_seeds |
+
+High-confidence remaining mob_pressure clusters preview:
+| route | stage | lane | count | seeds_seen | seed_presence_rate | confidence |
+|---|---|---|---:|---|---:|---|
+| route_sunscar | build_testing | mob_pressure_lane | 24 | 1, 2, 3 | 1.0 | high |
+| route_sunscar | route_exam | mob_pressure_lane | 21 | 1, 2, 3 | 1.0 | high |
+| route_frostspine | route_exam | mob_pressure_lane | 18 | 1, 2, 3 | 1.0 | high |
+| route_frostspine | build_testing | mob_pressure_lane | 15 | 1, 2, 3 | 1.0 | high |
+| route_ashen_ruins | route_exam | mob_pressure_lane | 12 | 1, 2, 3 | 1.0 | high |
+| route_ashen_ruins | build_testing | mob_pressure_lane | 11 | 1, 2, 3 | 1.0 | high |
+| route_mireveil | build_testing | mob_pressure_lane | 6 | 1, 2, 3 | 1.0 | high |
+| route_mireveil | route_exam | mob_pressure_lane | 6 | 1, 2, 3 | 1.0 | high |
+
+Unstable/noisy clusters preview:
+| route | stage | lane | count | seeds_seen | seed_presence_rate | confidence |
+|---|---|---|---:|---|---:|---|
+| route_ashen_ruins | build_testing | inconclusive_lane | 1 | 1 | 0.333 | low |
+
+PR4 confidence notes:
+- Diagnostic-only: PR4 does not tune balance numbers or replace compact PR3 regression counts.
+- Compact PR3 lane counts remain authoritative for checked-in regression comparisons.
+- PR4 confidence uses the active report scope; checked-in v2 uses full compact alpha scope, and scoped callers get scoped confidence diagnostics instead of full-alpha totals.
+- Bounded multi-seed config: seeds=(1, 2, 3), max_samples_per_route_stage=1, include_raw_runs=True, include_turn_trace=False.
+- No live runtime, Combat Core, formula, equipment budget, live mob template, economy/reward/loot/crafting, targeting, teleport, or live group combat changes are made by this report layer.
+
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
 Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidates. Full target comparison data is available from build_alpha_balance_report_data(). Hidden rows are not resolved or dismissed.

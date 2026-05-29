@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from game.balance_audit import audit_progression_context_rows, summarize_balance_audit_flags
@@ -58,7 +58,14 @@ PR13_TOP_CLUSTER_LIMIT = 8
 LATE_STAGE_TARGETED_STAGES = {"build_testing", "route_exam"}
 EARLY_TARGET_CALIBRATION_STAGES = {"soft_entry", "identity_visible"}
 ACTIONABLE_TARGET_STAGES = {"build_testing", "route_exam"}
-
+PR4_CONFIDENCE_SEEDS = (1, 2, 3)
+PR4_CONFIDENCE_LANES = (
+    "mob_pressure_lane",
+    "route_expectation_lane",
+    "bad_matchup_review_lane",
+    "inconclusive_lane",
+)
+PR4_CLUSTER_PREVIEW_LIMIT = 8
 
 
 @dataclass(frozen=True)
@@ -723,6 +730,7 @@ def _classify_pressure_attribution_run(run: dict[str, Any], target_row: dict[str
         "stage": stage,
         "archetype_id": archetype_id,
         "mob_id": run.get("mob_id"),
+        "seed": run.get("seed"),
         "target_label": target_row.get("target_label") or target_label or None,
         "observed_label": observed_label or None,
         "winner": winner,
@@ -769,7 +777,290 @@ def _build_recommended_lane_top_clusters(rows: list[dict[str, Any]]) -> list[dic
         for key, count in sorted(clusters.items(), key=lambda item: (-item[1], item[0]))[:PRESSURE_ATTRIBUTION_CLUSTER_LIMIT]
     ]
 
-def build_alpha_balance_report_data(matrix_result: dict | None = None, config: RouteStageMatrixConfig | None = None) -> dict:
+
+
+def _unavailable_pr4_multiseed_confidence_snapshot() -> dict[str, Any]:
+    return {
+        "available": False,
+        "seeds": list(PR4_CONFIDENCE_SEEDS),
+        "compact_lane_counts": {},
+        "multiseed_lane_counts": {},
+        "lane_deltas": {},
+        "stable_clusters": [],
+        "unstable_clusters": [],
+        "high_confidence_remaining_clusters": [],
+        "archetype_stability_clusters": [],
+        "scope": {},
+        "notes": [
+            "PR4 multi-seed confidence data is unavailable in this report config. Use build_default_alpha_simulation_report_v2_data() / v2 report data for authoritative confidence diagnostics.",
+        ],
+    }
+
+
+def _normalized_lane_delta_interpretation(compact_count: int, multiseed_total: int, seed_count: int) -> str:
+    if seed_count <= 0:
+        return "not_available"
+    if compact_count == 0:
+        return "stable_across_seeds" if multiseed_total == 0 else "higher_per_seed"
+
+    multiseed_per_seed_avg = multiseed_total / seed_count
+    ratio = multiseed_per_seed_avg / compact_count
+    if 0.90 <= ratio <= 1.10:
+        return "stable_across_seeds"
+    if 1.10 < ratio <= 1.25:
+        return "slightly_higher_per_seed"
+    if ratio > 1.25:
+        return "higher_per_seed"
+    if 0.75 <= ratio < 0.90:
+        return "slightly_lower_per_seed"
+    return "lower_per_seed"
+
+
+def _build_pr4_lane_deltas(
+    compact_lane_counts: dict[str, int],
+    multiseed_lane_counts: dict[str, int],
+    *,
+    seed_count: int,
+) -> dict[str, dict[str, Any]]:
+    lane_names = sorted(set(PR4_CONFIDENCE_LANES) | set(compact_lane_counts.keys()) | set(multiseed_lane_counts.keys()))
+    deltas: dict[str, dict[str, Any]] = {}
+    for lane in lane_names:
+        compact_count = int(compact_lane_counts.get(lane, 0))
+        multiseed_total = int(multiseed_lane_counts.get(lane, 0))
+        expected_multiseed_total = compact_count * max(0, seed_count)
+        multiseed_per_seed_avg = (multiseed_total / seed_count) if seed_count > 0 else 0.0
+        delta_per_seed = multiseed_per_seed_avg - compact_count if seed_count > 0 else 0.0
+        deltas[lane] = {
+            "compact": compact_count,
+            "seed_count": seed_count,
+            "expected_multiseed_total": expected_multiseed_total,
+            "multiseed_total": multiseed_total,
+            "multiseed_per_seed_avg": round(multiseed_per_seed_avg, 2),
+            "delta_vs_expected_total": multiseed_total - expected_multiseed_total,
+            "delta_per_seed_vs_compact": round(delta_per_seed, 2),
+            "interpretation": _normalized_lane_delta_interpretation(compact_count, multiseed_total, seed_count),
+        }
+    return deltas
+
+
+def _build_pr4_cluster_stability(rows: list[dict[str, Any]], seeds: tuple[int, ...]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    expected_seed_count = max(1, len(set(seeds)))
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (str(row.get("route_id", "")), str(row.get("stage", "")), str(row.get("recommended_lane", "inconclusive_lane")))
+        bucket = grouped.setdefault(key, {"key": key, "count": 0, "seeds_seen": set()})
+        bucket["count"] += 1
+        bucket["seeds_seen"].add(int(row.get("seed", 0) or 0))
+
+    clusters: list[dict[str, Any]] = []
+    for key, bucket in grouped.items():
+        seeds_seen = sorted(seed for seed in bucket["seeds_seen"] if seed in seeds)
+        seed_count = len(seeds_seen)
+        if seed_count >= expected_seed_count:
+            confidence = "high"
+        elif seed_count == expected_seed_count - 1 and expected_seed_count >= 3:
+            confidence = "medium"
+        elif seed_count >= 2:
+            confidence = "medium"
+        else:
+            confidence = "low"
+        clusters.append(
+            {
+                "cluster_type": "route_stage_lane",
+                "route_id": key[0],
+                "stage": key[1],
+                "recommended_lane": key[2],
+                "key": key,
+                "count": int(bucket["count"]),
+                "seeds_seen": seeds_seen,
+                "seed_presence_rate": round(seed_count / expected_seed_count, 3),
+                "confidence": confidence,
+            }
+        )
+
+    clusters = sorted(
+        clusters,
+        key=lambda row: (
+            {"high": 0, "medium": 1, "low": 2}.get(str(row.get("confidence")), 9),
+            -int(row.get("count", 0)),
+            str(row.get("route_id")),
+            str(row.get("stage")),
+            str(row.get("recommended_lane")),
+        ),
+    )
+    stable_clusters = [row for row in clusters if row.get("confidence") in {"high", "medium"}]
+    unstable_clusters = sorted(
+        [row for row in clusters if row.get("confidence") == "low"],
+        key=lambda row: (-int(row.get("count", 0)), str(row.get("route_id")), str(row.get("stage")), str(row.get("recommended_lane"))),
+    )
+    high_confidence_remaining_clusters = [
+        row for row in clusters if row.get("confidence") == "high" and row.get("recommended_lane") == "mob_pressure_lane"
+    ]
+    return stable_clusters, unstable_clusters, high_confidence_remaining_clusters
+
+
+def _build_pr4_archetype_stability(rows: list[dict[str, Any]], seeds: tuple[int, ...]) -> list[dict[str, Any]]:
+    expected_seed_count = max(1, len(set(seeds)))
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (str(row.get("archetype_id", "")), str(row.get("recommended_lane", "inconclusive_lane")))
+        bucket = grouped.setdefault(key, {"key": key, "count": 0, "seeds_seen": set()})
+        bucket["count"] += 1
+        bucket["seeds_seen"].add(int(row.get("seed", 0) or 0))
+    output: list[dict[str, Any]] = []
+    for key, bucket in grouped.items():
+        seeds_seen = sorted(seed for seed in bucket["seeds_seen"] if seed in seeds)
+        rate = len(seeds_seen) / expected_seed_count
+        confidence = "high" if rate >= 1.0 else "medium" if rate >= (2 / 3) else "low"
+        output.append(
+            {
+                "cluster_type": "archetype_lane",
+                "archetype_id": key[0],
+                "recommended_lane": key[1],
+                "key": key,
+                "count": int(bucket["count"]),
+                "seeds_seen": seeds_seen,
+                "seed_presence_rate": round(rate, 3),
+                "confidence": confidence,
+            }
+        )
+    return sorted(output, key=lambda row: (-int(row.get("count", 0)), str(row.get("archetype_id")), str(row.get("recommended_lane"))))
+
+
+
+
+def _pr4_scope_metadata(config: RouteStageMatrixConfig, scope_source: str) -> dict[str, Any]:
+    return {
+        "route_ids": list(config.route_ids),
+        "stages": list(config.stages),
+        "archetype_ids": list(config.archetype_ids),
+        "max_samples_per_route_stage": int(config.max_samples_per_route_stage),
+        "max_turns": int(config.max_turns),
+        "scope_source": scope_source,
+    }
+
+
+def _build_pr4_confidence_config_from_scope(
+    base_config: RouteStageMatrixConfig | None,
+    matrix_scope: dict[str, Any] | None,
+    seeds: tuple[int, ...],
+) -> tuple[RouteStageMatrixConfig, str, list[str]]:
+    notes: list[str] = []
+    if base_config is not None:
+        return (
+            replace(
+                base_config,
+                seeds=tuple(seeds),
+                include_raw_runs=True,
+                include_turn_trace=False,
+            ),
+            "config",
+            notes,
+        )
+
+    matrix_scope = matrix_scope or {}
+    routes = tuple(str(route_id) for route_id in matrix_scope.get("routes", ()) if route_id)
+    stages = tuple(str(stage) for stage in matrix_scope.get("stages", ()) if stage)
+    archetypes = tuple(str(archetype_id) for archetype_id in matrix_scope.get("archetypes", ()) if archetype_id)
+    if routes or stages or archetypes:
+        notes.append("PR4 confidence scope was derived from matrix_result because no active RouteStageMatrixConfig was provided; max_samples_per_route_stage/max_turns use safe defaults.")
+        return (
+            RouteStageMatrixConfig(
+                route_ids=routes or tuple(list_alpha_simulation_route_ids()),
+                stages=stages or tuple(list_route_simulation_stages()),
+                archetype_ids=archetypes or tuple(list_alpha_archetype_ids()),
+                seeds=tuple(seeds),
+                max_samples_per_route_stage=1,
+                max_turns=50,
+                include_raw_runs=True,
+                include_turn_trace=False,
+            ),
+            "matrix_result_fallback",
+            notes,
+        )
+
+    notes.append("PR4 confidence used the full alpha fallback scope because no active config or matrix scope was available.")
+    return (
+        RouteStageMatrixConfig(
+            route_ids=tuple(list_alpha_simulation_route_ids()),
+            stages=tuple(list_route_simulation_stages()),
+            archetype_ids=tuple(list_alpha_archetype_ids()),
+            seeds=tuple(seeds),
+            max_samples_per_route_stage=1,
+            max_turns=50,
+            include_raw_runs=True,
+            include_turn_trace=False,
+        ),
+        "default_full_alpha_fallback",
+        notes,
+    )
+
+
+def build_pr4_multiseed_confidence_snapshot(
+    *,
+    compact_lane_counts: dict[str, int] | None = None,
+    compact_pressure_rows: list[dict[str, Any]] | None = None,
+    base_config: RouteStageMatrixConfig | None = None,
+    matrix_scope: dict[str, Any] | None = None,
+    seeds: tuple[int, ...] = PR4_CONFIDENCE_SEEDS,
+) -> dict[str, Any]:
+    """Build diagnostic-only PR4 multi-seed confidence data.
+
+    Compact PR3 lane counts remain the checked-in regression baseline. The
+    multi-seed data only compares stability of the remaining signals and does
+    not tune balance numbers or replace the compact baseline.
+    """
+    _ = compact_pressure_rows
+    compact_lane_counts = dict(compact_lane_counts or {})
+    config, scope_source, scope_notes = _build_pr4_confidence_config_from_scope(base_config, matrix_scope, tuple(seeds))
+    scope = _pr4_scope_metadata(config, scope_source)
+    matrix = run_route_stage_simulation_matrix(config)
+    if not matrix.get("runs"):
+        unavailable = _unavailable_pr4_multiseed_confidence_snapshot()
+        unavailable["compact_lane_counts"] = compact_lane_counts
+        unavailable["scope"] = scope
+        unavailable["notes"] = list(unavailable.get("notes", [])) + scope_notes
+        return unavailable
+
+    multiseed_report = build_alpha_balance_report_data(matrix_result=matrix, config=config, include_pr4_confidence=False)
+    multiseed_rows = list(multiseed_report.get("pressure_attribution_rows", []))
+    multiseed_lane_counts = dict(multiseed_report.get("recommended_lane_counts", {}))
+    for lane in PR4_CONFIDENCE_LANES:
+        compact_lane_counts.setdefault(lane, 0)
+        multiseed_lane_counts.setdefault(lane, 0)
+
+    stable_clusters, unstable_clusters, high_confidence_remaining_clusters = _build_pr4_cluster_stability(multiseed_rows, tuple(seeds))
+    archetype_stability = _build_pr4_archetype_stability(multiseed_rows, tuple(seeds))
+    return {
+        "available": True,
+        "seeds": list(seeds),
+        "compact_lane_counts": compact_lane_counts,
+        "multiseed_lane_counts": multiseed_lane_counts,
+        "lane_deltas": _build_pr4_lane_deltas(compact_lane_counts, multiseed_lane_counts, seed_count=len(set(seeds))),
+        "stable_clusters": stable_clusters,
+        "unstable_clusters": unstable_clusters,
+        "high_confidence_remaining_clusters": high_confidence_remaining_clusters,
+        "archetype_stability_clusters": archetype_stability,
+        "scope": scope,
+        "run_count": int(matrix.get("run_count", 0)),
+        "sample_count": int(matrix.get("sample_count", 0)),
+        "notes": [
+            "Diagnostic-only: PR4 does not tune balance numbers or replace compact PR3 regression counts.",
+            "Compact PR3 lane counts remain authoritative for checked-in regression comparisons.",
+            "PR4 confidence uses the active report scope; checked-in v2 uses full compact alpha scope, and scoped callers get scoped confidence diagnostics instead of full-alpha totals.",
+            f"Bounded multi-seed config: seeds={tuple(seeds)}, max_samples_per_route_stage={config.max_samples_per_route_stage}, include_raw_runs=True, include_turn_trace=False.",
+            "No live runtime, Combat Core, formula, equipment budget, live mob template, economy/reward/loot/crafting, targeting, teleport, or live group combat changes are made by this report layer.",
+            *scope_notes,
+        ],
+    }
+
+
+def build_alpha_balance_report_data(
+    matrix_result: dict | None = None,
+    config: RouteStageMatrixConfig | None = None,
+    *,
+    include_pr4_confidence: bool = False,
+) -> dict:
     matrix = matrix_result if matrix_result is not None else run_route_stage_simulation_matrix(config)
     enriched_runs = [_enrich_run(run) for run in matrix.get("runs", [])]
     runs_by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -958,6 +1249,14 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
         stages=scoped_pack_stages if scoped_pack_stages else tuple(),
         archetype_ids=pack_archetype_ids if pack_archetype_ids else tuple(list_alpha_archetype_ids()),
     )
+    pr4_multiseed_confidence = _unavailable_pr4_multiseed_confidence_snapshot()
+    if include_pr4_confidence:
+        pr4_multiseed_confidence = build_pr4_multiseed_confidence_snapshot(
+            compact_lane_counts=recommended_lane_counts,
+            compact_pressure_rows=pressure_attribution_rows,
+            base_config=config,
+            matrix_scope=matrix,
+        )
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -1010,6 +1309,7 @@ def build_alpha_balance_report_data(matrix_result: dict | None = None, config: R
             "compact_regression": build_balance_report_mode("compact_regression").description,
             "expanded_balance": build_balance_report_mode("expanded_balance").description,
         },
+        "pr4_multiseed_confidence": pr4_multiseed_confidence,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -1110,6 +1410,86 @@ def _render_pr3_lane_summary_lines(report_data: dict[str, Any]) -> list[str]:
     return lines
 
 
+
+
+def _format_pr4_cluster_row(cluster: dict[str, Any]) -> str:
+    return (
+        f"| {cluster.get('route_id', 'n/a')} | {cluster.get('stage', 'n/a')} | "
+        f"{cluster.get('recommended_lane', 'n/a')} | {cluster.get('count', 0)} | "
+        f"{', '.join(str(seed) for seed in cluster.get('seeds_seen', [])) or 'none'} | "
+        f"{cluster.get('seed_presence_rate', 0)} | {cluster.get('confidence', 'n/a')} |"
+    )
+
+
+def _render_pr4_multiseed_confidence_lines(report_data: dict[str, Any], *, detailed: bool) -> list[str]:
+    lines = ["", "## Balance V2 PR4 Expanded Sampling / Multi-seed Confidence Summary"]
+    confidence = dict(report_data.get("pr4_multiseed_confidence") or {})
+    if not confidence.get("available"):
+        lines += [
+            "- PR4 multi-seed confidence data is unavailable in this report config. Use build_default_alpha_simulation_report_v2_data() / v2 report data for authoritative confidence diagnostics.",
+            "- No fake PR4 counts, stable-cluster wording, or decreased/increased conclusions are rendered for smoke/v1 configs without PR4 raw runs.",
+        ]
+        return lines
+    if not detailed:
+        lines += [
+            "- PR4 multi-seed confidence data is available in the report data object, but this v1/smoke renderer does not print detailed PR4 counts.",
+            "- Use render_alpha_simulation_report_v2_markdown() for the authoritative PR4 confidence diagnostics.",
+        ]
+        return lines
+
+    compact_counts = dict(confidence.get("compact_lane_counts", {}))
+    multiseed_counts = dict(confidence.get("multiseed_lane_counts", {}))
+    high_conf = list(confidence.get("high_confidence_remaining_clusters", []))
+    unstable = list(confidence.get("unstable_clusters", []))
+    lines += [
+        "This section is diagnostic-only and does not tune balance numbers. Compact PR3 counts remain the checked-in regression baseline; PR4 confidence data is used to guide future tuning scope.",
+        "No final balance claim is made. No live runtime, Combat Core behavior, global formulas, equipment budget formulas, live mob templates, rewards/economy/loot/crafting, targeting, teleport, or live group combat changes are made here.",
+        "Sunscar pure_support_solo_overlay route_exam overpressure remains separated as bad_matchup_review_lane, not an automatic support buff or Sunscar nerf.",
+        "No new tuning knobs were added.",
+        f"- Seeds: {', '.join(str(seed) for seed in confidence.get('seeds', []))}.",
+        f"- Compact PR3 lane counts: mob_pressure_lane={compact_counts.get('mob_pressure_lane', 0)}, route_expectation_lane={compact_counts.get('route_expectation_lane', 0)}, bad_matchup_review_lane={compact_counts.get('bad_matchup_review_lane', 0)}.",
+        f"- Multi-seed lane counts: mob_pressure_lane={multiseed_counts.get('mob_pressure_lane', 0)}, route_expectation_lane={multiseed_counts.get('route_expectation_lane', 0)}, bad_matchup_review_lane={multiseed_counts.get('bad_matchup_review_lane', 0)}, inconclusive_lane={multiseed_counts.get('inconclusive_lane', 0)}.",
+        "",
+        "Lane comparison table:",
+        "Multi-seed totals are raw totals across seeds; interpretation is normalized per seed.",
+        "PR4 confidence uses the active report scope. Checked-in v2 uses full compact alpha scope; scoped callers get scoped confidence diagnostics, not full-alpha totals.",
+        "| lane | compact PR3 | PR4 multi-seed total | expected total | per-seed avg | delta vs expected | interpretation |",
+        "|---|---:|---:|---:|---:|---:|---|",
+    ]
+    for lane, row in sorted(dict(confidence.get("lane_deltas", {})).items()):
+        lines.append(
+            f"| {lane} | {row.get('compact', 0)} | {row.get('multiseed_total', 0)} | "
+            f"{row.get('expected_multiseed_total', 0)} | {row.get('multiseed_per_seed_avg', 0)} | "
+            f"{row.get('delta_vs_expected_total', 0)} | {row.get('interpretation', 'not_available')} |"
+        )
+    lines += [
+        "",
+        "High-confidence remaining mob_pressure clusters preview:",
+        "| route | stage | lane | count | seeds_seen | seed_presence_rate | confidence |",
+        "|---|---|---|---:|---|---:|---|",
+    ]
+    if high_conf:
+        for cluster in high_conf[:PR4_CLUSTER_PREVIEW_LIMIT]:
+            lines.append(_format_pr4_cluster_row(cluster))
+    else:
+        lines.append("| n/a | n/a | mob_pressure_lane | 0 | none | 0 | n/a |")
+    lines += [
+        "",
+        "Unstable/noisy clusters preview:",
+        "| route | stage | lane | count | seeds_seen | seed_presence_rate | confidence |",
+        "|---|---|---|---:|---|---:|---|",
+    ]
+    if unstable:
+        for cluster in unstable[:PR4_CLUSTER_PREVIEW_LIMIT]:
+            lines.append(_format_pr4_cluster_row(cluster))
+    else:
+        lines.append("| n/a | n/a | n/a | 0 | none | 0 | n/a |")
+    lines += ["", "PR4 confidence notes:"]
+    for note in list(confidence.get("notes", [])):
+        lines.append(f"- {note}")
+    return lines
+
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -1159,6 +1539,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines += ["", "## 8. Suspicious Matchup Candidates"]
 
     lines.extend(_render_pr3_lane_summary_lines(report_data))
+    lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=False))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -1336,6 +1717,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
         lines.append("| n/a | 0 |")
 
     lines.extend(_render_pr3_lane_summary_lines(report_data))
+    lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=True))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
@@ -1580,4 +1962,7 @@ def build_default_alpha_balance_report_data() -> dict:
 
 
 def build_default_alpha_simulation_report_v2_data() -> dict:
-    return build_alpha_balance_report_data(config=build_checked_in_alpha_simulation_report_v2_config())
+    return build_alpha_balance_report_data(
+        config=build_checked_in_alpha_simulation_report_v2_config(),
+        include_pr4_confidence=True,
+    )
