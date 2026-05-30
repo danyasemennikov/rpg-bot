@@ -5,13 +5,26 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass
-- Status: simulation/reporting multi-seed balance confidence diagnostics
-- Confirmed state below reflects current merged main after Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics and includes prior Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
+- PR: Balance V2 PR5: Progression-aware Unified PvE/PvP Combat Budget Audit (latest; includes PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass)
+- Status: simulation/reporting unified combat budget audit diagnostics (latest; prior Status: simulation/reporting multi-seed balance confidence diagnostics)
+- Confirmed state below reflects current merged main after Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit and includes prior Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
 
 ---
 
 ## Confirmed merged state
+
+### Balance V2 PR5: Progression-aware Unified PvE/PvP Combat Budget Audit
+
+- added a simulation/reporting-only unified combat budget audit across all current alpha archetypes;
+- audit coverage includes six progression level bands: starter, identity, build_online, midgame, advanced, and endgame;
+- audit coverage includes five gear states: undergeared, baseline_expected, enhanced_expected, optimized, and overgeared_high_enhancement;
+- the new progression gear-state preset builder reuses existing item-level budget, slot weight, rarity multiplier, enhancement multiplier, and archetype/profile allocation formulas;
+- report v2 data now exposes `unified_combat_budget_audit` with audit rows, risk counts, PvE budget summary, PvP budget proxy summary, PR4 route-pressure reconciliation, systemic findings, and recommended tuning order;
+- PvP coverage is explicitly a `pvp_budget_proxy`, not real headless duel win rates; equal-budget PvP baseline states are baseline_expected, enhanced_expected, and optimized;
+- no new tuning knobs were added;
+- no live gameplay/runtime systems were changed;
+- no Combat Core/formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made;
+- PR5 does not claim final balance.
 
 ### Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass
 

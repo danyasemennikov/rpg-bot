@@ -1,5 +1,16 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR5 Progression-aware Unified PvE/PvP Combat Budget Audit Note
+
+- Adds simulation/reporting-only unified combat budget diagnostics across all current alpha archetypes.
+- Covers six progression level bands and five gear states from undergeared through overgeared_high_enhancement.
+- Reuses existing item-level budget, slot weight, rarity multiplier, enhancement multiplier, and archetype/profile allocation formulas.
+- Adds PvE budget summary and a clearly labeled PvP budget proxy; the proxy is not real headless PvP duel win-rate data.
+- Reconciles PR4 route-pressure lanes as scoped late-stage mob_pressure_lane evidence only.
+- Does not tune weapon numbers, skill numbers, armor stats, gear formulas, enhancement curves, routes, mobs, rewards/economy/loot/crafting, targeting, teleport, or live group combat.
+- Does not change live gameplay/runtime, Combat Core behavior, formulas, equipment budget formulas, live mob templates, economy/rewards, targeting, teleport, or live group combat.
+- Does not add new tuning knobs and does not claim final balance.
+
 ## Balance V2 PR4 Expanded Sampling / Multi-seed Confidence Pass Note
 
 - Adds simulation/reporting-only multi-seed confidence diagnostics for remaining PR3 pressure-lane signals.

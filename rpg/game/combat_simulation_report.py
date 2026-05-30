@@ -25,6 +25,7 @@ from game.equipment_budget import build_simulation_gear_preset
 from game.mob_scaling import PR3_LATE_STAGE_MOB_PRESSURE_REFINEMENTS
 from game.mobs import MOBS
 from game.pack_simulation import PACK_REQUIRED_STAGES, run_pack_simulation_matrix
+from game.unified_combat_budget_audit import build_unified_combat_budget_audit
 
 ARCHETYPE_MATCHUP_KEY_MAP = {
     "guardian_shield_1h": "shield_defensive_1h",
@@ -1257,6 +1258,10 @@ def build_alpha_balance_report_data(
             base_config=config,
             matrix_scope=matrix,
         )
+    unified_combat_budget_audit = build_unified_combat_budget_audit(
+        mode="compact_checked_in",
+        pressure_attribution_rows=pressure_attribution_rows,
+    )
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -1310,10 +1315,80 @@ def build_alpha_balance_report_data(
             "expanded_balance": build_balance_report_mode("expanded_balance").description,
         },
         "pr4_multiseed_confidence": pr4_multiseed_confidence,
+        "unified_combat_budget_audit": unified_combat_budget_audit,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
 
+
+
+
+def _render_pr5_unified_combat_budget_audit_lines(report_data: dict[str, Any]) -> list[str]:
+    audit = dict(report_data.get("unified_combat_budget_audit") or {})
+    lines = ["", "## Balance V2 PR5 Unified Combat Budget Audit"]
+    if not audit.get("available"):
+        lines.append("- PR5 unified combat budget audit data is unavailable for this report config.")
+        return lines
+
+    rows = list(audit.get("audit_rows", []))
+    pvp_proxy = dict(audit.get("pvp_budget_proxy_summary") or {})
+    pve_summary = dict(audit.get("pve_budget_summary") or {})
+    reconciliation = dict(audit.get("pr4_route_pressure_reconciliation") or {})
+    archetype_count = len({str(row.get("archetype_id")) for row in rows})
+    level_band_count = len(audit.get("level_bands", []))
+    gear_state_count = len(audit.get("gear_states", []))
+    lines += [
+        "Diagnostic-only: this section performs no tuning and makes no final balance claim.",
+        "All gear states are included: undergeared, baseline_expected, enhanced_expected, optimized, and overgeared_high_enhancement.",
+        "PvE and PvP/proxy budget coverage is included; PvP is a clearly labeled pvp_budget_proxy, not real duel win rates.",
+        "No live gameplay/runtime/formula/equipment/live mob/economy/targeting/teleport/live group combat changes are made.",
+        f"- Mode: {audit.get('mode')}.",
+        f"- Coverage: {archetype_count} archetypes, {level_band_count} level bands, {gear_state_count} gear states, {len(rows)} audit rows.",
+        f"- PvE budget summary source: {pve_summary.get('source', 'n/a')}.",
+        f"- PvP/proxy budget coverage: {pvp_proxy.get('summary_type', 'n/a')}; proxy_only={pvp_proxy.get('proxy_only')}; real_duel_win_rates={pvp_proxy.get('real_duel_win_rates')}.",
+        f"- PvP equal-budget baseline gear states: {', '.join(pvp_proxy.get('pvp_equal_budget_baseline_gear_states', [])) or 'none'}.",
+        f"- PvP gear-gap/stress states: {', '.join(pvp_proxy.get('pvp_gear_gap_stress_states', [])) or 'none'}.",
+        "",
+        "Top systemic findings:",
+    ]
+    for finding in list(audit.get("top_systemic_findings", []))[:5]:
+        lines.append(f"- {finding}")
+    if not audit.get("top_systemic_findings"):
+        lines.append("- none")
+
+    lines += ["", "Recommended tuning order:"]
+    for item in list(audit.get("recommended_tuning_order", []))[:6]:
+        lines.append(f"- {item}")
+    if not audit.get("recommended_tuning_order"):
+        lines.append("- none")
+
+    lines += [
+        "",
+        "PR4 route pressure reconciliation:",
+        f"- {reconciliation.get('interpretation', 'Diagnostic correlation only; no tuning is applied.')}",
+        f"- Compact PR4 lane counts referenced: {reconciliation.get('compact_pr4_lane_counts', {})}.",
+        "- Top suspect player-side archetype evidence:",
+    ]
+    suspect_preview = list(reconciliation.get("suspect_player_side_archetypes", []))[:6]
+    if suspect_preview:
+        for item in suspect_preview:
+            clusters = "; ".join(
+                f"{cluster.get('route_id')}/{cluster.get('stage')}={cluster.get('count')}"
+                for cluster in list(item.get("route_stage_clusters", []))[:3]
+            )
+            lines.append(
+                f"  - {item.get('archetype_id')}: mob_pressure_count={item.get('mob_pressure_count', 0)}; {clusters or 'no late mob_pressure clusters'}"
+            )
+    else:
+        lines.append("  - none")
+
+    lines += [
+        "",
+        "Notes:",
+    ]
+    for note in list(audit.get("notes", []))[:6]:
+        lines.append(f"- {note}")
+    return lines
 
 
 def _format_pr3_refinement_summary() -> list[str]:
@@ -1540,6 +1615,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
 
     lines.extend(_render_pr3_lane_summary_lines(report_data))
     lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=False))
+    lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -1718,6 +1794,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
 
     lines.extend(_render_pr3_lane_summary_lines(report_data))
     lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=True))
+    lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
