@@ -73,6 +73,91 @@ ARCHETYPE_METADATA = {
     "pure_support_solo_overlay": {"display_name": "Pure Support Solo Overlay", "weapon_profile": "holy_staff", "weapon_type": "holy", "damage_school": "holy", "armor_class": "light", "offhand_profile": "censer", "role_tags": ["support", "overlay", "solo_validation"], "strengths": ["healing", "durability_over_time"], "weaknesses": ["very_low_damage"], "preferred_policy_id": "solo_support_sustain", "preferred_skill_ids": ["regeneration", "blessing", "resurrection"], "notes": "Validation-only overlay archetype."},
 }
 
+
+EXPECTED_ROTATION_PROFILES = {
+    "axe_2h_bruiser": {
+        "archetype_id": "axe_2h_bruiser",
+        "profile_id": "axe_2h_bruiser_trade_sustain_v1",
+        "rotation_family": "bruiser_trade_sustain",
+        "expected_skill_ids": ["rage_call", "savage_chop", "blooded_resolve"],
+        "setup_skill_ids": ["rage_call"],
+        "payoff_skill_ids": ["savage_chop"],
+        "sustain_skill_ids": ["blooded_resolve"],
+        "mana_sensitive": True,
+        "cooldown_sensitive": True,
+        "notes": "Simulation interpretation profile only; checks whether bruiser budget rows depend on rage, damage, and self-sustain skill access.",
+    },
+    "daggers_venom": {
+        "archetype_id": "daggers_venom",
+        "profile_id": "daggers_venom_setup_payoff_v1",
+        "rotation_family": "setup_payoff_dot",
+        "expected_skill_ids": ["poison_blade", "envenom", "toxic_cut", "rupture_toxins"],
+        "setup_skill_ids": ["poison_blade", "envenom"],
+        "payoff_skill_ids": ["toxic_cut", "rupture_toxins"],
+        "sustain_skill_ids": [],
+        "mana_sensitive": True,
+        "cooldown_sensitive": True,
+        "notes": "Simulation interpretation profile only; separates venom setup/payoff expectations from ordinary attack fallback artifacts.",
+    },
+    "daggers_evasion": {
+        "archetype_id": "daggers_evasion",
+        "profile_id": "daggers_evasion_tempo_v1",
+        "rotation_family": "evasion_tempo",
+        "expected_skill_ids": ["smoke_bomb", "feint_step", "quick_slice", "death_dance"],
+        "setup_skill_ids": ["smoke_bomb", "feint_step"],
+        "payoff_skill_ids": ["quick_slice", "death_dance"],
+        "sustain_skill_ids": [],
+        "mana_sensitive": True,
+        "cooldown_sensitive": True,
+        "notes": "Simulation interpretation profile only; uses implemented dagger tempo skills rather than the old metadata-only counter placeholder.",
+    },
+    "bow_sniper": {
+        "archetype_id": "bow_sniper",
+        "profile_id": "bow_sniper_precision_v1",
+        "rotation_family": "mark_precision_payoff",
+        "expected_skill_ids": ["hunters_mark", "steady_aim", "aimed_shot", "deadeye"],
+        "setup_skill_ids": ["hunters_mark", "steady_aim"],
+        "payoff_skill_ids": ["aimed_shot", "deadeye"],
+        "sustain_skill_ids": [],
+        "mana_sensitive": True,
+        "cooldown_sensitive": True,
+        "notes": "Simulation interpretation profile only; separates precision setup assumptions from normal attack fallback.",
+    },
+    "magic_staff_destruction": {
+        "archetype_id": "magic_staff_destruction",
+        "profile_id": "magic_staff_destruction_burst_v1",
+        "rotation_family": "caster_burst",
+        "expected_skill_ids": ["arcane_surge", "fireball", "flame_wave", "cataclysm"],
+        "setup_skill_ids": ["arcane_surge"],
+        "payoff_skill_ids": ["fireball", "flame_wave", "cataclysm"],
+        "sustain_skill_ids": [],
+        "mana_sensitive": True,
+        "cooldown_sensitive": True,
+        "notes": "Simulation interpretation profile only; highlights mana/cooldown exposure for destruction burst rows.",
+    },
+    "holy_staff_solo": {
+        "archetype_id": "holy_staff_solo",
+        "profile_id": "holy_staff_solo_sustain_v1",
+        "rotation_family": "solo_support_sustain",
+        "expected_skill_ids": ["regeneration", "blessing", "heal", "smite"],
+        "setup_skill_ids": ["blessing"],
+        "payoff_skill_ids": ["smite"],
+        "sustain_skill_ids": ["regeneration", "heal"],
+        "mana_sensitive": True,
+        "cooldown_sensitive": True,
+        "notes": "Simulation interpretation profile only; support solo rows need sustain timing review before live tuning conclusions.",
+    },
+}
+
+
+def get_expected_rotation_profile(archetype_id: str) -> dict | None:
+    profile = EXPECTED_ROTATION_PROFILES.get(archetype_id)
+    return copy.deepcopy(profile) if profile else None
+
+
+def list_expected_rotation_profiles() -> list[dict]:
+    return [copy.deepcopy(EXPECTED_ROTATION_PROFILES[archetype_id]) for archetype_id in sorted(EXPECTED_ROTATION_PROFILES)]
+
 EXECUTABLE_POLICY_REGISTRY = {
     "always_attack": {"executable": True, "factory": lambda: AlwaysAttackPolicy(), "notes": "safe executable"},
     "always_guard_fallback": {"executable": True, "factory": lambda: AlwaysGuardFallbackPolicy(), "notes": "safe executable"},

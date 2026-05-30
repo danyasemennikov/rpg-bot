@@ -11,8 +11,10 @@ from game.combat_simulation_archetypes import (
     build_archetype_player_preset,
     build_archetype_simulation_skill_levels,
     get_archetype_metadata,
+    get_expected_rotation_profile,
     list_alpha_archetype_ids,
 )
+from game.skills import get_skill
 from game.combat_simulation_matrix import (
     RouteStageMatrixConfig,
     collect_route_stage_samples,
@@ -493,6 +495,177 @@ def _build_archetype_cards(archetype_ids: list[str], stages: list[str]) -> list[
             })
     return cards
 
+
+
+def _classify_policy_status(policy_id: str | None, policy_registry: dict[str, Any]) -> str:
+    if not policy_id or policy_id not in EXECUTABLE_POLICY_REGISTRY:
+        return "unsupported_policy_label"
+    if policy_registry.get("executable"):
+        return "executable"
+    return "metadata_only"
+
+
+def _build_policy_coverage_rows(archetype_ids: list[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for archetype_id in archetype_ids:
+        metadata = get_archetype_metadata(archetype_id)
+        policy_id = metadata.get("preferred_policy_id")
+        policy_registry = EXECUTABLE_POLICY_REGISTRY.get(policy_id, {})
+        profile = get_expected_rotation_profile(archetype_id)
+        expected_skill_ids = list((profile or {}).get("expected_skill_ids", []))
+        missing_expected_skill_ids = [skill_id for skill_id in expected_skill_ids if not get_skill(skill_id)]
+        setup_skill_ids = list((profile or {}).get("setup_skill_ids", []))
+        payoff_skill_ids = list((profile or {}).get("payoff_skill_ids", []))
+        sustain_skill_ids = list((profile or {}).get("sustain_skill_ids", []))
+        policy_executable = bool(policy_registry.get("executable"))
+        policy_status = _classify_policy_status(policy_id, policy_registry)
+        reasons: list[str] = []
+        if policy_status == "unsupported_policy_label":
+            reasons.append("unsupported_policy_label")
+        if policy_status == "metadata_only":
+            reasons.append("metadata_only_policy")
+        if not profile:
+            reasons.append("missing_expected_rotation_profile")
+        if missing_expected_skill_ids:
+            reasons.append("missing_expected_skill")
+        if profile and not (setup_skill_ids and payoff_skill_ids):
+            reasons.append("missing_setup_payoff_rotation")
+        role_tags = set(metadata.get("role_tags", []))
+        is_burst_review = policy_id in {"aggressive_burst", "sniper_precision"} or "burst" in role_tags
+        if not policy_executable and is_burst_review:
+            reasons.append("burst_window_policy_review")
+        if policy_id in {"solo_support_sustain", "toolbox_balanced"} or "support" in metadata.get("role_tags", []):
+            reasons.append("support_solo_policy_review")
+        if profile and (profile.get("mana_sensitive") is None):
+            reasons.append("mana_policy_unknown")
+        if profile and (profile.get("cooldown_sensitive") is None):
+            reasons.append("cooldown_policy_unknown")
+        if sustain_skill_ids and not policy_executable:
+            reasons.append("sustain_timing_policy_unknown")
+        rows.append({
+            "archetype_id": archetype_id,
+            "preferred_policy_id": policy_id,
+            "policy_executable": policy_executable,
+            "policy_status": policy_status,
+            "expected_rotation_profile_id": (profile or {}).get("profile_id"),
+            "expected_skill_count": len(expected_skill_ids),
+            "available_expected_skill_count": len(expected_skill_ids) - len(missing_expected_skill_ids),
+            "missing_expected_skill_ids": missing_expected_skill_ids,
+            "uses_setup_payoff": bool(setup_skill_ids and payoff_skill_ids),
+            "mana_sensitive": bool((profile or {}).get("mana_sensitive", False)),
+            "cooldown_sensitive": bool((profile or {}).get("cooldown_sensitive", False)),
+            "artifact_reasons": reasons,
+        })
+    return rows
+
+
+def _label_mana_pressure(avg_remaining_pct: float, avg_mana_spent: float) -> str:
+    if avg_mana_spent <= 0:
+        return "no_mana_spend_observed"
+    if avg_remaining_pct <= 0.15:
+        return "high_mana_pressure"
+    if avg_remaining_pct <= 0.35:
+        return "moderate_mana_pressure"
+    return "low_mana_pressure"
+
+
+def _label_skill_economy(skill_use_rate: float, normal_attack_fallback_rate: float, mana_pressure_label: str) -> str:
+    if skill_use_rate <= 0 and normal_attack_fallback_rate >= 0.75:
+        return "normal_attack_fallback_dominant"
+    if mana_pressure_label == "high_mana_pressure" and normal_attack_fallback_rate >= 0.5:
+        return "mana_constrained_fallback_risk"
+    if skill_use_rate >= 0.35:
+        return "skill_rotation_visible"
+    if skill_use_rate > 0:
+        return "limited_skill_use_visible"
+    return "skill_use_not_observed"
+
+
+def _build_skill_economy_rows(enriched_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for run in enriched_runs:
+        grouped[str(run.get("archetype_id"))].append(run)
+
+    rows: list[dict[str, Any]] = []
+    for archetype_id in sorted(grouped):
+        runs = grouped[archetype_id]
+        run_count = max(1, len(runs))
+        total_turns = sum(max(1, int(run.get("turns", 0) or 0)) for run in runs)
+        total_skills = 0
+        total_normals = 0
+        total_guard = 0
+        mana_spent_total = 0.0
+        mana_remaining_pct_total = 0.0
+        damage_dealt_per_turn_total = 0.0
+        damage_taken_per_turn_total = 0.0
+        end_reason_counts: Counter[str] = Counter()
+        for run in runs:
+            obs = dict(run.get("observability") or {})
+            actions = dict(run.get("actions_used") or {})
+            total_skills += int(obs.get("skills_used_count", len(run.get("skills_used", []))))
+            total_normals += int(obs.get("normal_attacks_used", actions.get("normal_attack", 0)))
+            total_guard += int(obs.get("guard_used", actions.get("guard_fallback", 0)))
+            mana_spent_total += float(obs.get("mana_spent", 0) or 0)
+            mana_remaining_pct_total += float(obs.get("player_mana_remaining_pct", 0.0) or 0.0)
+            damage_dealt_per_turn_total += float(obs.get("damage_dealt_per_turn", 0.0) or 0.0)
+            damage_taken_per_turn_total += float(obs.get("damage_taken_per_turn", 0.0) or 0.0)
+            end_reason_counts[str(obs.get("end_reason") or "unknown")] += 1
+        action_denominator = max(1, total_skills + total_normals + total_guard)
+        skill_use_rate = total_skills / action_denominator
+        normal_attack_fallback_rate = total_normals / action_denominator
+        mana_remaining_pct = mana_remaining_pct_total / run_count
+        avg_mana_spent = mana_spent_total / run_count
+        mana_pressure_label = _label_mana_pressure(mana_remaining_pct, avg_mana_spent)
+        rows.append({
+            "archetype_id": archetype_id,
+            "run_count": len(runs),
+            "mana_spent": avg_mana_spent,
+            "player_mana_remaining_pct": mana_remaining_pct,
+            "skills_used_count": total_skills,
+            "normal_attacks_used": total_normals,
+            "guard_used": total_guard,
+            "damage_dealt_per_turn": damage_dealt_per_turn_total / run_count,
+            "damage_taken_per_turn": damage_taken_per_turn_total / run_count,
+            "end_reason": dict(end_reason_counts),
+            "skill_use_rate": skill_use_rate,
+            "normal_attack_fallback_rate": normal_attack_fallback_rate,
+            "mana_pressure_label": mana_pressure_label,
+            "skill_economy_label": _label_skill_economy(skill_use_rate, normal_attack_fallback_rate, mana_pressure_label),
+            "cooldown_observability_available": False,
+        })
+    return rows
+
+
+def build_simulation_policy_skill_economy_diagnostics(enriched_runs: list[dict[str, Any]], archetype_ids: list[str]) -> dict[str, Any]:
+    policy_rows = _build_policy_coverage_rows(archetype_ids)
+    economy_rows = _build_skill_economy_rows(enriched_runs)
+    reason_counts: Counter[str] = Counter()
+    for row in policy_rows:
+        reason_counts.update(row.get("artifact_reasons", []))
+    economy_label_counts = Counter(row.get("skill_economy_label") for row in economy_rows)
+    top_policy_gaps = sorted(
+        [row for row in policy_rows if row.get("artifact_reasons")],
+        key=lambda row: (len(row.get("artifact_reasons", [])), row.get("archetype_id", "")),
+        reverse=True,
+    )[:8]
+    return {
+        "available": True,
+        "policy_coverage_rows": policy_rows,
+        "skill_economy_rows": economy_rows,
+        "artifact_reason_counts": dict(reason_counts),
+        "skill_economy_label_counts": dict(economy_label_counts),
+        "top_policy_gaps": top_policy_gaps,
+        "recommended_next_tuning_branch": [
+            "Resolve simulation policy artifacts before treating PR5 rows as live skill-economy tuning evidence.",
+            "Keep PvP in proxy-only budget review until a safe duel adapter exists.",
+            "Defer route, mob, gear, and PvP tuning until PR6 diagnostics identify whether gaps are policy artifacts or real economy risks.",
+        ],
+        "notes": [
+            "Balance V2 PR6 is diagnostic/reporting-only and applies no live tuning.",
+            "No live gameplay/runtime/formula/equipment/live mob/economy/targeting/teleport/live group combat changes are made.",
+            "Cooldown-blocked turn counts are not safely observable in current report rows; cooldown_observability_available=False is intentional follow-up scope.",
+        ],
+    }
 
 def _parse_node_depth_from_location_id(location_id: str) -> int | None:
     suffix = str(location_id or "").lower().split("_n", 1)
@@ -1262,6 +1435,10 @@ def build_alpha_balance_report_data(
         mode="compact_checked_in",
         pressure_attribution_rows=pressure_attribution_rows,
     )
+    simulation_policy_skill_economy = build_simulation_policy_skill_economy_diagnostics(
+        enriched_runs,
+        list(matrix.get("archetypes", [])) or list_alpha_archetype_ids(),
+    )
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -1316,6 +1493,7 @@ def build_alpha_balance_report_data(
         },
         "pr4_multiseed_confidence": pr4_multiseed_confidence,
         "unified_combat_budget_audit": unified_combat_budget_audit,
+        "simulation_policy_skill_economy": simulation_policy_skill_economy,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -1565,6 +1743,40 @@ def _render_pr4_multiseed_confidence_lines(report_data: dict[str, Any], *, detai
     return lines
 
 
+
+def _render_pr6_simulation_policy_skill_economy_lines(report_data: dict[str, Any]) -> list[str]:
+    data = dict(report_data.get("simulation_policy_skill_economy") or {})
+    lines = ["", "## Balance V2 PR6 Simulation Policy & Skill Economy Clarification"]
+    if not data.get("available"):
+        lines.append("- PR6 simulation policy and skill economy diagnostics are unavailable for this report config.")
+        return lines
+
+    policy_rows = list(data.get("policy_coverage_rows", []))
+    economy_rows = list(data.get("skill_economy_rows", []))
+    lines += [
+        "Diagnostic-only: PR6 performs no live tuning and makes no final balance claim.",
+        "No live gameplay/runtime/formula/equipment/live mob/economy/targeting/teleport/live group combat changes are made.",
+        "PR6 separates simulation policy artifacts from real skill economy risks before any future tuning branch uses PR5 budget rows.",
+        "PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.",
+        f"- Policy coverage rows: {len(policy_rows)}.",
+        f"- Skill economy rows: {len(economy_rows)}.",
+        f"- Artifact reason counts: {data.get('artifact_reason_counts', {})}.",
+        f"- Skill economy label counts: {data.get('skill_economy_label_counts', {})}.",
+        "- Cooldown observability: cooldown-blocked turn counts are not safely available, so rows set cooldown_observability_available=False pending follow-up instrumentation.",
+        "",
+        "Top policy gaps:",
+    ]
+    for row in list(data.get("top_policy_gaps", []))[:6]:
+        reasons = ", ".join(row.get("artifact_reasons", [])) or "none"
+        missing = ", ".join(row.get("missing_expected_skill_ids", [])) or "none"
+        lines.append(f"- {row.get('archetype_id')}: policy={row.get('preferred_policy_id')} status={row.get('policy_status')} reasons={reasons}; missing_expected_skills={missing}.")
+    if not data.get("top_policy_gaps"):
+        lines.append("- none")
+    lines += ["", "Recommended next tuning branch:"]
+    for item in list(data.get("recommended_next_tuning_branch", []))[:4]:
+        lines.append(f"- {item}")
+    return lines
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -1616,6 +1828,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines.extend(_render_pr3_lane_summary_lines(report_data))
     lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=False))
     lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
+    lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -1795,6 +2008,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines.extend(_render_pr3_lane_summary_lines(report_data))
     lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=True))
     lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
+    lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)

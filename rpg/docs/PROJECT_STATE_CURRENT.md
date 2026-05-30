@@ -5,13 +5,29 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Balance V2 PR5: Progression-aware Unified PvE/PvP Combat Budget Audit (latest; includes PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass)
-- Status: simulation/reporting unified combat budget audit diagnostics (latest; prior Status: simulation/reporting multi-seed balance confidence diagnostics)
-- Confirmed state below reflects current merged main after Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit and includes prior Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
+- PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass (latest; includes PR: Balance V2 PR5: Progression-aware Unified PvE/PvP Combat Budget Audit)
+- Status: simulation/reporting policy coverage and skill economy clarification diagnostics (latest; prior Status: simulation/reporting unified combat budget audit diagnostics; Status: simulation/reporting multi-seed balance confidence diagnostics)
+- Confirmed state below reflects current merged main after Balance V2 PR6 simulation policy and skill economy clarification and includes prior Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics (PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass), Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context
 
 ---
 
 ## Confirmed merged state
+
+### Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass
+
+- added diagnostic/reporting-only policy coverage diagnostics for all 14 current alpha archetypes;
+- added expected rotation profiles for daggers_venom, bow_sniper, magic_staff_destruction, holy_staff_solo, axe_2h_bruiser, and daggers_evasion using implemented skill ids only;
+- missing expected skills are reported as diagnostic gaps instead of adding live skills or crashing report generation;
+- report v2 data now exposes `simulation_policy_skill_economy` with policy coverage rows, skill economy rows, artifact reason counts, skill economy label counts, top policy gaps, notes, and recommended next tuning branch guidance;
+- skill economy diagnostics reuse existing simulation observability for mana spent, mana remaining percentage, skill use, normal attack fallback, guard use, damage per turn, and end reasons;
+- cooldown-blocked turn counts are not faked; rows explicitly set `cooldown_observability_available=False` pending follow-up instrumentation;
+- PvP remains proxy-only; route, mob, gear, and PvP tuning remain deferred;
+- PR5 unified combat budget audit coverage remains 14 archetypes × 6 level bands × 5 gear states = 420 rows;
+- no metadata-only policies were made executable in this PR;
+- no new tuning knobs were added;
+- no live gameplay/runtime systems were changed;
+- no Combat Core/formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made;
+- PR6 does not claim final balance.
 
 ### Balance V2 PR5: Progression-aware Unified PvE/PvP Combat Budget Audit
 
