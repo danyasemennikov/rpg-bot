@@ -309,6 +309,30 @@ Notes:
 - PvP coverage is a clearly labeled budget proxy, not real headless duel win rates; equal-budget baseline uses baseline_expected, enhanced_expected, and optimized only.
 - No live gameplay/runtime/formula/equipment/live mob/economy/targeting/teleport/live group combat changes are made.
 
+## Balance V2 PR6 Simulation Policy & Skill Economy Clarification
+Diagnostic-only: PR6 performs no live tuning and makes no final balance claim.
+No live gameplay/runtime/formula/equipment/live mob/economy/targeting/teleport/live group combat changes are made.
+PR6 separates simulation policy artifacts from real skill economy risks before any future tuning branch uses PR5 budget rows.
+PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
+- Policy coverage rows: 14.
+- Skill economy rows: 14.
+- Artifact reason counts: {'missing_expected_rotation_profile': 8, 'metadata_only_policy': 9, 'burst_window_policy_review': 3, 'support_solo_policy_review': 3, 'sustain_timing_policy_unknown': 1}.
+- Skill economy label counts: {'normal_attack_fallback_dominant': 6, 'limited_skill_use_visible': 4, 'skill_rotation_visible': 4}.
+- Cooldown observability: cooldown-blocked turn counts are not safely available, so rows set cooldown_observability_available=False pending follow-up instrumentation.
+
+Top policy gaps:
+- tome_toolbox: policy=toolbox_balanced status=metadata_only reasons=metadata_only_policy, missing_expected_rotation_profile, support_solo_policy_review; missing_expected_skills=none.
+- sword_2h_burst: policy=aggressive_burst status=metadata_only reasons=metadata_only_policy, missing_expected_rotation_profile, burst_window_policy_review; missing_expected_skills=none.
+- pure_support_solo_overlay: policy=solo_support_sustain status=metadata_only reasons=metadata_only_policy, missing_expected_rotation_profile, support_solo_policy_review; missing_expected_skills=none.
+- holy_staff_solo: policy=solo_support_sustain status=metadata_only reasons=metadata_only_policy, support_solo_policy_review, sustain_timing_policy_unknown; missing_expected_skills=none.
+- magic_staff_destruction: policy=aggressive_burst status=metadata_only reasons=metadata_only_policy, burst_window_policy_review; missing_expected_skills=none.
+- magic_staff_control: policy=control_caster status=metadata_only reasons=metadata_only_policy, missing_expected_rotation_profile; missing_expected_skills=none.
+
+Recommended next tuning branch:
+- Resolve simulation policy artifacts before treating PR5 rows as live skill-economy tuning evidence.
+- Keep PvP in proxy-only budget review until a safe duel adapter exists.
+- Defer route, mob, gear, and PvP tuning until PR6 diagnostics identify whether gaps are policy artifacts or real economy risks.
+
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
 Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidates. Full target comparison data is available from build_alpha_balance_report_data(). Hidden rows are not resolved or dismissed.

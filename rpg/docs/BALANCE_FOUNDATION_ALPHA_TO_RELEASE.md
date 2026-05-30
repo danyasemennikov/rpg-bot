@@ -1,5 +1,17 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR6 Simulation Policy & Skill Economy Clarification Note
+
+- Adds simulation/reporting-only policy coverage and skill economy diagnostics around PR5 budget interpretation.
+- Separates simulation policy artifacts from real skill economy risks before any future tuning branch uses unified combat budget rows.
+- Adds expected rotation profiles for selected alpha archetypes using implemented skill ids only; missing design-intended skills are reported as diagnostics rather than added as live skills.
+- Adds concise skill economy labels from existing simulation observability, including mana pressure and normal-attack fallback rates.
+- Cooldown-blocked turn counts remain follow-up instrumentation because they are not safely observable in current report rows.
+- PvP remains proxy-only, and route/mob/gear/PvP tuning remains deferred.
+- Does not tune weapon numbers, skill numbers, armor stats, gear formulas, enhancement curves, routes, mobs, rewards/economy/loot/crafting, targeting, teleport, or live group combat.
+- Does not change live gameplay/runtime, Combat Core behavior, formulas, equipment budget formulas, live mob templates, economy/rewards, targeting, teleport, or live group combat.
+- Does not add new tuning knobs and does not claim final balance.
+
 ## Balance V2 PR5 Progression-aware Unified PvE/PvP Combat Budget Audit Note
 
 - Adds simulation/reporting-only unified combat budget diagnostics across all current alpha archetypes.
