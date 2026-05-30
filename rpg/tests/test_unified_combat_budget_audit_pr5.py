@@ -193,6 +193,7 @@ def test_no_pr3_pr4_tuning_knobs_changed_and_no_pr5_tuning_knobs_added():
 
 
 def test_project_state_current_has_pr5_header_update():
-    content = Path("docs/PROJECT_STATE_CURRENT.md").read_text(encoding="utf-8")
+    project_root = Path(__file__).resolve().parents[1]
+    content = (project_root / "docs" / "PROJECT_STATE_CURRENT.md").read_text(encoding="utf-8")
     assert "Balance V2 PR5" in content
     assert "Unified PvE/PvP Combat Budget Audit" in content
