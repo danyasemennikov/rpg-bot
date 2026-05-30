@@ -267,6 +267,48 @@ PR4 confidence notes:
 - Bounded multi-seed config: seeds=(1, 2, 3), max_samples_per_route_stage=1, include_raw_runs=True, include_turn_trace=False.
 - No live runtime, Combat Core, formula, equipment budget, live mob template, economy/reward/loot/crafting, targeting, teleport, or live group combat changes are made by this report layer.
 
+## Balance V2 PR5 Unified Combat Budget Audit
+Diagnostic-only: this section performs no tuning and makes no final balance claim.
+All gear states are included: undergeared, baseline_expected, enhanced_expected, optimized, and overgeared_high_enhancement.
+PvE and PvP/proxy budget coverage is included; PvP is a clearly labeled pvp_budget_proxy, not real duel win rates.
+No live gameplay/runtime/formula/equipment/live mob/economy/targeting/teleport/live group combat changes are made.
+- Mode: compact_checked_in.
+- Coverage: 14 archetypes, 6 level bands, 5 gear states, 420 audit rows.
+- PvE budget summary source: progression_gear_budget_grid_plus_existing_pve_route_pressure_reconciliation.
+- PvP/proxy budget coverage: pvp_budget_proxy; proxy_only=True; real_duel_win_rates=False.
+- PvP equal-budget baseline gear states: baseline_expected, enhanced_expected, optimized.
+- PvP gear-gap/stress states: undergeared, overgeared_high_enhancement.
+
+Top systemic findings:
+- simulation_policy_artifact: 270 audit rows
+- skill_economy_risk: 210 audit rows
+- pvp_only_toxicity: 156 audit rows
+- secondary_stat_concentration_risk: 150 audit rows
+- enhancement_scaling_risk: 84 audit rows
+
+Recommended tuning order:
+- 1. Review PR4 route-pressure reconciliation before tuning mobs or routes.
+- 2. Review overgeared/enhancement stress rows separately from PvP baseline rows.
+- 3. Review PvP proxy burst/stall toxicity before any live duel ruleset changes.
+- 4. Only after diagnostic review, use separate future PRs for actual tuning proposals.
+
+PR4 route pressure reconciliation:
+- Route pressure is reconciled as scoped mob_pressure_lane evidence only; PR5 does not convert PR4 lanes into tuning changes.
+- Compact PR4 lane counts referenced: {'bad_matchup_review_lane': 1, 'inconclusive_lane': 2, 'mob_pressure_lane': 41, 'route_expectation_lane': 44}.
+- Top suspect player-side archetype evidence:
+  - daggers_venom: mob_pressure_count=5; route_ashen_ruins/build_testing=1; route_ashen_ruins/route_exam=1; route_frostspine/route_exam=1
+  - axe_2h_bruiser: mob_pressure_count=4; route_ashen_ruins/build_testing=1; route_ashen_ruins/route_exam=1; route_sunscar/build_testing=1
+  - daggers_evasion: mob_pressure_count=4; route_ashen_ruins/build_testing=1; route_ashen_ruins/route_exam=1; route_frostspine/build_testing=1
+  - holy_staff_solo: mob_pressure_count=4; route_sunscar/build_testing=1; route_sunscar/route_exam=1; route_westwild/build_testing=1
+  - magic_staff_destruction: mob_pressure_count=4; route_frostspine/build_testing=1; route_frostspine/route_exam=1; route_sunscar/build_testing=1
+  - bow_sniper: mob_pressure_count=3; route_ashen_ruins/route_exam=1; route_mireveil/build_testing=1; route_mireveil/route_exam=1
+
+Notes:
+- Balance V2 PR5 is diagnostic-only and applies no tuning.
+- All current alpha archetypes, six level bands, and five gear states are included.
+- PvP coverage is a clearly labeled budget proxy, not real headless duel win rates; equal-budget baseline uses baseline_expected, enhanced_expected, and optimized only.
+- No live gameplay/runtime/formula/equipment/live mob/economy/targeting/teleport/live group combat changes are made.
+
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
 Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidates. Full target comparison data is available from build_alpha_balance_report_data(). Hidden rows are not resolved or dismissed.
