@@ -5,6 +5,7 @@ from typing import Any
 
 from game.combat_simulation import (
     SIM_ACTION_NORMAL_ATTACK,
+    ProfileAwareSimulationPolicy,
     ScriptedActionPolicy,
     SimulationConfig,
     build_simulation_mob_preset,
@@ -13,6 +14,7 @@ from game.combat_simulation import (
 )
 from game.combat_simulation_archetypes import (
     EXECUTABLE_POLICY_REGISTRY,
+    PROFILE_POLICY_PILOT_ARCHETYPE_IDS,
     REQUIRED_POWER_TIERS,
     build_archetype_player_preset,
     build_archetype_simulation_skill_levels,
@@ -21,6 +23,7 @@ from game.combat_simulation_archetypes import (
 )
 from game.locations import ROUTE_MATCHUP_TARGET_PROFILES, WORLD_LOCATIONS
 from game.mobs import MOBS
+from game.skills import get_skill
 from game.mob_scaling import (
     ROLE_ELITE,
     ROLE_NORMAL,
@@ -157,15 +160,65 @@ def collect_route_stage_samples(route_id: str, stage: str, *, max_samples: int =
     return samples
 
 
-def build_basic_archetype_simulation_policy(archetype_id: str, power_tier: str):
-    _ = power_tier
+PROFILE_POLICY_STATUS_EXECUTABLE_PILOT = "profile_executable_pilot"
+PROFILE_POLICY_STATUS_METADATA_FALLBACK = "metadata_only_fallback"
+
+PROFILE_POLICY_ACTIONS: dict[str, list[str]] = {
+    "daggers_venom": ["envenom", "poison_blade", "toxic_cut", "rupture_toxins", SIM_ACTION_NORMAL_ATTACK],
+    "daggers_evasion": ["smoke_bomb", "feint_step", "quick_slice", "death_dance", SIM_ACTION_NORMAL_ATTACK],
+    "bow_sniper": ["hunters_mark", "steady_aim", "aimed_shot", "deadeye", SIM_ACTION_NORMAL_ATTACK],
+    "magic_staff_destruction": ["arcane_surge", "fireball", "flame_wave", "cataclysm", SIM_ACTION_NORMAL_ATTACK],
+    "holy_staff_solo": ["blessing", "smite", SIM_ACTION_NORMAL_ATTACK],
+}
+
+
+def _skill_loop_actions(skill_ids_or_actions: list[str]) -> list[str]:
+    actions: list[str] = []
+    for item in skill_ids_or_actions:
+        if item == SIM_ACTION_NORMAL_ATTACK:
+            actions.append(item)
+        elif item and get_skill(item):
+            actions.append(make_simulation_skill_action(item))
+    return actions or [SIM_ACTION_NORMAL_ATTACK]
+
+
+def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> dict[str, Any]:
     metadata = get_archetype_metadata(archetype_id)
     pref_policy = metadata.get("preferred_policy_id")
-    registry_item = EXECUTABLE_POLICY_REGISTRY.get(pref_policy)
-    if registry_item and registry_item.get("executable"):
-        return registry_item["factory"]()
-
+    registry_item = EXECUTABLE_POLICY_REGISTRY.get(pref_policy, {})
     skill_levels = build_archetype_simulation_skill_levels(archetype_id, power_tier)
+
+    if archetype_id in PROFILE_POLICY_PILOT_ARCHETYPE_IDS:
+        actions = _skill_loop_actions(PROFILE_POLICY_ACTIONS.get(archetype_id, []))
+        if archetype_id == "holy_staff_solo":
+            policy = ProfileAwareSimulationPolicy(
+                actions,
+                low_hp_actions=_skill_loop_actions(["heal", "regeneration", SIM_ACTION_NORMAL_ATTACK]),
+                low_hp_threshold=0.55,
+            )
+        else:
+            policy = ProfileAwareSimulationPolicy(actions)
+        return {
+            "policy": policy,
+            "active_simulation_policy_id": f"profile:{archetype_id}",
+            "active_simulation_policy_status": PROFILE_POLICY_STATUS_EXECUTABLE_PILOT,
+            "profile_policy_executable": True,
+            "profile_policy_pilot": True,
+            "registry_policy_id": pref_policy,
+            "registry_policy_executable": bool(registry_item.get("executable")),
+        }
+
+    if registry_item and registry_item.get("executable"):
+        return {
+            "policy": registry_item["factory"](),
+            "active_simulation_policy_id": pref_policy,
+            "active_simulation_policy_status": "registry_executable",
+            "profile_policy_executable": False,
+            "profile_policy_pilot": False,
+            "registry_policy_id": pref_policy,
+            "registry_policy_executable": True,
+        }
+
     chosen_skill = None
     for skill_id in metadata.get("preferred_skill_ids", []):
         if skill_id in skill_levels:
@@ -175,7 +228,19 @@ def build_basic_archetype_simulation_policy(archetype_id: str, power_tier: str):
     actions = [SIM_ACTION_NORMAL_ATTACK, SIM_ACTION_NORMAL_ATTACK]
     if chosen_skill:
         actions = [make_simulation_skill_action(chosen_skill), SIM_ACTION_NORMAL_ATTACK, SIM_ACTION_NORMAL_ATTACK]
-    return ScriptedActionPolicy(actions)
+    return {
+        "policy": ScriptedActionPolicy(actions),
+        "active_simulation_policy_id": "basic_fallback",
+        "active_simulation_policy_status": PROFILE_POLICY_STATUS_METADATA_FALLBACK,
+        "profile_policy_executable": False,
+        "profile_policy_pilot": False,
+        "registry_policy_id": pref_policy,
+        "registry_policy_executable": bool(registry_item.get("executable")),
+    }
+
+
+def build_basic_archetype_simulation_policy(archetype_id: str, power_tier: str):
+    return resolve_archetype_simulation_policy(archetype_id, power_tier)["policy"]
 
 
 def _label_observed_pressure(summary: dict[str, Any]) -> str:
@@ -332,10 +397,11 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                         mob = build_simulation_mob_preset(sample.mob_id)
                         mob.update({k: v for k, v in scaled_mob.items() if k in ("hp", "damage", "accuracy", "evasion", "defense", "magic_defense", "damage_min", "damage_max")})
                         skill_levels = build_archetype_simulation_skill_levels(archetype_id, power_tier=stage)
+                        policy_resolution = resolve_archetype_simulation_policy(archetype_id, stage)
                         result = simulate_single_combat(
                             player,
                             mob,
-                            policy=build_basic_archetype_simulation_policy(archetype_id, stage),
+                            policy=policy_resolution["policy"],
                             config=SimulationConfig(
                                 seed=seed,
                                 max_turns=cfg.max_turns,
@@ -366,6 +432,10 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                             "damage_dealt": result.damage_dealt, "damage_taken": result.damage_taken,
                             "actions_used": dict(result.actions_used), "skills_used": list(result.skills_used),
                             "observability": dict(result.observability),
+                            "active_simulation_policy_id": policy_resolution.get("active_simulation_policy_id"),
+                            "active_simulation_policy_status": policy_resolution.get("active_simulation_policy_status"),
+                            "profile_policy_executable": policy_resolution.get("profile_policy_executable"),
+                            "profile_policy_pilot": policy_resolution.get("profile_policy_pilot"),
                         }
                         if cfg.include_turn_trace and result.turn_trace:
                             run_item["turn_trace"] = list(result.turn_trace)
@@ -398,6 +468,7 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                     "avg_damage_taken": metrics["dmg_taken_sum"] / runs_count,
                     "skills_used_total": dict(metrics["skills_used_total"]),
                     "actions_used_total": dict(metrics["actions_used_total"]),
+                    "active_simulation_policy_status": resolve_archetype_simulation_policy(archetype_id, stage).get("active_simulation_policy_status"),
                 }
                 summary["observed_pressure_label"] = _label_observed_pressure(summary)
                 summaries.append(summary)

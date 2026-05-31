@@ -15,6 +15,14 @@ from game.skills import get_skill
 from game.equipment_budget import build_simulation_gear_preset
 
 
+PROFILE_POLICY_PILOT_ARCHETYPE_IDS = (
+    "daggers_venom",
+    "daggers_evasion",
+    "bow_sniper",
+    "magic_staff_destruction",
+    "holy_staff_solo",
+)
+
 REQUIRED_ARCHETYPE_IDS = (
     "guardian_shield_1h",
     "sword_2h_burst",
@@ -269,6 +277,13 @@ def build_archetype_player_preset(archetype_id: str, power_tier: str) -> dict:
     return player
 
 
+def _skill_available_at_simulation_stage(skill_id: str, stage_level: int) -> bool:
+    skill_def = get_skill(skill_id)
+    if not skill_def:
+        return False
+    return int(stage_level) >= int(skill_def.get("unlock_mastery", 1) or 1)
+
+
 def build_archetype_simulation_skill_levels(archetype_id: str, power_tier: str) -> dict[str, int]:
     if power_tier not in REQUIRED_POWER_TIERS:
         raise ValueError(f"Unknown power tier: {power_tier}")
@@ -280,10 +295,23 @@ def build_archetype_simulation_skill_levels(archetype_id: str, power_tier: str) 
         "route_exam": 4,
     }
     level = tier_to_level[power_tier]
+    is_profile_pilot = archetype_id in PROFILE_POLICY_PILOT_ARCHETYPE_IDS
     skill_levels: dict[str, int] = {}
     for skill_id in metadata.get("preferred_skill_ids", []):
-        if get_skill(skill_id):
+        if get_skill(skill_id) and (not is_profile_pilot or _skill_available_at_simulation_stage(skill_id, level)):
             skill_levels[skill_id] = level
+
+    if is_profile_pilot:
+        profile = get_expected_rotation_profile(archetype_id) or {}
+        profile_skill_ids: list[str] = []
+        for key in ("expected_skill_ids", "setup_skill_ids", "payoff_skill_ids", "sustain_skill_ids"):
+            for skill_id in profile.get(key, []):
+                if skill_id not in profile_skill_ids:
+                    profile_skill_ids.append(skill_id)
+        for skill_id in profile_skill_ids:
+            if _skill_available_at_simulation_stage(skill_id, level):
+                skill_levels[skill_id] = level
+
     return skill_levels
 
 

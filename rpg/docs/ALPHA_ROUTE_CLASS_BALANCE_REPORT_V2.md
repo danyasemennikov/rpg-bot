@@ -601,3 +601,12 @@ strong_clean, strong_but_risky, normal, hard, very_hard, death_blocked, timeout_
 ## Raw Data Pointers
 - Source module: `game.combat_simulation_matrix.run_route_stage_simulation_matrix`.
 - Raw runs included in current report data object: True.
+
+## Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot
+
+- Diagnostic/simulation-only pilot; no live tuning or gameplay/runtime changes.
+- Profile-aware simulation policies are active only for pilot archetypes: `daggers_venom`, `daggers_evasion`, `bow_sniper`, `magic_staff_destruction`, `holy_staff_solo`.
+- Metadata-only registry policies (`aggressive_burst`, `venom_setup`, `evasion_tempo`, `sniper_precision`, `control_caster`, `solo_support_sustain`, `toolbox_balanced`) were not globally flipped executable.
+- PR6 policy coverage remains 14 archetypes and PR6 skill economy diagnostics remain 14 archetypes.
+- PR5 audit remains 420 rows (14 archetypes × 6 level bands × 5 gear states).
+- PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
