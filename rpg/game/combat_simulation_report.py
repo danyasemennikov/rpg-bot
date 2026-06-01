@@ -8,6 +8,7 @@ from game.balance_audit import audit_progression_context_rows, summarize_balance
 from game.balance_foundation import build_simulation_stage_progression_context
 from game.combat_simulation_archetypes import (
     EXECUTABLE_POLICY_REGISTRY,
+    PROFILE_POLICY_PILOT_ARCHETYPE_IDS,
     build_archetype_player_preset,
     build_archetype_simulation_skill_levels,
     get_archetype_metadata,
@@ -20,6 +21,7 @@ from game.combat_simulation_matrix import (
     collect_route_stage_samples,
     list_alpha_simulation_route_ids,
     list_route_simulation_stages,
+    resolve_archetype_simulation_policy,
     run_route_stage_simulation_matrix,
 )
 from game.locations import ROUTE_MATCHUP_TARGET_PROFILES, WORLD_LOCATIONS
@@ -519,6 +521,10 @@ def _build_policy_coverage_rows(archetype_ids: list[str]) -> list[dict[str, Any]
         sustain_skill_ids = list((profile or {}).get("sustain_skill_ids", []))
         policy_executable = bool(policy_registry.get("executable"))
         policy_status = _classify_policy_status(policy_id, policy_registry)
+        policy_resolution = resolve_archetype_simulation_policy(archetype_id, "build_testing")
+        active_policy_status = str(policy_resolution.get("active_simulation_policy_status") or "unknown")
+        profile_policy_pilot = archetype_id in PROFILE_POLICY_PILOT_ARCHETYPE_IDS
+        profile_policy_executable = bool(policy_resolution.get("profile_policy_executable"))
         reasons: list[str] = []
         if policy_status == "unsupported_policy_label":
             reasons.append("unsupported_policy_label")
@@ -547,6 +553,10 @@ def _build_policy_coverage_rows(archetype_ids: list[str]) -> list[dict[str, Any]
             "preferred_policy_id": policy_id,
             "policy_executable": policy_executable,
             "policy_status": policy_status,
+            "active_simulation_policy_id": policy_resolution.get("active_simulation_policy_id"),
+            "active_simulation_policy_status": active_policy_status,
+            "profile_policy_executable": profile_policy_executable,
+            "profile_policy_pilot": profile_policy_pilot,
             "expected_rotation_profile_id": (profile or {}).get("profile_id"),
             "expected_skill_count": len(expected_skill_ids),
             "available_expected_skill_count": len(expected_skill_ids) - len(missing_expected_skill_ids),
@@ -1777,6 +1787,23 @@ def _render_pr6_simulation_policy_skill_economy_lines(report_data: dict[str, Any
         lines.append(f"- {item}")
     return lines
 
+
+def _render_pr7_profile_aware_policy_pilot_lines(report_data: dict[str, Any]) -> list[str]:
+    data = dict(report_data.get("simulation_policy_skill_economy") or {})
+    policy_rows = list(data.get("policy_coverage_rows", []))
+    audit_rows = list((report_data.get("unified_combat_budget_audit") or {}).get("audit_rows", []))
+    pilot_ids = ", ".join(PROFILE_POLICY_PILOT_ARCHETYPE_IDS)
+    return [
+        "",
+        "## Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot",
+        "Diagnostic/simulation-only pilot: PR7 performs no live tuning and changes no live gameplay/runtime formulas, skill numbers, weapons, armor, gear, enhancement, mobs, routes, rewards/economy, PvP rules, targeting, teleport, or live group combat.",
+        f"Pilot archetypes: {pilot_ids}.",
+        "Metadata-only registry policies were not globally flipped; pilot execution is resolved only by the simulation policy resolver.",
+        f"PR6 policy coverage remains {len(policy_rows)} rows and PR6 skill economy remains {len(data.get('skill_economy_rows', []))} rows.",
+        f"PR5 audit remains {len(audit_rows)} rows (expected 420).",
+        "PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.",
+    ]
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -1829,6 +1856,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=False))
     lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
     lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
+    lines.extend(_render_pr7_profile_aware_policy_pilot_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -2009,6 +2037,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines.extend(_render_pr4_multiseed_confidence_lines(report_data, detailed=True))
     lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
     lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
+    lines.extend(_render_pr7_profile_aware_policy_pilot_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)

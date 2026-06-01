@@ -89,6 +89,39 @@ class ScriptedActionPolicy:
         return SIM_ACTION_NORMAL_ATTACK
 
 
+class ProfileAwareSimulationPolicy:
+    """Conservative simulation-only profile policy.
+
+    The policy follows a short visible rotation and falls back to normal attacks
+    naturally when the simulator cannot execute a requested skill.  It only uses
+    current battle-state HP for the optional sustain branch; it does not inspect
+    future rolls or live player data.
+    """
+
+    def __init__(
+        self,
+        actions: list[str],
+        *,
+        low_hp_actions: list[str] | None = None,
+        low_hp_threshold: float = 0.55,
+    ):
+        self.actions = list(actions)
+        self.low_hp_actions = list(low_hp_actions or [])
+        self.low_hp_threshold = float(low_hp_threshold)
+
+    def _loop_action(self, actions: list[str], turn: int) -> str:
+        if not actions:
+            return SIM_ACTION_NORMAL_ATTACK
+        return actions[(max(1, int(turn)) - 1) % len(actions)]
+
+    def choose_action(self, *, turn: int, battle_state: dict) -> str:
+        max_hp = max(1, int(battle_state.get("player_max_hp", battle_state.get("max_hp", 1)) or 1))
+        current_hp = int(battle_state.get("player_hp", max_hp) or 0)
+        if self.low_hp_actions and (current_hp / max_hp) <= self.low_hp_threshold:
+            return self._loop_action(self.low_hp_actions, turn)
+        return self._loop_action(self.actions, turn)
+
+
 def make_simulation_skill_action(skill_id: str) -> str:
     return f"{SIM_ACTION_SKILL_PREFIX}{skill_id}"
 

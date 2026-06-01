@@ -60,7 +60,7 @@ def test_pr4_uses_multiple_seeds():
 def test_pr4_compact_pr3_baseline_preserved():
     _, confidence = _pr4_data()
     compact = confidence["compact_lane_counts"]
-    assert compact["mob_pressure_lane"] == 41
+    assert compact["mob_pressure_lane"] == 34
     assert compact["route_expectation_lane"] == 44
     assert compact["bad_matchup_review_lane"] == 1
 
@@ -68,10 +68,10 @@ def test_pr4_compact_pr3_baseline_preserved():
 def test_pr4_default_multiseed_totals_and_scope_metadata_are_preserved():
     _, confidence = _pr4_data()
     totals = confidence["multiseed_lane_counts"]
-    assert totals["mob_pressure_lane"] == 125
+    assert totals["mob_pressure_lane"] == 114
     assert totals["route_expectation_lane"] == 132
     assert totals["bad_matchup_review_lane"] == 3
-    assert totals["inconclusive_lane"] == 4
+    assert totals["inconclusive_lane"] == 15
     scope = confidence["scope"]
     assert scope["route_ids"]
     assert scope["stages"]
@@ -210,12 +210,12 @@ def test_pr4_normalized_lane_interpretations_do_not_treat_seed_totals_as_raw_gro
     assert bad_matchup["interpretation"] == "stable_across_seeds"
 
     mob_pressure = deltas["mob_pressure_lane"]
-    assert mob_pressure["compact"] == 41
-    assert mob_pressure["multiseed_total"] == 125
-    assert mob_pressure["expected_multiseed_total"] == 123
-    assert mob_pressure["delta_vs_expected_total"] == 2
-    assert mob_pressure["multiseed_per_seed_avg"] == 41.67
-    assert mob_pressure["delta_per_seed_vs_compact"] == 0.67
+    assert mob_pressure["compact"] == 34
+    assert mob_pressure["multiseed_total"] == 114
+    assert mob_pressure["expected_multiseed_total"] == 102
+    assert mob_pressure["delta_vs_expected_total"] == 12
+    assert mob_pressure["multiseed_per_seed_avg"] == 38.0
+    assert mob_pressure["delta_per_seed_vs_compact"] == 4.0
     assert mob_pressure["interpretation"] in {"stable_across_seeds", "slightly_higher_per_seed"}
     assert mob_pressure["interpretation"] != "higher_in_multiseed"
 
@@ -241,10 +241,10 @@ def test_pr4_rendered_v2_report_contains_summary_tables_and_disclaimers():
 def test_pr4_checked_in_report_contains_section_and_pr3_counts():
     content = REPORT_PATH.read_text(encoding="utf-8")
     assert "## Balance V2 PR4 Expanded Sampling / Multi-seed Confidence Summary" in content
-    assert "Current mob_pressure_lane count: 41." in content
+    assert "Current mob_pressure_lane count: 34." in content
     assert "Current route_expectation_lane count: 44." in content
     assert "Current bad_matchup_review_lane count: 1." in content
-    assert "Compact PR3 lane counts: mob_pressure_lane=41, route_expectation_lane=44, bad_matchup_review_lane=1" in content
+    assert "Compact PR3 lane counts: mob_pressure_lane=34, route_expectation_lane=44, bad_matchup_review_lane=1" in content
 
 
 def test_pr4_v1_smoke_guard_does_not_fake_counts():

@@ -45,7 +45,7 @@ def test_pr3_v2_renderer_reports_authoritative_counts_when_raw_runs_available():
     md = render_alpha_simulation_report_v2_markdown(report)
     section = _section(md, "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary", "## Target vs Observed v2 Signals")
     assert "Previous PR2 mob_pressure_lane baseline: 43." in section
-    assert "Current mob_pressure_lane count: 41." in section
+    assert "Current mob_pressure_lane count: 34." in section
     assert "Current route_expectation_lane count: 44." in section
     assert "Current bad_matchup_review_lane count: 1." in section
     assert "Classifier movement vs PR2 baseline: decreased." in section
