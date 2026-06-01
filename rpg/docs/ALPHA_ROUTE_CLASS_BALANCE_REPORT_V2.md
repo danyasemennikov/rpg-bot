@@ -342,6 +342,36 @@ PR6 policy coverage remains 14 rows and PR6 skill economy remains 14 rows.
 PR5 audit remains 420 rows (expected 420).
 PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
 
+## Balance V2 PR8 Simulation Action Resolution / Fallback Attribution
+Diagnostic/simulation-only: PR8 adds action-resolution and fallback attribution observability without live tuning.
+No live gameplay/runtime formulas, skill numbers, weapons, armor, gear, enhancement, mobs, routes, rewards/economy, PvP rules, targeting, teleport, cooldown reset behavior, reward behavior, or live group combat were changed.
+Fallback reasons are now attributed for simulator policy requests that resolve to skill use, normal_attack fallback, or guard fallback.
+Metadata-only registry policies remain not globally flipped; pilot execution remains resolver-scoped only.
+PR6 remains 14/14 policy coverage / skill economy rows.
+PR5 remains 420 audit rows (expected 420).
+PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
+
+Top fallback reasons:
+- skill_locked_or_unleveled: 154
+- guard_fallback_action: 24
+- insufficient_mana: 1
+
+Action resolution counts:
+- policy_chose_normal_attack: 443
+- resolved_skill_success: 216
+- skill_locked_or_unleveled: 154
+- guard_fallback_action: 24
+- insufficient_mana: 1
+
+Pilot fallback summary:
+| archetype | requested_skills | resolved_skill_success | normal_attack_fallback | top_fallback_reasons |
+|---|---:|---:|---:|---|
+| daggers_venom | 54 | 34 | 20 | skill_locked_or_unleveled:19, insufficient_mana:1 |
+| daggers_evasion | 83 | 38 | 45 | skill_locked_or_unleveled:45 |
+| bow_sniper | 76 | 34 | 42 | skill_locked_or_unleveled:42 |
+| magic_staff_destruction | 32 | 20 | 12 | skill_locked_or_unleveled:12 |
+| holy_staff_solo | 66 | 30 | 36 | skill_locked_or_unleveled:36 |
+
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
 Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidates. Full target comparison data is available from build_alpha_balance_report_data(). Hidden rows are not resolved or dismissed.
