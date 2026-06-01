@@ -13,6 +13,7 @@ from game.combat import (
     process_skill_turn,
 )
 from game.skills import get_skill
+from game.skill_engine import calc_skill_mana_cost
 from game.mobs import get_mob
 
 
@@ -245,6 +246,11 @@ def _build_observability_summary(
     skills_used: list[str],
     damage_dealt: int,
     damage_taken: int,
+    action_resolution_counts: dict[str, int] | None = None,
+    fallback_reason_counts: dict[str, int] | None = None,
+    requested_skill_count: int = 0,
+    resolved_skill_success_count: int = 0,
+    normal_attack_fallback_count: int = 0,
 ) -> dict:
     player_max_hp = max(1, int(player_local.get("max_hp") or player_local.get("hp") or 1))
     player_max_mana = max(1, int(player_local.get("max_mana") or player_local.get("mana") or 1))
@@ -276,6 +282,11 @@ def _build_observability_summary(
         "normal_attacks_used": int(actions_used.get(SIM_ACTION_NORMAL_ATTACK, 0)),
         "guard_used": int(actions_used.get(SIM_ACTION_GUARD_FALLBACK, 0)),
         "end_reason": end_reason,
+        "action_resolution_counts": dict(action_resolution_counts or {}),
+        "fallback_reason_counts": dict(fallback_reason_counts or {}),
+        "requested_skill_count": int(requested_skill_count),
+        "resolved_skill_success_count": int(resolved_skill_success_count),
+        "normal_attack_fallback_count": int(normal_attack_fallback_count),
     }
 
 def _run_with_seed(seed: int, fn: Callable[[], SimulationResult]) -> SimulationResult:
@@ -305,6 +316,53 @@ def simulate_single_combat(
     simulation_cooldowns: dict[str, int] = {}
     turn_trace: list[dict] = []
     max_trace_turns = max(0, int(cfg.max_trace_turns))
+    action_resolution_counts: dict[str, int] = {}
+    fallback_reason_counts: dict[str, int] = {}
+    requested_skill_count = 0
+    resolved_skill_success_count = 0
+    normal_attack_fallback_count = 0
+
+    def _count_action_resolution(status: str, fallback_reason: str | None) -> None:
+        action_resolution_counts[status] = action_resolution_counts.get(status, 0) + 1
+        if fallback_reason:
+            fallback_reason_counts[fallback_reason] = fallback_reason_counts.get(fallback_reason, 0) + 1
+
+    def _build_skill_resolution_metadata(chosen_action: str, requested_skill_id: str | None) -> dict:
+        skill_def = get_skill(requested_skill_id) if requested_skill_id else None
+        skill_level = int(cfg.skill_levels.get(requested_skill_id, 0)) if requested_skill_id else 0
+        cooldown_before = int(simulation_cooldowns.get(requested_skill_id, 0)) if requested_skill_id else 0
+        mana_before = int(battle_state.get("player_mana", 0) or 0)
+        mana_cost = calc_skill_mana_cost(skill_def, skill_level) if skill_def and skill_level > 0 else 0
+        skill_exists = bool(skill_def)
+        skill_unlock_mastery = int(skill_def.get("unlock_mastery", 0) or 0) if skill_def else None
+        skill_visible = bool(skill_def and skill_level > 0 and skill_level >= int(skill_def.get("unlock_mastery", 0) or 0))
+        can_attempt_skill = bool(skill_exists and skill_visible and cooldown_before <= 0 and (mana_cost <= 0 or mana_before >= mana_cost))
+        return {
+            "requested_action": chosen_action,
+            "requested_skill_id": requested_skill_id,
+            "resolved_action": "no_player_action",
+            "action_resolution_status": "unknown_fallback",
+            "fallback_reason": None,
+            "skill_exists": skill_exists if requested_skill_id else None,
+            "skill_level": skill_level if requested_skill_id else None,
+            "skill_unlock_mastery": skill_unlock_mastery,
+            "skill_visible": skill_visible if requested_skill_id else None,
+            "cooldown_before": cooldown_before if requested_skill_id else None,
+            "mana_before": mana_before,
+            "mana_cost": mana_cost if requested_skill_id else None,
+            "can_attempt_skill": can_attempt_skill if requested_skill_id else None,
+        }
+
+    def _classify_skill_guard_failure(meta: dict) -> str:
+        if not meta.get("skill_exists"):
+            return "skill_missing"
+        if int(meta.get("skill_level") or 0) <= 0 or not meta.get("skill_visible"):
+            return "skill_locked_or_unleveled"
+        if int(meta.get("cooldown_before") or 0) > 0:
+            return "skill_on_cooldown"
+        if int(meta.get("mana_cost") or 0) > int(meta.get("mana_before") or 0):
+            return "insufficient_mana"
+        return "unknown_fallback"
 
     def _tick_skill_cooldowns() -> None:
         for sid, turns in list(simulation_cooldowns.items()):
@@ -315,6 +373,8 @@ def simulate_single_combat(
                 simulation_cooldowns.pop(sid, None)
 
     def _run() -> SimulationResult:
+        nonlocal requested_skill_count, resolved_skill_success_count, normal_attack_fallback_count
+
         terminated_by_max_turns = False
         executed_turns = 0
 
@@ -329,8 +389,12 @@ def simulate_single_combat(
             chosen_action = action_policy.choose_action(turn=turn_number, battle_state=battle_state)
             action = chosen_action
             requested_skill_id = parse_simulation_skill_action(chosen_action)
-            if action not in actions_used and requested_skill_id is None:
+            resolution_meta = _build_skill_resolution_metadata(chosen_action, requested_skill_id)
+            invalid_policy_action = action not in actions_used and requested_skill_id is None
+            if invalid_policy_action:
                 action = SIM_ACTION_NORMAL_ATTACK
+                resolution_meta["action_resolution_status"] = "invalid_policy_action_fallback"
+                resolution_meta["fallback_reason"] = "invalid_policy_action_fallback"
             resolved_action = "no_player_action"
 
             if action == SIM_ACTION_NORMAL_ATTACK:
@@ -343,6 +407,8 @@ def simulate_single_combat(
                     )
                     actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
                     resolved_action = SIM_ACTION_NORMAL_ATTACK
+                    if not invalid_policy_action:
+                        resolution_meta["action_resolution_status"] = "policy_chose_normal_attack"
                     trace_after_player_action = _snapshot_combat_totals(battle_state)
                     if battle_state.get("mob_hp", 0) > 0:
                         process_enemy_side_turn(
@@ -372,6 +438,8 @@ def simulate_single_combat(
                         )
                         actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
                         resolved_action = SIM_ACTION_NORMAL_ATTACK
+                        if not invalid_policy_action:
+                            resolution_meta["action_resolution_status"] = "policy_chose_normal_attack"
                         trace_after_player_action = _snapshot_combat_totals(battle_state)
                     else:
                         resolved_action = "enemy_first_player_dead"
@@ -380,6 +448,8 @@ def simulate_single_combat(
                 apply_timeout_fallback_guard(battle_state, lang=cfg.lang)
                 actions_used[SIM_ACTION_GUARD_FALLBACK] += 1
                 resolved_action = SIM_ACTION_GUARD_FALLBACK
+                resolution_meta["action_resolution_status"] = "guard_fallback_action"
+                resolution_meta["fallback_reason"] = "guard_fallback_action"
                 trace_after_player_action = _snapshot_combat_totals(battle_state)
                 process_enemy_side_turn(
                     mob_local,
@@ -398,7 +468,7 @@ def simulate_single_combat(
                 skill_level = int(cfg.skill_levels.get(requested_skill_id, 0))
                 skill_def = get_skill(requested_skill_id)
                 local_cd = int(simulation_cooldowns.get(requested_skill_id, 0))
-                can_use = bool(skill_def) and skill_level > 0 and local_cd <= 0
+                can_use = bool(resolution_meta.get("can_attempt_skill"))
 
                 if battle_state.get("player_goes_first", True):
                     if can_use:
@@ -413,16 +483,25 @@ def simulate_single_combat(
                         if skill_turn.get("success"):
                             actions_used[action_key] += 1
                             resolved_action = action_key
+                            resolution_meta["action_resolution_status"] = "resolved_skill_success"
                             battle_state.setdefault("skills_used", []).append(requested_skill_id)
                             simulation_cooldowns[requested_skill_id] = int(skill_def.get("cooldown", 0))
                         else:
                             process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                             actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
                             resolved_action = SIM_ACTION_NORMAL_ATTACK
+                            reason = _classify_skill_guard_failure(resolution_meta)
+                            if reason == "unknown_fallback":
+                                reason = "skill_execution_failed"
+                            resolution_meta["action_resolution_status"] = reason
+                            resolution_meta["fallback_reason"] = reason
                     else:
                         process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                         actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
                         resolved_action = SIM_ACTION_NORMAL_ATTACK
+                        reason = _classify_skill_guard_failure(resolution_meta)
+                        resolution_meta["action_resolution_status"] = reason
+                        resolution_meta["fallback_reason"] = reason
                     trace_after_player_action = _snapshot_combat_totals(battle_state)
                     if battle_state.get("mob_hp", 0) > 0:
                         process_enemy_side_turn(mob_local, player_local, battle_state, lang=cfg.lang, tick_player_post_action_buffs=True, tick_timed_trigger_buffs=True, increment_turn=True)
@@ -442,28 +521,62 @@ def simulate_single_combat(
                             if skill_turn.get("success"):
                                 actions_used[action_key] += 1
                                 resolved_action = action_key
+                                resolution_meta["action_resolution_status"] = "resolved_skill_success"
                                 battle_state.setdefault("skills_used", []).append(requested_skill_id)
                                 simulation_cooldowns[requested_skill_id] = int(skill_def.get("cooldown", 0))
                             else:
                                 process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                                 actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
                                 resolved_action = SIM_ACTION_NORMAL_ATTACK
+                                reason = _classify_skill_guard_failure(resolution_meta)
+                                if reason == "unknown_fallback":
+                                    reason = "skill_execution_failed"
+                                resolution_meta["action_resolution_status"] = reason
+                                resolution_meta["fallback_reason"] = reason
                         else:
                             process_player_attack_side_turn(player_local, mob_local, battle_state, lang=cfg.lang)
                             actions_used[SIM_ACTION_NORMAL_ATTACK] += 1
                             resolved_action = SIM_ACTION_NORMAL_ATTACK
+                            reason = _classify_skill_guard_failure(resolution_meta)
+                            resolution_meta["action_resolution_status"] = reason
+                            resolution_meta["fallback_reason"] = reason
                     else:
                         resolved_action = "enemy_first_player_dead"
                     trace_after_player_action = _snapshot_combat_totals(battle_state)
                     battle_state["turn"] = int(battle_state.get("turn", 0)) + 1
+
+            resolution_meta["resolved_action"] = resolved_action
+            if resolution_meta.get("action_resolution_status") == "unknown_fallback" and resolved_action == SIM_ACTION_NORMAL_ATTACK:
+                resolution_meta["fallback_reason"] = resolution_meta.get("fallback_reason") or "unknown_fallback"
+            _count_action_resolution(
+                str(resolution_meta.get("action_resolution_status") or "unknown_fallback"),
+                resolution_meta.get("fallback_reason"),
+            )
+            if requested_skill_id is not None:
+                requested_skill_count += 1
+            if resolution_meta.get("action_resolution_status") == "resolved_skill_success":
+                resolved_skill_success_count += 1
+            if requested_skill_id is not None and resolved_action == SIM_ACTION_NORMAL_ATTACK and resolution_meta.get("fallback_reason"):
+                normal_attack_fallback_count += 1
 
             trace_after_enemy_action = _snapshot_combat_totals(battle_state)
             if cfg.include_turn_trace and len(turn_trace) < max_trace_turns:
                 turn_trace.append({
                     "turn": turn_number,
                     "chosen_action": chosen_action,
+                    "requested_action": resolution_meta.get("requested_action"),
                     "resolved_action": resolved_action,
+                    "action_resolution_status": resolution_meta.get("action_resolution_status"),
+                    "fallback_reason": resolution_meta.get("fallback_reason"),
                     "requested_skill_id": requested_skill_id,
+                    "skill_exists": resolution_meta.get("skill_exists"),
+                    "skill_level": resolution_meta.get("skill_level"),
+                    "skill_unlock_mastery": resolution_meta.get("skill_unlock_mastery"),
+                    "skill_visible": resolution_meta.get("skill_visible"),
+                    "cooldown_before": resolution_meta.get("cooldown_before"),
+                    "mana_before": resolution_meta.get("mana_before"),
+                    "mana_cost": resolution_meta.get("mana_cost"),
+                    "can_attempt_skill": resolution_meta.get("can_attempt_skill"),
                     "player_before": {"hp": trace_before["hp"], "mana": trace_before["mana"]},
                     "mob_before": {"hp": trace_before["mob_hp"]},
                     "player_after_player_action": {"hp": trace_after_player_action["hp"], "mana": trace_after_player_action["mana"]},
@@ -509,6 +622,11 @@ def simulate_single_combat(
             skills_used=skills_used,
             damage_dealt=damage_dealt,
             damage_taken=damage_taken,
+            action_resolution_counts=action_resolution_counts,
+            fallback_reason_counts=fallback_reason_counts,
+            requested_skill_count=requested_skill_count,
+            resolved_skill_success_count=resolved_skill_success_count,
+            normal_attack_fallback_count=normal_attack_fallback_count,
         )
         return SimulationResult(
             winner=winner,

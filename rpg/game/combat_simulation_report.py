@@ -677,6 +677,72 @@ def build_simulation_policy_skill_economy_diagnostics(enriched_runs: list[dict[s
         ],
     }
 
+
+def _merge_counter_from_runs(enriched_runs: list[dict[str, Any]], observability_key: str) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    for run in enriched_runs:
+        obs = dict(run.get("observability") or {})
+        counts.update(dict(obs.get(observability_key) or {}))
+    return counts
+
+
+def _sorted_count_dict(counter: Counter[str]) -> dict[str, int]:
+    return {key: int(count) for key, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))}
+
+
+def _build_grouped_fallback_counts(enriched_runs: list[dict[str, Any]], group_key: str) -> dict[str, dict[str, int]]:
+    grouped: dict[str, Counter[str]] = defaultdict(Counter)
+    for run in enriched_runs:
+        key = str(run.get(group_key) or "unknown")
+        obs = dict(run.get("observability") or {})
+        grouped[key].update(dict(obs.get("fallback_reason_counts") or {}))
+    return {key: _sorted_count_dict(grouped[key]) for key in sorted(grouped)}
+
+
+def build_simulation_action_resolution_diagnostics(enriched_runs: list[dict[str, Any]]) -> dict[str, Any]:
+    fallback_reason_counts = _merge_counter_from_runs(enriched_runs, "fallback_reason_counts")
+    action_resolution_counts = _merge_counter_from_runs(enriched_runs, "action_resolution_counts")
+
+    pilot_summary: list[dict[str, Any]] = []
+    for archetype_id in PROFILE_POLICY_PILOT_ARCHETYPE_IDS:
+        rows = [run for run in enriched_runs if str(run.get("archetype_id")) == archetype_id]
+        requested = sum(int((run.get("observability") or {}).get("requested_skill_count", 0) or 0) for run in rows)
+        successes = sum(int((run.get("observability") or {}).get("resolved_skill_success_count", 0) or 0) for run in rows)
+        normal_fallbacks = sum(int((run.get("observability") or {}).get("normal_attack_fallback_count", 0) or 0) for run in rows)
+        fallback_counts: Counter[str] = Counter()
+        action_counts: Counter[str] = Counter()
+        for run in rows:
+            obs = dict(run.get("observability") or {})
+            fallback_counts.update(dict(obs.get("fallback_reason_counts") or {}))
+            action_counts.update(dict(obs.get("action_resolution_counts") or {}))
+        pilot_summary.append({
+            "archetype_id": archetype_id,
+            "run_count": len(rows),
+            "requested_skill_count": requested,
+            "resolved_skill_success_count": successes,
+            "normal_attack_fallback_count": normal_fallbacks,
+            "fallback_reason_counts": _sorted_count_dict(fallback_counts),
+            "action_resolution_counts": _sorted_count_dict(action_counts),
+        })
+
+    return {
+        "available": True,
+        "fallback_reason_counts": _sorted_count_dict(fallback_reason_counts),
+        "action_resolution_counts": _sorted_count_dict(action_resolution_counts),
+        "fallback_reason_counts_by_archetype": _build_grouped_fallback_counts(enriched_runs, "archetype_id"),
+        "fallback_reason_counts_by_stage": _build_grouped_fallback_counts(enriched_runs, "stage"),
+        "pilot_policy_resolution_summary": pilot_summary,
+        "requested_skill_count_total": sum(int((run.get("observability") or {}).get("requested_skill_count", 0) or 0) for run in enriched_runs),
+        "resolved_skill_success_count_total": sum(int((run.get("observability") or {}).get("resolved_skill_success_count", 0) or 0) for run in enriched_runs),
+        "normal_attack_fallback_count_total": sum(int((run.get("observability") or {}).get("normal_attack_fallback_count", 0) or 0) for run in enriched_runs),
+        "notes": [
+            "Balance V2 PR8 is diagnostic/simulation/reporting-only and observes action resolution without changing live gameplay.",
+            "Fallback reasons classify simulator policy requests that already resolved to normal_attack or guard fallback.",
+            "Metadata-only registry policies remain metadata-only; simulation pilot resolution does not globally flip executable flags.",
+        ],
+    }
+
+
 def _parse_node_depth_from_location_id(location_id: str) -> int | None:
     suffix = str(location_id or "").lower().split("_n", 1)
     if len(suffix) != 2:
@@ -1449,6 +1515,7 @@ def build_alpha_balance_report_data(
         enriched_runs,
         list(matrix.get("archetypes", [])) or list_alpha_archetype_ids(),
     )
+    simulation_action_resolution = build_simulation_action_resolution_diagnostics(enriched_runs)
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -1504,6 +1571,7 @@ def build_alpha_balance_report_data(
         "pr4_multiseed_confidence": pr4_multiseed_confidence,
         "unified_combat_budget_audit": unified_combat_budget_audit,
         "simulation_policy_skill_economy": simulation_policy_skill_economy,
+        "simulation_action_resolution": simulation_action_resolution,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -1804,6 +1872,55 @@ def _render_pr7_profile_aware_policy_pilot_lines(report_data: dict[str, Any]) ->
         "PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.",
     ]
 
+
+def _render_pr8_simulation_action_resolution_lines(report_data: dict[str, Any]) -> list[str]:
+    data = dict(report_data.get("simulation_action_resolution") or {})
+    pr6 = dict(report_data.get("simulation_policy_skill_economy") or {})
+    audit_rows = list((report_data.get("unified_combat_budget_audit") or {}).get("audit_rows", []))
+    lines = [
+        "",
+        "## Balance V2 PR8 Simulation Action Resolution / Fallback Attribution",
+        "Diagnostic/simulation-only: PR8 adds action-resolution and fallback attribution observability without live tuning.",
+        "No live gameplay/runtime formulas, skill numbers, weapons, armor, gear, enhancement, mobs, routes, rewards/economy, PvP rules, targeting, teleport, cooldown reset behavior, reward behavior, or live group combat were changed.",
+        "Fallback reasons are now attributed for simulator policy requests that resolve to skill use, normal_attack fallback, or guard fallback.",
+        "Metadata-only registry policies remain not globally flipped; pilot execution remains resolver-scoped only.",
+        f"PR6 remains {len(pr6.get('policy_coverage_rows', []))}/{len(pr6.get('skill_economy_rows', []))} policy coverage / skill economy rows.",
+        f"PR5 remains {len(audit_rows)} audit rows (expected 420).",
+        "PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.",
+        "",
+        "Top fallback reasons:",
+    ]
+    fallback_counts = dict(data.get("fallback_reason_counts") or {})
+    if fallback_counts:
+        for reason, count in list(fallback_counts.items())[:8]:
+            lines.append(f"- {reason}: {count}")
+    else:
+        lines.append("- none: 0")
+    action_counts = dict(data.get("action_resolution_counts") or {})
+    lines += ["", "Action resolution counts:"]
+    if action_counts:
+        for status, count in list(action_counts.items())[:8]:
+            lines.append(f"- {status}: {count}")
+    else:
+        lines.append("- none: 0")
+    lines += ["", "Pilot fallback summary:"]
+    pilot_rows = list(data.get("pilot_policy_resolution_summary") or [])
+    if pilot_rows:
+        lines += [
+            "| archetype | requested_skills | resolved_skill_success | normal_attack_fallback | top_fallback_reasons |",
+            "|---|---:|---:|---:|---|",
+        ]
+        for row in pilot_rows:
+            fallback_summary = ", ".join(f"{k}:{v}" for k, v in list(dict(row.get("fallback_reason_counts") or {}).items())[:4]) or "none"
+            lines.append(
+                f"| {row.get('archetype_id')} | {row.get('requested_skill_count', 0)} | "
+                f"{row.get('resolved_skill_success_count', 0)} | {row.get('normal_attack_fallback_count', 0)} | {fallback_summary} |"
+            )
+    else:
+        lines.append("- none")
+    return lines
+
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -1857,6 +1974,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
     lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
     lines.extend(_render_pr7_profile_aware_policy_pilot_lines(report_data))
+    lines.extend(_render_pr8_simulation_action_resolution_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -2038,6 +2156,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines.extend(_render_pr5_unified_combat_budget_audit_lines(report_data))
     lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
     lines.extend(_render_pr7_profile_aware_policy_pilot_lines(report_data))
+    lines.extend(_render_pr8_simulation_action_resolution_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)

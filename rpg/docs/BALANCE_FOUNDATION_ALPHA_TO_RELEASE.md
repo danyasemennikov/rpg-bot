@@ -1,5 +1,18 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR8 Simulation Action Resolution / Fallback Attribution Note
+
+- Adds diagnostic/simulation/reporting-only action resolution metadata to simulated turns.
+- Attributes simulator skill-request fallbacks with compact reasons such as missing skill, locked/unleveled skill, cooldown, insufficient mana, execution failure, invalid policy action fallback, and guard fallback.
+- Adds aggregate action-resolution and fallback-reason observability to simulation results, matrix summaries, report data, and the checked-in V2 report renderer.
+- Keeps PR6 policy coverage at 14 rows and PR6 skill economy diagnostics at 14 rows.
+- Keeps PR5 unified combat budget audit coverage at 420 rows.
+- Keeps PR7 pilot policy guarantees intact and keeps metadata-only registry policies from being globally flipped executable.
+- PvP remains proxy-only, and route/mob/gear/PvP tuning remains deferred.
+- Does not tune weapon numbers, skill numbers, armor stats, gear formulas, enhancement curves, routes, mobs, rewards/economy/loot/crafting, targeting, teleport, cooldown reset behavior, reward behavior, or live group combat.
+- Does not change live gameplay/runtime, Combat Core behavior, formulas, equipment budget formulas, live mob templates, economy/rewards, targeting, teleport, or live group combat.
+- Does not add new live skills, new tuning knobs, or final balance claims.
+
 ## Balance V2 PR6 Simulation Policy & Skill Economy Clarification Note
 
 - Adds simulation/reporting-only policy coverage and skill economy diagnostics around PR5 budget interpretation.

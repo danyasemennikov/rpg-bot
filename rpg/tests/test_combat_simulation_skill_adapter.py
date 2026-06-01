@@ -138,7 +138,7 @@ def test_player_first_steady_aim_not_double_ticked_in_single_exchange():
         build_simulation_player_preset(mana=120, max_mana=120, agility=50, weapon_profile="bow", weapon_type="ranged"),
         build_simulation_mob_preset("stone_golem"),
         policy=ScriptedActionPolicy([make_simulation_skill_action("steady_aim")]),
-        config=SimulationConfig(seed=42, max_turns=1, skill_levels={"steady_aim": 2}),
+        config=SimulationConfig(seed=42, max_turns=1, skill_levels={"steady_aim": 5}),
     )
     assert result.final_battle_state.get("steady_aim_turns", 0) == 1
 

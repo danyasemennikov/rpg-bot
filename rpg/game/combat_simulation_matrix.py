@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -387,6 +388,8 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                     "runs": 0, "wins": 0, "losses": 0, "timeouts": 0,
                     "turns_sum": 0, "php_sum": 0, "pmana_sum": 0, "dmg_dealt_sum": 0, "dmg_taken_sum": 0,
                     "skills_used_total": {}, "actions_used_total": {},
+                    "fallback_reason_counts_total": Counter(), "action_resolution_counts_total": Counter(),
+                    "requested_skill_count_total": 0, "resolved_skill_success_count_total": 0,
                 }
                 for sample in samples:
                     for seed in cfg.seeds:
@@ -453,6 +456,11 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                             metrics["actions_used_total"][action_key] = metrics["actions_used_total"].get(action_key, 0) + int(count)
                         for skill_id in result.skills_used:
                             metrics["skills_used_total"][skill_id] = metrics["skills_used_total"].get(skill_id, 0) + 1
+                        obs = dict(result.observability or {})
+                        metrics["fallback_reason_counts_total"].update(dict(obs.get("fallback_reason_counts", {})))
+                        metrics["action_resolution_counts_total"].update(dict(obs.get("action_resolution_counts", {})))
+                        metrics["requested_skill_count_total"] += int(obs.get("requested_skill_count", 0) or 0)
+                        metrics["resolved_skill_success_count_total"] += int(obs.get("resolved_skill_success_count", 0) or 0)
 
                 if metrics["runs"] <= 0:
                     continue
@@ -468,6 +476,10 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                     "avg_damage_taken": metrics["dmg_taken_sum"] / runs_count,
                     "skills_used_total": dict(metrics["skills_used_total"]),
                     "actions_used_total": dict(metrics["actions_used_total"]),
+                    "fallback_reason_counts_total": dict(metrics["fallback_reason_counts_total"]),
+                    "action_resolution_counts_total": dict(metrics["action_resolution_counts_total"]),
+                    "requested_skill_count_total": int(metrics["requested_skill_count_total"]),
+                    "resolved_skill_success_count_total": int(metrics["resolved_skill_success_count_total"]),
                     "active_simulation_policy_status": resolve_archetype_simulation_policy(archetype_id, stage).get("active_simulation_policy_status"),
                 }
                 summary["observed_pressure_label"] = _label_observed_pressure(summary)
