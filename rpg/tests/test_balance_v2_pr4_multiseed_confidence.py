@@ -241,10 +241,10 @@ def test_pr4_rendered_v2_report_contains_summary_tables_and_disclaimers():
 def test_pr4_checked_in_report_contains_section_and_pr3_counts():
     content = REPORT_PATH.read_text(encoding="utf-8")
     assert "## Balance V2 PR4 Expanded Sampling / Multi-seed Confidence Summary" in content
-    assert "Current mob_pressure_lane count: 41." in content
+    assert "Current mob_pressure_lane count: 34." in content
     assert "Current route_expectation_lane count: 44." in content
     assert "Current bad_matchup_review_lane count: 1." in content
-    assert "Compact PR3 lane counts: mob_pressure_lane=41, route_expectation_lane=44, bad_matchup_review_lane=1" in content
+    assert "Compact PR3 lane counts: mob_pressure_lane=34, route_expectation_lane=44, bad_matchup_review_lane=1" in content
 
 
 def test_pr4_v1_smoke_guard_does_not_fake_counts():

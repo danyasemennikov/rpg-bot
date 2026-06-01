@@ -258,6 +258,13 @@ def test_guard_fallback_counts_as_guard_like_action_rate():
     assert enriched["skill_use_rate"] == 0
 
 
+def test_checked_in_v2_report_matches_default_renderer_output():
+    project_root = Path(__file__).resolve().parents[1]
+    report_path = project_root / "docs" / "ALPHA_ROUTE_CLASS_BALANCE_REPORT_V2.md"
+    rendered = render_alpha_simulation_report_v2_markdown(build_default_alpha_simulation_report_v2_data())
+    assert report_path.read_text(encoding="utf-8") == rendered
+
+
 def test_policy_failure_label_from_guard_loop_summary():
     summary = {
         "runs": 10,
