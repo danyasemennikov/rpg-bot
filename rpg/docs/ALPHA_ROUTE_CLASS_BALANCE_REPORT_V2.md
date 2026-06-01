@@ -352,14 +352,14 @@ PR5 remains 420 audit rows (expected 420).
 PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
 
 Top fallback reasons:
-- skill_locked_or_unleveled: 164
+- skill_locked_or_unleveled: 154
 - guard_fallback_action: 24
 - insufficient_mana: 1
 
 Action resolution counts:
-- policy_chose_normal_attack: 426
-- resolved_skill_success: 206
-- skill_locked_or_unleveled: 164
+- policy_chose_normal_attack: 443
+- resolved_skill_success: 216
+- skill_locked_or_unleveled: 154
 - guard_fallback_action: 24
 - insufficient_mana: 1
 
@@ -525,9 +525,9 @@ Simulation/reporting-only diagnostic preview. Labels are diagnostic likely cause
 This classifier points future review toward tuning lanes; it does not claim final balance or prescribe automatic support buffs/Sunscar nerfs.
 
 Attribution counts:
-- mob_hp_too_low: 65
-- player_damage_too_high: 65
-- resource_pressure_missing: 59
+- mob_hp_too_low: 64
+- player_damage_too_high: 64
+- resource_pressure_missing: 57
 - mob_damage_too_low: 46
 - sample_too_soft: 44
 - target_expectation_mismatch: 44
@@ -552,8 +552,8 @@ Top attribution clusters:
 - archetype_attribution / magic_staff_destruction / player_damage_too_high: 8
 - archetype_attribution / magic_staff_destruction / resource_pressure_missing: 8
 - route_stage_attribution / route_sunscar / identity_visible / mob_damage_too_low: 8
-- route_stage_attribution / route_sunscar / identity_visible / mob_hp_too_low: 8
-- route_stage_attribution / route_sunscar / identity_visible / player_damage_too_high: 8
+- route_stage_attribution / route_sunscar / identity_visible / resource_pressure_missing: 8
+- route_stage_attribution / route_sunscar / identity_visible / sample_too_soft: 8
 
 Top recommended lane clusters:
 - route_stage_lane / route_sunscar / identity_visible / route_expectation_lane: 8

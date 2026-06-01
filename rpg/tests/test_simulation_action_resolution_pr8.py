@@ -97,23 +97,23 @@ def test_requested_locked_or_unleveled_skill_is_attributed_and_falls_back():
     assert row["skill_visible"] is False
 
 
-def test_positive_level_below_unlock_mastery_falls_back_as_locked_or_unleveled():
+def test_learned_positive_level_below_unlock_mastery_can_execute_direct_simulation():
     result = _simulate(
-        [make_simulation_skill_action("cataclysm")],
-        skill_levels={"cataclysm": 1},
-        player_overrides={"mana": 500, "max_mana": 500},
+        [make_simulation_skill_action("steady_aim")],
+        skill_levels={"steady_aim": 2},
+        player_overrides={"mana": 120, "max_mana": 120, "weapon_profile": "bow", "weapon_type": "ranged"},
     )
     row = result.turn_trace[0]
-    assert row["requested_skill_id"] == "cataclysm"
-    assert row["resolved_action"] == SIM_ACTION_NORMAL_ATTACK
-    assert row["action_resolution_status"] == "skill_locked_or_unleveled"
-    assert row["fallback_reason"] == "skill_locked_or_unleveled"
+    assert row["requested_skill_id"] == "steady_aim"
+    assert row["resolved_action"] == "skill:steady_aim"
+    assert row["action_resolution_status"] == "resolved_skill_success"
+    assert row["fallback_reason"] is None
     assert row["skill_exists"] is True
-    assert row["skill_level"] == 1
+    assert row["skill_level"] == 2
     assert row["skill_unlock_mastery"] > row["skill_level"]
-    assert row["skill_visible"] is False
-    assert row["can_attempt_skill"] is False
-    assert "cataclysm" not in result.skills_used
+    assert row["skill_visible"] is True
+    assert row["can_attempt_skill"] is True
+    assert "steady_aim" in result.skills_used
 
 
 def test_requested_skill_on_cooldown_is_attributed_and_falls_back():

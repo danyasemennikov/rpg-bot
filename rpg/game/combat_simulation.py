@@ -335,8 +335,10 @@ def simulate_single_combat(
         mana_cost = calc_skill_mana_cost(skill_def, skill_level) if skill_def and skill_level > 0 else 0
         skill_exists = bool(skill_def)
         skill_unlock_mastery = int(skill_def.get("unlock_mastery", 0) or 0) if skill_def else None
-        skill_visible = bool(skill_def and skill_level > 0 and skill_level >= int(skill_def.get("unlock_mastery", 0) or 0))
-        can_attempt_skill = bool(skill_exists and skill_visible and cooldown_before <= 0 and (mana_cost <= 0 or mana_before >= mana_cost))
+        # Simulation skill_levels is an explicit learned-skill map.  unlock_mastery
+        # stays diagnostic here; stage gating belongs in the preset builder.
+        skill_visible = bool(skill_def and skill_level > 0)
+        can_attempt_skill = bool(skill_exists and skill_level > 0 and cooldown_before <= 0 and (mana_cost <= 0 or mana_before >= mana_cost))
         return {
             "requested_action": chosen_action,
             "requested_skill_id": requested_skill_id,
