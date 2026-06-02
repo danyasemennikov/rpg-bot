@@ -3,13 +3,13 @@
 ## Purpose
 This repository contains a Telegram text MMORPG bot.
 
-This file is the main instruction file for Codex and other coding agents.
+This file is the main instruction file for the coding agent. Jules is the current default coding agent.
 Read this file first, then read `CLAUDE.md`, then read `GAME_FOUNDATION.md` before making important changes.
 
 ## Primary workflow
 The working model for this repository is:
-1. ChatGPT chat is used for architecture, balance, specifications, design decisions, and review.
-2. Codex is used to implement approved changes in the codebase.
+1. A design/spec/review assistant is used for architecture, balance, specifications, design decisions, and review.
+2. The coding agent is used to implement approved changes in the codebase. Jules is the current default coding agent.
 3. Do not assume any previously generated `*_v2.py` files or patches were merged unless the user explicitly says they were merged.
 4. Until the user clearly confirms otherwise, assume the project files in the repository are still the original versions.
 
@@ -42,8 +42,10 @@ For any medium or large task, read in this order:
 1. `AGENTS.md`
 2. `CLAUDE.md`
 3. `GAME_FOUNDATION.md`
-4. the target file(s)
-5. directly related neighboring files
+4. `rpg/docs/PROJECT_STATE_CURRENT.md`
+5. `rpg/docs/AI_WORKFLOW.md`
+6. the target file(s)
+7. directly related neighboring files
 
 ## Current design rules
 Treat the following as approved project rules unless the user explicitly changes them.
@@ -105,7 +107,7 @@ After completing a task, provide:
 4. any follow-up risks or next recommended step.
 
 ## Good task style for this repository
-Codex performs best here when the task includes:
+The coding agent performs best here when the task includes:
 - goal;
 - files to inspect/edit;
 - constraints;
