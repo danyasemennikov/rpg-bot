@@ -42,8 +42,10 @@ For any medium or large task, read in this order:
 1. `AGENTS.md`
 2. `CLAUDE.md`
 3. `GAME_FOUNDATION.md`
-4. the target file(s)
-5. directly related neighboring files
+4. `rpg/docs/PROJECT_STATE_CURRENT.md`
+5. `rpg/docs/AI_WORKFLOW.md`
+6. the target file(s)
+7. directly related neighboring files
 
 ## Current design rules
 Treat the following as approved project rules unless the user explicitly changes them.

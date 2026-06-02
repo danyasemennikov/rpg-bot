@@ -8,9 +8,9 @@ It is intended to bootstrap Gemini with the current project state, rules, and co
 Do not treat any planned, discussed, or unmerged work as confirmed state.
 
 *Current confirmed state summary:*
-- **Balance V2 PR8 Simulation Action Resolution / Fallback Attribution** is the latest merged state.
-- Focus has been on simulation/reporting action resolution, fallback attribution diagnostics, profile-aware policy execution, and unified combat budget audits.
-- No live tuning/gameplay/runtime/formula/equipment/mob/economy/targeting/teleport/cooldown reset/reward/live group combat changes were made recently.
+- **Google AI Workflow Migration Foundation** is the latest workflow/docs state after PR #213 merges.
+- **Balance V2 PR8 Simulation Action Resolution / Fallback Attribution** remains the latest gameplay/simulation/balance confirmed state before this docs migration.
+- No gameplay/runtime/formula/equipment/mob/economy/targeting/teleport/cooldown reset/reward/live group combat changes were made by this workflow migration.
 
 ## Workflow Rules
 - The project follows a Google-based AI workflow (`rpg/docs/GOOGLE_AI_WORKFLOW.md`).

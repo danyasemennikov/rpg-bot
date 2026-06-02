@@ -14,8 +14,8 @@ This log is used to track **accepted decisions only**. Loose ideas or theoretica
 ---
 
 ### Decision: Migrate to Google AI Workflow
-- **Date:** 2024-05-24
+- **Date:** 2026-06-02
 - **Context:** The previous ChatGPT/Codex workflow caused context fragmentation because agents did not reliably share memory.
 - **Decision:** Move to a two-Gem + Jules workflow. Gemini handles design, spec, and review, while Jules handles code implementation.
 - **Impact:** Documentation updated (AGENTS.md, AI_WORKFLOW.md, etc.) to reflect the new roles.
-- **Status:** Implemented in PR (Docs/Workflow only).
+- **Status:** Implemented in PR #213.
