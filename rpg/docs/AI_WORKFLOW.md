@@ -1,94 +1,72 @@
 # AI Workflow
 
-This project uses multiple AI-assisted working modes.
+This project uses a Google AI workflow with Gemini/Gems and Jules.
 
-The goal is to avoid mixing design decisions, implementation planning, Codex execution, and technical review in one conversation.
+The goal is to avoid context fragmentation and avoid mixing theoretical design with concrete implementation and review.
 
 ---
 
-## Working chats
+## Working modes
 
-### RPG — Design Room
+### 1. RPG — Design & Balance (Gemini Gem)
 
 Purpose:
 
-- game design decisions
+- game design
+- balance
 - route identity
-- class fantasy
+- class/archetype fantasy
 - PvE/PvP philosophy
-- economy and reward direction
+- economy/rewards
 - player experience
+- theoretical decisions before implementation
 
 Output:
 
 - Decision Packet
-
-Does not output Codex prompts by default.
-
----
-
-### RPG — Balance Lab
-
-Purpose:
-
-- route/class balance
-- PvE pressure
-- PvP pressure
-- build matchups
-- numeric risk analysis
-- progression speed
-- reward feel
-
-Output:
-
-- balance Decision Packet
+- balance specifications
 - risks
-- done criteria
 
-Does not output Codex prompts by default.
+Does not output implementation code or PRs.
 
 ---
 
-### RPG — Producer / Specs
+### 2. RPG — Producer / Jules Review (Gemini Gem)
 
 Purpose:
 
-- convert Decision Packets into implementation plans
-- define PR scope
-- define files
-- define tests
-- define non-goals
-- prepare Codex-ready prompts
+- implementation plans
+- coherent PR scope
+- Jules prompts
+- PR review
+- blockers / cheap tails
+- fix prompts
+- merge/test guidance
 
 Output:
 
 - implementation plan
-- Codex prompt
+- Jules prompt
+- blocker list / fix prompt if needed
+- merge/test guidance if ready
 
 ---
 
-### RPG — Codex Review / Integration
+### 3. Implementation (Jules)
 
 Purpose:
 
-- review Codex summaries and diffs
-- find blockers
-- find cheap tails
-- prepare fix prompts
-- decide whether a PR can merge
-- provide test commands
+- write code based on Jules prompts
+- run tests
+- implement PRs
 
-Output:
-
-- blocker list
-- fix prompt if needed
-- merge/test guidance if ready
+Jules is the current default coding agent for implementation PRs.
 
 ---
 
 ## Handoff protocol
 
-When a chat finishes its role for the current stage, it must stop and produce a handoff packet instead of continuing into another role.
+When a Gem finishes its role for the current stage, it must stop and produce a handoff packet instead of continuing into another role.
 
 Format:
 
@@ -111,10 +89,10 @@ Recommended next action:
 
 Routing:
 
-- Design Room / Balance Lab → Producer / Specs
-- Producer / Specs → Codex
-- Codex result → Codex Review / Integration
-- Codex Review / Integration after merge → update Project State and choose next stage
+- Design & Balance → Producer / Jules Review
+- Producer / Jules Review → Jules
+- Jules result → Producer / Jules Review
+- Producer / Jules Review after merge → update Project State and choose next stage
 
 ---
 
