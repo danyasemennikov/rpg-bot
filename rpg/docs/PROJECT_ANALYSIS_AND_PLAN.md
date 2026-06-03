@@ -15,19 +15,20 @@ Derived strictly from `PROJECT_STATE_CURRENT.md`, the current active focus is on
 
 ## 3. Stale/Deprecated Docs Warnings
 Older repository documentation may conflict with the current state or the new Google AI workflow:
-- `rpg/AGENTS.md` currently references `CLAUDE.md` and `GAME_FOUNDATION.md` as mandatory reading, but these files no longer exist or are considered fully deprecated/removed.
+- **Active Foundation Docs**: `rpg/docs/CLAUDE.md` and `rpg/docs/GAME_FOUNDATION.md` are active, canonical foundation documents and remain mandatory reading for medium/large or non-trivial tasks.
 - Any legacy documentation implying a single-agent workflow (like Claude alone) is stale. The project now strictly adheres to the workflow outlined in `rpg/docs/GOOGLE_AI_WORKFLOW.md` and `rpg/docs/AI_WORKFLOW.md`.
 - Any legacy documentation claiming that major weapon families (like holy rods, staffs, or bows) are "missing" is strictly incorrect, as they are actively present in the codebase.
 
 ## 4. Real Next PR Candidates
 
-### Candidate 1: Cleanup of Stale Documentation References
-- **Goal**: Remove references to deleted/deprecated files (`CLAUDE.md`, `GAME_FOUNDATION.md`) from `rpg/AGENTS.md`.
-- **Why now**: Ensures new AI agents do not get confused or loop while looking for missing mandatory reading files, aligning with the new workflow.
+### Candidate 1: Clarify Canonical Paths in AGENTS.md
+- **Goal**: Clarify canonical paths to active foundation docs in `rpg/AGENTS.md` (update paths to point to `rpg/docs/CLAUDE.md` and `rpg/docs/GAME_FOUNDATION.md`).
+- **Why now**: Resolves path discrepancies to ensure AI agents can successfully find mandatory reading files without confusion.
 - **Likely files**: `rpg/AGENTS.md`
-- **Non-goals**: No rewriting of other documentation, no changes to any `.py` files.
+- **Non-goals**: No rewriting of other documentation, no deletion of core file references, no changes to any `.py` files.
 - **Test expectations**: No runtime tests are executed because this is a docs-only PR.
 - **Project state impact**: `PROJECT_STATE_CURRENT.md not updated: no confirmed project state change.`
+- **Note**: This candidate is advisory only; do not implement it in this PR.
 
 ## 5. Non-goals
 The project is explicitly avoiding the following right now:
