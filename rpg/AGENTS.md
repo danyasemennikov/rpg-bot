@@ -4,7 +4,7 @@
 This repository contains a Telegram text MMORPG bot.
 
 This file is the main instruction file for the coding agent. Jules is the current default coding agent.
-Read this file first, then read `CLAUDE.md`, then read `GAME_FOUNDATION.md` before making important changes.
+Read this file first, then read `rpg/docs/CLAUDE.md`, then read `rpg/docs/GAME_FOUNDATION.md` before making important changes.
 
 ## Primary workflow
 The working model for this repository is:
@@ -34,14 +34,14 @@ High-level repository structure:
 - `game/` — game logic
 - `handlers/` — Telegram handlers
 - `locales/` — i18n files
-- `CLAUDE.md` — current technical/context file
-- `GAME_FOUNDATION.md` — design and balance foundation
+- `rpg/docs/CLAUDE.md` — current technical/context file
+- `rpg/docs/GAME_FOUNDATION.md` — design and balance foundation
 
 ## Mandatory reading order for non-trivial tasks
 For any medium or large task, read in this order:
-1. `AGENTS.md`
-2. `CLAUDE.md`
-3. `GAME_FOUNDATION.md`
+1. `rpg/AGENTS.md`
+2. `rpg/docs/CLAUDE.md`
+3. `rpg/docs/GAME_FOUNDATION.md`
 4. `rpg/docs/PROJECT_STATE_CURRENT.md`
 5. `rpg/docs/AI_WORKFLOW.md`
 6. the target file(s)
@@ -124,7 +124,7 @@ Preferred example shape:
 - Do not perform broad repo-wide refactors without explicit approval.
 - Do not introduce complex frameworks or unnecessary dependencies.
 - Do not replace readable procedural code with advanced patterns unless there is a clear payoff.
-- Do not ignore `CLAUDE.md` or `GAME_FOUNDATION.md` when working on systems that touch gameplay.
+- Do not ignore `rpg/docs/CLAUDE.md` or `rpg/docs/GAME_FOUNDATION.md` when working on systems that touch gameplay.
 
 ## Project State Update Requirement
 

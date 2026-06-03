@@ -8,7 +8,7 @@ Use this template to generate structured prompts for Jules, the coding agent, fo
 [Describe the specific objective of the PR]
 
 ### Before editing
-[List any specific documentation or files Jules must read before making changes, e.g., `AGENTS.md`, `GAME_FOUNDATION.md`, or specific feature specs.]
+[List any specific documentation or files Jules must read before making changes, e.g., `rpg/AGENTS.md`, `rpg/docs/GAME_FOUNDATION.md`, or specific feature specs.]
 
 ### Context
 [Provide necessary background information, explaining *why* this change is being made and any relevant decisions from the Design & Balance Gem.]
