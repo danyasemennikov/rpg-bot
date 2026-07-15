@@ -211,5 +211,5 @@ def test_project_state_current_has_pr8_as_latest():
     project_root = Path(__file__).resolve().parents[1]
     text = (project_root / "docs" / "PROJECT_STATE_CURRENT.md").read_text(encoding="utf-8")
     assert "Balance V2 PR8 Simulation Action Resolution / Fallback Attribution" in text
-    first_pr_line = next(line for line in text.splitlines() if line.startswith("- PR:"))
-    assert "PR8" in first_pr_line
+    assert "PR: Codex Workflow Restoration (Docs only)" in text
+    assert "Latest gameplay/balance confirmed state remains Balance V2 PR8 Simulation Action Resolution / Fallback Attribution." in text
