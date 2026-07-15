@@ -1,6 +1,6 @@
 # AI Workflow
 
-This project uses a Google AI workflow with Gemini/Gems and Jules.
+This project uses a ChatGPT / Producer / Specs + Codex implementation workflow.
 
 The goal is to avoid context fragmentation and avoid mixing theoretical design with concrete implementation and review.
 
@@ -8,7 +8,7 @@ The goal is to avoid context fragmentation and avoid mixing theoretical design w
 
 ## Working modes
 
-### 1. RPG — Design & Balance (Gemini Gem)
+### 1. ChatGPT / Design & Balance
 
 Purpose:
 
@@ -31,13 +31,13 @@ Does not output implementation code or PRs.
 
 ---
 
-### 2. RPG — Producer / Jules Review (Gemini Gem)
+### 2. ChatGPT / Producer / Specs / Codex Review
 
 Purpose:
 
 - implementation plans
 - coherent PR scope
-- Jules prompts
+- Codex prompts
 - PR review
 - blockers / cheap tails
 - fix prompts
@@ -46,27 +46,27 @@ Purpose:
 Output:
 
 - implementation plan
-- Jules prompt
+- Codex prompt
 - blocker list / fix prompt if needed
 - merge/test guidance if ready
 
 ---
 
-### 3. Implementation (Jules)
+### 3. Implementation (Codex)
 
 Purpose:
 
-- write code based on Jules prompts
+- write code based on Codex prompts
 - run tests
 - implement PRs
 
-Jules is the current default coding agent for implementation PRs.
+Codex is the current implementation coding agent for implementation PRs.
 
 ---
 
 ## Handoff protocol
 
-When a Gem finishes its role for the current stage, it must stop and produce a handoff packet instead of continuing into another role.
+When an assistant finishes its role for the current stage, it must stop and produce a handoff packet instead of continuing into another role.
 
 Format:
 
@@ -89,10 +89,10 @@ Recommended next action:
 
 Routing:
 
-- Design & Balance → Producer / Jules Review
-- Producer / Jules Review → Jules
-- Jules result → Producer / Jules Review
-- Producer / Jules Review after merge → update Project State and choose next stage
+- Design & Balance → Producer / Specs
+- Producer / Specs → Codex
+- Codex result → Codex Review / Integration
+- Codex Review / Integration after merge → update Project State and choose next stage
 
 ---
 

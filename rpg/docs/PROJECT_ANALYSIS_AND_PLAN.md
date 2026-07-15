@@ -1,7 +1,7 @@
 # Project Analysis and Plan
 
 ## 1. Confirmed Merged State
-The project has successfully migrated to the new Google AI workflow (PR #213 is merged). The new workflow utilizes Gemini/Gems for design, balance, and review, while Jules serves as the designated implementation coding agent.
+The project has restored the active implementation workflow to Codex. ChatGPT / Producer / Specs handles architecture, design, PR scope, and review; Codex is the current implementation coding agent.
 
 Functionally, the actual `main` branch codebase contains a fully working combat system and skill engine. Crucially, multiple weapon classes and families are already implemented and present in the runtime codebase (e.g., in `rpg/game/skills.py`), including bows, 2-handed swords, 2-handed axes, magic staffs, holy staffs, wands, holy rods, tomes, and venom daggers. The core combat foundation is stable and functional.
 
@@ -14,9 +14,9 @@ Derived strictly from `PROJECT_STATE_CURRENT.md`, the current active focus is on
 - Alpha-ready loop stabilization.
 
 ## 3. Stale/Deprecated Docs Warnings
-Older repository documentation may conflict with the current state or the new Google AI workflow:
+Older repository documentation may conflict with the current state or the restored Codex workflow:
 - **Active Foundation Docs**: `rpg/docs/CLAUDE.md` and `rpg/docs/GAME_FOUNDATION.md` are active, canonical foundation documents and remain mandatory reading for medium/large or non-trivial tasks.
-- Any legacy documentation implying a single-agent workflow (like Claude alone) is stale. The project now strictly adheres to the workflow outlined in `rpg/docs/GOOGLE_AI_WORKFLOW.md` and `rpg/docs/AI_WORKFLOW.md`.
+- Jules/Gemini workflow documents are historical/inactive unless explicitly marked current again. The project now follows `rpg/docs/AI_WORKFLOW.md` with Codex as implementation agent.
 - Any legacy documentation claiming that major weapon families (like holy rods, staffs, or bows) are "missing" is strictly incorrect, as they are actively present in the codebase.
 
 ## 4. Real Next PR Candidates

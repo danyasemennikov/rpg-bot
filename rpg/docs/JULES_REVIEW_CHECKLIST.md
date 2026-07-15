@@ -1,6 +1,6 @@
-# Jules Review Checklist
+# Jules Review Checklist (Archived / Inactive)
 
-The Producer Gem should use this checklist when reviewing PRs submitted by Jules.
+Archived workflow experiment checklist. Do not use this as the current implementation source of truth; current implementation review should happen through Codex Review / Integration.
 
 ### Review Checklist
 

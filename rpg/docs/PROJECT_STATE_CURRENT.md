@@ -5,19 +5,30 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
-- PR: Google AI Workflow Migration Foundation (Docs only)
+- PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: Google AI Workflow Migration Foundation (Docs only)
-- Confirmed state below reflects current merged main after Google AI Workflow Migration Foundation, and includes prior Balance V2 PR8 simulation action resolution / fallback attribution, Balance V2 PR7 profile-aware simulation policy execution pilot, Balance V2 PR6 simulation policy and skill economy clarification, Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics (PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass), Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context.
+- Status: Codex Workflow Restoration (Docs only)
+- Confirmed state below reflects current merged main after Codex Workflow Restoration, and includes prior Balance V2 PR8 simulation action resolution / fallback attribution, Balance V2 PR7 profile-aware simulation policy execution pilot, Balance V2 PR6 simulation policy and skill economy clarification, Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics (PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass), Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context.
 
 ---
 
 ## Confirmed merged state
 
+### Codex Workflow Restoration
+
+- Active implementation workflow is restored to Codex.
+- ChatGPT / Producer / Specs handles architecture, design, PR scope, review, blockers, cheap tails, fix prompts, and merge/test guidance.
+- Codex is the current implementation coding agent for approved PR scopes.
+- Codex results return to Codex Review / Integration for review, blockers, cheap tails, fix prompts, and merge/test guidance.
+- Jules workflow docs are historical/inactive workflow experiment references and are not the current source of truth for implementation.
+- No gameplay, combat, balance, runtime, formula, route, economy, equipment, reward, PvP, targeting, teleport, cooldown reset, or live group combat behavior changed in this docs/workflow-only state update.
+- Latest gameplay/balance confirmed state remains Balance V2 PR8 Simulation Action Resolution / Fallback Attribution.
+
 ### Google AI Workflow Migration Foundation
 
-- Project documentation was migrated to support a two-Gem + Jules workflow.
-- `AGENTS.md` and `AI_WORKFLOW.md` were updated to reflect Gemini and Jules roles.
+- Project documentation was previously migrated to support a two-Gem + Jules workflow.
+- This workflow is now historical/inactive and superseded by Codex Workflow Restoration.
+- `AGENTS.md` and `AI_WORKFLOW.md` have since been updated to restore Codex implementation roles.
 - `GOOGLE_AI_WORKFLOW.md`, `AI_CONTEXT_BOOTSTRAP.md`, `GEMINI_GEMS_SETUP.md`, `JULES_TASK_TEMPLATE.md`, `JULES_REVIEW_CHECKLIST.md`, `PROJECT_NOTEBOOK_STRUCTURE.md`, `PR_PIPELINE.md`, `DECISIONS_LOG.md`, and `BACKLOG.md` were created.
 - Explicitly no gameplay, combat, formula, runtime behavior, or tests were changed; this is a docs/workflow-only update.
 
@@ -247,8 +258,6 @@ Alpha readiness policy:
   - audit flags remain diagnostic-only;
   - gear budget, mob encounter scaling, pack/group simulation, route/mob/skill/reward/formula tuning, and live behavior changes are not included.
 
-
-
 ### Equipment Budget Foundation (PR9)
 
 - equipment budget foundation is implemented for simulation/reporting;
@@ -269,10 +278,6 @@ Alpha readiness policy:
 - scaled final mob stats are produced from base template, encounter level, role, and route pressure modifiers;
 - report v2 exposes scaled mob context;
 - live mob templates/gameplay, rewards, loot/crafting, pack/group simulation, and tuning are not changed.
-
-
-
-
 
 ### Balance Instrument V2 Observability Foundation
 

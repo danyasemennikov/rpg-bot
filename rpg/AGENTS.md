@@ -3,13 +3,13 @@
 ## Purpose
 This repository contains a Telegram text MMORPG bot.
 
-This file is the main instruction file for the coding agent. Jules is the current default coding agent.
+This file is the main instruction file for the coding agent. Codex is the current implementation coding agent.
 Read this file first, then read `rpg/docs/CLAUDE.md`, then read `rpg/docs/GAME_FOUNDATION.md` before making important changes.
 
 ## Primary workflow
 The working model for this repository is:
 1. A design/spec/review assistant is used for architecture, balance, specifications, design decisions, and review.
-2. The coding agent is used to implement approved changes in the codebase. Jules is the current default coding agent.
+2. Codex is used to implement approved changes in the codebase. Codex is the current implementation coding agent.
 3. Do not assume any previously generated `*_v2.py` files or patches were merged unless the user explicitly says they were merged.
 4. Until the user clearly confirms otherwise, assume the project files in the repository are still the original versions.
 
