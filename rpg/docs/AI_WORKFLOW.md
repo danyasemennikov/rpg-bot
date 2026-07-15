@@ -64,6 +64,18 @@ Codex is the current implementation coding agent for implementation PRs.
 
 ---
 
+## Codex App Draft PR Workflow
+
+- ChatGPT / Producer / Specs provides prompts and review.
+- Codex App may use a local worktree as a working copy.
+- Codex must create a fresh branch for each task.
+- Codex must push the branch and create a Draft PR.
+- Codex must not merge PRs.
+- The user sends Summary / Testing / Changed files / PR link back to Producer review.
+- Merge happens only after Producer says “можно мержить”.
+
+---
+
 ## Handoff protocol
 
 When an assistant finishes its role for the current stage, it must stop and produce a handoff packet instead of continuing into another role.
