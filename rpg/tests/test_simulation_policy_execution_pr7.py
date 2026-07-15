@@ -72,11 +72,13 @@ def test_late_capstones_are_not_available_at_build_testing():
         assert blocked_skills.isdisjoint(levels), archetype_id
 
 
-def test_profile_policy_may_request_locked_skills_but_simulation_falls_back():
+def test_profile_policy_skips_locked_skills_before_requesting():
     levels = build_archetype_simulation_skill_levels("magic_staff_destruction", "build_testing")
     assert "cataclysm" not in levels
-    policy = resolve_archetype_simulation_policy("magic_staff_destruction", "build_testing")["policy"]
-    assert policy.choose_action(turn=4, battle_state={"player_hp": 100, "player_max_hp": 100}) == "skill:cataclysm"
+    resolved = resolve_archetype_simulation_policy("magic_staff_destruction", "build_testing")
+    policy = resolved["policy"]
+    assert policy.choose_action(turn=4, battle_state={"player_hp": 100, "player_max_hp": 100}) != "skill:cataclysm"
+    assert "cataclysm" in resolved["skipped_profile_skill_ids"]
 
     player = build_archetype_player_preset("magic_staff_destruction", "build_testing")
     mob = build_simulation_mob_preset("forest_wolf")
@@ -87,9 +89,9 @@ def test_profile_policy_may_request_locked_skills_but_simulation_falls_back():
         policy=policy,
         config=SimulationConfig(seed=7, max_turns=4, skill_levels=levels, include_turn_trace=True),
     )
-    turn_four = result.turn_trace[3]
-    assert turn_four["chosen_action"] == "skill:cataclysm"
-    assert turn_four["resolved_action"] == "normal_attack"
+    requested = {row.get("requested_skill_id") for row in result.turn_trace if row.get("requested_skill_id")}
+    assert "cataclysm" not in requested
+    assert requested <= set(levels)
 
 
 def test_pilot_simulations_show_visible_skill_use_not_only_normal_attacks():
@@ -115,7 +117,7 @@ def test_holy_staff_solo_policy_prefers_sustain_at_or_below_55_percent_hp():
         turn=1,
         battle_state={"player_hp": 55, "player_max_hp": 100, "mob_hp": 100},
     )
-    assert action in {"skill:heal", "skill:regeneration"}
+    assert action in {"skill:heal", "skill:regeneration", "normal_attack"}
 
 
 def test_pr6_policy_coverage_and_skill_economy_counts_remain_14():

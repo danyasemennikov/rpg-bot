@@ -743,6 +743,47 @@ def build_simulation_action_resolution_diagnostics(enriched_runs: list[dict[str,
     }
 
 
+
+def build_profile_policy_availability_diagnostics(enriched_runs: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counts: Counter[str] = Counter()
+    skipped_counts: Counter[str] = Counter()
+    unavailable_counts: Counter[str] = Counter()
+    by_archetype: dict[str, dict[str, Any]] = {}
+    for run in enriched_runs:
+        status = str(run.get("profile_policy_availability_status") or "no_profile_policy")
+        status_counts[status] += 1
+        for skill_id in run.get("skipped_profile_skill_ids") or []:
+            skipped_counts[str(skill_id)] += 1
+        for skill_id in run.get("unavailable_profile_skill_ids") or []:
+            unavailable_counts[str(skill_id)] += 1
+    for archetype_id in PROFILE_POLICY_PILOT_ARCHETYPE_IDS:
+        rows = [run for run in enriched_runs if str(run.get("archetype_id")) == archetype_id]
+        statuses = Counter(str(row.get("profile_policy_availability_status") or "no_profile_policy") for row in rows)
+        skipped = Counter()
+        unavailable = Counter()
+        skill_locked = 0
+        for row in rows:
+            skipped.update(str(sid) for sid in (row.get("skipped_profile_skill_ids") or []))
+            unavailable.update(str(sid) for sid in (row.get("unavailable_profile_skill_ids") or []))
+            skill_locked += int(((row.get("observability") or {}).get("fallback_reason_counts") or {}).get("skill_locked_or_unleveled", 0) or 0)
+        by_archetype[archetype_id] = {
+            "run_count": len(rows),
+            "availability_status_counts": _sorted_count_dict(statuses),
+            "skipped_profile_skill_counts": _sorted_count_dict(skipped),
+            "unavailable_profile_skill_counts": _sorted_count_dict(unavailable),
+            "skill_locked_or_unleveled_fallback_count": skill_locked,
+        }
+    return {
+        "available": True,
+        "availability_status_counts": _sorted_count_dict(status_counts),
+        "skipped_profile_skill_counts": _sorted_count_dict(skipped_counts),
+        "unavailable_profile_skill_counts": _sorted_count_dict(unavailable_counts),
+        "total_skipped_profile_skill_references": int(sum(skipped_counts.values())),
+        "total_unavailable_profile_skill_references": int(sum(unavailable_counts.values())),
+        "pilot_availability_summary": [dict({"archetype_id": k}, **v) for k, v in by_archetype.items()],
+        "skill_locked_or_unleveled_fallback_count": int(_merge_counter_from_runs(enriched_runs, "fallback_reason_counts").get("skill_locked_or_unleveled", 0)),
+    }
+
 def _parse_node_depth_from_location_id(location_id: str) -> int | None:
     suffix = str(location_id or "").lower().split("_n", 1)
     if len(suffix) != 2:
@@ -1516,6 +1557,7 @@ def build_alpha_balance_report_data(
         list(matrix.get("archetypes", [])) or list_alpha_archetype_ids(),
     )
     simulation_action_resolution = build_simulation_action_resolution_diagnostics(enriched_runs)
+    profile_policy_availability = build_profile_policy_availability_diagnostics(enriched_runs)
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -1572,6 +1614,7 @@ def build_alpha_balance_report_data(
         "unified_combat_budget_audit": unified_combat_budget_audit,
         "simulation_policy_skill_economy": simulation_policy_skill_economy,
         "simulation_action_resolution": simulation_action_resolution,
+        "profile_policy_availability": profile_policy_availability,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -1921,6 +1964,51 @@ def _render_pr8_simulation_action_resolution_lines(report_data: dict[str, Any]) 
     return lines
 
 
+
+def _render_pr9_profile_policy_availability_lines(report_data: dict[str, Any]) -> list[str]:
+    data = dict(report_data.get("profile_policy_availability") or {})
+    pr6 = dict(report_data.get("simulation_policy_skill_economy") or {})
+    audit_rows = list((report_data.get("unified_combat_budget_audit") or {}).get("audit_rows", []))
+    pr8 = dict(report_data.get("simulation_action_resolution") or {})
+    lines = [
+        "",
+        "## Balance V2 PR9 Availability-aware Profile Policy Selection",
+        "Diagnostic/simulation/reporting-only: no live tuning, gameplay, combat, formula, route, mob, gear, PvP, cooldown reset, reward, or runtime behavior changed.",
+        "Profile policies now skip unavailable profile skills before requesting actions from direct simulations.",
+        "Unavailable/skipped profile skills are reported diagnostically; skill_levels remains the explicit learned positive-level execution map and unlock_mastery remains diagnostic/upstream metadata only.",
+        "PR8 action-resolution and fallback attribution metadata remains intact.",
+        f"PR6 remains {len(pr6.get('policy_coverage_rows', []))}/{len(pr6.get('skill_economy_rows', []))} policy coverage / skill economy rows.",
+        f"PR5 remains {len(audit_rows)} audit rows (expected 420).",
+        f"PR7 pilot set remains exactly five: {', '.join(PROFILE_POLICY_PILOT_ARCHETYPE_IDS)}.",
+        "Metadata-only registry policies remain not globally executable.",
+        "PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.",
+        "No final balance claims are made.",
+        "",
+        "Availability status counts:",
+    ]
+    for status, count in list(dict(data.get("availability_status_counts") or {}).items()):
+        lines.append(f"- {status}: {count}")
+    if not data.get("availability_status_counts"):
+        lines.append("- none: 0")
+    lines += [
+        "",
+        "Skipped/unavailable profile skill counts:",
+        f"- skipped profile skill references: {data.get('total_skipped_profile_skill_references', 0)}",
+        f"- unavailable profile skill references: {data.get('total_unavailable_profile_skill_references', 0)}",
+        f"- current skill_locked_or_unleveled fallback count after availability filtering: {data.get('skill_locked_or_unleveled_fallback_count', 0)}",
+        f"- PR8 total fallback reasons remain reported separately: {dict(pr8.get('fallback_reason_counts') or {})}",
+        "",
+        "Top pilot availability summaries:",
+        "| archetype | statuses | skipped_profile_skills | unavailable_profile_skills | skill_locked_or_unleveled_fallbacks |",
+        "|---|---|---|---|---:|",
+    ]
+    for row in list(data.get("pilot_availability_summary") or []):
+        statuses = ", ".join(f"{k}:{v}" for k, v in dict(row.get("availability_status_counts") or {}).items()) or "none"
+        skipped = ", ".join(f"{k}:{v}" for k, v in dict(row.get("skipped_profile_skill_counts") or {}).items()) or "none"
+        unavailable = ", ".join(f"{k}:{v}" for k, v in dict(row.get("unavailable_profile_skill_counts") or {}).items()) or "none"
+        lines.append(f"| {row.get('archetype_id')} | {statuses} | {skipped} | {unavailable} | {row.get('skill_locked_or_unleveled_fallback_count', 0)} |")
+    return lines
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -1975,6 +2063,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
     lines.extend(_render_pr7_profile_aware_policy_pilot_lines(report_data))
     lines.extend(_render_pr8_simulation_action_resolution_lines(report_data))
+    lines.extend(_render_pr9_profile_policy_availability_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -2157,6 +2246,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines.extend(_render_pr6_simulation_policy_skill_economy_lines(report_data))
     lines.extend(_render_pr7_profile_aware_policy_pilot_lines(report_data))
     lines.extend(_render_pr8_simulation_action_resolution_lines(report_data))
+    lines.extend(_render_pr9_profile_policy_availability_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)

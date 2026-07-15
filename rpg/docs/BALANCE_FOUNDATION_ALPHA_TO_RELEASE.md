@@ -1,5 +1,21 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR9 Availability-aware Profile Policy Selection Note
+
+- Adds diagnostic/simulation/reporting-only availability-aware selection for PR7 profile-aware pilot policies.
+- Profile-aware pilot policies skip profile skills that are not present in current direct simulation `skill_levels` with level > 0.
+- Unavailable and skipped profile skills are exposed as deterministic diagnostics, including availability status, coverage, available skill ids, unavailable skill ids, skipped skill ids, and unavailable counts.
+- Keeps `unlock_mastery` as upstream/build-stage metadata and diagnostic evidence only; direct learned positive-level skills below unlock mastery still execute when explicitly present in `skill_levels`.
+- Preserves PR8 action-resolution and fallback attribution metadata.
+- Keeps PR7 pilot set exactly five: `daggers_venom`, `daggers_evasion`, `bow_sniper`, `magic_staff_destruction`, and `holy_staff_solo`.
+- Keeps PR6 policy coverage at 14 rows and PR6 skill economy diagnostics at 14 rows.
+- Keeps PR5 unified combat budget audit coverage at 420 rows.
+- Metadata-only registry policies remain not globally executable.
+- PvP remains proxy-only, and route/mob/gear/PvP tuning remains deferred.
+- Does not tune weapon numbers, skill numbers, armor stats, gear formulas, enhancement curves, routes, mobs, rewards/economy/loot/crafting, targeting, teleport, cooldown reset behavior, reward behavior, or live group combat.
+- Does not change live gameplay/runtime, Combat Core behavior, formulas, equipment budget formulas, live mob templates, economy/rewards, targeting, teleport, or live group combat.
+- Does not add new live skills, new tuning knobs, or final balance claims.
+
 ## Balance V2 PR8 Simulation Action Resolution / Fallback Attribution Note
 
 - Adds diagnostic/simulation/reporting-only action resolution metadata to simulated turns.

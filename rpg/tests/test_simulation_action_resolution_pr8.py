@@ -207,9 +207,10 @@ def test_pr6_pr5_pr7_and_metadata_registry_guards_remain_intact():
         assert EXECUTABLE_POLICY_REGISTRY[policy_id]["executable"] is False
 
 
-def test_project_state_current_has_pr8_as_latest():
+def test_project_state_current_preserves_pr8_and_records_pr9_latest():
     project_root = Path(__file__).resolve().parents[1]
     text = (project_root / "docs" / "PROJECT_STATE_CURRENT.md").read_text(encoding="utf-8")
     assert "Balance V2 PR8 Simulation Action Resolution / Fallback Attribution" in text
     assert "PR: Codex Workflow Restoration (Docs only)" in text
-    assert "Latest gameplay/balance confirmed state remains Balance V2 PR8 Simulation Action Resolution / Fallback Attribution." in text
+    assert "Balance V2 PR8 Simulation Action Resolution / Fallback Attribution" in text
+    assert "Balance V2 PR9 Availability-aware Profile Policy Selection" in text

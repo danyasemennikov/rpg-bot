@@ -183,6 +183,42 @@ def _skill_loop_actions(skill_ids_or_actions: list[str]) -> list[str]:
     return actions or [SIM_ACTION_NORMAL_ATTACK]
 
 
+def _available_profile_skill_ids(profile_skill_ids: list[str], skill_levels: dict[str, int]) -> list[str]:
+    return [skill_id for skill_id in profile_skill_ids if int(skill_levels.get(skill_id, 0) or 0) > 0]
+
+
+def _build_profile_policy_availability_diagnostics(profile_skill_ids: list[str], skill_levels: dict[str, int]) -> dict[str, Any]:
+    unique_profile_skill_ids = [skill_id for skill_id in dict.fromkeys(profile_skill_ids) if skill_id and get_skill(skill_id)]
+    available = _available_profile_skill_ids(unique_profile_skill_ids, skill_levels)
+    unavailable = [skill_id for skill_id in unique_profile_skill_ids if skill_id not in available]
+    if not unique_profile_skill_ids:
+        status = "no_profile_policy"
+    elif not available:
+        status = "no_profile_skills_available"
+    elif unavailable:
+        status = "partial_profile_skills_available"
+    else:
+        status = "all_profile_skills_available"
+    return {
+        "available_profile_skill_ids": available,
+        "unavailable_profile_skill_ids": unavailable,
+        "skipped_profile_skill_ids": unavailable,
+        "unavailable_profile_skill_count": len(unavailable),
+        "profile_policy_stage_coverage": f"{len(available)}/{len(unique_profile_skill_ids)}",
+        "profile_policy_availability_status": status,
+    }
+
+
+def _filter_profile_policy_actions(skill_ids_or_actions: list[str], skill_levels: dict[str, int]) -> list[str]:
+    filtered: list[str] = []
+    for item in skill_ids_or_actions:
+        if item == SIM_ACTION_NORMAL_ATTACK:
+            filtered.append(item)
+        elif int(skill_levels.get(item, 0) or 0) > 0:
+            filtered.append(item)
+    return _skill_loop_actions(filtered)
+
+
 def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> dict[str, Any]:
     metadata = get_archetype_metadata(archetype_id)
     pref_policy = metadata.get("preferred_policy_id")
@@ -190,11 +226,32 @@ def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> d
     skill_levels = build_archetype_simulation_skill_levels(archetype_id, power_tier)
 
     if archetype_id in PROFILE_POLICY_PILOT_ARCHETYPE_IDS:
-        actions = _skill_loop_actions(PROFILE_POLICY_ACTIONS.get(archetype_id, []))
+        profile_action_ids = PROFILE_POLICY_ACTIONS.get(archetype_id, [])
+        availability = _build_profile_policy_availability_diagnostics(
+            [item for item in profile_action_ids if item != SIM_ACTION_NORMAL_ATTACK],
+            skill_levels,
+        )
+        actions = _filter_profile_policy_actions(profile_action_ids, skill_levels)
         if archetype_id == "holy_staff_solo":
+            low_hp_ids = ["heal", "regeneration", SIM_ACTION_NORMAL_ATTACK]
+            low_hp_availability = _build_profile_policy_availability_diagnostics(
+                [item for item in low_hp_ids if item != SIM_ACTION_NORMAL_ATTACK],
+                skill_levels,
+            )
+            for key in ("available_profile_skill_ids", "unavailable_profile_skill_ids", "skipped_profile_skill_ids"):
+                availability[key] = list(dict.fromkeys(list(availability[key]) + list(low_hp_availability[key])))
+            availability["unavailable_profile_skill_count"] = len(availability["unavailable_profile_skill_ids"])
+            total_known = len(availability["available_profile_skill_ids"]) + len(availability["unavailable_profile_skill_ids"])
+            availability["profile_policy_stage_coverage"] = f"{len(availability['available_profile_skill_ids'])}/{total_known}"
+            if not availability["available_profile_skill_ids"]:
+                availability["profile_policy_availability_status"] = "no_profile_skills_available"
+            elif availability["unavailable_profile_skill_ids"]:
+                availability["profile_policy_availability_status"] = "partial_profile_skills_available"
+            else:
+                availability["profile_policy_availability_status"] = "all_profile_skills_available"
             policy = ProfileAwareSimulationPolicy(
                 actions,
-                low_hp_actions=_skill_loop_actions(["heal", "regeneration", SIM_ACTION_NORMAL_ATTACK]),
+                low_hp_actions=_filter_profile_policy_actions(low_hp_ids, skill_levels),
                 low_hp_threshold=0.55,
             )
         else:
@@ -207,6 +264,7 @@ def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> d
             "profile_policy_pilot": True,
             "registry_policy_id": pref_policy,
             "registry_policy_executable": bool(registry_item.get("executable")),
+            **availability,
         }
 
     if registry_item and registry_item.get("executable"):
@@ -218,6 +276,12 @@ def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> d
             "profile_policy_pilot": False,
             "registry_policy_id": pref_policy,
             "registry_policy_executable": True,
+            "available_profile_skill_ids": [],
+            "unavailable_profile_skill_ids": [],
+            "skipped_profile_skill_ids": [],
+            "unavailable_profile_skill_count": 0,
+            "profile_policy_stage_coverage": "0/0",
+            "profile_policy_availability_status": "no_profile_policy",
         }
 
     chosen_skill = None
@@ -237,6 +301,12 @@ def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> d
         "profile_policy_pilot": False,
         "registry_policy_id": pref_policy,
         "registry_policy_executable": bool(registry_item.get("executable")),
+        "available_profile_skill_ids": [],
+        "unavailable_profile_skill_ids": [],
+        "skipped_profile_skill_ids": [],
+        "unavailable_profile_skill_count": 0,
+        "profile_policy_stage_coverage": "0/0",
+        "profile_policy_availability_status": "no_profile_policy",
     }
 
 
@@ -439,6 +509,12 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                             "active_simulation_policy_status": policy_resolution.get("active_simulation_policy_status"),
                             "profile_policy_executable": policy_resolution.get("profile_policy_executable"),
                             "profile_policy_pilot": policy_resolution.get("profile_policy_pilot"),
+                            "available_profile_skill_ids": list(policy_resolution.get("available_profile_skill_ids", [])),
+                            "unavailable_profile_skill_ids": list(policy_resolution.get("unavailable_profile_skill_ids", [])),
+                            "skipped_profile_skill_ids": list(policy_resolution.get("skipped_profile_skill_ids", [])),
+                            "unavailable_profile_skill_count": int(policy_resolution.get("unavailable_profile_skill_count", 0) or 0),
+                            "profile_policy_stage_coverage": policy_resolution.get("profile_policy_stage_coverage"),
+                            "profile_policy_availability_status": policy_resolution.get("profile_policy_availability_status"),
                         }
                         if cfg.include_turn_trace and result.turn_trace:
                             run_item["turn_trace"] = list(result.turn_trace)
@@ -481,6 +557,9 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                     "requested_skill_count_total": int(metrics["requested_skill_count_total"]),
                     "resolved_skill_success_count_total": int(metrics["resolved_skill_success_count_total"]),
                     "active_simulation_policy_status": resolve_archetype_simulation_policy(archetype_id, stage).get("active_simulation_policy_status"),
+                    "profile_policy_availability_status": resolve_archetype_simulation_policy(archetype_id, stage).get("profile_policy_availability_status"),
+                    "profile_policy_stage_coverage": resolve_archetype_simulation_policy(archetype_id, stage).get("profile_policy_stage_coverage"),
+                    "unavailable_profile_skill_count": int(resolve_archetype_simulation_policy(archetype_id, stage).get("unavailable_profile_skill_count", 0) or 0),
                 }
                 summary["observed_pressure_label"] = _label_observed_pressure(summary)
                 summaries.append(summary)

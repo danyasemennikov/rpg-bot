@@ -5,15 +5,32 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: Balance V2 PR9 Availability-aware Profile Policy Selection
 - PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 - PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
-- Confirmed state below reflects current merged main after PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation, and includes prior Codex Workflow Restoration docs/workflow state plus prior Balance V2 PR8 simulation action resolution / fallback attribution, Balance V2 PR7 profile-aware simulation policy execution pilot, Balance V2 PR6 simulation policy and skill economy clarification, Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context.
+- Status: Balance V2 PR9 Availability-aware Profile Policy Selection
+- Latest gameplay/balance diagnostic state: Balance V2 PR9 Availability-aware Profile Policy Selection
+- Confirmed state below reflects current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection, and includes prior PR218 test-suite SQLite isolation state, prior Codex Workflow Restoration docs/workflow state, prior Balance V2 PR8 simulation action resolution / fallback attribution, Balance V2 PR7 profile-aware simulation policy execution pilot, Balance V2 PR6 simulation policy and skill economy clarification, Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context.
 
 ---
 
 ## Confirmed merged state
+
+### Balance V2 PR9 Availability-aware Profile Policy Selection
+
+- Balance V2 PR9 is diagnostic/simulation/reporting-only.
+- PR7 profile-aware simulation policies now skip profile skills that are unavailable in the current simulation `skill_levels` map.
+- For direct simulation execution, `skill_levels` is the explicit learned-skill map: a profile skill is available only when its skill id exists in current `skill_levels` and its level is greater than 0.
+- `unlock_mastery` is not used as a direct execution gate; it remains upstream/build-stage metadata and diagnostic evidence.
+- Unavailable/skipped profile skills are reported diagnostically through availability status, coverage, available, unavailable, skipped, and unavailable-count fields.
+- PR8 action-resolution / fallback attribution metadata remains intact, including requested/resolved action, fallback reason, skill existence/level/unlock/visibility, cooldown, mana, and can-attempt fields.
+- PR7 pilot set remains exactly five: `daggers_venom`, `daggers_evasion`, `bow_sniper`, `magic_staff_destruction`, and `holy_staff_solo`.
+- PR6 policy coverage remains 14 rows and PR6 skill economy diagnostics remain 14 rows.
+- PR5 audit remains 420 rows.
+- Metadata-only registry policies remain `executable=False` and are not globally executable.
+- PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
+- No live gameplay, combat, balance, runtime behavior, formula, route, mob, equipment, reward, economy, targeting, teleport, cooldown reset, reward behavior, live skill definition, or live group combat behavior changed.
 
 ### PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 
@@ -22,7 +39,7 @@ Last updated after merge:
 - Test setup initializes core schema, seeded item data, PvE runtime tables, and minimal FK-valid synthetic players needed by DB-touching runtime unit tests.
 - SQLite lock failures caused by shared/stale `game.db` state and foreign-key failures caused by cooldown/item writes without fixture-backed parent rows are addressed in test infrastructure.
 - No gameplay, combat, balance, runtime behavior, formula, route, mob, equipment, reward, economy, targeting, teleport, cooldown reset, or live skill definitions changed.
-- Latest gameplay/balance confirmed state remains Balance V2 PR8 Simulation Action Resolution / Fallback Attribution.
+- This PR did not change gameplay/balance diagnostic state; it stabilized the test baseline only.
 
 ### Codex Workflow Restoration
 
@@ -32,7 +49,7 @@ Last updated after merge:
 - Codex results return to Codex Review / Integration for review, blockers, cheap tails, fix prompts, and merge/test guidance.
 - Jules workflow docs are historical/inactive workflow experiment references and are not the current source of truth for implementation.
 - No gameplay, combat, balance, runtime, formula, route, economy, equipment, reward, PvP, targeting, teleport, cooldown reset, or live group combat behavior changed in this docs/workflow-only state update.
-- Latest gameplay/balance confirmed state remains Balance V2 PR8 Simulation Action Resolution / Fallback Attribution.
+- This docs/workflow-only update did not change gameplay/balance diagnostic state.
 
 ### Google AI Workflow Migration Foundation
 

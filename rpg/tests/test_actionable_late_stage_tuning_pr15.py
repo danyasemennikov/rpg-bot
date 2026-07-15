@@ -137,7 +137,9 @@ def test_project_state_pr15_header_section_and_no_stale_pr14_header():
     content = STATE_PATH.read_text(encoding="utf-8")
     header = content.split("---", 1)[0]
     assert "PR: Codex Workflow Restoration (Docs only)" in header
-    assert "Status: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation" in header
+    assert "Status: Balance V2 PR9 Availability-aware Profile Policy Selection" in header
+    assert "current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection" in header
+    assert "prior PR218 test-suite SQLite isolation state" in header
     assert "Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics" in header
     assert "PR: PR14: Target Expectation Calibration Pass" not in header
     assert "### Actionable Late-Stage Underpressure Tuning Pass (PR15)" in content
