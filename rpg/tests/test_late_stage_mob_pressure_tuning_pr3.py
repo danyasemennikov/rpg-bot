@@ -155,8 +155,8 @@ def test_pr3_docs_state_header_foundation_note_and_non_goals():
     foundation = FOUNDATION_PATH.read_text(encoding="utf-8")
     header = state.split("---", 1)[0]
     assert "PR: Codex Workflow Restoration (Docs only)" in header
-    assert "Status: Codex Workflow Restoration (Docs only)" in header
-    assert "PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass" in header
+    assert "Status: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation" in header
+    assert "Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics" in header
     assert "### Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass" in state
     assert "controlled simulation/reporting-only late-stage mob pressure tuning was applied" in state
     assert "current mob_pressure_lane count after PR3 classifier cleanup is 41" in state

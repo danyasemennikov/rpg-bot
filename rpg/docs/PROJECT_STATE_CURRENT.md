@@ -5,14 +5,24 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 - PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: Codex Workflow Restoration (Docs only)
-- Confirmed state below reflects current merged main after Codex Workflow Restoration, and includes prior Balance V2 PR8 simulation action resolution / fallback attribution, Balance V2 PR7 profile-aware simulation policy execution pilot, Balance V2 PR6 simulation policy and skill economy clarification, Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics (PR: Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass), Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context.
+- Status: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
+- Confirmed state below reflects current merged main after PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation, and includes prior Codex Workflow Restoration docs/workflow state plus prior Balance V2 PR8 simulation action resolution / fallback attribution, Balance V2 PR7 profile-aware simulation policy execution pilot, Balance V2 PR6 simulation policy and skill economy clarification, Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context.
 
 ---
 
 ## Confirmed merged state
+
+### PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
+
+- Full pytest baseline is stabilized through shared test SQLite isolation.
+- Pytest now redirects runtime database access to per-test temporary SQLite databases instead of the local `game.db`.
+- Test setup initializes core schema, seeded item data, PvE runtime tables, and minimal FK-valid synthetic players needed by DB-touching runtime unit tests.
+- SQLite lock failures caused by shared/stale `game.db` state and foreign-key failures caused by cooldown/item writes without fixture-backed parent rows are addressed in test infrastructure.
+- No gameplay, combat, balance, runtime behavior, formula, route, mob, equipment, reward, economy, targeting, teleport, cooldown reset, or live skill definitions changed.
+- Latest gameplay/balance confirmed state remains Balance V2 PR8 Simulation Action Resolution / Fallback Attribution.
 
 ### Codex Workflow Restoration
 
