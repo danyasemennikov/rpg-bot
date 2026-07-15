@@ -45,7 +45,7 @@ def test_pr3_v2_renderer_reports_authoritative_counts_when_raw_runs_available():
     md = render_alpha_simulation_report_v2_markdown(report)
     section = _section(md, "## Balance V2 PR3 Controlled Late-Stage Mob Pressure Tuning Summary", "## Target vs Observed v2 Signals")
     assert "Previous PR2 mob_pressure_lane baseline: 43." in section
-    assert "Current mob_pressure_lane count: 34." in section
+    assert "Current mob_pressure_lane count: 35." in section
     assert "Current route_expectation_lane count: 44." in section
     assert "Current bad_matchup_review_lane count: 1." in section
     assert "Classifier movement vs PR2 baseline: decreased." in section
@@ -155,7 +155,9 @@ def test_pr3_docs_state_header_foundation_note_and_non_goals():
     foundation = FOUNDATION_PATH.read_text(encoding="utf-8")
     header = state.split("---", 1)[0]
     assert "PR: Codex Workflow Restoration (Docs only)" in header
-    assert "Status: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation" in header
+    assert "Status: Balance V2 PR9 Availability-aware Profile Policy Selection" in header
+    assert "current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection" in header
+    assert "prior PR218 test-suite SQLite isolation state" in header
     assert "Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics" in header
     assert "### Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass" in state
     assert "controlled simulation/reporting-only late-stage mob pressure tuning was applied" in state
