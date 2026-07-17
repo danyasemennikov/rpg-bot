@@ -399,6 +399,49 @@ Top pilot availability summaries:
 | magic_staff_destruction | partial_profile_skills_available:20 | cataclysm:20, flame_wave:20, arcane_surge:10 | cataclysm:20, flame_wave:20, arcane_surge:10 | 0 |
 | holy_staff_solo | partial_profile_skills_available:20 | blessing:20, regeneration:10 | blessing:20, regeneration:10 | 0 |
 
+## Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
+Diagnostic/simulation/reporting-only: PR10 adds no live tuning and changes no gameplay or runtime behavior.
+PR9 availability filtering remains intact, and skill_locked_or_unleveled remains 0 after filtering.
+The remaining observed fallback signal is concentrated in cooldown, guard, and insufficient mana reasons.
+This breakdown is diagnostic evidence, not a final balance claim.
+Route/mob/gear/PvP tuning remains deferred until this diagnostic signal is reviewed.
+
+Total fallback reason counts:
+| fallback_reason | count |
+|---|---:|
+| skill_on_cooldown | 61 |
+| guard_fallback_action | 24 |
+| insufficient_mana | 4 |
+
+Cooldown fallback counts by archetype:
+| archetype | cooldown_fallback_count |
+|---|---:|
+| holy_staff_solo | 25 |
+| daggers_evasion | 19 |
+| bow_sniper | 16 |
+| daggers_venom | 1 |
+
+Cooldown fallback counts by stage:
+| stage | cooldown_fallback_count |
+|---|---:|
+| build_testing | 20 |
+| route_exam | 17 |
+| identity_visible | 13 |
+| soft_entry | 11 |
+
+Pilot archetype fallback summary:
+| archetype | skill_on_cooldown | guard_fallback_action | insufficient_mana | skill_locked_or_unleveled |
+|---|---:|---:|---:|---:|
+| daggers_venom | 1 | 0 | 3 | 0 |
+| daggers_evasion | 19 | 0 | 1 | 0 |
+| bow_sniper | 16 | 0 | 0 | 0 |
+| magic_staff_destruction | 0 | 0 | 0 | 0 |
+| holy_staff_solo | 25 | 0 | 0 | 0 |
+
+Recommended next investigation:
+- investigate_cooldown_and_mana_policy_behavior
+- cooldown=61, guard=24, insufficient_mana=4
+
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
 Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidates. Full target comparison data is available from build_alpha_balance_report_data(). Hidden rows are not resolved or dismissed.
