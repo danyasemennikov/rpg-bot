@@ -17,6 +17,7 @@ from game.combat_simulation_matrix import (
 )
 from game.combat_simulation_report import (
     build_default_alpha_simulation_report_v2_data,
+    build_pr13_cooldown_suppression_confirmation,
     render_alpha_simulation_report_v2_markdown,
 )
 
@@ -114,6 +115,86 @@ def test_default_report_confirms_pr13_adoption_and_exact_pr12_parity(report_data
     assert data["active_cooldown_fallback_count"] == 0
     assert data["insufficient_mana_fallback_count"] == 4
     assert data["diagnostic_branch_status"] == "closed_unless_regression_blocker"
+
+
+@pytest.mark.parametrize(
+    ("comparison_overrides", "expected_status"),
+    (
+        ({"available": False}, "open_comparison_unavailable"),
+        (
+            {
+                "available": True,
+                "scope_alignment_status": "mismatch",
+                "scope_mismatches": ["routes"],
+            },
+            "open_scope_mismatch_or_incomplete",
+        ),
+        (
+            {
+                "available": True,
+                "normal_fallback_parity_mismatch_count": 1,
+            },
+            "open_parity_mismatch",
+        ),
+    ),
+)
+def test_pr13_confirmation_stays_open_when_comparison_cannot_confirm(
+    comparison_overrides,
+    expected_status,
+):
+    comparison = {
+        "available": True,
+        "scope_alignment_status": "aligned",
+        "scope_mismatches": [],
+        "pilot_archetypes": list(PROFILE_POLICY_PILOT_ARCHETYPE_IDS),
+        "scenario_pair_count": 100,
+        "normal_fallback_parity_pair_count": 100,
+        "normal_fallback_parity_mismatch_count": 0,
+        "baseline_totals": {"wins": 100, "losses": 0, "timeouts": 0},
+        "normal_fallback_candidate_totals": {"wins": 100, "losses": 0, "timeouts": 0},
+    }
+    comparison.update(comparison_overrides)
+
+    data = build_pr13_cooldown_suppression_confirmation(
+        {"cooldown_fallback_count": 0},
+        comparison,
+    )
+
+    assert data["diagnostic_branch_status"] == expected_status
+    assert data["outcome_and_final_state_parity"] is False
+
+
+def test_pr13_confirmation_stays_open_when_active_cooldown_fallbacks_remain():
+    comparison = {
+        "available": True,
+        "scope_alignment_status": "aligned",
+        "scope_mismatches": [],
+        "pilot_archetypes": list(PROFILE_POLICY_PILOT_ARCHETYPE_IDS),
+        "scenario_pair_count": 100,
+        "normal_fallback_parity_pair_count": 100,
+        "normal_fallback_parity_mismatch_count": 0,
+        "baseline_totals": {"wins": 100, "losses": 0, "timeouts": 0},
+        "normal_fallback_candidate_totals": {"wins": 100, "losses": 0, "timeouts": 0},
+    }
+
+    data = build_pr13_cooldown_suppression_confirmation(
+        {"cooldown_fallback_count": 1},
+        comparison,
+    )
+
+    assert data["diagnostic_branch_status"] == "open_active_cooldown_fallbacks_remain"
+
+
+def test_pr13_renderer_does_not_claim_closure_when_confirmation_fails():
+    markdown = render_alpha_simulation_report_v2_markdown({
+        "pr13_cooldown_aware_normal_suppression": {
+            "diagnostic_branch_status": "open_parity_mismatch",
+            "outcome_and_final_state_parity": False,
+        },
+    })
+
+    assert "diagnostic branch remains open: open_parity_mismatch" in markdown
+    assert "This closes the cooldown-request diagnostic branch" not in markdown
 
 
 def test_default_report_is_deterministic_and_checked_in_markdown_matches(report_data):

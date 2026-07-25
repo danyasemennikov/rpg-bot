@@ -30,6 +30,7 @@ from game.combat_simulation_matrix import (
 from game.combat_simulation_report import (
     build_alpha_balance_report_data,
     build_default_alpha_simulation_report_v2_data,
+    build_pr12_cooldown_shadow_policy_comparison,
     render_alpha_simulation_report_v2_markdown,
 )
 
@@ -316,6 +317,53 @@ def test_paired_runner_uses_identical_stable_scenario_identities():
         assert pair["baseline"]["scenario_identity"] == identity
         assert pair["normal_fallback_candidate"]["scenario_identity"] == identity
         assert pair["next_ready_candidate"]["scenario_identity"] == identity
+
+
+def test_candidate_a_parity_detects_final_battle_state_only_difference():
+    identity = {
+        "route": "route_westwild",
+        "stage": "build_testing",
+        "archetype": "daggers_venom",
+        "location": "westwild_n1",
+        "mob": "crow",
+        "seed": 1,
+    }
+    shared = {
+        "winner": "player",
+        "turns": 2,
+        "terminated_by_max_turns": False,
+        "player_hp_remaining": 10,
+        "player_mana_remaining": 5,
+        "mob_hp_remaining": 0,
+        "damage_dealt": 20,
+        "damage_taken": 3,
+        "actions_used": {"normal_attack": 2},
+        "skills_used": [],
+        "observability": {},
+    }
+    comparison = {
+        "pilot_archetypes": list(PROFILE_POLICY_PILOT_ARCHETYPE_IDS),
+        "pairs": [{
+            "scenario_identity": identity,
+            "baseline": {**shared, "final_battle_state": {"player_hp": 10, "mob_hp": 0}},
+            "normal_fallback_candidate": {
+                **shared,
+                "final_battle_state": {"player_hp": 9, "mob_hp": 0},
+            },
+            "next_ready_candidate": {**shared, "final_battle_state": {"player_hp": 10, "mob_hp": 0}},
+        }],
+    }
+
+    data = build_pr12_cooldown_shadow_policy_comparison(
+        comparison,
+        scope_alignment_status="aligned",
+        comparison_config_source="test",
+    )
+
+    assert data["normal_fallback_parity_mismatch_count"] == 1
+    assert data["normal_fallback_parity_mismatches"][0]["mismatched_fields"] == [
+        "final_battle_state"
+    ]
 
 
 def _narrow_comparison_config():

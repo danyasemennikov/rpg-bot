@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -388,6 +389,9 @@ def _shadow_result_item(result, policy_id: str, identity: dict[str, Any]) -> dic
         "damage_taken": int(result.damage_taken),
         "actions_used": dict(sorted(result.actions_used.items())),
         "skills_used": list(result.skills_used),
+        # The simulator's temporary policy context is never persisted into
+        # final_battle_state, so this preserves every final gameplay-state field.
+        "final_battle_state": copy.deepcopy(result.final_battle_state),
         "observability": dict(result.observability),
     }
 

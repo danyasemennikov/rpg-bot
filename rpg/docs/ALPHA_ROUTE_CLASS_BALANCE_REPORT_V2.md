@@ -550,7 +550,7 @@ Candidate B remains inactive, no next-skill scan occurs, and no final balance cl
 |---:|---:|---:|---:|---:|---:|---:|
 | 5 | 100 | 0 | 61 | 0 | 61 | 4 |
 
-Paired outcomes and final combat state remain identical to the prior active baseline.
+Paired outcomes and exact final combat-state snapshots remain identical to the prior active baseline.
 This closes the cooldown-request diagnostic branch unless regressions reveal a blocker.
 
 ## Target vs Observed v2 Signals

@@ -1616,6 +1616,7 @@ def build_pr12_cooldown_shadow_policy_comparison(
         "damage_taken",
         "actions_used",
         "skills_used",
+        "final_battle_state",
     )
     parity_mismatches = []
     for pair in pairs:
@@ -1779,37 +1780,63 @@ def build_pr13_cooldown_suppression_confirmation(
     candidate_diagnostics = dict(
         pr12_comparison.get("normal_fallback_candidate_diagnostics") or {}
     )
+    pilot_archetypes = list(pr12_comparison.get("pilot_archetypes") or [])
+    comparison_available = bool(pr12_comparison.get("available"))
+    expected_scope_present = (
+        pr12_comparison.get("scope_alignment_status") == "aligned"
+        and not pr12_comparison.get("scope_mismatches")
+        and set(pilot_archetypes) == set(PROFILE_POLICY_PILOT_ARCHETYPE_IDS)
+        and int(pr12_comparison.get("scenario_pair_count", 0) or 0) == 100
+        and int(pr12_comparison.get("normal_fallback_parity_pair_count", 0) or 0) == 100
+    )
+    parity_mismatch_count = int(
+        pr12_comparison.get("normal_fallback_parity_mismatch_count", 0) or 0
+    )
+    active_cooldown_fallback_count = int(
+        post_pr9_fallback_diagnostics.get("cooldown_fallback_count", 0) or 0
+    )
+    if not comparison_available:
+        diagnostic_branch_status = "open_comparison_unavailable"
+    elif not expected_scope_present:
+        diagnostic_branch_status = "open_scope_mismatch_or_incomplete"
+    elif parity_mismatch_count:
+        diagnostic_branch_status = "open_parity_mismatch"
+    elif active_cooldown_fallback_count:
+        diagnostic_branch_status = "open_active_cooldown_fallbacks_remain"
+    else:
+        diagnostic_branch_status = "closed_unless_regression_blocker"
+
+    parity_confirmed = (
+        comparison_available
+        and expected_scope_present
+        and parity_mismatch_count == 0
+        and baseline.get("wins") == candidate.get("wins")
+        and baseline.get("losses") == candidate.get("losses")
+        and baseline.get("timeouts") == candidate.get("timeouts")
+    )
     return {
         "simulation_only": True,
-        "pilot_archetypes": list(pr12_comparison.get("pilot_archetypes") or []),
+        "pilot_archetypes": pilot_archetypes,
         "candidate_a_adopted": True,
         "candidate_b_active": False,
+        "comparison_available": comparison_available,
+        "expected_scope_present": expected_scope_present,
         "historical_scenario_pair_count": int(
             pr12_comparison.get("normal_fallback_parity_pair_count", 0) or 0
         ),
-        "historical_parity_mismatch_count": int(
-            pr12_comparison.get("normal_fallback_parity_mismatch_count", 0) or 0
-        ),
+        "historical_parity_mismatch_count": parity_mismatch_count,
         "previous_cooldown_fallback_count": int(
             baseline.get("cooldown_fallback_count", 0) or 0
         ),
-        "active_cooldown_fallback_count": int(
-            post_pr9_fallback_diagnostics.get("cooldown_fallback_count", 0) or 0
-        ),
+        "active_cooldown_fallback_count": active_cooldown_fallback_count,
         "explicit_policy_normal_attack_count": int(
             candidate_diagnostics.get("proactive_normal_replacement_count", 0) or 0
         ),
         "insufficient_mana_fallback_count": int(
             post_pr9_fallback_diagnostics.get("insufficient_mana_count", 0) or 0
         ),
-        "outcome_and_final_state_parity": (
-            bool(pr12_comparison.get("available"))
-            and not pr12_comparison.get("normal_fallback_parity_mismatch_count")
-            and baseline.get("wins") == candidate.get("wins")
-            and baseline.get("losses") == candidate.get("losses")
-            and baseline.get("timeouts") == candidate.get("timeouts")
-        ),
-        "diagnostic_branch_status": "closed_unless_regression_blocker",
+        "outcome_and_final_state_parity": parity_confirmed,
+        "diagnostic_branch_status": diagnostic_branch_status,
     }
 
 
@@ -2830,7 +2857,7 @@ def _render_pr12_cooldown_shadow_policy_comparison_lines(report_data: dict[str, 
 
 def _render_pr13_cooldown_suppression_lines(report_data: dict[str, Any]) -> list[str]:
     data = dict(report_data.get("pr13_cooldown_aware_normal_suppression") or {})
-    return [
+    lines = [
         "",
         "## Balance V2 PR13 Cooldown-Aware Normal Request Suppression",
         "Simulation-policy-only adoption of PR12 Candidate A for the unchanged five-pilot set.",
@@ -2848,9 +2875,19 @@ def _render_pr13_cooldown_suppression_lines(report_data: dict[str, Any]) -> list
         f"{data.get('explicit_policy_normal_attack_count', 0)} | "
         f"{data.get('insufficient_mana_fallback_count', 0)} |",
         "",
-        "Paired outcomes and final combat state remain identical to the prior active baseline.",
-        "This closes the cooldown-request diagnostic branch unless regressions reveal a blocker.",
     ]
+    if data.get("outcome_and_final_state_parity"):
+        lines.append("Paired outcomes and exact final combat-state snapshots remain identical to the prior active baseline.")
+    else:
+        lines.append("Paired outcome and final combat-state parity is not confirmed for this report scope.")
+    if data.get("diagnostic_branch_status") == "closed_unless_regression_blocker":
+        lines.append("This closes the cooldown-request diagnostic branch unless regressions reveal a blocker.")
+    else:
+        lines.append(
+            "The cooldown-request diagnostic branch remains open: "
+            f"{data.get('diagnostic_branch_status', 'open_confirmation_unavailable')}."
+        )
+    return lines
 
 
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
