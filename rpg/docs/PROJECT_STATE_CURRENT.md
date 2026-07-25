@@ -5,17 +5,32 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
 - PR: Balance V2 PR9 Availability-aware Profile Policy Selection
 - PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 - PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: Balance V2 PR9 Availability-aware Profile Policy Selection
-- Latest gameplay/balance diagnostic state: Balance V2 PR9 Availability-aware Profile Policy Selection
+- Status: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
+- Latest gameplay/balance diagnostic state: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
+- Previous Status: Balance V2 PR9 Availability-aware Profile Policy Selection
+- PR10 is based on current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection.
+- PR221 / Balance V2 PR10 diagnostic/reporting state is proposed on top of the preserved baseline below.
 - Confirmed state below reflects current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection, and includes prior PR218 test-suite SQLite isolation state, prior Codex Workflow Restoration docs/workflow state, prior Balance V2 PR8 simulation action resolution / fallback attribution, Balance V2 PR7 profile-aware simulation policy execution pilot, Balance V2 PR6 simulation policy and skill economy clarification, Balance V2 PR5 progression-aware unified PvE/PvP combat budget audit, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance V2 PR3 controlled late-stage mob pressure tuning, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, PR15 actionable late-stage tuning, PR14 target calibration, PR13 targeted tuning, and PR12 first tuning pass baseline context.
 
 ---
 
 ## Confirmed merged state
+
+### PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
+
+- PR221 / Balance V2 PR10 is the latest confirmed gameplay/balance diagnostic state.
+- PR9 remains prior availability-aware profile policy state.
+- PR8 action-resolution state remains preserved.
+- PR218 test baseline state remains preserved.
+- PR10 is diagnostic/simulation/reporting-only.
+- PR10 adds post-PR9 fallback breakdown diagnostics.
+- PR10 does not tune gameplay/runtime/balance numbers.
+- No live gameplay/combat/runtime/formula/skill/mob/route/equipment/reward/economy/PvP/targeting/teleport/cooldown reset/live group combat behavior changed.
 
 ### Balance V2 PR9 Availability-aware Profile Policy Selection
 

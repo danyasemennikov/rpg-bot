@@ -334,3 +334,9 @@ PR2 Balance Instrument V2 pressure attribution note (implemented simulation/repo
 - PR6 policy coverage remains 14 archetypes and PR6 skill economy diagnostics remain 14 archetypes.
 - PR5 audit remains 420 rows (14 archetypes × 6 level bands × 5 gear states).
 - PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
+
+## Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown Note
+
+- PR10 is diagnostic/reporting-only and observes the remaining fallback reasons after PR9 availability filtering.
+- It does not change policies, skills, cooldowns, mana costs, formulas, routes, mobs, rewards, PvP, targeting, teleport, or runtime behavior.
+- It is intended to guide the next tuning or diagnostic branch after the cooldown, guard, and insufficient-mana signal is reviewed.
