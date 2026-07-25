@@ -491,6 +491,76 @@ Recommended next investigation:
 |---|
 | investigate_top_cooldown_skill_policy_request_cadence_before_tuning |
 
+## Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
+Simulation/diagnostic/reporting-only; the active baseline policy remains unchanged.
+Candidate A proactively requests normal attack where the baseline would have produced a cooldown fallback to normal attack.
+Candidate B tries the next learned, ready, affordable skill in the same active profile branch.
+Neither candidate is active gameplay or an active simulation policy.
+These counterfactual results are evidence for a separately reviewed next branch, not a final balance verdict.
+
+Comparison scope:
+| pilot archetypes | scenario pairs | candidate policies |
+|---:|---:|---|
+| 5 | 100 | cooldown_aware_normal_fallback, cooldown_aware_next_ready_skill |
+
+Candidate A behavioral parity:
+| parity pairs | mismatches | baseline cooldown fallbacks | proactive normal replacements |
+|---:|---:|---:|---:|
+| 100 | 0 | 61 | 61 |
+
+Baseline versus Candidate B totals and deltas:
+| metric | baseline | Candidate B | delta |
+|---|---:|---:|---:|
+| wins | 100 | 100 | 0.0 |
+| losses | 0 | 0 | 0.0 |
+| timeouts | 0 | 0 | 0.0 |
+| average turns | 3.96 | 3.93 | -0.03 |
+| average HP remaining | 1325.23 | 1321.9 | -3.33 |
+| average mana remaining | 1303.8 | 1302.9 | -0.9 |
+| average damage dealt | 707.93 | 707.93 | 0.0 |
+| average damage taken | 85.62 | 88.95 | 3.33 |
+| successful skills | 198 | 202 | 4.0 |
+| normal attacks | 198 | 191 | -7.0 |
+| cooldown fallbacks | 61 | 0 | -61.0 |
+| insufficient-mana fallbacks | 4 | 5 | 1.0 |
+
+Outcome changes:
+| improved | worsened | unchanged | total changed |
+|---:|---:|---:|---:|
+| 0 | 0 | 100 | 0 |
+
+Blocked skills and replacement actions:
+| Candidate A blocked skill | count |
+|---|---:|
+| smite | 25 |
+| smoke_bomb | 19 |
+| hunters_mark | 16 |
+| poison_blade | 1 |
+
+| Candidate B replacement skill | count |
+|---|---:|
+| feint_step | 12 |
+| smoke_bomb | 8 |
+
+Top Candidate B scenario impacts:
+| route | stage | archetype | affected scenarios | outcome changes | next-ready replacements | turns delta | damage-taken delta |
+|---|---|---|---:|---:|---:|---:|---:|
+| route_ashen_ruins | build_testing | daggers_evasion | 1 | 0 | 3 | -1 | 84 |
+| route_frostspine | route_exam | daggers_evasion | 1 | 0 | 3 | -1 | 98 |
+| route_sunscar | build_testing | daggers_evasion | 1 | 0 | 3 | -1 | 77 |
+| route_frostspine | build_testing | daggers_evasion | 1 | 0 | 3 | 0 | 74 |
+| route_mireveil | build_testing | daggers_evasion | 1 | 0 | 2 | 0 | 0 |
+| route_mireveil | route_exam | daggers_evasion | 1 | 0 | 2 | 0 | 0 |
+| route_sunscar | route_exam | daggers_evasion | 1 | 0 | 2 | 0 | 0 |
+| route_westwild | build_testing | daggers_evasion | 1 | 0 | 2 | 0 | 0 |
+
+Recommended next investigation:
+| recommendation |
+|---|
+| consider_cooldown_aware_normal_request_suppression_only |
+
+Candidate A totals remain counterfactual only: wins=100, losses=0, timeouts=0.
+
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
 Showing 40 route-balanced suspicious preview rows out of 88 suspicious candidates. Full target comparison data is available from build_alpha_balance_report_data(). Hidden rows are not resolved or dismissed.
