@@ -154,6 +154,85 @@ def test_candidate_b_selects_next_ready_skill_or_normal_when_all_are_blocked():
     assert all_blocked == SIM_ACTION_NORMAL_ATTACK
 
 
+def _candidate_b_for_mana_scan(candidate_skill_ids):
+    return CooldownAwareShadowPolicy(
+        [
+            make_simulation_skill_action("sword_rush"),
+            *[make_simulation_skill_action(skill_id) for skill_id in candidate_skill_ids],
+        ],
+        candidate_policy_id=COOLDOWN_AWARE_NEXT_READY_SKILL_POLICY_ID,
+        select_next_ready_skill=True,
+    )
+
+
+def test_candidate_b_does_not_select_level_one_power_strike_at_zero_mana():
+    policy = _candidate_b_for_mana_scan(["power_strike"])
+    action = policy.choose_action(
+        turn=1,
+        battle_state=_policy_state(
+            cooldowns={"sword_rush": 2},
+            skill_levels={"sword_rush": 1, "power_strike": 1},
+            mana=0,
+        ),
+    )
+    assert action == SIM_ACTION_NORMAL_ATTACK
+
+
+def test_candidate_b_skips_unaffordable_skill_for_later_affordable_ready_skill():
+    policy = _candidate_b_for_mana_scan(["power_strike", "feint_step"])
+    action = policy.choose_action(
+        turn=1,
+        battle_state=_policy_state(
+            cooldowns={"sword_rush": 2},
+            skill_levels={"sword_rush": 1, "power_strike": 1, "feint_step": 1},
+            mana=14,
+        ),
+    )
+    assert action == "skill:feint_step"
+
+
+def test_candidate_b_exact_required_mana_allows_selection():
+    policy = _candidate_b_for_mana_scan(["power_strike"])
+    action = policy.choose_action(
+        turn=1,
+        battle_state=_policy_state(
+            cooldowns={"sword_rush": 2},
+            skill_levels={"sword_rush": 1, "power_strike": 1},
+            mana=15,
+        ),
+    )
+    assert action == "skill:power_strike"
+
+
+def test_candidate_b_one_mana_below_requirement_skips_selection():
+    policy = _candidate_b_for_mana_scan(["power_strike"])
+    action = policy.choose_action(
+        turn=1,
+        battle_state=_policy_state(
+            cooldowns={"sword_rush": 2},
+            skill_levels={"sword_rush": 1, "power_strike": 1},
+            mana=14,
+        ),
+    )
+    assert action == SIM_ACTION_NORMAL_ATTACK
+
+
+def test_candidate_b_returns_normal_when_no_ready_skill_is_affordable():
+    policy = _candidate_b_for_mana_scan(["power_strike", "smite"])
+    action = policy.choose_action(
+        turn=1,
+        battle_state=_policy_state(
+            cooldowns={"sword_rush": 2},
+            skill_levels={"sword_rush": 1, "power_strike": 1, "smite": 1},
+            mana=0,
+        ),
+    )
+    assert action == SIM_ACTION_NORMAL_ATTACK
+    diagnostics = policy.get_shadow_diagnostics()
+    assert diagnostics["next_ready_skill_replacement_count"] == 0
+    assert diagnostics["proactive_normal_replacement_count"] == 1
+
+
 def test_candidates_do_not_select_unavailable_profile_skills():
     candidate = build_cooldown_shadow_policy(
         "magic_staff_destruction",

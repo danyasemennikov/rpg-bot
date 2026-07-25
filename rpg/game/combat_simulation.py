@@ -173,6 +173,7 @@ class CooldownAwareShadowPolicy(ProfileAwareSimulationPolicy):
         context = dict(battle_state.get(SIMULATION_POLICY_CONTEXT_KEY) or {})
         cooldowns = dict(context.get("simulation_cooldowns") or {})
         skill_levels = dict(context.get("skill_levels") or {})
+        player_mana = int(context.get("player_mana", 0) or 0)
         if not scheduled_skill_id or int(cooldowns.get(scheduled_skill_id, 0) or 0) <= 0:
             return scheduled_action
 
@@ -184,10 +185,19 @@ class CooldownAwareShadowPolicy(ProfileAwareSimulationPolicy):
             for offset in range(1, len(branch)):
                 candidate_action = branch[(start_index + offset) % len(branch)]
                 candidate_skill_id = parse_simulation_skill_action(candidate_action)
+                candidate_skill_level = int(skill_levels.get(candidate_skill_id, 0) or 0)
+                candidate_skill_def = get_skill(candidate_skill_id) if candidate_skill_id else None
+                candidate_mana_cost = (
+                    calc_skill_mana_cost(candidate_skill_def, candidate_skill_level)
+                    if candidate_skill_def and candidate_skill_level > 0
+                    else 0
+                )
                 if (
                     candidate_skill_id
-                    and int(skill_levels.get(candidate_skill_id, 0) or 0) > 0
+                    and candidate_skill_def
+                    and candidate_skill_level > 0
                     and int(cooldowns.get(candidate_skill_id, 0) or 0) <= 0
+                    and (candidate_mana_cost <= 0 or player_mana >= candidate_mana_cost)
                 ):
                     self._next_ready_skill_replacement_count += 1
                     self._count_replacement(candidate_action)

@@ -494,7 +494,7 @@ Recommended next investigation:
 ## Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 Simulation/diagnostic/reporting-only; the active baseline policy remains unchanged.
 Candidate A proactively requests normal attack where the baseline would have produced a cooldown fallback to normal attack.
-Candidate B tries the next ready skill in the same active profile branch.
+Candidate B tries the next learned, ready, affordable skill in the same active profile branch.
 Neither candidate is active gameplay or an active simulation policy.
 These counterfactual results are evidence for a separately reviewed next branch, not a final balance verdict.
 

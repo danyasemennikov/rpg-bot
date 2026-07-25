@@ -27,7 +27,7 @@ Last updated after merge:
 ### PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 
 - Balance V2 PR12 is simulation/diagnostic/reporting-only and compares two isolated cooldown-aware shadow candidates for the unchanged five-archetype PR7 pilot set.
-- Candidate A requests a normal attack when the scheduled profile skill is on cooldown; Candidate B scans the same active profile branch for the next ready available skill.
+- Candidate A requests a normal attack when the scheduled profile skill is on cooldown; Candidate B scans the same active profile branch for the next learned, ready, affordable skill.
 - Candidate A is checked for paired behavioral parity with the active baseline, while Candidate B is reported as counterfactual impact evidence.
 - Report data exposes `pr12_cooldown_shadow_policy_comparison` with deterministic paired totals, parity evidence, replacement diagnostics, deltas, outcome changes, impact clusters, and a conservative next investigation.
 - The active baseline returned by `resolve_archetype_simulation_policy` remains unchanged. Neither shadow candidate is adopted, globally executable, or included in normal matrix results.

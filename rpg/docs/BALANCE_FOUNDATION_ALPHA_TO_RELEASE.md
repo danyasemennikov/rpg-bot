@@ -2,7 +2,7 @@
 
 ## Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison Note
 
-- Compares two simulation-only shadow candidates: proactive normal-attack replacement and next-ready-profile-skill replacement.
+- Compares two simulation-only shadow candidates: proactive normal-attack replacement and next learned, ready, affordable profile-skill replacement.
 - The active profile-aware baseline remains unchanged, and neither candidate was adopted or added to normal matrix execution.
 - No policy cadence, skill, cooldown, mana-cost, formula, route, mob, gear, economy, PvP, or runtime tuning occurred.
 - The counterfactual results determine the next separately reviewed diagnostic or tuning branch; they are not a final balance verdict.
