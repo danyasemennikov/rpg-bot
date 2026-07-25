@@ -1587,7 +1587,14 @@ def _pr12_merge_shadow_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]
     return output
 
 
-def build_pr12_cooldown_shadow_policy_comparison(comparison: dict[str, Any]) -> dict[str, Any]:
+def build_pr12_cooldown_shadow_policy_comparison(
+    comparison: dict[str, Any],
+    *,
+    scope_alignment_status: str,
+    comparison_config_source: str,
+    unavailable_reason: str | None = None,
+    scope_mismatches: list[str] | None = None,
+) -> dict[str, Any]:
     pairs = list(comparison.get("pairs", []))
     baseline_rows = [dict(pair.get("baseline") or {}) for pair in pairs]
     normal_rows = [dict(pair.get("normal_fallback_candidate") or {}) for pair in pairs]
@@ -1726,7 +1733,9 @@ def build_pr12_cooldown_shadow_policy_comparison(comparison: dict[str, Any]) -> 
         "unchanged": unchanged,
         "transitions": _sorted_count_dict(transition_counts),
     }
-    if parity_mismatches:
+    if not pairs:
+        recommendation = "shadow_comparison_unavailable"
+    elif parity_mismatches:
         recommendation = "investigate_shadow_policy_parity_mismatch"
     elif outcome_change_counts["total"] > 0:
         recommendation = "review_next_ready_skill_candidate_impact_before_adoption"
@@ -1735,6 +1744,10 @@ def build_pr12_cooldown_shadow_policy_comparison(comparison: dict[str, Any]) -> 
 
     return {
         "available": bool(pairs),
+        "scope_alignment_status": scope_alignment_status,
+        "unavailable_reason": unavailable_reason or (None if pairs else "no_pilot_scenarios_in_scope"),
+        "comparison_config_source": comparison_config_source,
+        "scope_mismatches": list(scope_mismatches or []),
         "pilot_archetypes": list(comparison.get("pilot_archetypes", [])),
         "scenario_pair_count": len(pairs),
         "candidate_policy_ids": list(comparison.get("candidate_policy_ids", [])),
@@ -1754,6 +1767,78 @@ def build_pr12_cooldown_shadow_policy_comparison(comparison: dict[str, Any]) -> 
         "top_next_ready_impact_clusters": top_impacts,
         "recommended_next_investigation": recommendation,
     }
+
+
+def _pr12_matrix_scope_mismatches(matrix: dict[str, Any], config: RouteStageMatrixConfig) -> list[str]:
+    mismatches: list[str] = []
+    expected_scope = {
+        "routes": list(config.route_ids),
+        "stages": list(config.stages),
+        "archetypes": list(config.archetype_ids),
+    }
+    for matrix_key, expected in expected_scope.items():
+        if list(matrix.get(matrix_key, [])) != expected:
+            mismatches.append(matrix_key)
+
+    matrix_config = dict(matrix.get("matrix_config") or {})
+    if matrix_config:
+        config_checks = {
+            "route_ids": list(config.route_ids),
+            "stages": list(config.stages),
+            "archetype_ids": list(config.archetype_ids),
+            "seeds": list(config.seeds),
+            "max_samples_per_route_stage": int(config.max_samples_per_route_stage),
+            "max_turns": int(config.max_turns),
+        }
+        for key, expected in config_checks.items():
+            if matrix_config.get(key) != expected and key not in mismatches:
+                mismatches.append(key)
+    return mismatches
+
+
+def _build_pr12_comparison_for_report(
+    *,
+    matrix: dict[str, Any],
+    matrix_result_was_supplied: bool,
+    config: RouteStageMatrixConfig | None,
+    effective_config: RouteStageMatrixConfig,
+) -> dict[str, Any]:
+    if matrix_result_was_supplied and config is None:
+        return build_pr12_cooldown_shadow_policy_comparison(
+            {},
+            scope_alignment_status="unavailable",
+            comparison_config_source="none",
+            unavailable_reason="matching_matrix_config_required",
+        )
+
+    comparison_config = config if matrix_result_was_supplied else effective_config
+    if comparison_config is None:
+        return build_pr12_cooldown_shadow_policy_comparison(
+            {},
+            scope_alignment_status="unavailable",
+            comparison_config_source="none",
+            unavailable_reason="matching_matrix_config_required",
+        )
+
+    mismatches = _pr12_matrix_scope_mismatches(matrix, comparison_config)
+    if mismatches:
+        return build_pr12_cooldown_shadow_policy_comparison(
+            {},
+            scope_alignment_status="mismatch",
+            comparison_config_source="explicit_config",
+            unavailable_reason="matrix_config_scope_mismatch",
+            scope_mismatches=mismatches,
+        )
+
+    return build_pr12_cooldown_shadow_policy_comparison(
+        run_cooldown_shadow_policy_comparison(comparison_config),
+        scope_alignment_status="aligned",
+        comparison_config_source=(
+            "explicit_matching_config"
+            if matrix_result_was_supplied
+            else "generated_matrix_config"
+        ),
+    )
 
 
 def build_alpha_balance_report_data(
@@ -1971,8 +2056,11 @@ def build_alpha_balance_report_data(
     profile_policy_availability = build_profile_policy_availability_diagnostics(enriched_runs)
     post_pr9_fallback_diagnostics = build_post_pr9_fallback_diagnostics(enriched_runs)
     post_pr10_policy_pressure_diagnostics = build_post_pr10_policy_pressure_diagnostics(enriched_runs)
-    pr12_cooldown_shadow_policy_comparison = build_pr12_cooldown_shadow_policy_comparison(
-        run_cooldown_shadow_policy_comparison(effective_config)
+    pr12_cooldown_shadow_policy_comparison = _build_pr12_comparison_for_report(
+        matrix=matrix,
+        matrix_result_was_supplied=matrix_result is not None,
+        config=config,
+        effective_config=effective_config,
     )
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
@@ -2581,6 +2669,21 @@ def _render_pr12_cooldown_shadow_policy_comparison_lines(report_data: dict[str, 
         "Candidate B tries the next ready skill in the same active profile branch.",
         "Neither candidate is active gameplay or an active simulation policy.",
         "These counterfactual results are evidence for a separately reviewed next branch, not a final balance verdict.",
+    ]
+    if not data.get("available"):
+        lines += [
+            "",
+            "Shadow comparison unavailable for this report scope:",
+            "| scope alignment | config source | unavailable reason | mismatches |",
+            "|---|---|---|---|",
+            f"| {data.get('scope_alignment_status', 'unavailable')} | "
+            f"{data.get('comparison_config_source', 'none')} | "
+            f"{data.get('unavailable_reason', 'matching_matrix_config_required')} | "
+            f"{', '.join(data.get('scope_mismatches', [])) or 'none'} |",
+        ]
+        return lines
+
+    lines += [
         "",
         "Comparison scope:",
         "| pilot archetypes | scenario pairs | candidate policies |",

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import game.combat_simulation_report as report_module
 from game.combat_simulation import (
     SIM_ACTION_NORMAL_ATTACK,
     SIMULATION_POLICY_CONTEXT_KEY,
@@ -24,8 +25,10 @@ from game.combat_simulation_matrix import (
     build_cooldown_shadow_policy,
     resolve_archetype_simulation_policy,
     run_cooldown_shadow_policy_comparison,
+    run_route_stage_simulation_matrix,
 )
 from game.combat_simulation_report import (
+    build_alpha_balance_report_data,
     build_default_alpha_simulation_report_v2_data,
     render_alpha_simulation_report_v2_markdown,
 )
@@ -236,9 +239,83 @@ def test_paired_runner_uses_identical_stable_scenario_identities():
         assert pair["next_ready_candidate"]["scenario_identity"] == identity
 
 
+def _narrow_comparison_config():
+    return RouteStageMatrixConfig(
+        route_ids=("route_westwild",),
+        stages=("build_testing",),
+        archetype_ids=tuple(sorted(PILOT_SET)),
+        seeds=(1,),
+        max_samples_per_route_stage=1,
+        max_turns=50,
+        include_turn_trace=False,
+    )
+
+
+def test_supplied_narrow_matrix_and_matching_config_keep_pr12_scope_narrow():
+    config = _narrow_comparison_config()
+    matrix = run_route_stage_simulation_matrix(config)
+    data = build_alpha_balance_report_data(
+        matrix_result=matrix,
+        config=config,
+    )["pr12_cooldown_shadow_policy_comparison"]
+    assert data["available"] is True
+    assert data["scope_alignment_status"] == "aligned"
+    assert data["comparison_config_source"] == "explicit_matching_config"
+    assert data["unavailable_reason"] is None
+    assert data["scenario_pair_count"] == 5
+
+
+def test_supplied_matrix_without_config_does_not_launch_default_shadow_comparison(monkeypatch):
+    matrix = run_route_stage_simulation_matrix(_narrow_comparison_config())
+
+    def fail_if_called(_config):
+        raise AssertionError("default PR12 shadow comparison must not run")
+
+    monkeypatch.setattr(report_module, "run_cooldown_shadow_policy_comparison", fail_if_called)
+    data = build_alpha_balance_report_data(
+        matrix_result=matrix,
+    )["pr12_cooldown_shadow_policy_comparison"]
+    assert data["available"] is False
+    assert data["scope_alignment_status"] == "unavailable"
+    assert data["comparison_config_source"] == "none"
+    assert data["unavailable_reason"] == "matching_matrix_config_required"
+    assert data["scenario_pair_count"] == 0
+
+
+def test_mismatched_explicit_config_cannot_produce_available_comparison(monkeypatch):
+    matrix = run_route_stage_simulation_matrix(_narrow_comparison_config())
+    mismatched_config = RouteStageMatrixConfig(
+        route_ids=("route_frostspine",),
+        stages=("build_testing",),
+        archetype_ids=tuple(sorted(PILOT_SET)),
+        seeds=(1,),
+        max_samples_per_route_stage=1,
+        max_turns=50,
+        include_turn_trace=False,
+    )
+
+    def fail_if_called(_config):
+        raise AssertionError("mismatched PR12 shadow comparison must not run")
+
+    monkeypatch.setattr(report_module, "run_cooldown_shadow_policy_comparison", fail_if_called)
+    data = build_alpha_balance_report_data(
+        matrix_result=matrix,
+        config=mismatched_config,
+    )["pr12_cooldown_shadow_policy_comparison"]
+    assert data["available"] is False
+    assert data["scope_alignment_status"] == "mismatch"
+    assert data["comparison_config_source"] == "explicit_config"
+    assert data["unavailable_reason"] == "matrix_config_scope_mismatch"
+    assert "routes" in data["scope_mismatches"]
+    assert data["scenario_pair_count"] == 0
+
+
 def test_checked_in_pr12_comparison_has_candidate_a_full_parity(report_data):
     data = report_data["pr12_cooldown_shadow_policy_comparison"]
     assert data["available"] is True
+    assert data["scope_alignment_status"] == "aligned"
+    assert data["comparison_config_source"] == "generated_matrix_config"
+    assert data["unavailable_reason"] is None
     assert data["normal_fallback_parity_pair_count"] == data["scenario_pair_count"] == 100
     assert data["normal_fallback_parity_mismatch_count"] == 0
     assert data["normal_fallback_parity_mismatches"] == []
