@@ -460,6 +460,16 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                     "skills_used_total": {}, "actions_used_total": {},
                     "fallback_reason_counts_total": Counter(), "action_resolution_counts_total": Counter(),
                     "requested_skill_count_total": 0, "resolved_skill_success_count_total": 0,
+                    "requested_skill_counts_total": Counter(),
+                    "resolved_skill_success_counts_by_skill_total": Counter(),
+                    "fallback_reason_counts_by_skill_total": {},
+                    "cooldown_fallback_counts_by_skill_total": Counter(),
+                    "insufficient_mana_fallback_counts_by_skill_total": Counter(),
+                    "cooldown_remaining_totals_by_skill": Counter(),
+                    "cooldown_remaining_maximums_by_skill": {},
+                    "mana_deficit_totals_by_skill": Counter(),
+                    "mana_deficit_maximums_by_skill": {},
+                    "policy_guard_action_count_total": 0,
                 }
                 for sample in samples:
                     for seed in cfg.seeds:
@@ -537,6 +547,29 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                         metrics["action_resolution_counts_total"].update(dict(obs.get("action_resolution_counts", {})))
                         metrics["requested_skill_count_total"] += int(obs.get("requested_skill_count", 0) or 0)
                         metrics["resolved_skill_success_count_total"] += int(obs.get("resolved_skill_success_count", 0) or 0)
+                        metrics["requested_skill_counts_total"].update(dict(obs.get("requested_skill_counts", {})))
+                        metrics["resolved_skill_success_counts_by_skill_total"].update(
+                            dict(obs.get("resolved_skill_success_counts_by_skill", {}))
+                        )
+                        for skill_id, reason_counts in dict(obs.get("fallback_reason_counts_by_skill", {})).items():
+                            metrics["fallback_reason_counts_by_skill_total"].setdefault(skill_id, Counter()).update(reason_counts)
+                        metrics["cooldown_fallback_counts_by_skill_total"].update(
+                            dict(obs.get("cooldown_fallback_counts_by_skill", {}))
+                        )
+                        metrics["insufficient_mana_fallback_counts_by_skill_total"].update(
+                            dict(obs.get("insufficient_mana_fallback_counts_by_skill", {}))
+                        )
+                        metrics["cooldown_remaining_totals_by_skill"].update(
+                            dict(obs.get("cooldown_remaining_totals_by_skill", {}))
+                        )
+                        metrics["mana_deficit_totals_by_skill"].update(dict(obs.get("mana_deficit_totals_by_skill", {})))
+                        for source_key, target_key in (
+                            ("cooldown_remaining_maximums_by_skill", "cooldown_remaining_maximums_by_skill"),
+                            ("mana_deficit_maximums_by_skill", "mana_deficit_maximums_by_skill"),
+                        ):
+                            for skill_id, value in dict(obs.get(source_key, {})).items():
+                                metrics[target_key][skill_id] = max(int(value), int(metrics[target_key].get(skill_id, 0)))
+                        metrics["policy_guard_action_count_total"] += int(obs.get("policy_guard_action_count", 0) or 0)
 
                 if metrics["runs"] <= 0:
                     continue
@@ -556,6 +589,31 @@ def run_route_stage_simulation_matrix(config: RouteStageMatrixConfig | None = No
                     "action_resolution_counts_total": dict(metrics["action_resolution_counts_total"]),
                     "requested_skill_count_total": int(metrics["requested_skill_count_total"]),
                     "resolved_skill_success_count_total": int(metrics["resolved_skill_success_count_total"]),
+                    "requested_skill_counts_total": dict(sorted(metrics["requested_skill_counts_total"].items())),
+                    "resolved_skill_success_counts_by_skill_total": dict(
+                        sorted(metrics["resolved_skill_success_counts_by_skill_total"].items())
+                    ),
+                    "fallback_reason_counts_by_skill_total": {
+                        skill_id: dict(sorted(reason_counts.items()))
+                        for skill_id, reason_counts in sorted(metrics["fallback_reason_counts_by_skill_total"].items())
+                    },
+                    "cooldown_fallback_counts_by_skill_total": dict(
+                        sorted(metrics["cooldown_fallback_counts_by_skill_total"].items())
+                    ),
+                    "insufficient_mana_fallback_counts_by_skill_total": dict(
+                        sorted(metrics["insufficient_mana_fallback_counts_by_skill_total"].items())
+                    ),
+                    "cooldown_remaining_totals_by_skill": dict(
+                        sorted(metrics["cooldown_remaining_totals_by_skill"].items())
+                    ),
+                    "cooldown_remaining_maximums_by_skill": dict(
+                        sorted(metrics["cooldown_remaining_maximums_by_skill"].items())
+                    ),
+                    "mana_deficit_totals_by_skill": dict(sorted(metrics["mana_deficit_totals_by_skill"].items())),
+                    "mana_deficit_maximums_by_skill": dict(
+                        sorted(metrics["mana_deficit_maximums_by_skill"].items())
+                    ),
+                    "policy_guard_action_count_total": int(metrics["policy_guard_action_count_total"]),
                     "active_simulation_policy_status": resolve_archetype_simulation_policy(archetype_id, stage).get("active_simulation_policy_status"),
                     "profile_policy_availability_status": resolve_archetype_simulation_policy(archetype_id, stage).get("profile_policy_availability_status"),
                     "profile_policy_stage_coverage": resolve_archetype_simulation_policy(archetype_id, stage).get("profile_policy_stage_coverage"),

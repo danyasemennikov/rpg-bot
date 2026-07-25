@@ -5,23 +5,38 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
 - PR: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
 - PR: Balance V2 PR9 Availability-aware Profile Policy Selection
 - PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 - PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
-- Prior confirmed Status: Balance V2 PR9 Availability-aware Profile Policy Selection
-- Latest gameplay/balance diagnostic state: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
-- Confirmed state below extends the current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection with PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown as the latest gameplay/balance diagnostic state, while preserving Balance V2 PR9 as the prior availability-aware profile policy state, Balance V2 PR8 as the prior action-resolution state, and PR218 as the test baseline state.
+- Status: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
+- Prior confirmed Status: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
+- Historical Status: Balance V2 PR9 Availability-aware Profile Policy Selection
+- Latest gameplay/balance diagnostic state: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
+- Historical baseline phrase retained for regression continuity: current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection.
+- Confirmed state below extends PR221 / Balance V2 PR10 with PR223 / Balance V2 PR11 as the latest gameplay/balance diagnostic state, while preserving PR10 as the prior fallback-breakdown state, Balance V2 PR9 as the prior availability-aware profile policy state, Balance V2 PR8 as the prior action-resolution state, and PR218 as the test baseline state.
 - Historical baselines remain preserved, including prior PR218 test-suite SQLite isolation state, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, and PR15 actionable late-stage tuning.
 
 ---
 
 ## Confirmed merged state
 
+### PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
+
+- Balance V2 PR11 is diagnostic/simulation/reporting-only.
+- PR11 corrects diagnostic attribution so directly selected guard-policy actions record `policy_chose_guard`, increment `policy_guard_action_count`, and are not counted as genuine fallback reasons.
+- PR11 adds full-run, per-skill requested/success/fallback aggregates plus cooldown-remaining and mana-deficit totals and maximums independently of capped turn traces.
+- Route-stage matrix raw runs preserve the evidence, deterministic summaries aggregate it, and report data exposes `post_pr10_policy_pressure_diagnostics`.
+- Cooldown and insufficient-mana policy pressure is attributed to concrete skills, archetypes, and stages.
+- `skill_locked_or_unleveled` remains 0.
+- PR221 / PR10 remains the prior fallback-breakdown state; PR9 availability filtering, PR8 action-resolution metadata, PR218 test baseline, PR7 five-pilot set, PR6 14/14 coverage, and PR5 420-row audit remain preserved.
+- No live gameplay/runtime behavior, policy cadence, cooldown duration, mana cost, formula, route, mob, gear, reward, economy, or PvP tuning occurred.
+
 ### PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
 
+- Historical PR10 state marker (before PR11): Latest gameplay/balance diagnostic state: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown.
 - Balance V2 PR10 is diagnostic/simulation/reporting-only.
 - Report data now exposes `post_pr9_fallback_diagnostics` with post-PR9 total counts, cooldown/guard/insufficient-mana counts, archetype and stage breakdowns, pilot summaries, top clusters, and a recommended next investigation.
 - PR9 availability-aware profile policy filtering remains intact, and `skill_locked_or_unleveled` remains 0 after filtering.

@@ -349,14 +349,13 @@ PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
 
 Top fallback reasons:
 - skill_on_cooldown: 61
-- guard_fallback_action: 24
 - insufficient_mana: 4
 
 Action resolution counts:
 - policy_chose_normal_attack: 532
 - resolved_skill_success: 258
 - skill_on_cooldown: 61
-- guard_fallback_action: 24
+- policy_chose_guard: 24
 - insufficient_mana: 4
 
 Pilot fallback summary:
@@ -388,7 +387,7 @@ Skipped/unavailable profile skill counts:
 - skipped profile skill references: 220
 - unavailable profile skill references: 220
 - current skill_locked_or_unleveled fallback count after availability filtering: 0
-- PR8 total fallback reasons remain reported separately: {'skill_on_cooldown': 61, 'guard_fallback_action': 24, 'insufficient_mana': 4}
+- PR8 total fallback reasons remain reported separately: {'skill_on_cooldown': 61, 'insufficient_mana': 4}
 
 Top pilot availability summaries:
 | archetype | statuses | skipped_profile_skills | unavailable_profile_skills | skill_locked_or_unleveled_fallbacks |
@@ -410,7 +409,6 @@ Total fallback reason counts:
 | fallback_reason | count |
 |---|---:|
 | skill_on_cooldown | 61 |
-| guard_fallback_action | 24 |
 | insufficient_mana | 4 |
 
 Cooldown fallback counts by archetype:
@@ -440,7 +438,58 @@ Pilot archetype fallback summary:
 
 Recommended next investigation:
 - investigate_cooldown_and_mana_policy_behavior
-- cooldown=61, guard=24, insufficient_mana=4
+- cooldown=61, guard=0, insufficient_mana=4
+
+## Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
+Diagnostic/simulation/reporting-only: PR11 changes no live tuning, gameplay, or runtime behavior.
+Intentional policy guard actions are now separated from genuine failed-action fallback reasons while guard execution remains unchanged.
+PR10's guard count contained deliberate guard-policy actions; it was not evidence of 24 failed skill attempts.
+skill_locked_or_unleveled remains 0.
+Cooldown and mana pressure is now attributed to concrete skills, archetypes, and stages.
+This evidence is not a final balance verdict.
+Policy, cooldown, mana-cost, route, mob, gear, reward, economy, and PvP tuning remains deferred.
+
+Corrected fallback totals versus intentional guard actions:
+| evidence | count |
+|---|---:|
+| intentional policy guard actions | 24 |
+| true guard fallbacks | 0 |
+| cooldown fallbacks | 61 |
+| insufficient mana fallbacks | 4 |
+| skill locked or unleveled | 0 |
+
+Top cooldown-pressured skills:
+| skill | requests | successes | cooldown fallbacks | avg cooldown remaining | max cooldown remaining | archetypes | stages |
+|---|---:|---:|---:|---:|---:|---|---|
+| smite | 60 | 35 | 25 | 1.00 | 1 | holy_staff_solo | build_testing, identity_visible, route_exam, soft_entry |
+| smoke_bomb | 43 | 24 | 19 | 1.53 | 2 | daggers_evasion | build_testing, identity_visible, route_exam, soft_entry |
+| hunters_mark | 36 | 20 | 16 | 1.50 | 2 | bow_sniper | build_testing, identity_visible, route_exam, soft_entry |
+| poison_blade | 25 | 24 | 1 | 1.00 | 1 | daggers_venom | soft_entry |
+
+Insufficient-mana skills:
+| skill | insufficient mana | avg mana deficit | max mana deficit | archetypes | stages |
+|---|---:|---:|---:|---|---|
+| toxic_cut | 3 | 14.00 | 14 | daggers_venom | build_testing |
+| feint_step | 1 | 4.00 | 4 | daggers_evasion | build_testing |
+
+Top archetype/stage/skill clusters:
+| archetype | stage | skill | reason | count |
+|---|---|---|---|---:|
+| holy_staff_solo | route_exam | smite | skill_on_cooldown | 11 |
+| holy_staff_solo | build_testing | smite | skill_on_cooldown | 9 |
+| daggers_evasion | build_testing | smoke_bomb | skill_on_cooldown | 6 |
+| bow_sniper | build_testing | hunters_mark | skill_on_cooldown | 5 |
+| daggers_evasion | identity_visible | smoke_bomb | skill_on_cooldown | 5 |
+| daggers_evasion | soft_entry | smoke_bomb | skill_on_cooldown | 5 |
+| bow_sniper | identity_visible | hunters_mark | skill_on_cooldown | 4 |
+| bow_sniper | soft_entry | hunters_mark | skill_on_cooldown | 4 |
+| holy_staff_solo | identity_visible | smite | skill_on_cooldown | 4 |
+| bow_sniper | route_exam | hunters_mark | skill_on_cooldown | 3 |
+
+Recommended next investigation:
+| recommendation |
+|---|
+| investigate_top_cooldown_skill_policy_request_cadence_before_tuning |
 
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.

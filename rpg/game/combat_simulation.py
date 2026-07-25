@@ -251,6 +251,16 @@ def _build_observability_summary(
     requested_skill_count: int = 0,
     resolved_skill_success_count: int = 0,
     normal_attack_fallback_count: int = 0,
+    requested_skill_counts: dict[str, int] | None = None,
+    resolved_skill_success_counts_by_skill: dict[str, int] | None = None,
+    fallback_reason_counts_by_skill: dict[str, dict[str, int]] | None = None,
+    cooldown_fallback_counts_by_skill: dict[str, int] | None = None,
+    insufficient_mana_fallback_counts_by_skill: dict[str, int] | None = None,
+    cooldown_remaining_totals_by_skill: dict[str, int] | None = None,
+    cooldown_remaining_maximums_by_skill: dict[str, int] | None = None,
+    mana_deficit_totals_by_skill: dict[str, int] | None = None,
+    mana_deficit_maximums_by_skill: dict[str, int] | None = None,
+    policy_guard_action_count: int = 0,
 ) -> dict:
     player_max_hp = max(1, int(player_local.get("max_hp") or player_local.get("hp") or 1))
     player_max_mana = max(1, int(player_local.get("max_mana") or player_local.get("mana") or 1))
@@ -287,6 +297,23 @@ def _build_observability_summary(
         "requested_skill_count": int(requested_skill_count),
         "resolved_skill_success_count": int(resolved_skill_success_count),
         "normal_attack_fallback_count": int(normal_attack_fallback_count),
+        "requested_skill_counts": dict(sorted((requested_skill_counts or {}).items())),
+        "resolved_skill_success_counts_by_skill": dict(sorted((resolved_skill_success_counts_by_skill or {}).items())),
+        "fallback_reason_counts_by_skill": {
+            skill_id: dict(sorted(reason_counts.items()))
+            for skill_id, reason_counts in sorted((fallback_reason_counts_by_skill or {}).items())
+        },
+        "cooldown_fallback_counts_by_skill": dict(sorted((cooldown_fallback_counts_by_skill or {}).items())),
+        "insufficient_mana_fallback_counts_by_skill": dict(
+            sorted((insufficient_mana_fallback_counts_by_skill or {}).items())
+        ),
+        "cooldown_remaining_totals_by_skill": dict(sorted((cooldown_remaining_totals_by_skill or {}).items())),
+        "cooldown_remaining_maximums_by_skill": dict(
+            sorted((cooldown_remaining_maximums_by_skill or {}).items())
+        ),
+        "mana_deficit_totals_by_skill": dict(sorted((mana_deficit_totals_by_skill or {}).items())),
+        "mana_deficit_maximums_by_skill": dict(sorted((mana_deficit_maximums_by_skill or {}).items())),
+        "policy_guard_action_count": int(policy_guard_action_count),
     }
 
 def _run_with_seed(seed: int, fn: Callable[[], SimulationResult]) -> SimulationResult:
@@ -321,6 +348,16 @@ def simulate_single_combat(
     requested_skill_count = 0
     resolved_skill_success_count = 0
     normal_attack_fallback_count = 0
+    requested_skill_counts: dict[str, int] = {}
+    resolved_skill_success_counts_by_skill: dict[str, int] = {}
+    fallback_reason_counts_by_skill: dict[str, dict[str, int]] = {}
+    cooldown_fallback_counts_by_skill: dict[str, int] = {}
+    insufficient_mana_fallback_counts_by_skill: dict[str, int] = {}
+    cooldown_remaining_totals_by_skill: dict[str, int] = {}
+    cooldown_remaining_maximums_by_skill: dict[str, int] = {}
+    mana_deficit_totals_by_skill: dict[str, int] = {}
+    mana_deficit_maximums_by_skill: dict[str, int] = {}
+    policy_guard_action_count = 0
 
     def _count_action_resolution(status: str, fallback_reason: str | None) -> None:
         action_resolution_counts[status] = action_resolution_counts.get(status, 0) + 1
@@ -376,6 +413,7 @@ def simulate_single_combat(
 
     def _run() -> SimulationResult:
         nonlocal requested_skill_count, resolved_skill_success_count, normal_attack_fallback_count
+        nonlocal policy_guard_action_count
 
         terminated_by_max_turns = False
         executed_turns = 0
@@ -450,8 +488,9 @@ def simulate_single_combat(
                 apply_timeout_fallback_guard(battle_state, lang=cfg.lang)
                 actions_used[SIM_ACTION_GUARD_FALLBACK] += 1
                 resolved_action = SIM_ACTION_GUARD_FALLBACK
-                resolution_meta["action_resolution_status"] = "guard_fallback_action"
-                resolution_meta["fallback_reason"] = "guard_fallback_action"
+                resolution_meta["action_resolution_status"] = "policy_chose_guard"
+                resolution_meta["fallback_reason"] = None
+                policy_guard_action_count += 1
                 trace_after_player_action = _snapshot_combat_totals(battle_state)
                 process_enemy_side_turn(
                     mob_local,
@@ -556,10 +595,46 @@ def simulate_single_combat(
             )
             if requested_skill_id is not None:
                 requested_skill_count += 1
+                requested_skill_counts[requested_skill_id] = requested_skill_counts.get(requested_skill_id, 0) + 1
             if resolution_meta.get("action_resolution_status") == "resolved_skill_success":
                 resolved_skill_success_count += 1
+                if requested_skill_id is not None:
+                    resolved_skill_success_counts_by_skill[requested_skill_id] = (
+                        resolved_skill_success_counts_by_skill.get(requested_skill_id, 0) + 1
+                    )
             if requested_skill_id is not None and resolved_action == SIM_ACTION_NORMAL_ATTACK and resolution_meta.get("fallback_reason"):
                 normal_attack_fallback_count += 1
+            if requested_skill_id is not None and resolution_meta.get("fallback_reason"):
+                reason = str(resolution_meta["fallback_reason"])
+                skill_reasons = fallback_reason_counts_by_skill.setdefault(requested_skill_id, {})
+                skill_reasons[reason] = skill_reasons.get(reason, 0) + 1
+                if reason == "skill_on_cooldown":
+                    cooldown_remaining = max(0, int(resolution_meta.get("cooldown_before") or 0))
+                    cooldown_fallback_counts_by_skill[requested_skill_id] = (
+                        cooldown_fallback_counts_by_skill.get(requested_skill_id, 0) + 1
+                    )
+                    cooldown_remaining_totals_by_skill[requested_skill_id] = (
+                        cooldown_remaining_totals_by_skill.get(requested_skill_id, 0) + cooldown_remaining
+                    )
+                    cooldown_remaining_maximums_by_skill[requested_skill_id] = max(
+                        cooldown_remaining_maximums_by_skill.get(requested_skill_id, 0),
+                        cooldown_remaining,
+                    )
+                elif reason == "insufficient_mana":
+                    mana_deficit = max(
+                        0,
+                        int(resolution_meta.get("mana_cost") or 0) - int(resolution_meta.get("mana_before") or 0),
+                    )
+                    insufficient_mana_fallback_counts_by_skill[requested_skill_id] = (
+                        insufficient_mana_fallback_counts_by_skill.get(requested_skill_id, 0) + 1
+                    )
+                    mana_deficit_totals_by_skill[requested_skill_id] = (
+                        mana_deficit_totals_by_skill.get(requested_skill_id, 0) + mana_deficit
+                    )
+                    mana_deficit_maximums_by_skill[requested_skill_id] = max(
+                        mana_deficit_maximums_by_skill.get(requested_skill_id, 0),
+                        mana_deficit,
+                    )
 
             trace_after_enemy_action = _snapshot_combat_totals(battle_state)
             if cfg.include_turn_trace and len(turn_trace) < max_trace_turns:
@@ -629,6 +704,16 @@ def simulate_single_combat(
             requested_skill_count=requested_skill_count,
             resolved_skill_success_count=resolved_skill_success_count,
             normal_attack_fallback_count=normal_attack_fallback_count,
+            requested_skill_counts=requested_skill_counts,
+            resolved_skill_success_counts_by_skill=resolved_skill_success_counts_by_skill,
+            fallback_reason_counts_by_skill=fallback_reason_counts_by_skill,
+            cooldown_fallback_counts_by_skill=cooldown_fallback_counts_by_skill,
+            insufficient_mana_fallback_counts_by_skill=insufficient_mana_fallback_counts_by_skill,
+            cooldown_remaining_totals_by_skill=cooldown_remaining_totals_by_skill,
+            cooldown_remaining_maximums_by_skill=cooldown_remaining_maximums_by_skill,
+            mana_deficit_totals_by_skill=mana_deficit_totals_by_skill,
+            mana_deficit_maximums_by_skill=mana_deficit_maximums_by_skill,
+            policy_guard_action_count=policy_guard_action_count,
         )
         return SimulationResult(
             winner=winner,

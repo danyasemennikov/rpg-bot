@@ -836,6 +836,131 @@ def build_post_pr9_fallback_diagnostics(enriched_runs: list[dict[str, Any]]) -> 
         "recommended_next_investigation": recommendation,
     }
 
+
+def build_post_pr10_policy_pressure_diagnostics(enriched_runs: list[dict[str, Any]]) -> dict[str, Any]:
+    requested: Counter[str] = Counter()
+    successes: Counter[str] = Counter()
+    cooldown_counts: Counter[str] = Counter()
+    mana_counts: Counter[str] = Counter()
+    cooldown_totals: Counter[str] = Counter()
+    mana_deficit_totals: Counter[str] = Counter()
+    cooldown_maximums: dict[str, int] = {}
+    mana_deficit_maximums: dict[str, int] = {}
+    fallback_by_skill: dict[str, Counter[str]] = defaultdict(Counter)
+    cooldown_archetypes: dict[str, set[str]] = defaultdict(set)
+    cooldown_stages: dict[str, set[str]] = defaultdict(set)
+    mana_archetypes: dict[str, set[str]] = defaultdict(set)
+    mana_stages: dict[str, set[str]] = defaultdict(set)
+    pressure_by_archetype: dict[str, Counter[str]] = defaultdict(Counter)
+    pressure_by_stage: dict[str, Counter[str]] = defaultdict(Counter)
+    pressure_clusters: Counter[tuple[str, str, str, str]] = Counter()
+    fallback_counts = _merge_counter_from_runs(enriched_runs, "fallback_reason_counts")
+    policy_guard_action_count = 0
+
+    for run in enriched_runs:
+        obs = dict(run.get("observability") or {})
+        archetype_id = str(run.get("archetype_id") or "unknown")
+        stage = str(run.get("stage") or "unknown")
+        requested.update(dict(obs.get("requested_skill_counts") or {}))
+        successes.update(dict(obs.get("resolved_skill_success_counts_by_skill") or {}))
+        policy_guard_count = int(obs.get("policy_guard_action_count", 0) or 0)
+        policy_guard_action_count += policy_guard_count
+        pressure_by_archetype[archetype_id]["policy_guard_action_count"] += policy_guard_count
+        pressure_by_stage[stage]["policy_guard_action_count"] += policy_guard_count
+
+        for skill_id, reason_counts in dict(obs.get("fallback_reason_counts_by_skill") or {}).items():
+            fallback_by_skill[skill_id].update(reason_counts)
+        for skill_id, count in dict(obs.get("cooldown_fallback_counts_by_skill") or {}).items():
+            count = int(count)
+            cooldown_counts[skill_id] += count
+            if count:
+                cooldown_archetypes[skill_id].add(archetype_id)
+                cooldown_stages[skill_id].add(stage)
+                pressure_by_archetype[archetype_id]["cooldown_fallback_count"] += count
+                pressure_by_stage[stage]["cooldown_fallback_count"] += count
+                pressure_clusters[(archetype_id, stage, skill_id, "skill_on_cooldown")] += count
+        for skill_id, count in dict(obs.get("insufficient_mana_fallback_counts_by_skill") or {}).items():
+            count = int(count)
+            mana_counts[skill_id] += count
+            if count:
+                mana_archetypes[skill_id].add(archetype_id)
+                mana_stages[skill_id].add(stage)
+                pressure_by_archetype[archetype_id]["insufficient_mana_count"] += count
+                pressure_by_stage[stage]["insufficient_mana_count"] += count
+                pressure_clusters[(archetype_id, stage, skill_id, "insufficient_mana")] += count
+        cooldown_totals.update(dict(obs.get("cooldown_remaining_totals_by_skill") or {}))
+        mana_deficit_totals.update(dict(obs.get("mana_deficit_totals_by_skill") or {}))
+        for skill_id, value in dict(obs.get("cooldown_remaining_maximums_by_skill") or {}).items():
+            cooldown_maximums[skill_id] = max(cooldown_maximums.get(skill_id, 0), int(value))
+        for skill_id, value in dict(obs.get("mana_deficit_maximums_by_skill") or {}).items():
+            mana_deficit_maximums[skill_id] = max(mana_deficit_maximums.get(skill_id, 0), int(value))
+
+    cooldown_details = [
+        {
+            "skill_id": skill_id,
+            "request_count": int(requested.get(skill_id, 0)),
+            "success_count": int(successes.get(skill_id, 0)),
+            "cooldown_fallback_count": int(count),
+            "average_cooldown_remaining": cooldown_totals[skill_id] / count if count else 0.0,
+            "maximum_cooldown_remaining": int(cooldown_maximums.get(skill_id, 0)),
+            "affected_archetypes": sorted(cooldown_archetypes.get(skill_id, set())),
+            "affected_stages": sorted(cooldown_stages.get(skill_id, set())),
+        }
+        for skill_id, count in sorted(cooldown_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    mana_details = [
+        {
+            "skill_id": skill_id,
+            "insufficient_mana_count": int(count),
+            "average_mana_deficit": mana_deficit_totals[skill_id] / count if count else 0.0,
+            "maximum_mana_deficit": int(mana_deficit_maximums.get(skill_id, 0)),
+            "affected_archetypes": sorted(mana_archetypes.get(skill_id, set())),
+            "affected_stages": sorted(mana_stages.get(skill_id, set())),
+        }
+        for skill_id, count in sorted(mana_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    top_clusters = [
+        {
+            "archetype_id": key[0],
+            "stage": key[1],
+            "skill_id": key[2],
+            "pressure_reason": key[3],
+            "count": int(count),
+        }
+        for key, count in sorted(pressure_clusters.items(), key=lambda item: (-item[1], item[0]))[:10]
+    ]
+    recommendation = (
+        "investigate_top_cooldown_skill_policy_request_cadence_before_tuning"
+        if sum(cooldown_counts.values()) >= sum(mana_counts.values()) and sum(cooldown_counts.values()) > 0
+        else "investigate_top_mana_deficit_skill_policy_request_cadence_before_tuning"
+        if sum(mana_counts.values()) > 0
+        else "no_cooldown_or_mana_policy_pressure_observed"
+    )
+    return {
+        "available": bool(enriched_runs),
+        "policy_guard_action_count": int(policy_guard_action_count),
+        "true_guard_fallback_count": int(fallback_counts.get("guard_fallback_action", 0)),
+        "cooldown_fallback_count": int(sum(cooldown_counts.values())),
+        "insufficient_mana_count": int(sum(mana_counts.values())),
+        "skill_locked_or_unleveled_count": int(fallback_counts.get("skill_locked_or_unleveled", 0)),
+        "requested_skill_counts": _sorted_count_dict(requested),
+        "resolved_skill_success_counts_by_skill": _sorted_count_dict(successes),
+        "fallback_reason_counts_by_skill": {
+            skill_id: _sorted_count_dict(counts) for skill_id, counts in sorted(fallback_by_skill.items())
+        },
+        "cooldown_fallback_details_by_skill": cooldown_details,
+        "insufficient_mana_details_by_skill": mana_details,
+        "policy_pressure_counts_by_archetype": {
+            key: _sorted_count_dict(value) for key, value in sorted(pressure_by_archetype.items())
+        },
+        "policy_pressure_counts_by_stage": {
+            key: _sorted_count_dict(value) for key, value in sorted(pressure_by_stage.items())
+        },
+        "top_policy_pressure_clusters": top_clusters,
+        "recommended_next_investigation": recommendation,
+    }
+
+
 def _parse_node_depth_from_location_id(location_id: str) -> int | None:
     suffix = str(location_id or "").lower().split("_n", 1)
     if len(suffix) != 2:
@@ -1611,6 +1736,7 @@ def build_alpha_balance_report_data(
     simulation_action_resolution = build_simulation_action_resolution_diagnostics(enriched_runs)
     profile_policy_availability = build_profile_policy_availability_diagnostics(enriched_runs)
     post_pr9_fallback_diagnostics = build_post_pr9_fallback_diagnostics(enriched_runs)
+    post_pr10_policy_pressure_diagnostics = build_post_pr10_policy_pressure_diagnostics(enriched_runs)
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -1669,6 +1795,7 @@ def build_alpha_balance_report_data(
         "simulation_action_resolution": simulation_action_resolution,
         "profile_policy_availability": profile_policy_availability,
         "post_pr9_fallback_diagnostics": post_pr9_fallback_diagnostics,
+        "post_pr10_policy_pressure_diagnostics": post_pr10_policy_pressure_diagnostics,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -2121,6 +2248,86 @@ def _render_pr10_post_pr9_fallback_diagnostic_lines(report_data: dict[str, Any])
     ]
     return lines
 
+
+def _render_pr11_policy_pressure_attribution_lines(report_data: dict[str, Any]) -> list[str]:
+    data = dict(report_data.get("post_pr10_policy_pressure_diagnostics") or {})
+    lines = [
+        "",
+        "## Balance V2 PR11 Cooldown & Mana Policy Cause Attribution",
+        "Diagnostic/simulation/reporting-only: PR11 changes no live tuning, gameplay, or runtime behavior.",
+        "Intentional policy guard actions are now separated from genuine failed-action fallback reasons while guard execution remains unchanged.",
+        "PR10's guard count contained deliberate guard-policy actions; it was not evidence of 24 failed skill attempts.",
+        f"skill_locked_or_unleveled remains {data.get('skill_locked_or_unleveled_count', 0)}.",
+        "Cooldown and mana pressure is now attributed to concrete skills, archetypes, and stages.",
+        "This evidence is not a final balance verdict.",
+        "Policy, cooldown, mana-cost, route, mob, gear, reward, economy, and PvP tuning remains deferred.",
+        "",
+        "Corrected fallback totals versus intentional guard actions:",
+        "| evidence | count |",
+        "|---|---:|",
+        f"| intentional policy guard actions | {data.get('policy_guard_action_count', 0)} |",
+        f"| true guard fallbacks | {data.get('true_guard_fallback_count', 0)} |",
+        f"| cooldown fallbacks | {data.get('cooldown_fallback_count', 0)} |",
+        f"| insufficient mana fallbacks | {data.get('insufficient_mana_count', 0)} |",
+        f"| skill locked or unleveled | {data.get('skill_locked_or_unleveled_count', 0)} |",
+        "",
+        "Top cooldown-pressured skills:",
+        "| skill | requests | successes | cooldown fallbacks | avg cooldown remaining | max cooldown remaining | archetypes | stages |",
+        "|---|---:|---:|---:|---:|---:|---|---|",
+    ]
+    cooldown_rows = list(data.get("cooldown_fallback_details_by_skill") or {})
+    for row in cooldown_rows[:10]:
+        lines.append(
+            f"| {row.get('skill_id')} | {row.get('request_count', 0)} | {row.get('success_count', 0)} | "
+            f"{row.get('cooldown_fallback_count', 0)} | {float(row.get('average_cooldown_remaining', 0)):.2f} | "
+            f"{row.get('maximum_cooldown_remaining', 0)} | {', '.join(row.get('affected_archetypes', [])) or 'none'} | "
+            f"{', '.join(row.get('affected_stages', [])) or 'none'} |"
+        )
+    if not cooldown_rows:
+        lines.append("| none | 0 | 0 | 0 | 0.00 | 0 | none | none |")
+
+    lines += [
+        "",
+        "Insufficient-mana skills:",
+        "| skill | insufficient mana | avg mana deficit | max mana deficit | archetypes | stages |",
+        "|---|---:|---:|---:|---|---|",
+    ]
+    mana_rows = list(data.get("insufficient_mana_details_by_skill") or {})
+    for row in mana_rows[:10]:
+        lines.append(
+            f"| {row.get('skill_id')} | {row.get('insufficient_mana_count', 0)} | "
+            f"{float(row.get('average_mana_deficit', 0)):.2f} | {row.get('maximum_mana_deficit', 0)} | "
+            f"{', '.join(row.get('affected_archetypes', [])) or 'none'} | "
+            f"{', '.join(row.get('affected_stages', [])) or 'none'} |"
+        )
+    if not mana_rows:
+        lines.append("| none | 0 | 0.00 | 0 | none | none |")
+
+    lines += [
+        "",
+        "Top archetype/stage/skill clusters:",
+        "| archetype | stage | skill | reason | count |",
+        "|---|---|---|---|---:|",
+    ]
+    cluster_rows = list(data.get("top_policy_pressure_clusters") or {})
+    for row in cluster_rows:
+        lines.append(
+            f"| {row.get('archetype_id')} | {row.get('stage')} | {row.get('skill_id')} | "
+            f"{row.get('pressure_reason')} | {row.get('count', 0)} |"
+        )
+    if not cluster_rows:
+        lines.append("| none | none | none | none | 0 |")
+
+    lines += [
+        "",
+        "Recommended next investigation:",
+        "| recommendation |",
+        "|---|",
+        f"| {data.get('recommended_next_investigation', 'no_policy_pressure_diagnostics_available')} |",
+    ]
+    return lines
+
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -2177,6 +2384,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines.extend(_render_pr8_simulation_action_resolution_lines(report_data))
     lines.extend(_render_pr9_profile_policy_availability_lines(report_data))
     lines.extend(_render_pr10_post_pr9_fallback_diagnostic_lines(report_data))
+    lines.extend(_render_pr11_policy_pressure_attribution_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -2361,6 +2569,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines.extend(_render_pr8_simulation_action_resolution_lines(report_data))
     lines.extend(_render_pr9_profile_policy_availability_lines(report_data))
     lines.extend(_render_pr10_post_pr9_fallback_diagnostic_lines(report_data))
+    lines.extend(_render_pr11_policy_pressure_attribution_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
