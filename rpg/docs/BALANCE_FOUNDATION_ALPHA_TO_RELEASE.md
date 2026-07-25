@@ -1,5 +1,12 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR11 Cooldown & Mana Policy Cause Attribution Note
+
+- Intentional policy guard actions are separated from failure fallback reasons while preserving the executed guard action and combat behavior.
+- Full-run simulation and report diagnostics attribute cooldown and insufficient-mana pressure to concrete skills, archetypes, and route stages.
+- No policy cadence, cooldown duration, mana cost, formula, route, mob, or runtime behavior changed.
+- This diagnostic evidence will determine whether a later, separately reviewed tuning branch is justified; it is not a final balance verdict.
+
 ## Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown Note
 
 - Diagnostic/simulation/reporting-only breakdown of the remaining fallback reasons after PR9 availability filtering.
