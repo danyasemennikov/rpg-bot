@@ -5,26 +5,38 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 - PR: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
 - PR: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
 - PR: Balance V2 PR9 Availability-aware Profile Policy Selection
 - PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 - PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
-- Prior confirmed Status: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
+- Status: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
+- Prior confirmed Status: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
 - Historical Status: Balance V2 PR9 Availability-aware Profile Policy Selection
-- Latest gameplay/balance diagnostic state: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
+- Latest gameplay/balance diagnostic state: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 - Historical baseline phrase retained for regression continuity: current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection.
-- Confirmed state below extends PR221 / Balance V2 PR10 with PR223 / Balance V2 PR11 as the latest gameplay/balance diagnostic state, while preserving PR10 as the prior fallback-breakdown state, Balance V2 PR9 as the prior availability-aware profile policy state, Balance V2 PR8 as the prior action-resolution state, and PR218 as the test baseline state.
+- Confirmed state below extends PR223 / Balance V2 PR11 with PR224 / Balance V2 PR12 as the latest gameplay/balance diagnostic state, while preserving PR11 as the prior skill-level policy-pressure attribution state, PR10 as the prior fallback-breakdown state, Balance V2 PR9 as the prior availability-aware profile policy state, Balance V2 PR8 as the prior action-resolution state, and PR218 as the test baseline state.
 - Historical baselines remain preserved, including prior PR218 test-suite SQLite isolation state, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, and PR15 actionable late-stage tuning.
 
 ---
 
 ## Confirmed merged state
 
+### PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
+
+- Balance V2 PR12 is simulation/diagnostic/reporting-only and compares two isolated cooldown-aware shadow candidates for the unchanged five-archetype PR7 pilot set.
+- Candidate A requests a normal attack when the scheduled profile skill is on cooldown; Candidate B scans the same active profile branch for the next ready available skill.
+- Candidate A is checked for paired behavioral parity with the active baseline, while Candidate B is reported as counterfactual impact evidence.
+- Report data exposes `pr12_cooldown_shadow_policy_comparison` with deterministic paired totals, parity evidence, replacement diagnostics, deltas, outcome changes, impact clusters, and a conservative next investigation.
+- The active baseline returned by `resolve_archetype_simulation_policy` remains unchanged. Neither shadow candidate is adopted, globally executable, or included in normal matrix results.
+- PR223 / PR11 remains the prior skill-level policy-pressure attribution state; PR221 / PR10, PR9 availability filtering, PR8 action resolution, PR218 test baseline, PR7 five-pilot set, PR6 14/14 coverage, and PR5 420-row audit remain preserved.
+- No policy cadence, skill, cooldown, mana cost, combat formula, route, mob, gear, reward, economy, PvP, targeting, teleport, cooldown reset, database schema, live group combat, or runtime behavior changed.
+
 ### PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
 
+- Historical PR11 state marker (before PR12): Latest gameplay/balance diagnostic state: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution.
 - Balance V2 PR11 is diagnostic/simulation/reporting-only.
 - PR11 corrects diagnostic attribution so directly selected guard-policy actions record `policy_chose_guard`, increment `policy_guard_action_count`, and are not counted as genuine fallback reasons.
 - PR11 adds full-run, per-skill requested/success/fallback aggregates plus cooldown-remaining and mana-deficit totals and maximums independently of capped turn traces.

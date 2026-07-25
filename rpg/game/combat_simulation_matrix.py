@@ -6,6 +6,7 @@ from typing import Any
 
 from game.combat_simulation import (
     SIM_ACTION_NORMAL_ATTACK,
+    CooldownAwareShadowPolicy,
     ProfileAwareSimulationPolicy,
     ScriptedActionPolicy,
     SimulationConfig,
@@ -163,6 +164,8 @@ def collect_route_stage_samples(route_id: str, stage: str, *, max_samples: int =
 
 PROFILE_POLICY_STATUS_EXECUTABLE_PILOT = "profile_executable_pilot"
 PROFILE_POLICY_STATUS_METADATA_FALLBACK = "metadata_only_fallback"
+COOLDOWN_AWARE_NORMAL_FALLBACK_POLICY_ID = "cooldown_aware_normal_fallback"
+COOLDOWN_AWARE_NEXT_READY_SKILL_POLICY_ID = "cooldown_aware_next_ready_skill"
 
 PROFILE_POLICY_ACTIONS: dict[str, list[str]] = {
     "daggers_venom": ["envenom", "poison_blade", "toxic_cut", "rupture_toxins", SIM_ACTION_NORMAL_ATTACK],
@@ -312,6 +315,190 @@ def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> d
 
 def build_basic_archetype_simulation_policy(archetype_id: str, power_tier: str):
     return resolve_archetype_simulation_policy(archetype_id, power_tier)["policy"]
+
+
+def build_cooldown_shadow_policy(
+    archetype_id: str,
+    power_tier: str,
+    candidate_policy_id: str,
+) -> CooldownAwareShadowPolicy:
+    """Build a PR12 shadow candidate without changing the active resolver."""
+    if archetype_id not in PROFILE_POLICY_PILOT_ARCHETYPE_IDS:
+        raise ValueError(f"Shadow comparison is limited to pilot archetypes: {archetype_id}")
+    if candidate_policy_id not in {
+        COOLDOWN_AWARE_NORMAL_FALLBACK_POLICY_ID,
+        COOLDOWN_AWARE_NEXT_READY_SKILL_POLICY_ID,
+    }:
+        raise ValueError(f"Unknown cooldown shadow policy: {candidate_policy_id}")
+
+    skill_levels = build_archetype_simulation_skill_levels(archetype_id, power_tier)
+    actions = _filter_profile_policy_actions(PROFILE_POLICY_ACTIONS.get(archetype_id, []), skill_levels)
+    low_hp_actions = None
+    if archetype_id == "holy_staff_solo":
+        low_hp_actions = _filter_profile_policy_actions(
+            ["heal", "regeneration", SIM_ACTION_NORMAL_ATTACK],
+            skill_levels,
+        )
+    return CooldownAwareShadowPolicy(
+        actions,
+        candidate_policy_id=candidate_policy_id,
+        select_next_ready_skill=candidate_policy_id == COOLDOWN_AWARE_NEXT_READY_SKILL_POLICY_ID,
+        low_hp_actions=low_hp_actions,
+        low_hp_threshold=0.55,
+    )
+
+
+def _shadow_scenario_identity(
+    route_id: str,
+    stage: str,
+    archetype_id: str,
+    sample: RouteStageMobSample,
+    seed: int,
+) -> dict[str, Any]:
+    return {
+        "route": route_id,
+        "stage": stage,
+        "archetype": archetype_id,
+        "location": sample.location_id,
+        "mob": sample.mob_id,
+        "seed": int(seed),
+    }
+
+
+def _shadow_result_item(result, policy_id: str, identity: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scenario_identity": dict(identity),
+        "policy_id": policy_id,
+        "winner": result.winner,
+        "turns": int(result.turns),
+        "terminated_by_max_turns": bool(result.terminated_by_max_turns),
+        "player_hp_remaining": int(result.player_hp_remaining),
+        "player_mana_remaining": int(result.player_mana_remaining),
+        "mob_hp_remaining": int(result.mob_hp_remaining),
+        "damage_dealt": int(result.damage_dealt),
+        "damage_taken": int(result.damage_taken),
+        "actions_used": dict(sorted(result.actions_used.items())),
+        "skills_used": list(result.skills_used),
+        "observability": dict(result.observability),
+    }
+
+
+def run_cooldown_shadow_policy_comparison(config: RouteStageMatrixConfig | None = None) -> dict[str, Any]:
+    """Run paired PR12 counterfactuals for the five PR7 pilots only."""
+    cfg = config or RouteStageMatrixConfig()
+    pilot_archetypes = tuple(
+        archetype_id
+        for archetype_id in PROFILE_POLICY_PILOT_ARCHETYPE_IDS
+        if archetype_id in cfg.archetype_ids
+    )
+    pairs: list[dict[str, Any]] = []
+
+    for route_id in cfg.route_ids:
+        for stage in cfg.stages:
+            samples = collect_route_stage_samples(
+                route_id,
+                stage,
+                max_samples=cfg.max_samples_per_route_stage,
+            )
+            for archetype_id in pilot_archetypes:
+                for sample in samples:
+                    for seed in cfg.seeds:
+                        player = build_archetype_player_preset(archetype_id, power_tier=stage)
+                        mob_role = _resolve_tuned_sample_mob_role(route_id, stage, archetype_id, sample)
+                        scaled_mob = build_scaled_mob_for_simulation(
+                            sample.mob_id,
+                            route_id,
+                            stage,
+                            mob_role=mob_role,
+                        )
+                        scaled_mob = _apply_pr15_actionable_role_refinement(
+                            scaled_mob,
+                            route_id,
+                            stage,
+                            archetype_id,
+                        )
+                        mob = build_simulation_mob_preset(sample.mob_id)
+                        mob.update({
+                            key: value
+                            for key, value in scaled_mob.items()
+                            if key in (
+                                "hp", "damage", "accuracy", "evasion", "defense",
+                                "magic_defense", "damage_min", "damage_max",
+                            )
+                        })
+                        skill_levels = build_archetype_simulation_skill_levels(archetype_id, power_tier=stage)
+                        sim_config = SimulationConfig(
+                            seed=seed,
+                            max_turns=cfg.max_turns,
+                            include_log_tail=False,
+                            skill_levels=skill_levels,
+                            include_turn_trace=cfg.include_turn_trace,
+                            max_trace_turns=cfg.max_trace_turns,
+                        )
+                        baseline_resolution = resolve_archetype_simulation_policy(archetype_id, stage)
+                        normal_policy = build_cooldown_shadow_policy(
+                            archetype_id,
+                            stage,
+                            COOLDOWN_AWARE_NORMAL_FALLBACK_POLICY_ID,
+                        )
+                        next_ready_policy = build_cooldown_shadow_policy(
+                            archetype_id,
+                            stage,
+                            COOLDOWN_AWARE_NEXT_READY_SKILL_POLICY_ID,
+                        )
+                        identity = _shadow_scenario_identity(
+                            route_id,
+                            stage,
+                            archetype_id,
+                            sample,
+                            seed,
+                        )
+                        baseline = simulate_single_combat(
+                            player,
+                            mob,
+                            policy=baseline_resolution["policy"],
+                            config=sim_config,
+                        )
+                        normal = simulate_single_combat(
+                            player,
+                            mob,
+                            policy=normal_policy,
+                            config=sim_config,
+                        )
+                        next_ready = simulate_single_combat(
+                            player,
+                            mob,
+                            policy=next_ready_policy,
+                            config=sim_config,
+                        )
+                        pairs.append({
+                            "scenario_identity": identity,
+                            "baseline": _shadow_result_item(
+                                baseline,
+                                str(baseline_resolution["active_simulation_policy_id"]),
+                                identity,
+                            ),
+                            "normal_fallback_candidate": _shadow_result_item(
+                                normal,
+                                COOLDOWN_AWARE_NORMAL_FALLBACK_POLICY_ID,
+                                identity,
+                            ),
+                            "next_ready_candidate": _shadow_result_item(
+                                next_ready,
+                                COOLDOWN_AWARE_NEXT_READY_SKILL_POLICY_ID,
+                                identity,
+                            ),
+                        })
+
+    return {
+        "pilot_archetypes": list(pilot_archetypes),
+        "candidate_policy_ids": [
+            COOLDOWN_AWARE_NORMAL_FALLBACK_POLICY_ID,
+            COOLDOWN_AWARE_NEXT_READY_SKILL_POLICY_ID,
+        ],
+        "scenario_pair_count": len(pairs),
+        "pairs": pairs,
+    }
 
 
 def _label_observed_pressure(summary: dict[str, Any]) -> str:

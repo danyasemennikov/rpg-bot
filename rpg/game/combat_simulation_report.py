@@ -22,6 +22,7 @@ from game.combat_simulation_matrix import (
     list_alpha_simulation_route_ids,
     list_route_simulation_stages,
     resolve_archetype_simulation_policy,
+    run_cooldown_shadow_policy_comparison,
     run_route_stage_simulation_matrix,
 )
 from game.locations import ROUTE_MATCHUP_TARGET_PROFILES, WORLD_LOCATIONS
@@ -1523,13 +1524,246 @@ def build_pr4_multiseed_confidence_snapshot(
     }
 
 
+def _pr12_policy_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    count = len(rows)
+    totals = {
+        "runs": count,
+        "wins": sum(1 for row in rows if row.get("winner") == "player"),
+        "losses": sum(1 for row in rows if row.get("winner") == "mob"),
+        "timeouts": sum(1 for row in rows if row.get("terminated_by_max_turns")),
+        "turns": sum(int(row.get("turns", 0) or 0) for row in rows),
+        "player_hp_remaining": sum(int(row.get("player_hp_remaining", 0) or 0) for row in rows),
+        "player_mana_remaining": sum(int(row.get("player_mana_remaining", 0) or 0) for row in rows),
+        "damage_dealt": sum(int(row.get("damage_dealt", 0) or 0) for row in rows),
+        "damage_taken": sum(int(row.get("damage_taken", 0) or 0) for row in rows),
+        "successful_skill_count": sum(len(row.get("skills_used", [])) for row in rows),
+        "normal_attack_count": sum(
+            int((row.get("actions_used") or {}).get("normal_attack", 0) or 0)
+            for row in rows
+        ),
+        "cooldown_fallback_count": sum(
+            int(((row.get("observability") or {}).get("fallback_reason_counts") or {}).get("skill_on_cooldown", 0) or 0)
+            for row in rows
+        ),
+        "insufficient_mana_fallback_count": sum(
+            int(((row.get("observability") or {}).get("fallback_reason_counts") or {}).get("insufficient_mana", 0) or 0)
+            for row in rows
+        ),
+    }
+    denominator = max(1, count)
+    for source, target in (
+        ("turns", "average_turns"),
+        ("player_hp_remaining", "average_player_hp_remaining"),
+        ("player_mana_remaining", "average_player_mana_remaining"),
+        ("damage_dealt", "average_damage_dealt"),
+        ("damage_taken", "average_damage_taken"),
+    ):
+        totals[target] = round(totals[source] / denominator, 6)
+    return totals
+
+
+def _pr12_merge_shadow_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    scalar_keys = (
+        "scheduled_action_count",
+        "scheduled_blocked_skill_count",
+        "proactive_normal_replacement_count",
+        "next_ready_skill_replacement_count",
+    )
+    counter_keys = (
+        "blocked_skill_counts",
+        "replacement_action_counts",
+        "replacement_skill_counts",
+    )
+    output: dict[str, Any] = {key: 0 for key in scalar_keys}
+    counters = {key: Counter() for key in counter_keys}
+    for row in rows:
+        diagnostics = dict((row.get("observability") or {}).get("shadow_policy_diagnostics") or {})
+        for key in scalar_keys:
+            output[key] += int(diagnostics.get(key, 0) or 0)
+        for key in counter_keys:
+            counters[key].update(dict(diagnostics.get(key) or {}))
+    for key in counter_keys:
+        output[key] = _sorted_count_dict(counters[key])
+    return output
+
+
+def build_pr12_cooldown_shadow_policy_comparison(comparison: dict[str, Any]) -> dict[str, Any]:
+    pairs = list(comparison.get("pairs", []))
+    baseline_rows = [dict(pair.get("baseline") or {}) for pair in pairs]
+    normal_rows = [dict(pair.get("normal_fallback_candidate") or {}) for pair in pairs]
+    next_ready_rows = [dict(pair.get("next_ready_candidate") or {}) for pair in pairs]
+    baseline_totals = _pr12_policy_totals(baseline_rows)
+    normal_totals = _pr12_policy_totals(normal_rows)
+    next_ready_totals = _pr12_policy_totals(next_ready_rows)
+    normal_diagnostics = _pr12_merge_shadow_diagnostics(normal_rows)
+    next_ready_diagnostics = _pr12_merge_shadow_diagnostics(next_ready_rows)
+
+    parity_fields = (
+        "winner",
+        "turns",
+        "terminated_by_max_turns",
+        "player_hp_remaining",
+        "player_mana_remaining",
+        "mob_hp_remaining",
+        "damage_dealt",
+        "damage_taken",
+        "actions_used",
+        "skills_used",
+    )
+    parity_mismatches = []
+    for pair in pairs:
+        baseline = dict(pair.get("baseline") or {})
+        candidate = dict(pair.get("normal_fallback_candidate") or {})
+        mismatched_fields = [field for field in parity_fields if baseline.get(field) != candidate.get(field)]
+        if mismatched_fields:
+            parity_mismatches.append({
+                "scenario_identity": dict(pair.get("scenario_identity") or {}),
+                "mismatched_fields": mismatched_fields,
+                "baseline": {field: baseline.get(field) for field in mismatched_fields},
+                "candidate": {field: candidate.get(field) for field in mismatched_fields},
+            })
+
+    delta_fields = (
+        "wins",
+        "losses",
+        "timeouts",
+        "average_turns",
+        "average_player_hp_remaining",
+        "average_player_mana_remaining",
+        "average_damage_dealt",
+        "average_damage_taken",
+        "successful_skill_count",
+        "normal_attack_count",
+        "cooldown_fallback_count",
+        "insufficient_mana_fallback_count",
+    )
+    deltas = {
+        field: round(float(next_ready_totals[field]) - float(baseline_totals[field]), 6)
+        for field in delta_fields
+    }
+
+    transition_counts: Counter[str] = Counter()
+    improved = 0
+    worsened = 0
+    unchanged = 0
+    impact_groups: dict[tuple[str, str, str], dict[str, Any]] = {}
+    outcome_rank = {"mob": 0, "none": 1, "player": 2}
+    for pair in pairs:
+        baseline = dict(pair.get("baseline") or {})
+        candidate = dict(pair.get("next_ready_candidate") or {})
+        baseline_outcome = str(baseline.get("winner") or "none")
+        candidate_outcome = str(candidate.get("winner") or "none")
+        baseline_timeout = bool(baseline.get("terminated_by_max_turns"))
+        candidate_timeout = bool(candidate.get("terminated_by_max_turns"))
+        transition = f"{baseline_outcome}_to_{candidate_outcome}"
+        if baseline_timeout != candidate_timeout:
+            transition = (
+                f"{baseline_outcome}_{'timeout' if baseline_timeout else 'no_timeout'}"
+                f"_to_{candidate_outcome}_{'timeout' if candidate_timeout else 'no_timeout'}"
+            )
+        transition_counts[transition] += 1
+        outcome_changed = baseline_outcome != candidate_outcome or baseline_timeout != candidate_timeout
+        if outcome_rank.get(candidate_outcome, 1) > outcome_rank.get(baseline_outcome, 1) or (
+            baseline_outcome == candidate_outcome and baseline_timeout and not candidate_timeout
+        ):
+            improved += 1
+        elif outcome_rank.get(candidate_outcome, 1) < outcome_rank.get(baseline_outcome, 1):
+            worsened += 1
+        elif baseline_outcome == candidate_outcome and not baseline_timeout and candidate_timeout:
+            worsened += 1
+        else:
+            unchanged += 1
+
+        turns_delta = int(candidate.get("turns", 0) or 0) - int(baseline.get("turns", 0) or 0)
+        damage_taken_delta = int(candidate.get("damage_taken", 0) or 0) - int(baseline.get("damage_taken", 0) or 0)
+        replacement_count = int(
+            (((candidate.get("observability") or {}).get("shadow_policy_diagnostics") or {}).get(
+                "next_ready_skill_replacement_count",
+                0,
+            ))
+            or 0
+        )
+        if not outcome_changed and turns_delta == 0 and damage_taken_delta == 0 and replacement_count == 0:
+            continue
+        identity = dict(pair.get("scenario_identity") or {})
+        key = (
+            str(identity.get("route", "")),
+            str(identity.get("stage", "")),
+            str(identity.get("archetype", "")),
+        )
+        group = impact_groups.setdefault(key, {
+            "route": key[0],
+            "stage": key[1],
+            "archetype": key[2],
+            "affected_scenario_count": 0,
+            "outcome_change_count": 0,
+            "next_ready_replacement_count": 0,
+            "turns_delta_total": 0,
+            "damage_taken_delta_total": 0,
+        })
+        group["affected_scenario_count"] += 1
+        group["outcome_change_count"] += int(outcome_changed)
+        group["next_ready_replacement_count"] += replacement_count
+        group["turns_delta_total"] += turns_delta
+        group["damage_taken_delta_total"] += damage_taken_delta
+
+    top_impacts = sorted(
+        impact_groups.values(),
+        key=lambda row: (
+            -int(row["outcome_change_count"]),
+            -int(row["next_ready_replacement_count"]),
+            -int(row["affected_scenario_count"]),
+            -abs(int(row["turns_delta_total"])),
+            str(row["route"]),
+            str(row["stage"]),
+            str(row["archetype"]),
+        ),
+    )[:10]
+    outcome_change_counts = {
+        "total": improved + worsened,
+        "improved": improved,
+        "worsened": worsened,
+        "unchanged": unchanged,
+        "transitions": _sorted_count_dict(transition_counts),
+    }
+    if parity_mismatches:
+        recommendation = "investigate_shadow_policy_parity_mismatch"
+    elif outcome_change_counts["total"] > 0:
+        recommendation = "review_next_ready_skill_candidate_impact_before_adoption"
+    else:
+        recommendation = "consider_cooldown_aware_normal_request_suppression_only"
+
+    return {
+        "available": bool(pairs),
+        "pilot_archetypes": list(comparison.get("pilot_archetypes", [])),
+        "scenario_pair_count": len(pairs),
+        "candidate_policy_ids": list(comparison.get("candidate_policy_ids", [])),
+        "baseline_totals": baseline_totals,
+        "normal_fallback_candidate_totals": normal_totals,
+        "next_ready_candidate_totals": next_ready_totals,
+        "normal_fallback_parity_pair_count": len(pairs),
+        "normal_fallback_parity_mismatch_count": len(parity_mismatches),
+        "normal_fallback_parity_mismatches": parity_mismatches[:10],
+        "blocked_skill_counts": normal_diagnostics["blocked_skill_counts"],
+        "normal_replacement_counts": normal_diagnostics["replacement_action_counts"],
+        "next_ready_replacement_skill_counts": next_ready_diagnostics["replacement_skill_counts"],
+        "normal_fallback_candidate_diagnostics": normal_diagnostics,
+        "next_ready_candidate_diagnostics": next_ready_diagnostics,
+        "next_ready_deltas_vs_baseline": deltas,
+        "outcome_change_counts": outcome_change_counts,
+        "top_next_ready_impact_clusters": top_impacts,
+        "recommended_next_investigation": recommendation,
+    }
+
+
 def build_alpha_balance_report_data(
     matrix_result: dict | None = None,
     config: RouteStageMatrixConfig | None = None,
     *,
     include_pr4_confidence: bool = False,
 ) -> dict:
-    matrix = matrix_result if matrix_result is not None else run_route_stage_simulation_matrix(config)
+    effective_config = config or RouteStageMatrixConfig()
+    matrix = matrix_result if matrix_result is not None else run_route_stage_simulation_matrix(effective_config)
     enriched_runs = [_enrich_run(run) for run in matrix.get("runs", [])]
     runs_by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for run in enriched_runs:
@@ -1737,6 +1971,9 @@ def build_alpha_balance_report_data(
     profile_policy_availability = build_profile_policy_availability_diagnostics(enriched_runs)
     post_pr9_fallback_diagnostics = build_post_pr9_fallback_diagnostics(enriched_runs)
     post_pr10_policy_pressure_diagnostics = build_post_pr10_policy_pressure_diagnostics(enriched_runs)
+    pr12_cooldown_shadow_policy_comparison = build_pr12_cooldown_shadow_policy_comparison(
+        run_cooldown_shadow_policy_comparison(effective_config)
+    )
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -1796,6 +2033,7 @@ def build_alpha_balance_report_data(
         "profile_policy_availability": profile_policy_availability,
         "post_pr9_fallback_diagnostics": post_pr9_fallback_diagnostics,
         "post_pr10_policy_pressure_diagnostics": post_pr10_policy_pressure_diagnostics,
+        "pr12_cooldown_shadow_policy_comparison": pr12_cooldown_shadow_policy_comparison,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -2328,6 +2566,116 @@ def _render_pr11_policy_pressure_attribution_lines(report_data: dict[str, Any]) 
     return lines
 
 
+def _render_pr12_cooldown_shadow_policy_comparison_lines(report_data: dict[str, Any]) -> list[str]:
+    data = dict(report_data.get("pr12_cooldown_shadow_policy_comparison") or {})
+    baseline = dict(data.get("baseline_totals") or {})
+    normal = dict(data.get("normal_fallback_candidate_totals") or {})
+    next_ready = dict(data.get("next_ready_candidate_totals") or {})
+    deltas = dict(data.get("next_ready_deltas_vs_baseline") or {})
+    outcomes = dict(data.get("outcome_change_counts") or {})
+    lines = [
+        "",
+        "## Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison",
+        "Simulation/diagnostic/reporting-only; the active baseline policy remains unchanged.",
+        "Candidate A proactively requests normal attack where the baseline would have produced a cooldown fallback to normal attack.",
+        "Candidate B tries the next ready skill in the same active profile branch.",
+        "Neither candidate is active gameplay or an active simulation policy.",
+        "These counterfactual results are evidence for a separately reviewed next branch, not a final balance verdict.",
+        "",
+        "Comparison scope:",
+        "| pilot archetypes | scenario pairs | candidate policies |",
+        "|---:|---:|---|",
+        f"| {len(data.get('pilot_archetypes', []))} | {data.get('scenario_pair_count', 0)} | "
+        f"{', '.join(data.get('candidate_policy_ids', [])) or 'none'} |",
+        "",
+        "Candidate A behavioral parity:",
+        "| parity pairs | mismatches | baseline cooldown fallbacks | proactive normal replacements |",
+        "|---:|---:|---:|---:|",
+        f"| {data.get('normal_fallback_parity_pair_count', 0)} | "
+        f"{data.get('normal_fallback_parity_mismatch_count', 0)} | "
+        f"{baseline.get('cooldown_fallback_count', 0)} | "
+        f"{(data.get('normal_fallback_candidate_diagnostics') or {}).get('proactive_normal_replacement_count', 0)} |",
+        "",
+        "Baseline versus Candidate B totals and deltas:",
+        "| metric | baseline | Candidate B | delta |",
+        "|---|---:|---:|---:|",
+    ]
+    metric_rows = (
+        ("wins", "wins"),
+        ("losses", "losses"),
+        ("timeouts", "timeouts"),
+        ("average turns", "average_turns"),
+        ("average HP remaining", "average_player_hp_remaining"),
+        ("average mana remaining", "average_player_mana_remaining"),
+        ("average damage dealt", "average_damage_dealt"),
+        ("average damage taken", "average_damage_taken"),
+        ("successful skills", "successful_skill_count"),
+        ("normal attacks", "normal_attack_count"),
+        ("cooldown fallbacks", "cooldown_fallback_count"),
+        ("insufficient-mana fallbacks", "insufficient_mana_fallback_count"),
+    )
+    for label, key in metric_rows:
+        lines.append(
+            f"| {label} | {baseline.get(key, 0)} | {next_ready.get(key, 0)} | {deltas.get(key, 0)} |"
+        )
+
+    lines += [
+        "",
+        "Outcome changes:",
+        "| improved | worsened | unchanged | total changed |",
+        "|---:|---:|---:|---:|",
+        f"| {outcomes.get('improved', 0)} | {outcomes.get('worsened', 0)} | "
+        f"{outcomes.get('unchanged', 0)} | {outcomes.get('total', 0)} |",
+        "",
+        "Blocked skills and replacement actions:",
+        "| Candidate A blocked skill | count |",
+        "|---|---:|",
+    ]
+    blocked = dict(data.get("blocked_skill_counts") or {})
+    replacements = dict(data.get("next_ready_replacement_skill_counts") or {})
+    for skill_id, count in blocked.items():
+        lines.append(f"| {skill_id} | {count} |")
+    if not blocked:
+        lines.append("| none | 0 |")
+    lines += [
+        "",
+        "| Candidate B replacement skill | count |",
+        "|---|---:|",
+    ]
+    for skill_id, count in replacements.items():
+        lines.append(f"| {skill_id} | {count} |")
+    if not replacements:
+        lines.append("| none | 0 |")
+
+    lines += [
+        "",
+        "Top Candidate B scenario impacts:",
+        "| route | stage | archetype | affected scenarios | outcome changes | next-ready replacements | turns delta | damage-taken delta |",
+        "|---|---|---|---:|---:|---:|---:|---:|",
+    ]
+    impacts = list(data.get("top_next_ready_impact_clusters") or [])
+    for row in impacts:
+        lines.append(
+            f"| {row.get('route')} | {row.get('stage')} | {row.get('archetype')} | "
+            f"{row.get('affected_scenario_count', 0)} | {row.get('outcome_change_count', 0)} | "
+            f"{row.get('next_ready_replacement_count', 0)} | "
+            f"{row.get('turns_delta_total', 0)} | {row.get('damage_taken_delta_total', 0)} |"
+        )
+    if not impacts:
+        lines.append("| none | none | none | 0 | 0 | 0 | 0 | 0 |")
+    lines += [
+        "",
+        "Recommended next investigation:",
+        "| recommendation |",
+        "|---|",
+        f"| {data.get('recommended_next_investigation', 'no_shadow_comparison_available')} |",
+        "",
+        f"Candidate A totals remain counterfactual only: wins={normal.get('wins', 0)}, "
+        f"losses={normal.get('losses', 0)}, timeouts={normal.get('timeouts', 0)}.",
+    ]
+    return lines
+
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -2385,6 +2733,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines.extend(_render_pr9_profile_policy_availability_lines(report_data))
     lines.extend(_render_pr10_post_pr9_fallback_diagnostic_lines(report_data))
     lines.extend(_render_pr11_policy_pressure_attribution_lines(report_data))
+    lines.extend(_render_pr12_cooldown_shadow_policy_comparison_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -2570,6 +2919,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines.extend(_render_pr9_profile_policy_availability_lines(report_data))
     lines.extend(_render_pr10_post_pr9_fallback_diagnostic_lines(report_data))
     lines.extend(_render_pr11_policy_pressure_attribution_lines(report_data))
+    lines.extend(_render_pr12_cooldown_shadow_policy_comparison_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)

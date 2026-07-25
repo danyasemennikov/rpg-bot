@@ -20,6 +20,7 @@ from game.mobs import get_mob
 SIM_ACTION_NORMAL_ATTACK = "normal_attack"
 SIM_ACTION_GUARD_FALLBACK = "guard_fallback"
 SIM_ACTION_SKILL_PREFIX = "skill:"
+SIMULATION_POLICY_CONTEXT_KEY = "_simulation_policy_context"
 
 
 @dataclass
@@ -121,6 +122,92 @@ class ProfileAwareSimulationPolicy:
         if self.low_hp_actions and (current_hp / max_hp) <= self.low_hp_threshold:
             return self._loop_action(self.low_hp_actions, turn)
         return self._loop_action(self.actions, turn)
+
+
+class CooldownAwareShadowPolicy(ProfileAwareSimulationPolicy):
+    """Simulation-only counterfactual policy; never used by the active matrix."""
+
+    def __init__(
+        self,
+        actions: list[str],
+        *,
+        candidate_policy_id: str,
+        select_next_ready_skill: bool,
+        low_hp_actions: list[str] | None = None,
+        low_hp_threshold: float = 0.55,
+    ):
+        super().__init__(
+            actions,
+            low_hp_actions=low_hp_actions,
+            low_hp_threshold=low_hp_threshold,
+        )
+        self.candidate_policy_id = candidate_policy_id
+        self.select_next_ready_skill = bool(select_next_ready_skill)
+        self._scheduled_action_count = 0
+        self._scheduled_blocked_skill_count = 0
+        self._proactive_normal_replacement_count = 0
+        self._next_ready_skill_replacement_count = 0
+        self._blocked_skill_counts: dict[str, int] = {}
+        self._replacement_action_counts: dict[str, int] = {}
+        self._replacement_skill_counts: dict[str, int] = {}
+
+    def _active_branch(self, battle_state: dict) -> list[str]:
+        max_hp = max(1, int(battle_state.get("player_max_hp", battle_state.get("max_hp", 1)) or 1))
+        current_hp = int(battle_state.get("player_hp", max_hp) or 0)
+        if self.low_hp_actions and (current_hp / max_hp) <= self.low_hp_threshold:
+            return self.low_hp_actions
+        return self.actions
+
+    def _count_replacement(self, action: str) -> None:
+        self._replacement_action_counts[action] = self._replacement_action_counts.get(action, 0) + 1
+        skill_id = parse_simulation_skill_action(action)
+        if skill_id:
+            self._replacement_skill_counts[skill_id] = self._replacement_skill_counts.get(skill_id, 0) + 1
+
+    def choose_action(self, *, turn: int, battle_state: dict) -> str:
+        branch = self._active_branch(battle_state)
+        scheduled_action = self._loop_action(branch, turn)
+        self._scheduled_action_count += 1
+
+        scheduled_skill_id = parse_simulation_skill_action(scheduled_action)
+        context = dict(battle_state.get(SIMULATION_POLICY_CONTEXT_KEY) or {})
+        cooldowns = dict(context.get("simulation_cooldowns") or {})
+        skill_levels = dict(context.get("skill_levels") or {})
+        if not scheduled_skill_id or int(cooldowns.get(scheduled_skill_id, 0) or 0) <= 0:
+            return scheduled_action
+
+        self._scheduled_blocked_skill_count += 1
+        self._blocked_skill_counts[scheduled_skill_id] = self._blocked_skill_counts.get(scheduled_skill_id, 0) + 1
+
+        if self.select_next_ready_skill and branch:
+            start_index = (max(1, int(turn)) - 1) % len(branch)
+            for offset in range(1, len(branch)):
+                candidate_action = branch[(start_index + offset) % len(branch)]
+                candidate_skill_id = parse_simulation_skill_action(candidate_action)
+                if (
+                    candidate_skill_id
+                    and int(skill_levels.get(candidate_skill_id, 0) or 0) > 0
+                    and int(cooldowns.get(candidate_skill_id, 0) or 0) <= 0
+                ):
+                    self._next_ready_skill_replacement_count += 1
+                    self._count_replacement(candidate_action)
+                    return candidate_action
+
+        self._proactive_normal_replacement_count += 1
+        self._count_replacement(SIM_ACTION_NORMAL_ATTACK)
+        return SIM_ACTION_NORMAL_ATTACK
+
+    def get_shadow_diagnostics(self) -> dict:
+        return {
+            "candidate_policy_id": self.candidate_policy_id,
+            "scheduled_action_count": self._scheduled_action_count,
+            "scheduled_blocked_skill_count": self._scheduled_blocked_skill_count,
+            "proactive_normal_replacement_count": self._proactive_normal_replacement_count,
+            "next_ready_skill_replacement_count": self._next_ready_skill_replacement_count,
+            "blocked_skill_counts": dict(sorted(self._blocked_skill_counts.items())),
+            "replacement_action_counts": dict(sorted(self._replacement_action_counts.items())),
+            "replacement_skill_counts": dict(sorted(self._replacement_skill_counts.items())),
+        }
 
 
 def make_simulation_skill_action(skill_id: str) -> str:
@@ -426,7 +513,13 @@ def simulate_single_combat(
             trace_before = _snapshot_combat_totals(battle_state)
             log_before = list(battle_state.get("log", []))
             trace_after_player_action = dict(trace_before)
-            chosen_action = action_policy.choose_action(turn=turn_number, battle_state=battle_state)
+            policy_battle_state = dict(battle_state)
+            policy_battle_state[SIMULATION_POLICY_CONTEXT_KEY] = {
+                "simulation_cooldowns": dict(simulation_cooldowns),
+                "skill_levels": dict(cfg.skill_levels),
+                "player_mana": int(battle_state.get("player_mana", 0) or 0),
+            }
+            chosen_action = action_policy.choose_action(turn=turn_number, battle_state=policy_battle_state)
             action = chosen_action
             requested_skill_id = parse_simulation_skill_action(chosen_action)
             resolution_meta = _build_skill_resolution_metadata(chosen_action, requested_skill_id)
@@ -715,6 +808,9 @@ def simulate_single_combat(
             mana_deficit_maximums_by_skill=mana_deficit_maximums_by_skill,
             policy_guard_action_count=policy_guard_action_count,
         )
+        get_shadow_diagnostics = getattr(action_policy, "get_shadow_diagnostics", None)
+        if callable(get_shadow_diagnostics):
+            observability["shadow_policy_diagnostics"] = get_shadow_diagnostics()
         return SimulationResult(
             winner=winner,
             turns=executed_turns,
