@@ -106,10 +106,12 @@ class ProfileAwareSimulationPolicy:
         *,
         low_hp_actions: list[str] | None = None,
         low_hp_threshold: float = 0.55,
+        suppress_cooldown_requests: bool = False,
     ):
         self.actions = list(actions)
         self.low_hp_actions = list(low_hp_actions or [])
         self.low_hp_threshold = float(low_hp_threshold)
+        self.suppress_cooldown_requests = bool(suppress_cooldown_requests)
 
     def _loop_action(self, actions: list[str], turn: int) -> str:
         if not actions:
@@ -120,8 +122,18 @@ class ProfileAwareSimulationPolicy:
         max_hp = max(1, int(battle_state.get("player_max_hp", battle_state.get("max_hp", 1)) or 1))
         current_hp = int(battle_state.get("player_hp", max_hp) or 0)
         if self.low_hp_actions and (current_hp / max_hp) <= self.low_hp_threshold:
-            return self._loop_action(self.low_hp_actions, turn)
-        return self._loop_action(self.actions, turn)
+            scheduled_action = self._loop_action(self.low_hp_actions, turn)
+        else:
+            scheduled_action = self._loop_action(self.actions, turn)
+        if not self.suppress_cooldown_requests:
+            return scheduled_action
+
+        scheduled_skill_id = parse_simulation_skill_action(scheduled_action)
+        context = dict(battle_state.get(SIMULATION_POLICY_CONTEXT_KEY) or {})
+        cooldowns = dict(context.get("simulation_cooldowns") or {})
+        if scheduled_skill_id and int(cooldowns.get(scheduled_skill_id, 0) or 0) > 0:
+            return SIM_ACTION_NORMAL_ATTACK
+        return scheduled_action
 
 
 class CooldownAwareShadowPolicy(ProfileAwareSimulationPolicy):

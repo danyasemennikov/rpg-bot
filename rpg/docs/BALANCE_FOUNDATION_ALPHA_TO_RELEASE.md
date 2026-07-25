@@ -1,5 +1,15 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR13 Cooldown-Aware Normal Request Suppression Note
+
+- Adopts PR12 Candidate A only in the simulation resolver for the unchanged five profile-aware pilot archetypes.
+- When a scheduled learned skill is cooling down, the simulation policy explicitly requests `normal_attack`; it does not scan for another skill.
+- Ready but unaffordable skills remain requested, preserving independent insufficient-mana fallback diagnostics and PR8 action-resolution observability.
+- PR9 availability filtering, profile rotations, metadata-only policy status, and the historical PR12 shadow comparison remain preserved.
+- The default 100 paired scenarios retain exact outcome and final-state parity: the prior 61 cooldown fallbacks become 61 explicit policy normal attacks and active cooldown fallback count becomes 0.
+- Candidate B remains inactive. No live gameplay/runtime or balance numbers change, and no final balance claim is made.
+- This closes the cooldown-request diagnostic branch unless regressions reveal a blocker.
+
 ## Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison Note
 
 - Compares two simulation-only shadow candidates: proactive normal-attack replacement and next learned, ready, affordable profile-skill replacement.

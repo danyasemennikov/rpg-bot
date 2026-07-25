@@ -222,7 +222,12 @@ def _filter_profile_policy_actions(skill_ids_or_actions: list[str], skill_levels
     return _skill_loop_actions(filtered)
 
 
-def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> dict[str, Any]:
+def resolve_archetype_simulation_policy(
+    archetype_id: str,
+    power_tier: str,
+    *,
+    suppress_pilot_cooldown_requests: bool = True,
+) -> dict[str, Any]:
     metadata = get_archetype_metadata(archetype_id)
     pref_policy = metadata.get("preferred_policy_id")
     registry_item = EXECUTABLE_POLICY_REGISTRY.get(pref_policy, {})
@@ -256,9 +261,13 @@ def resolve_archetype_simulation_policy(archetype_id: str, power_tier: str) -> d
                 actions,
                 low_hp_actions=_filter_profile_policy_actions(low_hp_ids, skill_levels),
                 low_hp_threshold=0.55,
+                suppress_cooldown_requests=suppress_pilot_cooldown_requests,
             )
         else:
-            policy = ProfileAwareSimulationPolicy(actions)
+            policy = ProfileAwareSimulationPolicy(
+                actions,
+                suppress_cooldown_requests=suppress_pilot_cooldown_requests,
+            )
         return {
             "policy": policy,
             "active_simulation_policy_id": f"profile:{archetype_id}",
@@ -435,7 +444,12 @@ def run_cooldown_shadow_policy_comparison(config: RouteStageMatrixConfig | None 
                             include_turn_trace=cfg.include_turn_trace,
                             max_trace_turns=cfg.max_trace_turns,
                         )
-                        baseline_resolution = resolve_archetype_simulation_policy(archetype_id, stage)
+                        # Keep the PR12 comparison anchored to its pre-adoption baseline.
+                        baseline_resolution = resolve_archetype_simulation_policy(
+                            archetype_id,
+                            stage,
+                            suppress_pilot_cooldown_requests=False,
+                        )
                         normal_policy = build_cooldown_shadow_policy(
                             archetype_id,
                             stage,

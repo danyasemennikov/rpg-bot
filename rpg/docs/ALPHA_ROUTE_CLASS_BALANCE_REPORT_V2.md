@@ -348,24 +348,22 @@ PR5 remains 420 audit rows (expected 420).
 PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
 
 Top fallback reasons:
-- skill_on_cooldown: 61
 - insufficient_mana: 4
 
 Action resolution counts:
-- policy_chose_normal_attack: 532
+- policy_chose_normal_attack: 593
 - resolved_skill_success: 258
-- skill_on_cooldown: 61
 - policy_chose_guard: 24
 - insufficient_mana: 4
 
 Pilot fallback summary:
 | archetype | requested_skills | resolved_skill_success | normal_attack_fallback | top_fallback_reasons |
 |---|---:|---:|---:|---|
-| daggers_venom | 53 | 49 | 4 | insufficient_mana:3, skill_on_cooldown:1 |
-| daggers_evasion | 66 | 46 | 20 | skill_on_cooldown:19, insufficient_mana:1 |
-| bow_sniper | 51 | 35 | 16 | skill_on_cooldown:16 |
+| daggers_venom | 52 | 49 | 3 | insufficient_mana:3 |
+| daggers_evasion | 47 | 46 | 1 | insufficient_mana:1 |
+| bow_sniper | 35 | 35 | 0 | none |
 | magic_staff_destruction | 32 | 32 | 0 | none |
-| holy_staff_solo | 61 | 36 | 25 | skill_on_cooldown:25 |
+| holy_staff_solo | 36 | 36 | 0 | none |
 
 ## Balance V2 PR9 Availability-aware Profile Policy Selection
 Diagnostic/simulation/reporting-only: no live tuning, gameplay, combat, formula, route, mob, gear, PvP, cooldown reset, reward, or runtime behavior changed.
@@ -387,7 +385,7 @@ Skipped/unavailable profile skill counts:
 - skipped profile skill references: 220
 - unavailable profile skill references: 220
 - current skill_locked_or_unleveled fallback count after availability filtering: 0
-- PR8 total fallback reasons remain reported separately: {'skill_on_cooldown': 61, 'insufficient_mana': 4}
+- PR8 total fallback reasons remain reported separately: {'insufficient_mana': 4}
 
 Top pilot availability summaries:
 | archetype | statuses | skipped_profile_skills | unavailable_profile_skills | skill_locked_or_unleveled_fallbacks |
@@ -408,37 +406,30 @@ Route/mob/gear/PvP tuning remains deferred until this diagnostic signal is revie
 Total fallback reason counts:
 | fallback_reason | count |
 |---|---:|
-| skill_on_cooldown | 61 |
 | insufficient_mana | 4 |
 
 Cooldown fallback counts by archetype:
 | archetype | cooldown_fallback_count |
 |---|---:|
-| holy_staff_solo | 25 |
-| daggers_evasion | 19 |
-| bow_sniper | 16 |
-| daggers_venom | 1 |
+| none | 0 |
 
 Cooldown fallback counts by stage:
 | stage | cooldown_fallback_count |
 |---|---:|
-| build_testing | 20 |
-| route_exam | 17 |
-| identity_visible | 13 |
-| soft_entry | 11 |
+| none | 0 |
 
 Pilot archetype fallback summary:
 | archetype | skill_on_cooldown | guard_fallback_action | insufficient_mana | skill_locked_or_unleveled |
 |---|---:|---:|---:|---:|
-| daggers_venom | 1 | 0 | 3 | 0 |
-| daggers_evasion | 19 | 0 | 1 | 0 |
-| bow_sniper | 16 | 0 | 0 | 0 |
+| daggers_venom | 0 | 0 | 3 | 0 |
+| daggers_evasion | 0 | 0 | 1 | 0 |
+| bow_sniper | 0 | 0 | 0 | 0 |
 | magic_staff_destruction | 0 | 0 | 0 | 0 |
-| holy_staff_solo | 25 | 0 | 0 | 0 |
+| holy_staff_solo | 0 | 0 | 0 | 0 |
 
 Recommended next investigation:
 - investigate_cooldown_and_mana_policy_behavior
-- cooldown=61, guard=0, insufficient_mana=4
+- cooldown=0, guard=0, insufficient_mana=4
 
 ## Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
 Diagnostic/simulation/reporting-only: PR11 changes no live tuning, gameplay, or runtime behavior.
@@ -454,17 +445,14 @@ Corrected fallback totals versus intentional guard actions:
 |---|---:|
 | intentional policy guard actions | 24 |
 | true guard fallbacks | 0 |
-| cooldown fallbacks | 61 |
+| cooldown fallbacks | 0 |
 | insufficient mana fallbacks | 4 |
 | skill locked or unleveled | 0 |
 
 Top cooldown-pressured skills:
 | skill | requests | successes | cooldown fallbacks | avg cooldown remaining | max cooldown remaining | archetypes | stages |
 |---|---:|---:|---:|---:|---:|---|---|
-| smite | 60 | 35 | 25 | 1.00 | 1 | holy_staff_solo | build_testing, identity_visible, route_exam, soft_entry |
-| smoke_bomb | 43 | 24 | 19 | 1.53 | 2 | daggers_evasion | build_testing, identity_visible, route_exam, soft_entry |
-| hunters_mark | 36 | 20 | 16 | 1.50 | 2 | bow_sniper | build_testing, identity_visible, route_exam, soft_entry |
-| poison_blade | 25 | 24 | 1 | 1.00 | 1 | daggers_venom | soft_entry |
+| none | 0 | 0 | 0 | 0.00 | 0 | none | none |
 
 Insufficient-mana skills:
 | skill | insufficient mana | avg mana deficit | max mana deficit | archetypes | stages |
@@ -475,21 +463,13 @@ Insufficient-mana skills:
 Top archetype/stage/skill clusters:
 | archetype | stage | skill | reason | count |
 |---|---|---|---|---:|
-| holy_staff_solo | route_exam | smite | skill_on_cooldown | 11 |
-| holy_staff_solo | build_testing | smite | skill_on_cooldown | 9 |
-| daggers_evasion | build_testing | smoke_bomb | skill_on_cooldown | 6 |
-| bow_sniper | build_testing | hunters_mark | skill_on_cooldown | 5 |
-| daggers_evasion | identity_visible | smoke_bomb | skill_on_cooldown | 5 |
-| daggers_evasion | soft_entry | smoke_bomb | skill_on_cooldown | 5 |
-| bow_sniper | identity_visible | hunters_mark | skill_on_cooldown | 4 |
-| bow_sniper | soft_entry | hunters_mark | skill_on_cooldown | 4 |
-| holy_staff_solo | identity_visible | smite | skill_on_cooldown | 4 |
-| bow_sniper | route_exam | hunters_mark | skill_on_cooldown | 3 |
+| daggers_venom | build_testing | toxic_cut | insufficient_mana | 3 |
+| daggers_evasion | build_testing | feint_step | insufficient_mana | 1 |
 
 Recommended next investigation:
 | recommendation |
 |---|
-| investigate_top_cooldown_skill_policy_request_cadence_before_tuning |
+| investigate_top_mana_deficit_skill_policy_request_cadence_before_tuning |
 
 ## Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 Simulation/diagnostic/reporting-only; the active baseline policy remains unchanged.
@@ -560,6 +540,18 @@ Recommended next investigation:
 | consider_cooldown_aware_normal_request_suppression_only |
 
 Candidate A totals remain counterfactual only: wins=100, losses=0, timeouts=0.
+
+## Balance V2 PR13 Cooldown-Aware Normal Request Suppression
+Simulation-policy-only adoption of PR12 Candidate A for the unchanged five-pilot set.
+A scheduled learned skill that is cooling down now produces an explicit policy normal attack; ready but unaffordable skills remain requested so mana fallback attribution stays visible.
+Candidate B remains inactive, no next-skill scan occurs, and no final balance claim is made.
+
+| pilot archetypes | historical scenario pairs | parity mismatches | previous cooldown fallbacks | active cooldown fallbacks | explicit policy normal attacks | insufficient-mana fallbacks |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 100 | 0 | 61 | 0 | 61 | 4 |
+
+Paired outcomes and final combat state remain identical to the prior active baseline.
+This closes the cooldown-request diagnostic branch unless regressions reveal a blocker.
 
 ## Target vs Observed v2 Signals
 This table shows a compact route-balanced suspicious preview, not the full target-vs-observed matrix.
