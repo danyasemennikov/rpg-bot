@@ -1,5 +1,11 @@
 # Balance Foundation: Alpha to Release
 
+## Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown Note
+
+- Diagnostic/simulation/reporting-only breakdown of the remaining fallback reasons after PR9 availability filtering.
+- Observes cooldown, guard, and insufficient-mana fallback evidence to guide the next tuning or diagnostic branch.
+- Does not change policies, skills, cooldowns, mana costs, formulas, routes, mobs, rewards, PvP, targeting, teleport, runtime behavior, or any live gameplay system.
+
 ## Balance V2 PR9 Availability-aware Profile Policy Selection Note
 
 - Adds diagnostic/simulation/reporting-only availability-aware selection for PR7 profile-aware pilot policies.
