@@ -5,6 +5,7 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
 - PR: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 - PR: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
 - PR: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
@@ -12,20 +13,33 @@ Last updated after merge:
 - PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 - PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
-- Prior confirmed Status: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
+- Status: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
+- Prior confirmed Status: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 - Historical Status: Balance V2 PR9 Availability-aware Profile Policy Selection
-- Latest gameplay/balance diagnostic state: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
+- Latest simulation-policy state: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
+- Latest gameplay/balance diagnostic state: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
 - Historical baseline phrase retained for regression continuity: current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection.
-- Confirmed state below extends PR223 / Balance V2 PR11 with PR224 / Balance V2 PR12 as the latest gameplay/balance diagnostic state, while preserving PR11 as the prior skill-level policy-pressure attribution state, PR10 as the prior fallback-breakdown state, Balance V2 PR9 as the prior availability-aware profile policy state, Balance V2 PR8 as the prior action-resolution state, and PR218 as the test baseline state.
+- Confirmed state below extends PR224 / Balance V2 PR12 with PR225 / Balance V2 PR13 as the latest simulation-policy state, while preserving PR12 as historical shadow-comparison evidence, PR11 as the prior skill-level policy-pressure attribution state, PR10 as the prior fallback-breakdown state, Balance V2 PR9 as the prior availability-aware profile policy state, Balance V2 PR8 as the prior action-resolution state, and PR218 as the test baseline state.
 - Historical baselines remain preserved, including prior PR218 test-suite SQLite isolation state, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, and PR15 actionable late-stage tuning.
 
 ---
 
 ## Confirmed merged state
 
+### PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
+
+- Balance V2 PR13 adopts only PR12 Candidate A in the simulation resolver for the unchanged five-archetype PR7 pilot set.
+- A scheduled learned skill that is cooling down now produces an explicit policy `normal_attack`; the policy does not scan for or select another skill, and Candidate B remains inactive.
+- Ready but unaffordable scheduled skills remain requested, so insufficient-mana fallback behavior stays independently visible through PR8/PR11 diagnostics.
+- PR9 availability filtering, `PROFILE_POLICY_ACTIONS` rotations, metadata-only `executable=False` policies, PR8 action-resolution observability, and the PR12 historical shadow comparison remain preserved.
+- Across the default 100 scenario pairs, paired outcomes and final combat state remain identical; the known 61 cooldown-blocked requests become 61 explicit policy normal attacks and active cooldown fallback count becomes 0.
+- This closes the cooldown-request diagnostic branch unless regressions reveal a blocker. No final balance claim is made.
+- PR224 / PR12 through PR5 and PR218 history remain preserved.
+- No live gameplay/runtime, policy cadence, skill, cooldown duration, mana cost, combat formula, mob, route, equipment, reward, economy, PvP, targeting, teleport, cooldown reset, database schema, or live group combat behavior changed.
+
 ### PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 
+- Historical PR12 state marker (before PR13): Latest gameplay/balance diagnostic state: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison.
 - Balance V2 PR12 is simulation/diagnostic/reporting-only and compares two isolated cooldown-aware shadow candidates for the unchanged five-archetype PR7 pilot set.
 - Candidate A requests a normal attack when the scheduled profile skill is on cooldown; Candidate B scans the same active profile branch for the next learned, ready, affordable skill.
 - Candidate A is checked for paired behavioral parity with the active baseline, while Candidate B is reported as counterfactual impact evidence.

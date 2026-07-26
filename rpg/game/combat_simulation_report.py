@@ -1616,6 +1616,7 @@ def build_pr12_cooldown_shadow_policy_comparison(
         "damage_taken",
         "actions_used",
         "skills_used",
+        "final_battle_state",
     )
     parity_mismatches = []
     for pair in pairs:
@@ -1766,6 +1767,76 @@ def build_pr12_cooldown_shadow_policy_comparison(
         "outcome_change_counts": outcome_change_counts,
         "top_next_ready_impact_clusters": top_impacts,
         "recommended_next_investigation": recommendation,
+    }
+
+
+def build_pr13_cooldown_suppression_confirmation(
+    post_pr9_fallback_diagnostics: dict[str, Any],
+    pr12_comparison: dict[str, Any],
+) -> dict[str, Any]:
+    """Confirm adoption of PR12 Candidate A in the five-pilot simulation scope."""
+    baseline = dict(pr12_comparison.get("baseline_totals") or {})
+    candidate = dict(pr12_comparison.get("normal_fallback_candidate_totals") or {})
+    candidate_diagnostics = dict(
+        pr12_comparison.get("normal_fallback_candidate_diagnostics") or {}
+    )
+    pilot_archetypes = list(pr12_comparison.get("pilot_archetypes") or [])
+    comparison_available = bool(pr12_comparison.get("available"))
+    expected_scope_present = (
+        pr12_comparison.get("scope_alignment_status") == "aligned"
+        and not pr12_comparison.get("scope_mismatches")
+        and set(pilot_archetypes) == set(PROFILE_POLICY_PILOT_ARCHETYPE_IDS)
+        and int(pr12_comparison.get("scenario_pair_count", 0) or 0) == 100
+        and int(pr12_comparison.get("normal_fallback_parity_pair_count", 0) or 0) == 100
+    )
+    parity_mismatch_count = int(
+        pr12_comparison.get("normal_fallback_parity_mismatch_count", 0) or 0
+    )
+    active_cooldown_fallback_count = int(
+        post_pr9_fallback_diagnostics.get("cooldown_fallback_count", 0) or 0
+    )
+    if not comparison_available:
+        diagnostic_branch_status = "open_comparison_unavailable"
+    elif not expected_scope_present:
+        diagnostic_branch_status = "open_scope_mismatch_or_incomplete"
+    elif parity_mismatch_count:
+        diagnostic_branch_status = "open_parity_mismatch"
+    elif active_cooldown_fallback_count:
+        diagnostic_branch_status = "open_active_cooldown_fallbacks_remain"
+    else:
+        diagnostic_branch_status = "closed_unless_regression_blocker"
+
+    parity_confirmed = (
+        comparison_available
+        and expected_scope_present
+        and parity_mismatch_count == 0
+        and baseline.get("wins") == candidate.get("wins")
+        and baseline.get("losses") == candidate.get("losses")
+        and baseline.get("timeouts") == candidate.get("timeouts")
+    )
+    return {
+        "simulation_only": True,
+        "pilot_archetypes": pilot_archetypes,
+        "candidate_a_adopted": True,
+        "candidate_b_active": False,
+        "comparison_available": comparison_available,
+        "expected_scope_present": expected_scope_present,
+        "historical_scenario_pair_count": int(
+            pr12_comparison.get("normal_fallback_parity_pair_count", 0) or 0
+        ),
+        "historical_parity_mismatch_count": parity_mismatch_count,
+        "previous_cooldown_fallback_count": int(
+            baseline.get("cooldown_fallback_count", 0) or 0
+        ),
+        "active_cooldown_fallback_count": active_cooldown_fallback_count,
+        "explicit_policy_normal_attack_count": int(
+            candidate_diagnostics.get("proactive_normal_replacement_count", 0) or 0
+        ),
+        "insufficient_mana_fallback_count": int(
+            post_pr9_fallback_diagnostics.get("insufficient_mana_count", 0) or 0
+        ),
+        "outcome_and_final_state_parity": parity_confirmed,
+        "diagnostic_branch_status": diagnostic_branch_status,
     }
 
 
@@ -2062,6 +2133,10 @@ def build_alpha_balance_report_data(
         config=config,
         effective_config=effective_config,
     )
+    pr13_cooldown_aware_normal_suppression = build_pr13_cooldown_suppression_confirmation(
+        post_pr9_fallback_diagnostics,
+        pr12_cooldown_shadow_policy_comparison,
+    )
     return {
         "generated_for_routes": list(matrix.get("routes", [])),
         "stages": list(matrix.get("stages", [])),
@@ -2122,6 +2197,7 @@ def build_alpha_balance_report_data(
         "post_pr9_fallback_diagnostics": post_pr9_fallback_diagnostics,
         "post_pr10_policy_pressure_diagnostics": post_pr10_policy_pressure_diagnostics,
         "pr12_cooldown_shadow_policy_comparison": pr12_cooldown_shadow_policy_comparison,
+        "pr13_cooldown_aware_normal_suppression": pr13_cooldown_aware_normal_suppression,
         "raw_data_pointers": {"source": "run_route_stage_simulation_matrix", "raw_runs_included": bool(matrix.get("runs"))},
     }
 
@@ -2779,6 +2855,41 @@ def _render_pr12_cooldown_shadow_policy_comparison_lines(report_data: dict[str, 
     return lines
 
 
+def _render_pr13_cooldown_suppression_lines(report_data: dict[str, Any]) -> list[str]:
+    data = dict(report_data.get("pr13_cooldown_aware_normal_suppression") or {})
+    lines = [
+        "",
+        "## Balance V2 PR13 Cooldown-Aware Normal Request Suppression",
+        "Simulation-policy-only adoption of PR12 Candidate A for the unchanged five-pilot set.",
+        "A scheduled learned skill that is cooling down now produces an explicit policy normal attack; "
+        "ready but unaffordable skills remain requested so mana fallback attribution stays visible.",
+        "Candidate B remains inactive, no next-skill scan occurs, and no final balance claim is made.",
+        "",
+        "| pilot archetypes | historical scenario pairs | parity mismatches | previous cooldown fallbacks | active cooldown fallbacks | explicit policy normal attacks | insufficient-mana fallbacks |",
+        "|---:|---:|---:|---:|---:|---:|---:|",
+        f"| {len(data.get('pilot_archetypes', []))} | "
+        f"{data.get('historical_scenario_pair_count', 0)} | "
+        f"{data.get('historical_parity_mismatch_count', 0)} | "
+        f"{data.get('previous_cooldown_fallback_count', 0)} | "
+        f"{data.get('active_cooldown_fallback_count', 0)} | "
+        f"{data.get('explicit_policy_normal_attack_count', 0)} | "
+        f"{data.get('insufficient_mana_fallback_count', 0)} |",
+        "",
+    ]
+    if data.get("outcome_and_final_state_parity"):
+        lines.append("Paired outcomes and exact final combat-state snapshots remain identical to the prior active baseline.")
+    else:
+        lines.append("Paired outcome and final combat-state parity is not confirmed for this report scope.")
+    if data.get("diagnostic_branch_status") == "closed_unless_regression_blocker":
+        lines.append("This closes the cooldown-request diagnostic branch unless regressions reveal a blocker.")
+    else:
+        lines.append(
+            "The cooldown-request diagnostic branch remains open: "
+            f"{data.get('diagnostic_branch_status', 'open_confirmation_unavailable')}."
+        )
+    return lines
+
+
 def render_alpha_balance_report_markdown(report_data: dict) -> str:
     # PR5 renderer behavior
     lines = ["# Alpha Route/Class Balance Report v1", "", "## 1. Summary", "This is an alpha diagnostic report using representative solo route-stage samples.", "It is a signal artifact for future targeted tuning PRs and is not a final balance verdict.", "", "## 2. Methodology", "- Matrix source: route × stage × archetype deterministic simulation summaries.", f"- Routes: {', '.join(report_data.get('generated_for_routes', []))}", f"- Stages: {', '.join(report_data.get('stages', []))}", f"- Archetypes: {len(report_data.get('archetypes', []))}", f"- Total samples: {report_data.get('sample_count', 0)} | total runs: {report_data.get('run_count', 0)}", "", "## 3. Scope and Non-goals", "- No route/mob/skill/reward/formula tuning is performed in this report.", "- No live PvE/PvP behavior changes are introduced.", "- Pack proxy exists in v2/report data; no live/full multi-target runtime pack combat.", "- No live AFK/autopilot or smart autobattle behavior.", "", "## 4. Matrix Configuration", "- Config is deterministic and representative (solo route-native samples).", "", "## 5. Route Overview", "| Route | Runs | Win Rate | Timeout Rate |", "|---|---:|---:|---:|"]
@@ -2837,6 +2948,7 @@ def render_alpha_balance_report_markdown(report_data: dict) -> str:
     lines.extend(_render_pr10_post_pr9_fallback_diagnostic_lines(report_data))
     lines.extend(_render_pr11_policy_pressure_attribution_lines(report_data))
     lines.extend(_render_pr12_cooldown_shadow_policy_comparison_lines(report_data))
+    lines.extend(_render_pr13_cooldown_suppression_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_by_route: dict[str, int] = defaultdict(int)
@@ -3023,6 +3135,7 @@ def render_alpha_simulation_report_v2_markdown(report_data: dict) -> str:
     lines.extend(_render_pr10_post_pr9_fallback_diagnostic_lines(report_data))
     lines.extend(_render_pr11_policy_pressure_attribution_lines(report_data))
     lines.extend(_render_pr12_cooldown_shadow_policy_comparison_lines(report_data))
+    lines.extend(_render_pr13_cooldown_suppression_lines(report_data))
 
     suspicious_rows = list(report_data.get("suspicious_matchups", []))
     suspicious_preview = _select_route_balanced_suspicious_preview(suspicious_rows, SUSPICIOUS_TABLE_LIMIT)
