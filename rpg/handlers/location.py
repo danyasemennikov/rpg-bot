@@ -1224,6 +1224,7 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
     if not player:
         await update.message.reply_text(t('common.no_character', lang))
         return True
+    player = dict(player)
 
     if has_active_live_pvp_engagement(int(player['telegram_id'])):
         await update.message.reply_text(t('location.pvp_context_block', lang))

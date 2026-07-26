@@ -19,6 +19,7 @@ from game.combat import (
     process_enemy_side_turn, apply_timeout_fallback_guard, preview_skill_turn_precheck,
 )
 from game.pve_live import (
+    claim_pve_encounter_victory,
     create_or_load_open_world_pve_encounter,
     choose_enemy_target_participant_id,
     ensure_location_pve_spawn_instances,
@@ -648,6 +649,13 @@ async def _handle_victory_cleanup(
     levelup_before_loot: bool = False,
 ):
     """Общий post-victory cleanup для обычной атаки и скиллов."""
+    victory_claimed = claim_pve_encounter_victory(
+        encounter_id=battle_state.get('pve_encounter_id'),
+    )
+    if victory_claimed is False:
+        await safe_edit(query, t('battle.already_over', lang), parse_mode='HTML')
+        return
+
     if _is_group_encounter(battle_state):
         participant_ids = get_pve_encounter_player_ids(encounter_id=str(battle_state.get('pve_encounter_id', '')))
         if not participant_ids:
