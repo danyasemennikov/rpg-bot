@@ -30,7 +30,7 @@ Last updated after merge:
 ### PR226 / Alpha Core Loop Integration Baseline
 
 - The existing alpha loop is covered end to end through isolated SQLite persistence: player bootstrap, capital services, starter Westwild contract acceptance, adjacent travel and discovery, live open-world PvE completion, rewards and contract progress, gathering, and ordinary return travel.
-- Persisted PvE victory completion now uses an atomic one-time claim before rewards, preventing duplicate callbacks from granting combat rewards or contract progress more than once.
+- Persisted PvE victory completion uses an atomic one-time claim before rewards. Unknown, stale, non-victory, and duplicate callbacks fail closed. A failure before reward mutation releases the claim for safe retry; failures after mutation begins remain claimed to preserve at-most-once callback protection, without claiming transactional exactly-once recovery across partial reward writes.
 - The lower-menu gathering runtime now normalizes the SQLite player row before applying its existing battle, location, profession, roll, and inventory rails.
 - Blocked non-adjacent travel and invalid gathering surfaces remain non-rewarding negative paths.
 - No balance, simulation, dungeon, teleport, PvP, targeting, group-combat, schema, route, or content changes were made.

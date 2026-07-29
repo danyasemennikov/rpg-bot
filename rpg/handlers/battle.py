@@ -20,6 +20,7 @@ from game.combat import (
 )
 from game.pve_live import (
     claim_pve_encounter_victory,
+    release_pve_encounter_victory_claim,
     create_or_load_open_world_pve_encounter,
     choose_enemy_target_participant_id,
     ensure_location_pve_spawn_instances,
@@ -656,60 +657,69 @@ async def _handle_victory_cleanup(
         await safe_edit(query, t('battle.already_over', lang), parse_mode='HTML')
         return
 
-    if _is_group_encounter(battle_state):
-        participant_ids = get_pve_encounter_player_ids(encounter_id=str(battle_state.get('pve_encounter_id', '')))
-        if not participant_ids:
-            participant_ids = _group_participant_ids(battle_state)
-    else:
-        participant_ids = [user_id]
-    rewarded_participants: list[int] = []
-    result_reward = None
-    owner_any_levelup = False
-    owner_latest_level = int(player.get('level', 1))
-    defeated_units = list(battle_state.get('enemy_units') or [])
-    reward_units = defeated_units or [{}]
-    total_exp = 0
-    total_gold = 0
-    total_loot: list[str] = []
-    for participant_id in participant_ids:
-        snapshot = _participant_snapshot(battle_state, participant_id)
-        if snapshot and bool(snapshot.get('player_dead', snapshot.get('defeated', False))):
-            end_battle(participant_id)
-            continue
+    reward_mutation_started = False
+    try:
+        if _is_group_encounter(battle_state):
+            participant_ids = get_pve_encounter_player_ids(encounter_id=str(battle_state.get('pve_encounter_id', '')))
+            if not participant_ids:
+                participant_ids = _group_participant_ids(battle_state)
+        else:
+            participant_ids = [user_id]
+        rewarded_participants: list[int] = []
+        result_reward = None
+        owner_any_levelup = False
+        owner_latest_level = int(player.get('level', 1))
+        defeated_units = list(battle_state.get('enemy_units') or [])
+        reward_units = defeated_units or [{}]
+        total_exp = 0
+        total_gold = 0
+        total_loot: list[str] = []
+        for participant_id in participant_ids:
+            snapshot = _participant_snapshot(battle_state, participant_id)
+            if snapshot and bool(snapshot.get('player_dead', snapshot.get('defeated', False))):
+                end_battle(participant_id)
+                continue
 
-        participant_player_row = get_player(participant_id)
-        if participant_player_row:
-            participant_player = dict(participant_player_row)
-            reward_result = None
-            for unit in reward_units:
-                unit_rewards = calc_rewards(mob)
-                unit_rewards['location_id'] = battle_state.get('location_id', unit_rewards.get('location_id'))
-                unit_rewards['spawn_profile'] = unit.get('spawn_profile', battle_state.get('spawn_profile', unit_rewards.get('spawn_profile')))
-                unit_rewards['content_identity'] = battle_state.get('reward_content_identity', unit_rewards.get('content_identity'))
-                unit_rewards['spawn_identity'] = battle_state.get('spawn_identity', unit_rewards.get('spawn_identity'))
-                reward_result = apply_rewards(participant_id, participant_player, unit_rewards)
-                if isinstance(reward_result, dict):
-                    participant_player['exp'] = int(reward_result.get('new_exp', participant_player.get('exp', 0)))
-                    participant_player['gold'] = int(reward_result.get('new_gold', participant_player.get('gold', 0)))
-                    participant_player['level'] = int(reward_result.get('new_level', participant_player.get('level', 1)))
+            participant_player_row = get_player(participant_id)
+            if participant_player_row:
+                participant_player = dict(participant_player_row)
+                reward_result = None
+                for unit in reward_units:
+                    unit_rewards = calc_rewards(mob)
+                    unit_rewards['location_id'] = battle_state.get('location_id', unit_rewards.get('location_id'))
+                    unit_rewards['spawn_profile'] = unit.get('spawn_profile', battle_state.get('spawn_profile', unit_rewards.get('spawn_profile')))
+                    unit_rewards['content_identity'] = battle_state.get('reward_content_identity', unit_rewards.get('content_identity'))
+                    unit_rewards['spawn_identity'] = battle_state.get('spawn_identity', unit_rewards.get('spawn_identity'))
+                    reward_mutation_started = True
+                    reward_result = apply_rewards(participant_id, participant_player, unit_rewards)
+                    if isinstance(reward_result, dict):
+                        participant_player['exp'] = int(reward_result.get('new_exp', participant_player.get('exp', 0)))
+                        participant_player['gold'] = int(reward_result.get('new_gold', participant_player.get('gold', 0)))
+                        participant_player['level'] = int(reward_result.get('new_level', participant_player.get('level', 1)))
+                        if participant_id == user_id:
+                            owner_any_levelup = owner_any_levelup or bool(reward_result.get('leveled_up', False))
+                            owner_latest_level = int(reward_result.get('new_level', owner_latest_level))
+                    total_exp += int(unit_rewards.get('exp', 0)) if participant_id == user_id else 0
+                    total_gold += int(unit_rewards.get('gold', 0)) if participant_id == user_id else 0
                     if participant_id == user_id:
-                        owner_any_levelup = owner_any_levelup or bool(reward_result.get('leveled_up', False))
-                        owner_latest_level = int(reward_result.get('new_level', owner_latest_level))
-                total_exp += int(unit_rewards.get('exp', 0)) if participant_id == user_id else 0
-                total_gold += int(unit_rewards.get('gold', 0)) if participant_id == user_id else 0
+                        total_loot.extend(list(unit_rewards.get('loot') or []))
+                    register_hunt_kill_progress(
+                        player_id=participant_id,
+                        mob_id=str(unit.get('mob_id') or mob.get('id', '')),
+                        location_id=str(battle_state.get('location_id') or participant_player.get('location_id') or ''),
+                        spawn_profile=unit.get('spawn_profile', battle_state.get('spawn_profile')),
+                        special_spawn_key=unit.get('special_spawn_key', battle_state.get('special_spawn_key')),
+                    )
+                rewarded_participants.append(participant_id)
                 if participant_id == user_id:
-                    total_loot.extend(list(unit_rewards.get('loot') or []))
-                register_hunt_kill_progress(
-                    player_id=participant_id,
-                    mob_id=str(unit.get('mob_id') or mob.get('id', '')),
-                    location_id=str(battle_state.get('location_id') or participant_player.get('location_id') or ''),
-                    spawn_profile=unit.get('spawn_profile', battle_state.get('spawn_profile')),
-                    special_spawn_key=unit.get('special_spawn_key', battle_state.get('special_spawn_key')),
-                )
-            rewarded_participants.append(participant_id)
-            if participant_id == user_id:
-                result_reward = reward_result
-        end_battle(participant_id)
+                    result_reward = reward_result
+            end_battle(participant_id)
+    except Exception:
+        if victory_claimed is True and not reward_mutation_started:
+            release_pve_encounter_victory_claim(
+                encounter_id=battle_state.get('pve_encounter_id'),
+            )
+        raise
 
     if result_reward is None:
         result_reward = {

@@ -1965,22 +1965,45 @@ def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, m
 
 
 def claim_pve_encounter_victory(*, encounter_id: str | None) -> bool | None:
-    """Reserve an active persisted encounter for victory rewards exactly once."""
+    """Reserve an active persisted encounter for victory rewards.
+
+    ``None`` is reserved for legacy battles which have no persisted encounter
+    id.  Every supplied id is fail-closed: only an atomic active -> resolving
+    transition returns ``True``.
+    """
     if not encounter_id:
         return None
     conn = get_connection()
     try:
-        exists = conn.execute(
-            'SELECT 1 FROM pve_encounters WHERE encounter_id=?',
-            (str(encounter_id),),
-        ).fetchone()
-        if not exists:
-            return None
         cursor = conn.execute(
             """
             UPDATE pve_encounters
             SET status='resolving_victory', updated_at=CURRENT_TIMESTAMP
             WHERE encounter_id=? AND status='active'
+            """,
+            (str(encounter_id),),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+    finally:
+        conn.close()
+
+
+def release_pve_encounter_victory_claim(*, encounter_id: str | None) -> bool:
+    """Release an unmutated victory claim so the callback can be retried.
+
+    Callers must not use this after reward/progression mutation has begun:
+    resetting then could make a retry duplicate partially written rewards.
+    """
+    if not encounter_id:
+        return False
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE pve_encounters
+            SET status='active', updated_at=CURRENT_TIMESTAMP
+            WHERE encounter_id=? AND status='resolving_victory'
             """,
             (str(encounter_id),),
         )

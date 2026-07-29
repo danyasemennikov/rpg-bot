@@ -444,7 +444,8 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         battle_state = {'enemy_units': [{}, {}], 'pve_encounter_id': 'enc-reward-1', 'weapon_id': 'unarmed'}
         player = {'telegram_id': 501, 'lang': 'en', 'level': 1, 'exp': 0, 'gold': 0}
         captured = []
-        with patch('handlers.battle.get_player', return_value=player), \
+        with patch('handlers.battle.claim_pve_encounter_victory', return_value=True), \
+             patch('handlers.battle.get_player', return_value=player), \
              patch('handlers.battle.calc_rewards', side_effect=[{'exp': 10, 'gold': 5, 'loot': []}, {'exp': 10, 'gold': 5, 'loot': []}]), \
              patch('handlers.battle.apply_rewards', side_effect=[{'leveled_up': True, 'new_level': 2, 'new_exp': 1, 'new_gold': 5}, {'leveled_up': False, 'new_level': 2, 'new_exp': 2, 'new_gold': 10}]), \
              patch('handlers.battle.finish_solo_pve_encounter'), \

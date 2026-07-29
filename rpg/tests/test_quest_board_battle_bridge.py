@@ -20,6 +20,7 @@ class QuestBoardBattleBridgeTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with (
+            patch('handlers.battle.claim_pve_encounter_victory', return_value=True),
             patch('handlers.battle.calc_rewards', return_value={'exp': 10, 'gold': 3, 'loot': [], 'mob_id': 'forest_wolf'}),
             patch('handlers.battle._is_group_encounter', return_value=False),
             patch('handlers.battle.apply_rewards', return_value={'leveled_up': False, 'new_level': 10, 'new_exp': 0, 'new_gold': 0}),
