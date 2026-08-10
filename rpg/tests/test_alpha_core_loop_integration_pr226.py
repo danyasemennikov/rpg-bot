@@ -6,7 +6,7 @@ import pytest
 
 from database import create_player, get_connection, get_player, is_in_battle, is_location_discovered
 from game.combat import init_battle, process_turn
-from game.gathering_foundation import build_location_gather_source_profiles, resolve_gather_access_decision
+from game.gathering_foundation import build_location_gather_source_profiles
 from game.locations import get_location
 from game.mobs import get_mob
 from game.pve_live import (
@@ -171,17 +171,6 @@ async def _run_complete_alpha_core_loop():
     conn.close()
 
     profile = build_location_gather_source_profiles('westwild_n3')[0]
-    denied = resolve_gather_access_decision(
-        item_id=profile.item_id, player_profession_level=0, zone_tier_band=profile.zone_tier_band,
-    )
-    assert denied and not denied.is_allowed
-    allowed = resolve_gather_access_decision(
-        item_id=profile.item_id,
-        player_profession_level=denied.required_profession_level,
-        zone_tier_band=profile.zone_tier_band,
-    )
-    assert allowed and allowed.is_allowed
-
     message = SimpleNamespace(text='Gather', reply_text=AsyncMock())
     update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
     with (

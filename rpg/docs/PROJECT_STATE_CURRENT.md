@@ -31,7 +31,8 @@ Last updated after merge:
 
 - The existing alpha loop is covered end to end through isolated SQLite persistence: player bootstrap, capital services, starter Westwild contract acceptance, adjacent travel and discovery, live open-world PvE completion, rewards and contract progress, gathering, and ordinary return travel.
 - Persisted PvE victory completion uses an atomic one-time claim before rewards. Unknown, stale, non-victory, and duplicate callbacks fail closed. A failure before reward mutation releases the claim for safe retry; failures after mutation begins remain claimed to preserve at-most-once callback protection, without claiming transactional exactly-once recovery across partial reward writes.
-- The lower-menu gathering runtime now normalizes the SQLite player row before applying its existing battle, location, profession, roll, and inventory rails.
+- The live lower-menu gathering runtime normalizes the SQLite player row and exercises location-surface selection, battle/PvP blocking, gather rolls, and persisted inventory grants.
+- Gathering foundation metadata defines profession-level access requirements, but no canonical persisted player gathering-profession level rail currently exists; live profession-level enforcement is not wired and remains a follow-up integration gap.
 - Blocked non-adjacent travel and invalid gathering surfaces remain non-rewarding negative paths.
 - No balance, simulation, dungeon, teleport, PvP, targeting, group-combat, schema, route, or content changes were made.
 
