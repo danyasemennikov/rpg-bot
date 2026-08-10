@@ -5,6 +5,7 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR226 / Alpha Core Loop Integration Baseline
 - PR: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
 - PR: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 - PR: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
@@ -25,6 +26,15 @@ Last updated after merge:
 ---
 
 ## Confirmed merged state
+
+### PR226 / Alpha Core Loop Integration Baseline
+
+- The existing alpha loop is covered end to end through isolated SQLite persistence: player bootstrap, capital services, starter Westwild contract acceptance, adjacent travel and discovery, live open-world PvE completion, rewards and contract progress, gathering, and ordinary return travel.
+- Persisted PvE victory completion uses an atomic one-time claim before rewards. Unknown, stale, non-victory, and duplicate callbacks fail closed. A failure before reward mutation releases the claim for safe retry; failures after mutation begins remain claimed to preserve at-most-once callback protection, without claiming transactional exactly-once recovery across partial reward writes.
+- The live lower-menu gathering runtime normalizes the SQLite player row and exercises location-surface selection, battle/PvP blocking, gather rolls, and persisted inventory grants.
+- Gathering foundation metadata defines profession-level access requirements, but no canonical persisted player gathering-profession level rail currently exists; live profession-level enforcement is not wired and remains a follow-up integration gap.
+- Blocked non-adjacent travel and invalid gathering surfaces remain non-rewarding negative paths.
+- No balance, simulation, dungeon, teleport, PvP, targeting, group-combat, schema, route, or content changes were made.
 
 ### PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
 

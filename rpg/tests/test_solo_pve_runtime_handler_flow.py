@@ -1069,7 +1069,8 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
         mob = {'id': 'forest_wolf', 'hp': 20}
         rewards = {'exp': 10, 'gold': 5, 'loot': [], 'mob_level': 1}
 
-        with patch('handlers.battle.calc_rewards', return_value=rewards), \
+        with patch('handlers.battle.claim_pve_encounter_victory', return_value=True), \
+             patch('handlers.battle.calc_rewards', return_value=rewards), \
              patch('handlers.battle.get_player', side_effect=lambda pid: {
                 88001: self._player_row(),
                 88002: {**self._player_row(), 'telegram_id': 88002, 'level': 2},
@@ -1472,7 +1473,8 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         rewarded_ids = []
         safe_edit_mock = AsyncMock()
-        with patch('handlers.battle.get_pve_encounter_player_ids', return_value=[88002]), \
+        with patch('handlers.battle.claim_pve_encounter_victory', return_value=True), \
+             patch('handlers.battle.get_pve_encounter_player_ids', return_value=[88002]), \
              patch('handlers.battle.calc_rewards', return_value={'exp': 10, 'gold': 5, 'loot': []}), \
              patch('handlers.battle.get_player', side_effect=lambda pid: {**self._player_row(), 'telegram_id': pid}), \
              patch('handlers.battle.apply_rewards', side_effect=lambda pid, _p, _r: rewarded_ids.append(pid) or {'leveled_up': False, 'new_level': 1, 'new_exp': 0, 'new_gold': 0}), \
