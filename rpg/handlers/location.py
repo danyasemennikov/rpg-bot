@@ -11,6 +11,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from database import (
     ensure_player_location_discovered,
+    get_gathering_profession_level,
     get_player,
     get_connection,
     is_in_battle,
@@ -26,7 +27,7 @@ from game.contextual_keyboard import (
     resolve_lower_gather_profession_button,
     resolve_lower_service_button,
 )
-from game.gathering_foundation import build_location_gather_source_profiles
+from game.gathering_foundation import build_location_gather_source_profiles, resolve_gather_access_decision
 from game.resource_handbook import HANDBOOK_PROFESSIONS, build_resource_handbook_index
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
@@ -1262,6 +1263,26 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
 
     if not picked:
         await update.message.reply_text(t('location.gather_fail', lang))
+        return True
+
+    profession_level = get_gathering_profession_level(
+        int(player['telegram_id']), picked.profession_key,
+    )
+    access = resolve_gather_access_decision(
+        item_id=picked.item_id,
+        player_profession_level=profession_level or 1,
+        zone_tier_band=picked.zone_tier_band,
+    )
+    if access is None or not access.is_allowed:
+        if access is not None and not access.level_allowed:
+            await update.message.reply_text(t(
+                'location.gather_profession_level_required',
+                lang,
+                current_level=access.player_profession_level,
+                required_level=access.required_profession_level,
+            ))
+        else:
+            await update.message.reply_text(t('location.gather_zone_denied', lang))
         return True
 
     grant_item_to_player(

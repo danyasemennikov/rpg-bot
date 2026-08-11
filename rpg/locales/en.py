@@ -325,6 +325,8 @@ STRINGS = {
         'lower_service_stale': '⏳ This service is no longer available here. Refresh with /location.',
         'gather_success': '✅ You gathered: {item}.',
         'gather_fail': '❌ You found no usable resources this time.',
+        'gather_profession_level_required': '🔒 Your gathering profession level is {current_level}; level {required_level} is required for this resource.',
+        'gather_zone_denied': '🔒 This resource cannot be gathered in this zone.',
         'lower_travel_stale': '⏳ This travel option is no longer available from your current location. Refresh with /location.',
         'pve_join_success': '✅ You joined this encounter.',
         'pve_join_already': 'ℹ️ You are already in this encounter.',

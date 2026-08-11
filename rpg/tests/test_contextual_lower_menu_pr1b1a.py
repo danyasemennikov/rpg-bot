@@ -233,7 +233,9 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
             effective_user=SimpleNamespace(id=1),
         )
         context = SimpleNamespace()
-        profiles = [SimpleNamespace(item_id='herb_common', profession_key='herbalism', chance=1.0)]
+        profiles = [SimpleNamespace(
+            item_id='herb_common', profession_key='herbalism', chance=1.0, zone_tier_band=1,
+        )]
         with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10}), \
              patch('handlers.location.build_location_gather_source_profiles', return_value=profiles), \
              patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=profiles), \
