@@ -1,7 +1,10 @@
 import asyncio
+import sqlite3
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from database import (
     GATHERING_PROFESSION_KEYS,
@@ -97,6 +100,23 @@ def test_unknown_profession_key_does_not_create_state():
     ).fetchone()['count']
     conn.close()
     assert count == 5
+
+
+def test_database_rejects_direct_unknown_profession_insert():
+    _create_player()
+    conn = get_connection()
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                '''
+                INSERT INTO player_gathering_professions (
+                    telegram_id, profession_key, level, exp
+                ) VALUES (?, 'alchemy', 1, 0)
+                ''',
+                (PLAYER_ID,),
+            )
+    finally:
+        conn.close()
 
 
 def test_accessible_roll_grants_one_item_without_profession_progression():

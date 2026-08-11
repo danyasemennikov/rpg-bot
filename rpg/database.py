@@ -95,6 +95,9 @@ def init_db():
             exp             INTEGER NOT NULL DEFAULT 0,
             updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (telegram_id, profession_key),
+            CHECK (profession_key IN (
+                'herbalism', 'woodcutting', 'mining', 'fishing', 'hunting'
+            )),
             FOREIGN KEY (telegram_id) REFERENCES players(telegram_id)
         )
     ''')
