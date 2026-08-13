@@ -7,6 +7,14 @@ import os
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'game.db')
 
+GATHERING_PROFESSION_KEYS = (
+    'herbalism',
+    'woodcutting',
+    'mining',
+    'fishing',
+    'hunting',
+)
+
 
 def _add_column_if_missing(conn: sqlite3.Connection, table_name: str, column_name: str, sql_suffix: str) -> None:
     existing_columns = {
@@ -78,6 +86,21 @@ def init_db():
     _add_column_if_missing(conn, 'players', 'infamy', "INTEGER DEFAULT 0")
     _add_column_if_missing(conn, 'players', 'novice_protection', "INTEGER DEFAULT 1")
     _add_column_if_missing(conn, 'players', 'pvp_respawn_protection_until', "INTEGER DEFAULT 0")
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS player_gathering_professions (
+            telegram_id     INTEGER NOT NULL,
+            profession_key  TEXT NOT NULL,
+            level           INTEGER NOT NULL DEFAULT 1,
+            exp             INTEGER NOT NULL DEFAULT 0,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (telegram_id, profession_key),
+            CHECK (profession_key IN (
+                'herbalism', 'woodcutting', 'mining', 'fishing', 'hunting'
+            )),
+            FOREIGN KEY (telegram_id) REFERENCES players(telegram_id)
+        )
+    ''')
 
     # ────────────────────────────────────────
     # СПРАВОЧНИК ПРЕДМЕТОВ
@@ -362,6 +385,66 @@ def create_player(telegram_id: int, username: str, name: str, stats: dict):
     conn.commit()
     conn.close()
     ensure_player_location_discovered(telegram_id, 'capital_city')
+    ensure_player_gathering_professions(telegram_id)
+
+
+def ensure_player_gathering_professions(telegram_id: int) -> None:
+    """Idempotently create the five canonical gathering profession rows."""
+    conn = get_connection()
+    conn.executemany(
+        '''
+        INSERT OR IGNORE INTO player_gathering_professions (
+            telegram_id, profession_key, level, exp
+        ) VALUES (?, ?, 1, 0)
+        ''',
+        ((int(telegram_id), profession_key) for profession_key in GATHERING_PROFESSION_KEYS),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_gathering_profession_state(telegram_id: int, profession_key: str):
+    """Return one canonical profession row, or None for an unknown key/player."""
+    if profession_key not in GATHERING_PROFESSION_KEYS:
+        return None
+    if not player_exists(telegram_id):
+        return None
+
+    ensure_player_gathering_professions(telegram_id)
+    conn = get_connection()
+    row = conn.execute(
+        '''
+        SELECT telegram_id, profession_key, level, exp, updated_at
+        FROM player_gathering_professions
+        WHERE telegram_id=? AND profession_key=?
+        ''',
+        (int(telegram_id), profession_key),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def get_gathering_profession_level(telegram_id: int, profession_key: str) -> int | None:
+    state = get_gathering_profession_state(telegram_id, profession_key)
+    return int(state['level']) if state else None
+
+
+def list_gathering_profession_states(telegram_id: int) -> list[sqlite3.Row]:
+    if not player_exists(telegram_id):
+        return []
+    ensure_player_gathering_professions(telegram_id)
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT telegram_id, profession_key, level, exp, updated_at
+        FROM player_gathering_professions
+        WHERE telegram_id=?
+        ORDER BY profession_key
+        ''',
+        (int(telegram_id),),
+    ).fetchall()
+    conn.close()
+    return rows
 
 def update_player_stats(telegram_id: int, stats: dict):
     """Обновить статы игрока (при левелапе или распределении очков)."""

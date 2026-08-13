@@ -336,6 +336,8 @@ STRINGS = {
         'lower_service_stale': '⏳ Эта услуга больше недоступна в текущей локации. Обнови /location.',
         'gather_success': '✅ Ты добыл: {item}.',
         'gather_fail': '❌ В этот раз не удалось найти подходящие ресурсы.',
+        'gather_profession_level_required': '🔒 Твой уровень профессии сбора: {current_level}; для этого ресурса нужен уровень {required_level}.',
+        'gather_zone_denied': '🔒 Этот ресурс нельзя добывать в данной зоне.',
         'lower_travel_stale': '⏳ Этот переход больше недоступен из текущей локации. Обнови /location.',
         'pve_join_success': '✅ Вы присоединились к схватке.',
         'pve_join_already': 'ℹ️ Вы уже участник этой схватки.',

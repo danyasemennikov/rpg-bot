@@ -5,6 +5,7 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR227 / Gathering Profession Persistence & Runtime Access Baseline
 - PR: PR226 / Alpha Core Loop Integration Baseline
 - PR: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
 - PR: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
@@ -26,6 +27,14 @@ Last updated after merge:
 ---
 
 ## Confirmed merged state
+
+### PR227 / Gathering Profession Persistence & Runtime Access Baseline
+
+- Canonical gathering profession state is persisted independently for herbalism, woodcutting, mining, fishing, and hunting in `player_gathering_professions`.
+- New and legacy players are idempotently bootstrapped/backfilled with all five professions at level 1 and 0 exp; unknown profession keys are not persisted.
+- The live lower-menu gathering path now applies the existing gathering access decision to the rolled resource using its persisted profession level and zone tier, without rerolling or reweighting denied outcomes.
+- Profession- or zone-denied rolls grant nothing; accessible rolls retain the existing one-item gathering inventory grant and do not award profession exp.
+- Profession XP gain, level-up formula, level cap, tools, quality, mastery, specializations, profession UI, and hunting post-kill extraction remain unimplemented and deferred.
 
 ### PR226 / Alpha Core Loop Integration Baseline
 
@@ -471,7 +480,7 @@ Do not treat these as active scope unless a new accepted Decision Packet explici
 - No teleport.
 - No direct weapon-route bonuses.
 - No resistance framework.
-- No DB schema changes.
+- No destructive DB schema changes; additive persistence tables may be introduced by accepted runtime baselines such as PR227.
 
 - Teleport phase 1.
 - Dungeon runtime expansion.
