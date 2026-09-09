@@ -46,6 +46,7 @@ ITEM_NAMES = {
     'rat_fur': '🐀 Rat Fur',
     'herb_common': '🌿 Common Herb',
     'herb_magic':  '✨ Magic Herb',
+    'wood_common': '🪵 Common Wood',
     'wood_dark':   '🌑 Dark Wood',
     'enhance_shard': '🧩 Enhancement Shard',
     'enhancement_crystal': '⚙️ Enhancement Crystal',

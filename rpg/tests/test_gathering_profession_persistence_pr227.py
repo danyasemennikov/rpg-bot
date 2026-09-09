@@ -119,7 +119,7 @@ def test_database_rejects_direct_unknown_profession_insert():
         conn.close()
 
 
-def test_accessible_roll_grants_one_item_without_profession_progression():
+def test_accessible_roll_grants_one_item_with_followup_profession_progression():
     _create_player()
     before = _profession_snapshot('herbalism')
 
@@ -135,7 +135,7 @@ def test_accessible_roll_grants_one_item_without_profession_progression():
     conn.close()
     assert quantity == 1
     assert _profession_snapshot('herbalism')['level'] == before['level'] == 1
-    assert _profession_snapshot('herbalism')['exp'] == before['exp'] == 0
+    assert _profession_snapshot('herbalism')['exp'] == before['exp'] + 10 == 10
 
 
 def test_locked_roll_grants_nothing_does_not_reroll_and_level_unlocks_same_resource():
@@ -167,13 +167,13 @@ def test_locked_roll_grants_nothing_does_not_reroll_and_level_unlocks_same_resou
         (PLAYER_ID,),
     ).fetchone()['quantity'] == 1
     conn.close()
-    assert _profession_snapshot('herbalism')['exp'] == 0
+    assert _profession_snapshot('herbalism')['exp'] == 24
 
 
 def test_zone_denied_roll_grants_nothing():
     _create_player()
     wood = next(
-        profile for profile in build_location_gather_source_profiles('westwild_n2')
+        profile for profile in build_location_gather_source_profiles('westwild_n6')
         if profile.item_id == 'wood_dark'
     )
     conn = get_connection()

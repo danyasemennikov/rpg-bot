@@ -10,6 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from database import (
+    add_gathering_profession_exp,
     ensure_player_location_discovered,
     get_gathering_profession_level,
     get_player,
@@ -28,6 +29,7 @@ from game.contextual_keyboard import (
     resolve_lower_service_button,
 )
 from game.gathering_foundation import build_location_gather_source_profiles, resolve_gather_access_decision
+from game.gathering_progression import gathering_profession_xp_for_success
 from game.resource_handbook import HANDBOOK_PROFESSIONS, build_resource_handbook_index
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
@@ -1285,14 +1287,52 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
             await update.message.reply_text(t('location.gather_zone_denied', lang))
         return True
 
-    grant_item_to_player(
+    grant_result = grant_item_to_player(
         int(player['telegram_id']),
         picked.item_id,
         quantity=1,
         source='gathering',
         source_level=max(1, int(player.get('level', 1) or 1)),
     )
-    await update.message.reply_text(t('location.gather_success', lang, item=get_item_name(picked.item_id, lang)))
+    if isinstance(grant_result, dict) and not any(int(value) > 0 for value in grant_result.values()):
+        return True
+
+    xp_awarded = gathering_profession_xp_for_success(
+        current_profession_level=access.player_profession_level,
+        required_profession_level=access.required_profession_level,
+    )
+    progression = add_gathering_profession_exp(
+        int(player['telegram_id']),
+        access.profession_key,
+        xp_awarded,
+    )
+    success_text = t('location.gather_success', lang, item=get_item_name(picked.item_id, lang))
+    if progression.at_cap:
+        progress_text = t(
+            'location.gather_progress_cap',
+            lang,
+            xp=progression.xp_awarded,
+            level=progression.new_level,
+        )
+    elif progression.leveled_up:
+        progress_text = t(
+            'location.gather_progress_level_up',
+            lang,
+            xp=progression.xp_awarded,
+            level=progression.new_level,
+            exp=progression.new_exp,
+            exp_needed=progression.exp_needed,
+        )
+    else:
+        progress_text = t(
+            'location.gather_progress',
+            lang,
+            xp=progression.xp_awarded,
+            level=progression.new_level,
+            exp=progression.new_exp,
+            exp_needed=progression.exp_needed,
+        )
+    await update.message.reply_text(f'{success_text}\n{progress_text}')
     return True
 
 
