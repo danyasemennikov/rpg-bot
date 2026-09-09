@@ -5,6 +5,7 @@ This file is the source of truth for the currently confirmed merged state of the
 Do not record planned, discussed, or unmerged work as confirmed state.
 
 Last updated after merge:
+- PR: PR228 / Gathering Profession Progression Baseline
 - PR: PR227 / Gathering Profession Persistence & Runtime Access Baseline
 - PR: PR226 / Alpha Core Loop Integration Baseline
 - PR: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
@@ -28,13 +29,25 @@ Last updated after merge:
 
 ## Confirmed merged state
 
+### PR228 / Gathering Profession Progression Baseline
+
+- Successful lower-menu gathering now awards persisted profession XP after the rolled resource passes access checks and its item grant succeeds; failed, stale, invalid, battle/PvP-blocked, profession-denied, and zone-denied gathers award no profession XP.
+- Gathering profession progression is capped at level 20, stores XP within the current level, and requires `level * 50` XP for the next level; one award can cross multiple thresholds.
+- Successful-resource XP uses the access decision's effective required profession level: `8 + (2 * required_profession_level)` before trivial-resource scaling.
+- Resources up to 4 profession levels below the player award full XP, gaps of 5 through 8 award 50%, and gaps of 9 or more award 25%, using integer floor with a minimum of 1 XP for eligible non-cap successes.
+- Successful gathers can level their profession and immediately show localized XP/current-level progress; level-20 gathers still grant their item, award 0 profession XP, store 0 XP, and show maximum-level feedback without a next-level requirement.
+- Early Westwild woodcutting surfaces `westwild_n2` through `westwild_n5` now retain their existing chances while awarding the new level-1 `wood_common` gathering material; deeper surfaces from `westwild_n6` retain `wood_dark`, whose woodcutting requirement is now level 6.
+- The resource handbook continues to derive entries from live gather profiles, so common wood is indexed on the early surfaces while dark wood remains represented only on its current deeper surfaces.
+- The canonical progression helper and mutation rail support persisted hunting state, but hunting post-kill extraction and hunting XP remain unwired.
+- Gathering tools, quality, perks, talents, skill trees, specializations, crafting profession progression, and a full profession UI remain deferred.
+
 ### PR227 / Gathering Profession Persistence & Runtime Access Baseline
 
 - Canonical gathering profession state is persisted independently for herbalism, woodcutting, mining, fishing, and hunting in `player_gathering_professions`.
 - New and legacy players are idempotently bootstrapped/backfilled with all five professions at level 1 and 0 exp; unknown profession keys are not persisted.
 - The live lower-menu gathering path now applies the existing gathering access decision to the rolled resource using its persisted profession level and zone tier, without rerolling or reweighting denied outcomes.
-- Profession- or zone-denied rolls grant nothing; accessible rolls retain the existing one-item gathering inventory grant and do not award profession exp.
-- Profession XP gain, level-up formula, level cap, tools, quality, mastery, specializations, profession UI, and hunting post-kill extraction remain unimplemented and deferred.
+- At the PR227 baseline, profession- or zone-denied rolls granted nothing and accessible rolls retained the existing one-item gathering inventory grant without profession exp; PR228 supersedes the successful-gather progression behavior.
+- At the PR227 baseline, profession XP gain and its level contract were deferred; PR228 activates that narrow loop while tools, quality, mastery, specializations, full profession UI, and hunting post-kill extraction remain deferred.
 
 ### PR226 / Alpha Core Loop Integration Baseline
 

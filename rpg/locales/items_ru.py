@@ -46,6 +46,7 @@ ITEM_NAMES = {
     'rat_fur': '🐀 Шкура крысы',
     'herb_common': '🌿 Обычная трава',
     'herb_magic':  '✨ Магическая трава',
+    'wood_common': '🪵 Обычная древесина',
     'wood_dark':   '🌑 Тёмное дерево',
     'enhance_shard': '🧩 Осколок заточки',
     'enhancement_crystal': '⚙️ Кристалл усиления',

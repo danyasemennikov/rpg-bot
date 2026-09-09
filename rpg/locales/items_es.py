@@ -46,6 +46,7 @@ ITEM_NAMES = {
     'rat_fur': '🐀 Piel de Rata',
     'herb_common': '🌿 Hierba Común',
     'herb_magic':  '✨ Hierba Mágica',
+    'wood_common': '🪵 Madera Común',
     'wood_dark':   '🌑 Madera Oscura',
     'enhance_shard': '🧩 Fragmento de mejora',
     'enhancement_crystal': '⚙️ Cristal de refuerzo',

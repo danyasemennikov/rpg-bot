@@ -429,6 +429,62 @@ def get_gathering_profession_level(telegram_id: int, profession_key: str) -> int
     return int(state['level']) if state else None
 
 
+def add_gathering_profession_exp(telegram_id: int, profession_key: str, exp: int):
+    """Safely apply XP to one canonical gathering profession."""
+    if profession_key not in GATHERING_PROFESSION_KEYS:
+        return None
+    if not player_exists(telegram_id):
+        return None
+
+    from game.gathering_progression import apply_gathering_profession_progression
+
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute(
+            '''
+            INSERT OR IGNORE INTO player_gathering_professions (
+                telegram_id, profession_key, level, exp
+            ) VALUES (?, ?, 1, 0)
+            ''',
+            (int(telegram_id), profession_key),
+        )
+        row = conn.execute(
+            '''
+            SELECT level, exp
+            FROM player_gathering_professions
+            WHERE telegram_id=? AND profession_key=?
+            ''',
+            (int(telegram_id), profession_key),
+        ).fetchone()
+        result = apply_gathering_profession_progression(
+            profession_key=profession_key,
+            current_level=row['level'],
+            current_exp=row['exp'],
+            xp_awarded=exp,
+        )
+        conn.execute(
+            '''
+            UPDATE player_gathering_professions
+            SET level=?, exp=?, updated_at=CURRENT_TIMESTAMP
+            WHERE telegram_id=? AND profession_key=?
+            ''',
+            (
+                result.new_level,
+                result.new_exp,
+                int(telegram_id),
+                profession_key,
+            ),
+        )
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def list_gathering_profession_states(telegram_id: int) -> list[sqlite3.Row]:
     if not player_exists(telegram_id):
         return []
