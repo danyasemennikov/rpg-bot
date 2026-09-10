@@ -1,3 +1,5 @@
+from itertools import count
+_message_ids = count(1)
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -171,7 +173,7 @@ async def _run_complete_alpha_core_loop():
     conn.close()
 
     profile = build_location_gather_source_profiles('westwild_n3')[0]
-    message = SimpleNamespace(text='Gather', reply_text=AsyncMock())
+    message = SimpleNamespace(text='Gather', message_id=next(_message_ids), reply_text=AsyncMock())
     update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
     with (
         patch('handlers.location.looks_like_lower_gather_button', return_value=True),
@@ -324,7 +326,7 @@ async def _run_negative_paths():
             lang='en',
         )
 
-    message = SimpleNamespace(text='Gather', reply_text=AsyncMock())
+    message = SimpleNamespace(text='Gather', message_id=next(_message_ids), reply_text=AsyncMock())
     update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
     with (
         patch('handlers.location.looks_like_lower_gather_button', return_value=True),

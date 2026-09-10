@@ -1,3 +1,4 @@
+from game.action_receipts import issue_actions
 import os
 import tempfile
 import unittest
@@ -55,6 +56,12 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         conn.commit()
         conn.close()
 
+    def move_fixture(self, location):
+        conn = get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=8101', (location,))
+        conn.commit()
+        conn.close()
+
     def tearDown(self):
         database.DB_PATH = self._orig_db_path
         self._tmpdir.cleanup()
@@ -83,7 +90,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
     async def test_player_can_abandon_active_contract_from_board_callback(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         query = SimpleNamespace(
-            data='quest_board_abandon',
+            data='quest_board_abandon_' + issue_actions(8101, 'contract_abandon', ['hunt_forest_wolves'])['hunt_forest_wolves'],
             from_user=SimpleNamespace(id=8101),
             answer=AsyncMock(),
             edit_message_text=AsyncMock(),
@@ -109,7 +116,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         conn.close()
 
         query = SimpleNamespace(
-            data='quest_board_claim',
+            data='quest_board_claim_' + issue_actions(8101, 'contract_claim', ['hunt_forest_wolves'])['hunt_forest_wolves'],
             from_user=SimpleNamespace(id=8101),
             answer=AsyncMock(),
             edit_message_text=AsyncMock(),
@@ -131,14 +138,14 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         _text_active, keyboard_active = build_quest_board_message(player, location)
         active_callbacks = {btn.callback_data for row in keyboard_active.inline_keyboard for btn in row}
-        self.assertIn('quest_board_abandon', active_callbacks)
+        self.assertTrue(any(c.startswith('quest_board_abandon_') for c in active_callbacks))
         self.assertNotIn('quest_board_claim', active_callbacks)
 
         for _ in range(5):
             register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
         _text_ready, keyboard_ready = build_quest_board_message(player, location)
         ready_callbacks = {btn.callback_data for row in keyboard_ready.inline_keyboard for btn in row}
-        self.assertIn('quest_board_claim', ready_callbacks)
+        self.assertTrue(any(c.startswith('quest_board_claim_') for c in ready_callbacks))
         self.assertNotIn('quest_board_abandon', ready_callbacks)
 
     def test_single_slot_policy_rejects_second_active_contract(self):
@@ -183,6 +190,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('quest_board_accept_hunt_forest_spiders', callbacks)
 
     def test_capital_city_can_accept_and_claim_starter_contracts(self):
+        self.move_fixture('capital_city')
         ok, reason = accept_hunt_contract(
             player_id=8101,
             location_id='capital_city',
@@ -283,6 +291,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
 
         abandon_hunt_contract(player_id=8101)
 
+        self.move_fixture('hub_frostspine')
         ok_frontier_canonical, reason_frontier_canonical = accept_hunt_contract(
             player_id=8101,
             location_id='hub_frostspine',
@@ -398,6 +407,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         for _ in range(5):
             register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
+        self.move_fixture('frontier_outpost')
         ok, reason, reward = claim_completed_hunt_contract(player_id=8101, location_id='frontier_outpost')
         self.assertFalse(ok)
         self.assertEqual(reason, 'wrong_board')
@@ -458,6 +468,7 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
                 register_hunt_kill_progress(player_id=8101, mob_id='forest_wolf', location_id='westwild_n3')
             claim_completed_hunt_contract(player_id=8101, location_id='village')
 
+        self.move_fixture('frontier_outpost')
         accept_hunt_contract(player_id=8101, location_id='frontier_outpost', contract_key='hunt_mine_rats')
         canonical_mine_kill = register_hunt_kill_progress(
             player_id=8101,

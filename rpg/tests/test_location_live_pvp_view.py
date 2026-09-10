@@ -110,11 +110,16 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_normal_player_can_still_move(self):
         update = _FakeCallbackUpdate(1001, 'goto_westwild_n5')
-        player = {'telegram_id': 1001, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
+        from database import create_player, get_connection, get_player, is_location_discovered
+        create_player(1001, 'traveler', 'Traveler',
+                      dict(strength=4, vitality=4, agility=1, intuition=1, wisdom=1, luck=1), lang='en')
+        conn = get_connection()
+        conn.execute("UPDATE players SET location_id='dark_forest' WHERE telegram_id=1001")
+        conn.commit()
+        conn.close()
         target_location = {'id': 'westwild_n5', 'safe': True, 'level_min': 1, 'level_max': 10, 'mobs': [], 'services': []}
         context = _FakeContext()
         with (
-            patch('handlers.location.get_player', return_value=player),
             patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
             patch('handlers.location.is_in_battle', return_value=False),
             patch('handlers.location.get_location_neighbors', return_value=['westwild_n5']),
@@ -123,16 +128,14 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             patch('handlers.location.get_location_name', return_value='Village'),
             patch('handlers.location.get_location_desc', return_value='road'),
             patch('handlers.location.asyncio.sleep', new=AsyncMock()),
-            patch('handlers.location.get_connection') as connection_mock,
             patch('handlers.location.build_location_message', side_effect=self._location_message_stub),
             patch('handlers.location.clear_respawn_protection_on_dangerous_reentry'),
-            patch('handlers.location.ensure_player_location_discovered'),
             patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
         ):
-            connection_mock.return_value.execute.return_value = None
-            connection_mock.return_value.commit.return_value = None
-            connection_mock.return_value.close.return_value = None
             await handle_location_buttons(update, context=context)
+        self.assertEqual(get_player(1001)['location_id'], 'westwild_n5')
+        self.assertEqual(get_player(1001)['travel_revision'], 1)
+        self.assertTrue(is_location_discovered(1001, 'westwild_n5'))
         self.assertGreaterEqual(update.callback_query.edit_message_text.await_count, 2)
         answered_keys = {call.args[0] for call in update.callback_query.answer.await_args_list if call.args}
         self.assertNotIn('location.not_found', answered_keys)
