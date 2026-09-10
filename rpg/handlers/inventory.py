@@ -267,6 +267,124 @@ def _calc_safe_restore_amount(current_value: int, effective_cap: int, restore_va
     missing = max(0, int(effective_cap) - int(current_value))
     return max(0, min(int(restore_value), missing))
 
+def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
+    """Sell one owned material at a shop with its receipt and objective atomically."""
+    from game.action_receipts import ActionRejected, peaceful_player, consume_action
+    from game.quest_board import register_contract_objective
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        player = peaceful_player(conn, telegram_id, service='shop')
+        payload = consume_action(conn, telegram_id, 'sell', action_token)
+        inv_id, expected_quantity = (int(value) for value in payload.split(':'))
+        row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inv_id, telegram_id)).fetchone()
+        if not row or row['quantity'] != expected_quantity or expected_quantity <= 0:
+            raise ActionRejected('stale_action')
+        item = get_item(row['item_id'])
+        if not item or item['item_type'] != 'material' or item['sell_price'] <= 0:
+            raise ActionRejected('stale_action')
+        if expected_quantity == 1:
+            conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
+        else:
+            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
+        conn.execute('UPDATE players SET gold=gold+? WHERE telegram_id=?', (item['sell_price'], telegram_id))
+        register_contract_objective(conn, telegram_id, 'sell', row['item_id'], 1, player['location_id'])
+        conn.commit()
+        return {'status': 'sold', 'gold': item['sell_price']}
+    except ActionRejected as exc:
+        conn.rollback()
+        return {'status': str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def consume_owned_potion(conn, telegram_id: int, inventory_id: int, *, hp: int, mana: int,
+                        max_hp: int, max_mana: int, expected_quantity: int | None = None) -> dict:
+    """Shared inventory/battle consumption, using caller-owned transaction and caps."""
+    from game.action_receipts import ActionRejected
+    row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inventory_id, telegram_id)).fetchone()
+    if not row or row['quantity'] <= 0 or (expected_quantity is not None and row['quantity'] != expected_quantity):
+        raise ActionRejected('stale_action')
+    item = get_item(row['item_id'])
+    if not item or item['item_type'] != 'potion':
+        raise ActionRejected('stale_action')
+    bonus = json.loads(item['stat_bonus_json'])
+    heal = _calc_safe_restore_amount(hp, max_hp, bonus.get('heal', 0))
+    mana_gain = _calc_safe_restore_amount(mana, max_mana, bonus.get('mana', 0))
+    conn.execute('UPDATE players SET hp=?, mana=? WHERE telegram_id=?', (hp + heal, mana + mana_gain, telegram_id))
+    if row['quantity'] == 1:
+        conn.execute('DELETE FROM inventory WHERE id=?', (inventory_id,))
+    else:
+        conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inventory_id,))
+    return {'status': 'used', 'heal': heal, 'mana': mana_gain, 'item_id': row['item_id']}
+
+
+def use_inventory_consumable(telegram_id: int, action_token: str) -> dict:
+    from game.action_receipts import ActionRejected, peaceful_player, consume_action
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        player = peaceful_player(conn, telegram_id)
+        payload = consume_action(conn, telegram_id, 'use', action_token)
+        inv_id, expected_quantity = (int(value) for value in payload.split(':'))
+        effective = get_player_effective_stats(telegram_id, player)
+        result = consume_owned_potion(conn, telegram_id, inv_id, hp=player['hp'], mana=player['mana'],
+                    max_hp=effective['max_hp'], max_mana=effective['max_mana'], expected_quantity=expected_quantity)
+        conn.commit()
+        return result
+    except ActionRejected as exc:
+        conn.rollback()
+        return {'status': str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def use_battle_consumable(telegram_id: int, action_token: str, encounter_id: str) -> dict:
+    """Consume and persist the active solo encounter in the same transaction."""
+    from game.action_receipts import ActionRejected, consume_action
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        payload = consume_action(conn, telegram_id, 'battle_use', action_token)
+        saved_encounter, inv_id, quantity = payload.split(':')
+        row = conn.execute("""SELECT e.* FROM pve_encounters e JOIN pve_encounter_participants p
+            ON p.encounter_id=e.encounter_id WHERE e.encounter_id=? AND e.status='active'
+            AND p.player_id=? AND p.status='active'""", (encounter_id, telegram_id)).fetchone()
+        if saved_encounter != encounter_id or not row:
+            raise ActionRejected('stale_action')
+        state = json.loads(row['battle_state_json'])
+        from game.pve_live import sync_projection_for_participant
+        sync_projection_for_participant(battle_state=state, player_id=telegram_id)
+        if state.get('player_dead') or state.get('mob_dead'):
+            raise ActionRejected('stale_action')
+        result = consume_owned_potion(conn, telegram_id, int(inv_id),
+                    hp=state['player_hp'], mana=state['player_mana'],
+                    max_hp=state['player_max_hp'], max_mana=state['player_max_mana'],
+                    expected_quantity=int(quantity))
+        state['player_hp'] += result['heal']
+        state['player_mana'] += result['mana']
+        from game.pve_live import update_participant_combat_state_from_projection
+        update_participant_combat_state_from_projection(battle_state=state, player_id=telegram_id)
+        conn.execute('UPDATE pve_encounters SET battle_state_json=?, updated_at=CURRENT_TIMESTAMP WHERE encounter_id=?',
+                     (json.dumps(state, ensure_ascii=False), encounter_id))
+        conn.commit()
+        return {**result, 'battle': state}
+    except ActionRejected as exc:
+        conn.rollback()
+        return {'status': str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def build_tab_keyboard(active_tab: str, lang: str) -> list:
     row = []
     for tab_key in TABS:
@@ -431,7 +549,13 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
             text += t('inventory.instance_secondaries', lang, val=', '.join(secondary_lines)) + '\n'
 
     if item['description']:
-        text += f"\n<i>{item['description']}</i>\n"
+        from game.starter_kit import STARTER_WEAPONS
+        description = item['description']
+        if inv_row['item_id'] in STARTER_WEAPONS:
+            description = t('chapter.starter_description', lang)
+        elif inv_row['item_id'] in {'trail_vest', 'field_ration'}:
+            description = t(f"chapter.{inv_row['item_id']}_description", lang)
+        text += f"\n<i>{description}</i>\n"
 
     if inv_row.get('entry_type') == 'gear_instance' and instance_enhance < MAX_ENHANCE_LEVEL:
         req = get_enhance_requirements_for_target_level(instance_enhance + 1)
@@ -469,7 +593,10 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
         if inv_row.get('entry_type') == 'gear_instance' and instance_enhance < MAX_ENHANCE_LEVEL:
             keyboard.append([InlineKeyboardButton(t('inventory.enhance_btn', lang), callback_data=f"inv_enhance_{entry_token}_{back_tab}")])
     elif item['item_type'] == 'potion':
-        keyboard.append([InlineKeyboardButton(t('inventory.use_btn', lang), callback_data=f"inv_use_{entry_token}_{back_tab}")])
+        from game.action_receipts import issue_actions
+        payload = f"{inv_row['id']}:{inv_row['quantity']}"
+        token = issue_actions(telegram_id, 'use', [payload])[payload]
+        keyboard.append([InlineKeyboardButton(t('inventory.use_btn', lang), callback_data=f"inv_use_{token}_{back_tab}")])
 
     keyboard.append([
         InlineKeyboardButton(t('inventory.drop_btn', lang),     callback_data=f"inv_drop_{entry_token}_{back_tab}"),
@@ -503,9 +630,19 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     data  = query.data
     user  = query.from_user
-    p     = dict(get_player(user.id))
+    player_row = get_player(user.id)
+    if not player_row:
+        await query.answer(t('common.no_character', 'ru'), show_alert=True)
+        return
+    p     = dict(player_row)
     lang  = get_player_lang(user.id)
     effective_stats = get_player_effective_stats(user.id, p)
+
+    if data.startswith(('inv_equip_', 'inv_unequip_', 'inv_enhance_', 'inv_drop_', 'inv_transfer_')):
+        from game.pvp_live import has_active_live_pvp_engagement
+        if p['in_battle'] or has_active_live_pvp_engagement(user.id):
+            await query.answer(t('chapter.in_battle', lang), show_alert=True)
+            return
 
     if data == 'inv_noop':
         await query.answer()
@@ -628,6 +765,10 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
             return
         item = get_item(inv_row['item_id'])
 
+        actual_slot = resolve_equip_slot_for_item(inv_row['item_id'], get_equipped(user.id))
+        if slot != actual_slot and not (slot in {'ring1', 'ring2'} and actual_slot in {'ring1', 'ring2'}):
+            await query.answer(t('chapter.stale_action', lang), show_alert=True)
+            return
         if p['level']     < item['req_level']:     await query.answer(t('inventory.req_level',     lang, level=item['req_level']),     show_alert=True); return
         if p['strength']  < item['req_strength']:  await query.answer(t('inventory.req_strength',  lang, val=item['req_strength']),    show_alert=True); return
         if p['agility']   < item['req_agility']:   await query.answer(t('inventory.req_agility',   lang, val=item['req_agility']),     show_alert=True); return
@@ -662,43 +803,17 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
 
     # ── Использовать зелье ──
     if data.startswith('inv_use_'):
-        parts    = data.split('_')
-        entry_token = parts[2]
-        back_tab = parts[3]
-
-        inv_row = _load_inventory_entry(user.id, entry_token)
-        if not inv_row:
-            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
+        parts = data.split('_')
+        if len(parts) != 4:
+            await query.answer(t('chapter.stale_action', lang), show_alert=True)
             return
-        if inv_row.get('entry_type') == 'gear_instance':
-            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
+        result = use_inventory_consumable(user.id, parts[2])
+        if result['status'] != 'used':
+            await query.answer(t(f"chapter.{result['status']}", lang), show_alert=True)
             return
-        item  = get_item(inv_row['item_id'])
-        bonus = json.loads(item['stat_bonus_json'])
-
-        conn = get_connection()
-        msg  = ""
-
-        if 'heal' in bonus:
-            heal = _calc_safe_restore_amount(p['hp'], effective_stats['max_hp'], bonus['heal'])
-            conn.execute('UPDATE players SET hp=hp+? WHERE telegram_id=?', (heal, user.id))
-            msg += t('inventory.healed', lang, val=heal) + '\n'
-
-        if 'mana' in bonus:
-            mana_gain = _calc_safe_restore_amount(p['mana'], effective_stats['max_mana'], bonus['mana'])
-            conn.execute('UPDATE players SET mana=mana+? WHERE telegram_id=?', (mana_gain, user.id))
-            msg += t('inventory.mana_restored', lang, val=mana_gain) + '\n'
-
-        if inv_row['quantity'] > 1:
-            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_row['id'],))
-        else:
-            conn.execute('DELETE FROM inventory WHERE id=?', (inv_row['id'],))
-
-        conn.commit()
-        conn.close()
-
-        await query.answer(msg or t('inventory.used_ok', lang), show_alert=True)
-        text, keyboard = build_inventory_list(user.id, back_tab, lang)
+        msg = t('inventory.healed', lang, val=result['heal']) + '\n' + t('inventory.mana_restored', lang, val=result['mana'])
+        await query.answer(msg, show_alert=True)
+        text, keyboard = build_inventory_list(user.id, parts[3], lang)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 

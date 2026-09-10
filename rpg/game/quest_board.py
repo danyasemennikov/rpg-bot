@@ -13,6 +13,18 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class ContractObjective:
+    action: str
+    target: str
+    required: int
+    location_ids: tuple[str, ...] = ()
+
+    @property
+    def key(self):
+        return f'{self.action}:{self.target}'
+
+
+@dataclass(frozen=True)
 class HuntContract:
     contract_key: str
     title_i18n_key: str
@@ -28,6 +40,10 @@ class HuntContract:
     hunter_points_reward: int = 20
     required_hunter_rank: str | None = None
     target_location_ids: tuple[str, ...] = ()
+    chapter_order: int = 0
+    prerequisite: str | None = None
+    claim_locations: tuple[str, ...] = ()
+    objectives: tuple[ContractObjective, ...] = ()
 
 
 HUNTER_RANK_THRESHOLDS: tuple[tuple[str, int], ...] = (
@@ -173,7 +189,108 @@ HUNT_CONTRACTS: tuple[HuntContract, ...] = (
     ),
 )
 
+HUNT_CONTRACTS += (
+    HuntContract(
+        contract_key='chapter_first_watch', title_i18n_key='chapter.title_1',
+        target_mob_id='westwild_rabbit', required_kills=2, reward_exp=60, reward_gold=20,
+        board_locations=('capital_city',), target_location_ids=('westwild_n1',),
+        bonus_item_id='health_potion_small', bonus_item_qty=2, chapter_order=1,
+        objectives=(ContractObjective('gather', 'herb_common', 3, ('westwild_n1', 'westwild_n2')),),
+    ),
+    HuntContract(
+        contract_key='chapter_caravan', title_i18n_key='chapter.title_2',
+        target_mob_id='forest_boar', required_kills=2, reward_exp=100, reward_gold=35,
+        board_locations=('capital_city', 'hub_westwild'), claim_locations=('hub_westwild',),
+        target_location_ids=('westwild_n2',), chapter_order=2, prerequisite='chapter_first_watch',
+        objectives=(ContractObjective('harvest', 'boar_meat', 2, ('westwild_n2',)),
+                    ContractObjective('gather', 'wood_common', 3, ('westwild_n2', 'westwild_n3', 'westwild_n4', 'westwild_n5'))),
+    ),
+    HuntContract(
+        contract_key='chapter_outfitter', title_i18n_key='chapter.title_3',
+        target_mob_id='forest_wolf', required_kills=2, reward_exp=100, reward_gold=45,
+        board_locations=('hub_westwild',), target_location_ids=('westwild_n3',),
+        chapter_order=3, prerequisite='chapter_caravan',
+        objectives=(ContractObjective('harvest', 'wolf_pelt', 2, ('westwild_n3',)),
+                    ContractObjective('craft', 'trail_vest', 1),
+                    ContractObjective('craft', 'field_ration', 1),
+                    ContractObjective('equip', 'trail_vest', 1)),
+    ),
+    HuntContract(
+        contract_key='chapter_homecoming', title_i18n_key='chapter.title_4',
+        target_mob_id='', required_kills=0, reward_exp=80, reward_gold=40,
+        board_locations=('hub_westwild', 'capital_city'), claim_locations=('capital_city',),
+        chapter_order=4, prerequisite='chapter_outfitter', bonus_item_id='enhance_shard', bonus_item_qty=3,
+        objectives=(ContractObjective('craft', 'health_potion_small', 1),
+                    ContractObjective('sell', '*', 1)),
+    ),
+)
+
 HUNT_CONTRACTS_BY_KEY = {contract.contract_key: contract for contract in HUNT_CONTRACTS}
+
+
+def get_chapter_contracts():
+    return sorted((c for c in HUNT_CONTRACTS if c.chapter_order), key=lambda c: c.chapter_order)
+
+
+def get_contract_history(player_id: int, *, conn=None) -> set[str]:
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
+    try:
+        return {r['contract_key'] for r in conn.execute(
+            'SELECT contract_key FROM player_contract_history WHERE player_id=?', (player_id,))}
+    finally:
+        if owns_connection:
+            conn.close()
+
+
+def _objective_progress(conn, player_id: int, contract: HuntContract) -> dict[str, int]:
+    progress = {r['objective_key']: r['progress'] for r in conn.execute(
+        'SELECT objective_key, progress FROM player_contract_objectives WHERE player_id=? AND contract_key=?',
+        (player_id, contract.contract_key))}
+    for objective in contract.objectives:
+        if objective.action == 'equip':
+            # Wearing the result is a current-state requirement, not a replayable event.
+            row = conn.execute('''SELECT 1 FROM gear_instances WHERE telegram_id=?
+                AND base_item_id=? AND equipped_slot='chest' ''', (player_id, objective.target)).fetchone()
+            progress[objective.key] = int(bool(row))
+    return progress
+
+
+def register_contract_objective(conn, player_id: int, action: str, target: str,
+                                quantity: int, location_id: str) -> None:
+    """Internal bridge: called only after validated mutations in their transaction."""
+    state = _get_player_hunt_contract_state_with_conn(conn, player_id)
+    if not state or state['status'] not in {'active', 'completed'}:
+        return
+    contract = state['contract']
+    for objective in contract.objectives:
+        if objective.action != action or objective.target not in {target, '*'}:
+            continue
+        if objective.location_ids and not _location_matches_contract_scope(location_id, objective.location_ids):
+            continue
+        conn.execute('''INSERT INTO player_contract_objectives(player_id, contract_key, objective_key, progress)
+            VALUES (?, ?, ?, ?) ON CONFLICT(player_id, contract_key, objective_key)
+            DO UPDATE SET progress=MIN(?, progress+excluded.progress)''',
+                     (player_id, contract.contract_key, objective.key, min(objective.required, max(0, quantity)), objective.required))
+    refreshed = _get_player_hunt_contract_state_with_conn(conn, player_id)
+    if refreshed:
+        conn.execute('''UPDATE player_hunt_contracts SET status=?,
+            completed_at=CASE WHEN ?='completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
+            WHERE player_id=?''', (refreshed['status'], refreshed['status'], player_id))
+
+
+def build_objective_lines(state: dict, lang: str) -> list[str]:
+    contract = state['contract']
+    lines = []
+    if contract.required_kills:
+        lines.append(t('chapter.objective_kill', lang, name=get_mob_name(contract.target_mob_id, lang),
+                       progress=state['progress_kills'], required=contract.required_kills))
+    for objective in contract.objectives:
+        lines.append(t(f'chapter.objective_{objective.action}', lang,
+                       name=get_item_name(objective.target, lang),
+                       progress=state.get('objective_progress', {}).get(objective.key, 0), required=objective.required))
+    return lines
 
 
 def _normalize_location_id(location_id: str | None) -> str:
@@ -372,14 +489,19 @@ def list_hunt_contracts_for_player(*, location_id: str, player_id: int, lang: st
     current_rank = str(progress['current_rank'])
     available: list[HuntContract] = []
     locked: list[dict] = []
+    history = get_contract_history(player_id)
     for contract in list_hunt_contracts_for_location(location_id):
+        if contract.chapter_order and contract.contract_key in history:
+            continue
+        if contract.prerequisite and contract.prerequisite not in history:
+            continue
         locked_reason = get_contract_rank_lock_reason(contract=contract, player_hunter_rank=current_rank, lang=lang)
         if locked_reason:
             locked.append({'contract': contract, 'reason': locked_reason})
         else:
             available.append(contract)
     return {
-        'available': available,
+        'available': sorted(available, key=lambda contract: (not bool(contract.chapter_order), contract.chapter_order)),
         'locked': locked,
         'hunter_progress': progress,
     }
@@ -404,6 +526,12 @@ def _get_player_hunt_contract_state_with_conn(conn, player_id: int) -> dict | No
     if not contract:
         return None
     state['contract'] = contract
+    if contract.objectives and state['status'] in {'active', 'completed'}:
+        progress = _objective_progress(conn, player_id, contract)
+        state['objective_progress'] = progress
+        done = state['progress_kills'] >= contract.required_kills and all(
+            progress.get(o.key, 0) >= o.required for o in contract.objectives)
+        state['status'] = 'completed' if done else 'active'
     return state
 
 
@@ -425,6 +553,18 @@ def accept_hunt_contract(*, player_id: int, location_id: str, contract_key: str)
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        from game.action_receipts import peaceful_player, ActionRejected
+        try:
+            # Existing contracts declare their own board scope, including regional
+            # foundations whose location service has not been activated in the UI.
+            peaceful_player(conn, player_id, location_id=location_id)
+        except ActionRejected:
+            return False, 'wrong_board'
+        history = get_contract_history(player_id, conn=conn)
+        if contract.chapter_order and contract.contract_key in history:
+            return False, 'already_claimed'
+        if contract.prerequisite and contract.prerequisite not in history:
+            return False, 'previous_required'
         current = _get_player_hunt_contract_state_with_conn(conn, player_id)
         if current and current.get('status') in {'active', 'completed'}:
             conn.rollback()
@@ -452,6 +592,8 @@ def accept_hunt_contract(*, player_id: int, location_id: str, contract_key: str)
             ''',
             (int(player_id), contract.contract_key),
         )
+        conn.execute('DELETE FROM player_contract_objectives WHERE player_id=? AND contract_key=?',
+                     (player_id, contract.contract_key))
         conn.commit()
         return True, 'accepted'
     finally:
@@ -490,8 +632,9 @@ def register_hunt_kill_progress(
 
         current_progress = int(state.get('progress_kills', 0) or 0)
         next_progress = min(contract.required_kills, current_progress + 1)
-        completed_now = next_progress >= contract.required_kills and current_progress < contract.required_kills
-        next_status = 'completed' if next_progress >= contract.required_kills else 'active'
+        objectives_done = all(state.get('objective_progress', {}).get(o.key, 0) >= o.required for o in contract.objectives)
+        completed_now = next_progress >= contract.required_kills and current_progress < contract.required_kills and objectives_done
+        next_status = 'completed' if next_progress >= contract.required_kills and objectives_done else 'active'
 
         conn.execute(
             '''
@@ -512,7 +655,7 @@ def register_hunt_kill_progress(
         conn.close()
 
 
-def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[bool, str, dict | None]:
+def claim_completed_hunt_contract(*, player_id: int, location_id: str, action_token: str | None = None) -> tuple[bool, str, dict | None]:
     _ensure_player_hunt_contract_table()
     conn = get_connection()
     try:
@@ -530,10 +673,19 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[
             return False, 'not_completed', None
 
         contract: HuntContract = state['contract']
-        if not _location_matches_contract_scope(location_id, contract.board_locations):
+        from game.action_receipts import peaceful_player, consume_action, ActionRejected
+        try:
+            peaceful_player(conn, player_id, location_id=location_id)
+            if action_token is not None:
+                consume_action(conn, player_id, 'contract_claim', action_token, payload=contract.contract_key)
+        except ActionRejected as exc:
+            return False, str(exc), None
+        if not _location_matches_contract_scope(location_id, contract.claim_locations or contract.board_locations):
             conn.rollback()
             return False, 'wrong_board', None
 
+        if contract.chapter_order and contract.contract_key in get_contract_history(player_id, conn=conn):
+            return False, 'already_claimed', None
         player = conn.execute(
             'SELECT level, exp, gold, stat_points FROM players WHERE telegram_id=?',
             (int(player_id),),
@@ -608,6 +760,8 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[
             ''',
             (int(player_id),),
         )
+        conn.execute('INSERT OR IGNORE INTO player_contract_history(player_id, contract_key) VALUES (?, ?)',
+                     (player_id, contract.contract_key))
         conn.commit()
         return True, 'claimed', {
             'contract': contract,
@@ -630,12 +784,20 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str) -> tuple[
         conn.close()
 
 
-def abandon_hunt_contract(*, player_id: int) -> tuple[bool, str]:
+def abandon_hunt_contract(*, player_id: int, action_token: str | None = None) -> tuple[bool, str]:
     _ensure_player_hunt_contract_table()
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
         state = _get_player_hunt_contract_state_with_conn(conn, player_id)
+        if action_token is not None:
+            from game.action_receipts import peaceful_player, consume_action, ActionRejected
+            try:
+                peaceful_player(conn, player_id, service='quest_board')
+                consume_action(conn, player_id, 'contract_abandon', action_token,
+                               payload=state['contract_key'] if state else '')
+            except ActionRejected as exc:
+                return False, str(exc)
         if not state:
             conn.rollback()
             return False, 'no_contract'
@@ -678,7 +840,7 @@ def _build_contract_location_line(contract: HuntContract, lang: str) -> str:
 
 def _build_contract_board_locations_line(contract: HuntContract, lang: str) -> str:
     board_names: list[str] = []
-    for board_location_id in contract.board_locations:
+    for board_location_id in (contract.claim_locations or contract.board_locations):
         normalized_id = str(board_location_id or '').strip()
         if not normalized_id:
             continue
@@ -731,6 +893,10 @@ def build_contract_row(contract: HuntContract, lang: str) -> str:
             qty=max(1, int(contract.bonus_item_qty)),
             item=get_item_name(contract.bonus_item_id, lang),
         )
+    if contract.chapter_order:
+        return t('chapter.contract_row', lang, title=build_contract_title(contract, lang),
+                 story=t(f'chapter.story_{contract.chapter_order}', lang), exp=contract.reward_exp,
+                 gold=contract.reward_gold, bonus=bonus_reward)
     return t(
         'location.quest_contract_row',
         lang,
@@ -752,6 +918,11 @@ def build_hunt_contract_progress_line(*, player_id: int, lang: str, current_loca
         return None
     contract: HuntContract = state['contract']
     status_key = 'location.quest_board_status_ready' if state.get('status') == 'completed' else 'location.quest_board_status_active'
+    if contract.chapter_order:
+        done = int(bool(contract.required_kills and state['progress_kills'] >= contract.required_kills))
+        done += sum(state.get('objective_progress', {}).get(o.key, 0) >= o.required for o in contract.objectives)
+        return t('chapter.contract_progress', lang, title=build_contract_title(contract, lang),
+                 done=done, total=len(contract.objectives) + int(bool(contract.required_kills)), status=t(status_key, lang))
     return t(
         'location.location_active_contract_line',
         lang,

@@ -66,3 +66,6 @@ ITEM_NAMES = {
     'marsh_mushroom': '🍄 Marsh Mushrooms',
     'toxic_herb': '☣️ Toxic Herb',
 }
+
+
+ITEM_NAMES.update({'practice_sword': 'Practice sword', 'practice_bow': 'Practice bow', 'practice_staff': 'Practice staff', 'trail_vest': 'Trail vest', 'field_ration': 'Field ration'})

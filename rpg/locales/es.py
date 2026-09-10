@@ -692,3 +692,7 @@ STRINGS = {
         ),
     },
 }
+
+
+from locales.chapter import CHAPTER_STRINGS
+STRINGS['chapter'] = CHAPTER_STRINGS['es']

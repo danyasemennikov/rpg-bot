@@ -79,7 +79,11 @@ def init_db():
         )
     ''')
     conn.commit()
-    _add_column_if_missing(conn, 'players', 'last_seen', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    # SQLite cannot add a non-constant default to an inhabited legacy table.
+    _add_column_if_missing(conn, 'players', 'last_seen', 'TIMESTAMP')
+    conn.execute("UPDATE players SET last_seen=CURRENT_TIMESTAMP WHERE last_seen IS NULL")
+    conn.commit()
+    _add_column_if_missing(conn, 'players', 'travel_revision', 'INTEGER NOT NULL DEFAULT 0')
     _add_column_if_missing(conn, 'players', 'pvp_status', "TEXT DEFAULT 'neutral'")
     _add_column_if_missing(conn, 'players', 'combat_tag_until', "INTEGER DEFAULT 0")
     _add_column_if_missing(conn, 'players', 'red_flag', "INTEGER DEFAULT 0")
@@ -333,6 +337,8 @@ def init_db():
         )
     ''')
 
+    from game.alpha_schema import ensure_alpha_schema
+    ensure_alpha_schema(conn)
     conn.commit()
     conn.close()
     print('✅ База данных создана!')
@@ -352,40 +358,34 @@ def get_player(telegram_id: int):
     conn.close()
     return player
 
-def create_player(telegram_id: int, username: str, name: str, stats: dict):
-    """Создать нового игрока с выбранными статами."""
-    import sys
-    sys.path.append('/content/rpg_bot')
+def create_player(telegram_id: int, username: str, name: str, stats: dict, *, lang: str = 'ru'):
+    """Atomically create the character and its canonical starting state."""
     from game.balance import calc_max_hp, calc_max_mana, calc_carry_weight
+    from game.alpha_schema import ensure_crafting_professions
 
-    max_hp   = calc_max_hp(stats['vitality'])
+    max_hp = calc_max_hp(stats['vitality'])
     max_mana = calc_max_mana(stats['wisdom'])
-    weight   = calc_carry_weight(stats['strength'])
-
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO players (
-            telegram_id, username, name,
-            strength, agility, intuition,
-            vitality, wisdom, luck,
-            hp, max_hp, mana, max_mana, carry_weight,
-            location_id, last_seen
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'capital_city', datetime('now'))
-    ''', (
-        telegram_id, username, name,
-        stats['strength'], stats['agility'], stats['intuition'],
-        stats['vitality'], stats['wisdom'], stats['luck'],
-        max_hp, max_hp, max_mana, max_mana, weight
-    ))
-
-    # Создаём пустую экипировку
-    c.execute('INSERT INTO equipment (telegram_id) VALUES (?)', (telegram_id,))
-
-    conn.commit()
-    conn.close()
-    ensure_player_location_discovered(telegram_id, 'capital_city')
-    ensure_player_gathering_professions(telegram_id)
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute("""INSERT INTO players (
+            telegram_id, username, name, strength, agility, intuition, vitality, wisdom, luck,
+            hp, max_hp, mana, max_mana, carry_weight, location_id, lang, last_seen
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'capital_city', ?, datetime('now'))""",
+            (telegram_id, username, name, stats['strength'], stats['agility'], stats['intuition'],
+             stats['vitality'], stats['wisdom'], stats['luck'], max_hp, max_hp, max_mana, max_mana,
+             calc_carry_weight(stats['strength']), lang if lang in ('ru', 'en', 'es') else 'ru'))
+        conn.execute('INSERT INTO equipment(telegram_id) VALUES (?)', (telegram_id,))
+        conn.execute("INSERT INTO player_location_discovery(telegram_id, location_id) VALUES (?, 'capital_city')", (telegram_id,))
+        conn.executemany('INSERT INTO player_gathering_professions(telegram_id, profession_key) VALUES (?, ?)',
+                         ((telegram_id, key) for key in GATHERING_PROFESSION_KEYS))
+        ensure_crafting_professions(conn, telegram_id)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def ensure_player_gathering_professions(telegram_id: int) -> None:
@@ -429,18 +429,20 @@ def get_gathering_profession_level(telegram_id: int, profession_key: str) -> int
     return int(state['level']) if state else None
 
 
-def add_gathering_profession_exp(telegram_id: int, profession_key: str, exp: int):
+def add_gathering_profession_exp(telegram_id: int, profession_key: str, exp: int, *, conn=None):
     """Safely apply XP to one canonical gathering profession."""
     if profession_key not in GATHERING_PROFESSION_KEYS:
         return None
-    if not player_exists(telegram_id):
-        return None
-
     from game.gathering_progression import apply_gathering_profession_progression
 
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
-        conn.execute('BEGIN IMMEDIATE')
+        if owns_connection:
+            conn.execute('BEGIN IMMEDIATE')
+        if not conn.execute('SELECT 1 FROM players WHERE telegram_id=?', (telegram_id,)).fetchone():
+            return None
         conn.execute(
             '''
             INSERT OR IGNORE INTO player_gathering_professions (
@@ -476,13 +478,16 @@ def add_gathering_profession_exp(telegram_id: int, profession_key: str, exp: int
                 profession_key,
             ),
         )
-        conn.commit()
+        if owns_connection:
+            conn.commit()
         return result
     except Exception:
-        conn.rollback()
+        if owns_connection:
+            conn.rollback()
         raise
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()
 
 
 def list_gathering_profession_states(telegram_id: int) -> list[sqlite3.Row]:
@@ -547,18 +552,19 @@ def _resolve_discovery_location_id(location_id: str | None) -> str:
     return FALLBACK_SAFE_HUB_ID
 
 
-def ensure_player_location_discovered(telegram_id: int, location_id: str | None) -> None:
+def ensure_player_location_discovered(telegram_id: int, location_id: str | None, *, conn=None) -> None:
     canonical_location_id = _resolve_discovery_location_id(location_id)
-    conn = get_connection()
-    conn.execute(
-        '''
-        INSERT OR IGNORE INTO player_location_discovery (telegram_id, location_id)
-        VALUES (?, ?)
-        ''',
-        (int(telegram_id), canonical_location_id),
-    )
-    conn.commit()
-    conn.close()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
+    try:
+        conn.execute('''INSERT OR IGNORE INTO player_location_discovery (telegram_id, location_id)
+            VALUES (?, ?)''', (int(telegram_id), canonical_location_id))
+        if owns_connection:
+            conn.commit()
+    finally:
+        if owns_connection:
+            conn.close()
 
 
 def is_location_discovered(telegram_id: int, location_id: str | None) -> bool:

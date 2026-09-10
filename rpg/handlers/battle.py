@@ -768,10 +768,16 @@ async def _handle_victory_cleanup(
         loot_names = [get_item_name(i, lang) for i in total_loot]
         loot_text = '\n' + t('battle.loot', lang, items=', '.join(loot_names))
 
+    from game.hunting import HARVEST_ITEMS
+    rows = [[InlineKeyboardButton(t('chapter.journal', lang), callback_data='alpha_home')]]
+    if mob.get('id') in HARVEST_ITEMS and battle_state.get('pve_encounter_id') and not owner_dead:
+        rows.insert(0, [InlineKeyboardButton(t('chapter.harvest', lang),
+                    callback_data=f"alpha_extract_{battle_state['pve_encounter_id']}")])
+    victory_keyboard = InlineKeyboardMarkup(rows)
     if levelup_before_loot:
-        await safe_edit(query, victory_text + levelup_text + loot_text + mastery_text, parse_mode='HTML')
+        await safe_edit(query, victory_text + levelup_text + loot_text + mastery_text, reply_markup=victory_keyboard, parse_mode='HTML')
     else:
-        await safe_edit(query, victory_text + loot_text + levelup_text + mastery_text, parse_mode='HTML')
+        await safe_edit(query, victory_text + loot_text + levelup_text + mastery_text, reply_markup=victory_keyboard, parse_mode='HTML')
 
 async def _handle_death_or_resurrection(
     query,
@@ -1362,23 +1368,28 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     # ── Открыть зелья в бою ──
     if data.startswith('battle_potions_'):
         mob_id  = data.replace('battle_potions_', '')
-        potions = get_connection().execute('''
-            SELECT inv.id, inv.item_id, inv.quantity
-            FROM inventory inv
-            JOIN items i ON inv.item_id = i.item_id
-            WHERE inv.telegram_id=? AND i.item_type='potion'
-        ''', (user.id,)).fetchall()
+        from game.action_receipts import issue_actions
+        from game.i18n import get_item_name
+        conn = get_connection()
+        try:
+            potions = conn.execute("""SELECT inv.id, inv.item_id, inv.quantity FROM inventory inv
+                JOIN items i ON inv.item_id=i.item_id
+                WHERE inv.telegram_id=? AND i.item_type='potion' AND inv.quantity>0""", (user.id,)).fetchall()
+        finally:
+            conn.close()
+        encounter_id = str(battle_state.get('pve_encounter_id', ''))
+        payloads = [f"{encounter_id}:{pot['id']}:{pot['quantity']}" for pot in potions]
+        tokens = issue_actions(user.id, 'battle_use', payloads)
 
         if not potions:
             await query.answer(t('battle.no_potions', lang), show_alert=True)
             return
 
         keyboard = []
-        for pot in potions:
-            item = get_item(pot['item_id'])
+        for pot, payload in zip(potions, payloads):
             keyboard.append([InlineKeyboardButton(
-                f"💊 {item['name']} x{pot['quantity']}",
-                callback_data=f"battle_use_potion_{pot['id']}_{mob_id}"
+                f"💊 {get_item_name(pot['item_id'], lang)} x{pot['quantity']}",
+                callback_data=f"battle_use_potion_{tokens[payload]}"
             )])
         keyboard.append([InlineKeyboardButton(
             t('common.back', lang), callback_data=f"battle_back_{mob_id}"
@@ -1394,46 +1405,19 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
     # ── Использовать зелье в бою ──
     if data.startswith('battle_use_potion_'):
-        rest   = data.replace('battle_use_potion_', '', 1)
-        inv_id = int(rest.split('_')[0])
-        mob_id = '_'.join(rest.split('_')[1:])
-
-        conn    = get_connection()
-        inv_row = conn.execute('SELECT * FROM inventory WHERE id=?', (inv_id,)).fetchone()
-        conn.close()
-
-        item  = get_item(inv_row['item_id'])
-        bonus = json.loads(item['stat_bonus_json'])
-
-        conn = get_connection()
-        msg  = ""
-
-        if 'heal' in bonus:
-            heal = min(bonus['heal'], battle_state['player_max_hp'] - battle_state['player_hp'])
-            battle_state['player_hp'] += heal
-            conn.execute('UPDATE players SET hp=hp+? WHERE telegram_id=?', (heal, user.id))
-            msg += t('battle.potion_heal', lang, amount=heal)
-
-        if 'mana' in bonus:
-            mana_gain = min(bonus['mana'], battle_state['player_max_mana'] - battle_state['player_mana'])
-            battle_state['player_mana'] += mana_gain
-            conn.execute('UPDATE players SET mana=mana+? WHERE telegram_id=?', (mana_gain, user.id))
-            msg += t('battle.potion_mana', lang, amount=mana_gain)
-
-        if inv_row['quantity'] > 1:
-            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
-        else:
-            conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
-
-        conn.commit()
-        conn.close()
-
+        from handlers.inventory import use_battle_consumable
+        result = use_battle_consumable(user.id, data.removeprefix('battle_use_potion_'),
+                                      str(battle_state.get('pve_encounter_id', '')))
+        if result['status'] != 'used':
+            await query.answer(t(f"chapter.{result['status']}", lang), show_alert=True)
+            return
+        battle_state = result['battle']
         context.user_data['battle'] = battle_state
-        persist_solo_pve_encounter_state(
-            encounter_id=str(battle_state.get('pve_encounter_id', '')),
-            battle_state=battle_state,
-            mob=mob,
-        )
+        msg = ''
+        if result['heal']:
+            msg += t('battle.potion_heal', lang, amount=result['heal'])
+        if result['mana']:
+            msg += t('battle.potion_mana', lang, amount=result['mana'])
         await query.answer(msg or t('battle.potion_used', lang), show_alert=True)
 
         mob = context.user_data.get('battle_mob')

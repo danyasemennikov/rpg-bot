@@ -22,6 +22,7 @@ CraftStatus = Literal[
     'profession_level_too_low',
     'missing_materials',
     'craft_failed_atomic',
+    'stale_action', 'in_battle', 'wrong_location', 'no_player',
 ]
 
 
@@ -64,6 +65,7 @@ class CraftResult:
     missing_materials: tuple[MissingMaterial, ...] = field(default_factory=tuple)
     crafted_item_id: str | None = None
     crafted_quantity: int = 0
+    profession_xp: int = 0
 
     @property
     def is_success(self) -> bool:
@@ -133,49 +135,67 @@ STARTER_RECIPES: tuple[RecipeDefinition, ...] = (
     ),
 )
 
-RECIPE_BY_ID: dict[str, RecipeDefinition] = {recipe.recipe_id: recipe for recipe in STARTER_RECIPES}
+EARLY_RECIPES = (
+    RecipeDefinition('field_tonic', 'health_potion_small', 1, 'alchemy', 1,
+                     (RecipeRequirement('herb_common', 3, 'herb_base'),)),
+    RecipeDefinition('trail_ration', 'field_ration', 1, 'cooking', 1,
+                     (RecipeRequirement('boar_meat', 1, 'meat'), RecipeRequirement('herb_common', 1, 'herb_base'))),
+    RecipeDefinition('trail_vest', 'trail_vest', 1, 'medium_armor', 1,
+                     (RecipeRequirement('wolf_pelt', 2, 'hide'), RecipeRequirement('wood_common', 2, 'wood'))),
+    RecipeDefinition('field_mana', 'mana_potion', 1, 'alchemy', 2,
+                     (RecipeRequirement('herb_common', 5, 'herb_base'),)),
+)
+LIVE_RECIPE_IDS = tuple(recipe.recipe_id for recipe in EARLY_RECIPES)
+RECIPE_BY_ID: dict[str, RecipeDefinition] = {recipe.recipe_id: recipe for recipe in STARTER_RECIPES + EARLY_RECIPES}
 
 
 def get_recipe(recipe_id: str) -> RecipeDefinition | None:
     return RECIPE_BY_ID.get(recipe_id)
 
 
-def craft_recipe(telegram_id: int, recipe_id: str, profession_levels: dict[CraftingProfessionKey, int]) -> CraftResult:
-    recipe = get_recipe(recipe_id)
-    if recipe is None:
-        return CraftResult(status='recipe_not_found', recipe_id=recipe_id)
+def craft_recipe(telegram_id: int, recipe_id: str,
+                 profession_levels: dict[CraftingProfessionKey, int] | None = None,
+                 *, action_token: str | None = None) -> CraftResult:
+    """Execute a recipe with locked validation and atomic delivery.
 
-    contract_errors = validate_recipe_contract(recipe)
-    if contract_errors:
-        return CraftResult(
-            status='invalid_recipe_contract',
-            recipe_id=recipe_id,
-            profession_key=recipe.profession_key,
-        )
-
-    player_level = int(profession_levels.get(recipe.profession_key, 0))
-    if player_level < recipe.minimum_profession_level:
-        return CraftResult(
-            status='profession_level_too_low',
-            recipe_id=recipe.recipe_id,
-            profession_key=recipe.profession_key,
-            required_profession_level=recipe.minimum_profession_level,
-            player_profession_level=player_level,
-        )
-
-    aggregated_requirements = _aggregate_recipe_requirements(recipe)
-    missing = _find_missing_materials(telegram_id, aggregated_requirements)
-    if missing:
-        return CraftResult(
-            status='missing_materials',
-            recipe_id=recipe.recipe_id,
-            profession_key=recipe.profession_key,
-            missing_materials=tuple(missing),
-        )
+    The original explicit-level API remains for foundation callers. Live recipes
+    always use persisted levels, even if a caller supplies a level dictionary.
+    Telegram only submits a server-issued intent; it cannot select a locked recipe.
+    """
+    from game.action_receipts import ActionRejected, peaceful_player, consume_action, require_item_delivery
+    from game.alpha_schema import ensure_crafting_professions
+    from game.gathering_progression import apply_gathering_profession_progression, gathering_profession_xp_for_success
 
     conn = get_connection()
+    recipe = None
     try:
-        conn.execute('BEGIN')
+        conn.execute('BEGIN IMMEDIATE')
+        if action_token is not None:
+            recipe_id = consume_action(conn, telegram_id, 'craft', action_token)
+        recipe = get_recipe(recipe_id)
+        if recipe is None or (action_token is not None and recipe_id not in LIVE_RECIPE_IDS):
+            return CraftResult(status='recipe_not_found', recipe_id=recipe_id)
+        if validate_recipe_contract(recipe):
+            return CraftResult(status='invalid_recipe_contract', recipe_id=recipe_id)
+        live = recipe_id in LIVE_RECIPE_IDS
+        player = peaceful_player(conn, telegram_id, service='craftsmen_guild' if live else None)
+        if live:
+            ensure_crafting_professions(conn, telegram_id)
+            profession = conn.execute('''SELECT level, exp FROM player_crafting_professions
+                WHERE player_id=? AND profession_key=?''', (telegram_id, recipe.profession_key)).fetchone()
+            player_level = profession['level']
+        else:
+            player_level = int((profession_levels or {}).get(recipe.profession_key, 0))
+        if player_level < recipe.minimum_profession_level:
+            return CraftResult(status='profession_level_too_low', recipe_id=recipe_id,
+                               profession_key=recipe.profession_key,
+                               required_profession_level=recipe.minimum_profession_level,
+                               player_profession_level=player_level)
+        aggregated_requirements = _aggregate_recipe_requirements(recipe)
+        missing = _find_missing_materials(telegram_id, aggregated_requirements, conn=conn)
+        if missing:
+            return CraftResult(status='missing_materials', recipe_id=recipe_id,
+                               profession_key=recipe.profession_key, missing_materials=tuple(missing))
         _consume_recipe_materials(conn, telegram_id, aggregated_requirements)
         grant = grant_item_to_player(
             telegram_id,
@@ -184,7 +204,21 @@ def craft_recipe(telegram_id: int, recipe_id: str, profession_levels: dict[Craft
             source='crafting',
             conn=conn,
         )
+        require_item_delivery(grant, recipe.output_quantity)
         crafted_quantity = int(grant.get('stackable_added', 0) + grant.get('gear_instances_created', 0))
+        xp = 0
+        if live:
+            # Crafting uses the same bounded level curve as gathering, at 2x action XP.
+            xp = 2 * gathering_profession_xp_for_success(current_profession_level=player_level,
+                                                       required_profession_level=recipe.minimum_profession_level)
+            result = apply_gathering_profession_progression(profession_key=recipe.profession_key,
+                       current_level=player_level, current_exp=profession['exp'], xp_awarded=xp)
+            conn.execute('''UPDATE player_crafting_professions SET level=?, exp=?
+                WHERE player_id=? AND profession_key=?''',
+                         (result.new_level, result.new_exp, telegram_id, recipe.profession_key))
+            from game.quest_board import register_contract_objective
+            register_contract_objective(conn, telegram_id, 'craft', recipe.output_item_id,
+                                        crafted_quantity, player['location_id'])
         conn.commit()
         return CraftResult(
             status='crafted',
@@ -192,13 +226,16 @@ def craft_recipe(telegram_id: int, recipe_id: str, profession_levels: dict[Craft
             profession_key=recipe.profession_key,
             crafted_item_id=recipe.output_item_id,
             crafted_quantity=crafted_quantity,
+            profession_xp=xp,
         )
+    except ActionRejected as exc:
+        conn.rollback()
+        return CraftResult(status=str(exc), recipe_id=recipe_id)
     except Exception:
         conn.rollback()
         return CraftResult(
             status='craft_failed_atomic',
-            recipe_id=recipe.recipe_id,
-            profession_key=recipe.profession_key,
+            recipe_id=recipe_id,
         )
     finally:
         conn.close()
@@ -249,6 +286,8 @@ def resolve_crafting_output_families(item_id: str) -> tuple[str, ...]:
         return ()
 
     item_type = item.get('item_type')
+    if item.get('consumable_family') == 'food':
+        return ('food', 'edible_recovery')
     if item_type == 'potion':
         # Temporary bridge: current cooking starter output reuses a consumable potion item.
         return ('potions', 'edible_recovery')
@@ -342,8 +381,8 @@ def _aggregate_recipe_requirements(recipe: RecipeDefinition) -> dict[str, dict[s
     return aggregated
 
 
-def _find_missing_materials(telegram_id: int, aggregated_requirements: dict[str, dict[str, int]]) -> list[MissingMaterial]:
-    inventory = _get_inventory_quantities(telegram_id)
+def _find_missing_materials(telegram_id: int, aggregated_requirements: dict[str, dict[str, int]], *, conn=None) -> list[MissingMaterial]:
+    inventory = _get_inventory_quantities(telegram_id, conn=conn)
     missing: list[MissingMaterial] = []
     for item_id, required_qty in aggregated_requirements['bulk'].items():
         available = inventory.get(item_id, 0)
@@ -356,26 +395,34 @@ def _find_missing_materials(telegram_id: int, aggregated_requirements: dict[str,
     return missing
 
 
-def _get_inventory_quantities(telegram_id: int) -> dict[str, int]:
-    conn = get_connection()
+def _get_inventory_quantities(telegram_id: int, *, conn=None) -> dict[str, int]:
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
-        rows = conn.execute('SELECT item_id, quantity FROM inventory WHERE telegram_id=?', (telegram_id,)).fetchall()
+        rows = conn.execute('SELECT item_id, SUM(quantity) AS quantity FROM inventory WHERE telegram_id=? GROUP BY item_id', (telegram_id,)).fetchall()
         return {str(row['item_id']): int(row['quantity']) for row in rows}
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()
 
 
 def _consume_recipe_materials(conn, telegram_id: int, aggregated_requirements: dict[str, dict[str, int]]):
     for requirement_kind in ('bulk', 'special'):
         for item_id, required_qty in aggregated_requirements[requirement_kind].items():
-            row = conn.execute(
-                'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+            rows = conn.execute(
+                'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=? ORDER BY id',
                 (telegram_id, item_id),
-            ).fetchone()
-            if not row:
-                continue
-            new_quantity = int(row['quantity']) - int(required_qty)
-            if new_quantity > 0:
-                conn.execute('UPDATE inventory SET quantity=? WHERE id=?', (new_quantity, row['id']))
-            else:
-                conn.execute('DELETE FROM inventory WHERE id=?', (row['id'],))
+            ).fetchall()
+            remaining = required_qty
+            for row in rows:
+                take = min(remaining, int(row['quantity']))
+                if take <= 0:
+                    continue
+                if take == row['quantity']:
+                    conn.execute('DELETE FROM inventory WHERE id=?', (row['id'],))
+                else:
+                    conn.execute('UPDATE inventory SET quantity=quantity-? WHERE id=?', (take, row['id']))
+                remaining -= take
+            if remaining:
+                raise ValueError('materials_changed')
