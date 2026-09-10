@@ -142,6 +142,7 @@ def build_contextual_main_keyboard(player: dict | None = None, lang: str = 'ru')
         rows.extend(_build_contextual_gather_rows(player.get('location_id'), lang))
         rows.extend(_build_contextual_service_rows(player.get('location_id'), lang))
     rows.extend(_baseline_keyboard_rows(lang))
+    rows.append([t('chapter.journal', lang)])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 

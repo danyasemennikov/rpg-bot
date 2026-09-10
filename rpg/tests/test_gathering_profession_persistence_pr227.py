@@ -1,3 +1,5 @@
+from itertools import count
+_message_ids = count(1)
 import asyncio
 import sqlite3
 from dataclasses import replace
@@ -41,11 +43,11 @@ def _profession_snapshot(profession_key):
 
 
 async def _gather(profession_key, roll, profiles=None):
-    message = SimpleNamespace(text='Gather', reply_text=AsyncMock())
+    message = SimpleNamespace(text='Gather', message_id=next(_message_ids), reply_text=AsyncMock())
     update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
     profile_patch = (
-        patch('handlers.location.build_location_gather_source_profiles', return_value=profiles)
-        if profiles is not None else patch('handlers.location.build_location_gather_source_profiles', wraps=build_location_gather_source_profiles)
+        patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=profiles)
+        if profiles is not None else patch('game.gathering_runtime.build_location_gather_source_profiles', wraps=build_location_gather_source_profiles)
     )
     with (
         patch('handlers.location.looks_like_lower_gather_button', return_value=True),
@@ -55,7 +57,7 @@ async def _gather(profession_key, roll, profiles=None):
         patch('handlers.location.is_in_battle', return_value=False),
         profile_patch,
         patch(
-            'handlers.location.resolve_gather_access_decision',
+            'game.gathering_runtime.resolve_gather_access_decision',
             wraps=resolve_gather_access_decision,
         ) as access_mock,
     ):

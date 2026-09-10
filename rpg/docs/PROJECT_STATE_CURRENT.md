@@ -4,6 +4,32 @@ This file is the source of truth for the currently confirmed merged state of the
 
 Do not record planned, discussed, or unmerged work as confirmed state.
 
+## Playable Alpha Vertical Slice V1 — implemented in this PR, pending merge
+
+This subsection describes the branch implementation for review. The confirmed merged
+baseline below remains PR228 until Producer accepts and merges this PR.
+
+- Production startup now runs schema initialization and inserts missing static items;
+  legacy catalogs missing `wood_common` are reconciled without replacing player data.
+- `/journal` and the ru/en/es lower menu connect a once-per-player Aster starter kit,
+  four prerequisite-gated assignments, ordinary Westwild travel to Elmor and return.
+- Existing live contract state is extended with additive objective/history storage;
+  kill, gather, harvest, craft, sale and current equipment requirements are live.
+- Owned boar/wolf victories support one local extraction within 30 minutes, preserving
+  ordinary loot and using persisted hunting access/XP.
+- Guild workshops expose four recipes across persisted alchemy, cooking and medium
+  armor progression. Inputs come from the same road; outputs are potions, food and a
+  usable medium chest. Shops expose material sales and Elmor starter supplies.
+- Economic actions validate current authority and commit item/resource/XP/objective
+  changes with receipts. Consumable ownership and battle projection persistence are
+  checked; travel and discovery commit together. Persisted victory duplicate protection
+  remains unchanged, including its known partial-reward failure boundary.
+- Full localized ordinary-character integration and transaction/upgrade tests are in
+  `tests/test_playable_alpha_v1.py` and `tests/test_alpha_transactions_v1.py`.
+- See [shipped scope, migration, acceptance and limits](PLAYABLE_ALPHA_VERTICAL_SLICE_V1.md).
+
+## Confirmed merged baseline
+
 Last updated after merge:
 - PR: PR228 / Gathering Profession Progression Baseline
 - PR: PR227 / Gathering Profession Persistence & Runtime Access Baseline

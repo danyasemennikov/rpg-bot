@@ -128,7 +128,10 @@ def test_contract_progress_claim_e2e_all_alpha_ready_routes():
                 strength, agility, intuition, vitality, wisdom, luck, stat_points, location_id, in_battle, lang)
                 VALUES (?, ?, ?, 10, 0, 100, 100, 50, 50, 0, 5,5,5,5,5,5,0, ?, 0, 'en')""", (player_id, f'p{idx}', f'P{idx}', board_location))
             conn.commit(); conn.close()
-            contract = next(c for c in list_route_hunt_contracts(route_id) if not c.required_hunter_rank)
+            # This smoke covers independent hunt contracts. The chapter has its own
+            # full ordinary-character journey, including prerequisites/non-kill goals.
+            contract = next(c for c in list_route_hunt_contracts(route_id)
+                            if not c.required_hunter_rank and not c.chapter_order)
             ok, reason = accept_hunt_contract(player_id=player_id, location_id=board_location, contract_key=contract.contract_key)
             assert (ok, reason) == (True, 'accepted')
             for _ in range(contract.required_kills):

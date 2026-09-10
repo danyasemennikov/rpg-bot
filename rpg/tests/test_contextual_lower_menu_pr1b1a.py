@@ -1,3 +1,4 @@
+from game.gear_instances import grant_item_to_player
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -106,7 +107,7 @@ class LocationInlineRenderingTests(unittest.TestCase):
             patch('handlers.location.get_pending_location_encounters', return_value=[]),
             patch('handlers.location.list_location_available_spawn_instances', return_value=[]),
             patch('handlers.location.list_location_active_pve_encounters', return_value=[]),
-            patch('handlers.location.build_location_gather_source_profiles', return_value=gather_profiles or []),
+            patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=gather_profiles or []),
             patch('handlers.location.get_item_name', return_value='Herb'),
             patch('handlers.location.build_hunt_contract_progress_line', return_value=None),
         ):
@@ -215,13 +216,13 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stale_lower_gather_text_replies_and_does_not_fall_through(self):
         update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
             effective_user=SimpleNamespace(id=1),
         )
         context = SimpleNamespace()
         with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city'}), \
-             patch('handlers.location.build_location_gather_source_profiles', return_value=[]), \
-             patch('handlers.location.grant_item_to_player') as grant_mock:
+             patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=[]), \
+             patch('game.gathering_runtime.grant_item_to_player', wraps=grant_item_to_player) as grant_mock:
             handled = await handle_lower_menu_gather_text(update, context)
         self.assertTrue(handled)
         grant_mock.assert_not_called()
@@ -229,7 +230,7 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_valid_lower_gather_button_grants_profession_filtered_resource(self):
         update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
             effective_user=SimpleNamespace(id=1),
         )
         context = SimpleNamespace()
@@ -237,9 +238,9 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
             item_id='herb_common', profession_key='herbalism', chance=1.0, zone_tier_band=1,
         )]
         with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10}), \
-             patch('handlers.location.build_location_gather_source_profiles', return_value=profiles), \
+             patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=profiles), \
              patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=profiles), \
-             patch('handlers.location.grant_item_to_player') as grant_mock, \
+             patch('game.gathering_runtime.grant_item_to_player', wraps=grant_item_to_player) as grant_mock, \
              patch('handlers.location.random.random', return_value=0.2):
             handled = await handle_lower_menu_gather_text(update, context)
         self.assertTrue(handled)
@@ -247,16 +248,16 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_valid_lower_gather_button_fail_roll_replies_and_does_not_grant(self):
         update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
             effective_user=SimpleNamespace(id=1),
         )
         context = SimpleNamespace()
         profiles = [SimpleNamespace(item_id='herb_common', profession_key='herbalism', chance=0.1)]
         with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10, 'in_battle': 0}), \
-             patch('handlers.location.build_location_gather_source_profiles', return_value=profiles), \
+             patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=profiles), \
              patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=profiles), \
              patch('handlers.location.is_in_battle', return_value=False), \
-             patch('handlers.location.grant_item_to_player') as grant_mock, \
+             patch('game.gathering_runtime.grant_item_to_player', wraps=grant_item_to_player) as grant_mock, \
              patch('handlers.location.random.random', return_value=0.99):
             handled = await handle_lower_menu_gather_text(update, context)
         self.assertTrue(handled)
@@ -266,7 +267,7 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
     async def test_lower_gather_recognized_without_character_stops_fallthrough(self):
         from bot import handle_text
         update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
             effective_user=SimpleNamespace(id=1),
         )
         context = SimpleNamespace()
@@ -278,13 +279,13 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_gather_blocked_while_in_battle(self):
         update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
             effective_user=SimpleNamespace(id=1),
         )
         context = SimpleNamespace()
         with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10, 'in_battle': 1}), \
              patch('handlers.location.has_active_live_pvp_engagement', return_value=False), \
-             patch('handlers.location.grant_item_to_player') as grant_mock:
+             patch('game.gathering_runtime.grant_item_to_player', wraps=grant_item_to_player) as grant_mock:
             handled = await handle_lower_menu_gather_text(update, context)
         self.assertTrue(handled)
         grant_mock.assert_not_called()
@@ -292,13 +293,13 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_gather_blocked_in_pending_prep_live_pvp_context(self):
         update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', reply_text=AsyncMock()),
+            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
             effective_user=SimpleNamespace(id=1),
         )
         context = SimpleNamespace()
         with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10, 'in_battle': 0}), \
              patch('handlers.location.has_active_live_pvp_engagement', return_value=True), \
-             patch('handlers.location.grant_item_to_player') as grant_mock:
+             patch('game.gathering_runtime.grant_item_to_player', wraps=grant_item_to_player) as grant_mock:
             handled = await handle_lower_menu_gather_text(update, context)
         self.assertTrue(handled)
         grant_mock.assert_not_called()
@@ -372,7 +373,6 @@ class LowerMenuRefreshTests(unittest.IsolatedAsyncioTestCase):
              patch('handlers.location.is_pvp_mobility_blocked', return_value=False), \
              patch('handlers.location.asyncio.sleep', new=AsyncMock()), \
              patch('handlers.location.get_location', return_value={'id': 'westwild_n1', 'safe': True}), \
-             patch('handlers.location.get_connection', return_value=conn), \
              patch('handlers.location.ensure_player_location_discovered'), \
              patch('handlers.location.clear_respawn_protection_on_dangerous_reentry'), \
              patch('handlers.location._build_location_message_with_snapshot', return_value=('arrived text', Mock())):

@@ -111,6 +111,7 @@ CRAFTING_PROFESSION_CONTRACTS: dict[CraftingProfessionKey, CraftingProfessionCon
 
 
 EXPLICIT_CRAFT_IDENTITY_BY_ITEM_ID: dict[str, dict] = {
+    'wood_common': {'bulk_resource_group': 'wood', 'default_professions': ('medium_armor', 'blacksmith', 'arcane_engineer')},
     # Gather-derived bulk materials
     'iron_ore': {'bulk_resource_group': 'ore', 'default_professions': ('heavy_armor', 'blacksmith')},
     'coal': {'bulk_resource_group': 'fuel', 'default_professions': ('heavy_armor', 'blacksmith', 'cooking')},

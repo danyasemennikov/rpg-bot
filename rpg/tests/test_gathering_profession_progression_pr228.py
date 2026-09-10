@@ -1,3 +1,5 @@
+from itertools import count
+_message_ids = count(1)
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -62,7 +64,7 @@ def _profession(profession_key):
 
 
 async def _gather(profession_key, roll=0.0):
-    message = SimpleNamespace(text='Gather', reply_text=AsyncMock())
+    message = SimpleNamespace(text='Gather', message_id=next(_message_ids), reply_text=AsyncMock())
     update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
     with (
         patch('handlers.location.looks_like_lower_gather_button', return_value=True),
@@ -167,7 +169,7 @@ def test_success_can_level_profession_and_emits_level_up_feedback():
 
 def test_denied_dark_wood_grants_neither_item_nor_xp_and_does_not_reroll():
     _create_player(location_id='westwild_n6')
-    with patch('handlers.location.grant_item_to_player') as grant_mock:
+    with patch('game.gathering_runtime.grant_item_to_player') as grant_mock:
         _, message = asyncio.run(_gather('woodcutting'))
     grant_mock.assert_not_called()
     assert _profession('woodcutting')['exp'] == 0
@@ -190,7 +192,7 @@ def test_failed_roll_and_item_grant_failure_do_not_award_xp():
     asyncio.run(_gather('woodcutting', roll=0.99))
     assert _profession('woodcutting')['exp'] == 0
 
-    with patch('handlers.location.grant_item_to_player', side_effect=RuntimeError('grant failed')):
+    with patch('game.gathering_runtime.grant_item_to_player', side_effect=RuntimeError('grant failed')):
         with pytest.raises(RuntimeError, match='grant failed'):
             asyncio.run(_gather('woodcutting'))
     assert _profession('woodcutting')['exp'] == 0

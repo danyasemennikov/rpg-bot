@@ -30,6 +30,7 @@ from handlers.battle   import handle_battle_buttons
 from handlers.inventory import inventory_command, handle_inventory_buttons, handle_transfer_input
 from handlers.skills_ui import skills_command, handle_skills_buttons
 from handlers.settings import settings_command, handle_settings_buttons
+from handlers.chapter import journal_command, handle_chapter_buttons
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 LOCATION_CALLBACK_PATTERN = r'^(goto_|map_route_|noop|shop$|shop_back$|shop_buy_|quest_board|inn|craftsmen_|pvp_|pve_)'
@@ -102,8 +103,15 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         logger.error("Full traceback:\n%s", tb_text)
 
-def main():
+def initialize_runtime():
+    """Every production start upgrades schema and reconciles the static catalog."""
     init_db()
+    from game.seed import seed_items
+    seed_items()
+
+
+def main():
+    initialize_runtime()
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -132,6 +140,7 @@ def main():
     app.add_handler(CommandHandler('inventory', inventory_command))
     app.add_handler(CommandHandler('skills', skills_command))
     app.add_handler(CommandHandler('settings', settings_command))
+    app.add_handler(CommandHandler('journal', journal_command))
 
     # Колбэки
     app.add_handler(CallbackQueryHandler(handle_stat_buttons,     pattern='^stat_'))
@@ -142,6 +151,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_inventory_buttons, pattern='^inv_'))
     app.add_handler(CallbackQueryHandler(handle_skills_buttons, pattern='^sk_'))
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
+    app.add_handler(CallbackQueryHandler(handle_chapter_buttons, pattern='^alpha_'))
 
     app.add_handler(MessageHandler(filters.COMMAND & filters.Regex(UNDERSCORE_NAV_COMMAND_PATTERN), handle_underscore_navigation_command))
 
@@ -154,6 +164,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🎒"), inventory_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🔮"), skills_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^⚙️"), settings_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📖"), journal_command))
    # app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋"), quests_command))  # когда будет готов
    
    # Текстовый роутер — всегда последним!

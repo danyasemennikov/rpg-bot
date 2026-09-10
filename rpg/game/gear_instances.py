@@ -571,10 +571,40 @@ def clear_slot_ownership_across_models(telegram_id: int, slot: str):
         conn.close()
 
 
-def equip_gear_instance_in_slot(telegram_id: int, instance_id: int, slot: str):
+def equip_gear_instance_in_slot(telegram_id: int, instance_id: int, slot: str, *, conn=None):
     _validate_slot_name(slot)
-    clear_slot_ownership_across_models(telegram_id, slot)
-    set_gear_instance_equipped_slot(telegram_id, instance_id, slot)
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
+    try:
+        if owns_connection:
+            conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute('SELECT base_item_id FROM gear_instances WHERE id=? AND telegram_id=?',
+                           (instance_id, telegram_id)).fetchone()
+        if not row:
+            raise ValueError('gear_not_owned')
+        identity = _resolve_instance_slot_identity(row['base_item_id'])
+        if identity != slot and not (identity == 'ring' and slot in {'ring1', 'ring2'}):
+            raise ValueError('wrong_equipment_slot')
+        item = get_item(row['base_item_id'])
+        player = conn.execute('SELECT * FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
+        for stat in ('level', 'strength', 'agility', 'intuition', 'wisdom'):
+            if player[stat] < item.get(f'req_{stat}', 0):
+                raise ValueError('equipment_requirements')
+        conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (telegram_id,))
+        conn.execute('UPDATE gear_instances SET equipped_slot=NULL WHERE telegram_id=? AND equipped_slot=?',
+                     (telegram_id, slot))
+        conn.execute('UPDATE gear_instances SET equipped_slot=? WHERE telegram_id=? AND id=?',
+                     (slot, telegram_id, instance_id))
+        if owns_connection:
+            conn.commit()
+    except Exception:
+        if owns_connection:
+            conn.rollback()
+        raise
+    finally:
+        if owns_connection:
+            conn.close()
 
 
 def equip_legacy_inventory_in_slot(telegram_id: int, inventory_id: int, slot: str):

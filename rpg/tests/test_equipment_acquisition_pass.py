@@ -136,12 +136,16 @@ class EquipmentAcquisitionPassTests(unittest.TestCase):
         self.assertEqual(result['reason'], 'level_required')
 
     def test_outpost_shop_purchase_respects_level_and_gold_rules(self):
+        conn = get_connection()
+        conn.execute("UPDATE players SET location_id='frontier_outpost', level=6 WHERE telegram_id=9001")
+        conn.commit()
+        conn.close()
         low_level = try_buy_curated_shop_item(9001, 'frontier_outpost', 6, 'warden_kite_shield')
         self.assertFalse(low_level['ok'])
         self.assertEqual(low_level['reason'], 'level_required')
 
         conn = get_connection()
-        conn.execute('UPDATE players SET gold=300 WHERE telegram_id=?', (9001,))
+        conn.execute('UPDATE players SET gold=300, level=7 WHERE telegram_id=?', (9001,))
         conn.commit()
         conn.close()
         not_enough_gold = try_buy_curated_shop_item(9001, 'frontier_outpost', 7, 'warden_kite_shield')

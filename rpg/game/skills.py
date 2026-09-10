@@ -2341,6 +2341,9 @@ def get_skill(skill_id: str) -> dict:
     return SKILLS.get(skill_id)
 
 LEGACY_WEAPON_FAMILY_MAP = {
+    'practice_sword': 'sword_1h',
+    'practice_bow': 'bow',
+    'practice_staff': 'magic_staff',
     'wooden_sword': 'sword_1h',
     'iron_sword': 'sword_1h',
     'dagger': 'daggers',

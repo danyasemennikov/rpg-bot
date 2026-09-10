@@ -404,6 +404,35 @@ ITEM_REWARD_TAGS.update({
     'toxic_herb': {'reward_family': 'gathering_material', 'material_subtype': 'herb'},
 })
 
+# Comparable practice weapons expose existing families without stat/class locks.
+for _starter_id, _base_id, _name in (
+    ('practice_sword', 'wooden_sword', '🗡️ Учебный меч'),
+    ('practice_bow', 'short_bow', '🏹 Учебный лук'),
+    ('practice_staff', 'magic_staff', '🔮 Учебный посох'),
+):
+    ITEMS[_starter_id] = {
+        **ITEMS[_base_id], 'item_id': _starter_id, 'name': _name,
+        'description': 'Стартовое оружие снабженца Астера.', 'rarity': 'common',
+        'damage_min': 8, 'damage_max': 11, 'req_level': 1,
+        'req_strength': 0, 'req_agility': 0, 'req_intuition': 0, 'req_wisdom': 0,
+        'buy_price': 45, 'sell_price': 5, 'stat_bonus_json': '{}',
+    }
+ITEMS['trail_vest'] = {
+    **ITEMS['leather_armor'], 'item_id': 'trail_vest', 'name': '🧥 Походный жилет',
+    'description': 'Жилет из местных шкур, сшитый в мастерской Элмора.',
+    'slot_identity': 'chest', 'armor_class': 'medium', 'rarity': 'common',
+    'defense': 6, 'req_level': 1, 'req_strength': 0, 'req_agility': 0,
+    'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0, 'sell_price': 12,
+    'stat_bonus_json': '{}',
+}
+ITEMS['field_ration'] = {
+    **ITEMS['health_potion_small'], 'item_id': 'field_ration', 'name': '🍖 Походный паёк',
+    'description': 'Приготовленное мясо с травами. Восстанавливает 40 HP.',
+    'buy_price': 0, 'sell_price': 5, 'stat_bonus_json': '{"heal": 40}',
+    'consumable_family': 'food',
+}
+
+
 def get_item(item_id: str) -> dict:
     return ITEMS.get(item_id)
 

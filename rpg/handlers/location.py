@@ -10,9 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from database import (
-    add_gathering_profession_exp,
     ensure_player_location_discovered,
-    get_gathering_profession_level,
     get_player,
     get_connection,
     is_in_battle,
@@ -28,8 +26,7 @@ from game.contextual_keyboard import (
     resolve_lower_gather_profession_button,
     resolve_lower_service_button,
 )
-from game.gathering_foundation import build_location_gather_source_profiles, resolve_gather_access_decision
-from game.gathering_progression import gathering_profession_xp_for_success
+from game.gathering_foundation import build_location_gather_source_profiles
 from game.resource_handbook import HANDBOOK_PROFESSIONS, build_resource_handbook_index
 from game.mobs import get_mob
 from game.gear_instances import grant_item_to_player
@@ -106,6 +103,11 @@ CURATED_EQUIPMENT_VENDOR_STOCK = {
         {'item_id': 'mana_potion', 'level_min': 1},
     ],
     'hub_westwild': [
+        {'item_id': 'health_potion_small', 'level_min': 1},
+        {'item_id': 'mana_potion', 'level_min': 1},
+        {'item_id': 'practice_sword', 'level_min': 1},
+        {'item_id': 'practice_bow', 'level_min': 1},
+        {'item_id': 'practice_staff', 'level_min': 1},
 
         {'item_id': 'oak_guard_shield', 'level_min': 4},
         {'item_id': 'apprentice_focus_orb', 'level_min': 3},
@@ -517,7 +519,8 @@ def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
     return available
 
 
-def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: int, item_id: str) -> dict:
+def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: int, item_id: str,
+                             *, action_token: str | None = None) -> dict:
     """Покупка предмета из витрины магазина. Возвращает статус операции."""
     stock_by_id = {
         row['item_id']: row
@@ -532,35 +535,33 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
         return {'ok': False, 'reason': 'not_available'}
 
     level_min = stock_row.get('level_min', item.get('req_level', 1))
-    if player_level < level_min:
-        return {'ok': False, 'reason': 'level_required', 'required_level': level_min}
-
     price = item.get('buy_price', 0)
     conn = get_connection()
-    player_row = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
-    if not player_row:
+    from game.action_receipts import peaceful_player, consume_action, require_item_delivery, ActionRejected
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        player = peaceful_player(conn, telegram_id, service='shop', location_id=location_id)
+        if action_token is not None:
+            consume_action(conn, telegram_id, 'shop_buy', action_token, payload=item_id)
+        if player['level'] < level_min:
+            return {'ok': False, 'reason': 'level_required', 'required_level': level_min}
+        if price <= 0:
+            return {'ok': False, 'reason': 'not_available'}
+        if player['gold'] < price:
+            return {'ok': False, 'reason': 'not_enough_gold', 'price': price}
+        conn.execute('UPDATE players SET gold=gold-? WHERE telegram_id=?', (price, telegram_id))
+        require_item_delivery(grant_item_to_player(telegram_id, item_id, quantity=1, source='shop',
+                              source_level=max(player['level'], level_min), conn=conn), 1)
+        conn.commit()
+        return {'ok': True, 'price': price}
+    except ActionRejected as exc:
+        conn.rollback()
+        return {'ok': False, 'reason': str(exc)}
+    except Exception:
+        conn.rollback()
+        return {'ok': False, 'reason': 'delivery_failed'}
+    finally:
         conn.close()
-        return {'ok': False, 'reason': 'not_available'}
-
-    if player_row['gold'] < price:
-        conn.close()
-        return {'ok': False, 'reason': 'not_enough_gold', 'price': price}
-
-    conn.execute(
-        'UPDATE players SET gold=gold-? WHERE telegram_id=?',
-        (price, telegram_id),
-    )
-    conn.commit()
-    conn.close()
-
-    grant_item_to_player(
-        telegram_id,
-        item_id,
-        quantity=1,
-        source='shop',
-        source_level=max(player_level, level_min),
-    )
-    return {'ok': True, 'price': price}
 
 
 def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
@@ -570,6 +571,8 @@ def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboar
     text = t('location.shop_title_named', lang, place=location_name) + '\n\n'
     keyboard = []
 
+    from game.action_receipts import issue_actions
+    tokens = issue_actions(player['telegram_id'], 'shop_buy', [row['item_id'] for row in stock_rows])
     if not stock_rows:
         text += t('location.shop_empty', lang)
     else:
@@ -587,12 +590,13 @@ def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboar
                 level=req_level,
                 price=price,
             ) + '\n'
-            if player['level'] >= req_level:
+            if player['level'] >= req_level and stock_row['item_id'] in tokens:
                 keyboard.append([InlineKeyboardButton(
                     t('location.shop_buy_btn', lang, name=item_name, price=price),
-                    callback_data=f"shop_buy_{stock_row['item_id']}",
+                    callback_data=f"shop_buy_{stock_row['item_id']}|{tokens[stock_row['item_id']]}",
                 )])
 
+    keyboard.append([InlineKeyboardButton(t('chapter.sell', lang), callback_data='alpha_sell')])
     keyboard.append([InlineKeyboardButton(t('location.shop_back_btn', lang), callback_data='shop_back')])
     return text, InlineKeyboardMarkup(keyboard)
 
@@ -638,7 +642,8 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
     if active_contract:
         progress = int(state.get('progress_kills', 0) or 0)
         required = int(active_contract.required_kills)
-        can_claim_on_this_board = location_id in active_contract.board_locations
+        can_claim_on_this_board = resolve_location_id(location_id) in {
+            resolve_location_id(key) for key in (active_contract.claim_locations or active_contract.board_locations)}
         status_key = 'location.quest_board_status_ready' if state.get('status') == 'completed' else 'location.quest_board_status_active'
         text += '\n' + t(
             'location.quest_board_active_row',
@@ -649,15 +654,20 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
             status=t(status_key, lang),
         ) + '\n'
         text += t('location.quest_board_active_target', lang, target=build_contract_row(active_contract, lang)) + '\n'
+        if active_contract.chapter_order:
+            from game.quest_board import build_objective_lines
+            text += '\n'.join(build_objective_lines(state, lang)) + '\n'
         text += t(
             'location.quest_board_active_claim_boards',
             lang,
             boards=build_contract_board_locations_line(active_contract, lang),
         ) + '\n'
         if state.get('status') == 'completed' and can_claim_on_this_board:
+            from game.action_receipts import issue_actions
+            token = issue_actions(player['telegram_id'], 'contract_claim', [active_contract.contract_key])[active_contract.contract_key]
             keyboard.append([InlineKeyboardButton(
                 t('location.quest_board_claim_btn', lang),
-                callback_data='quest_board_claim',
+                callback_data=f'quest_board_claim_{token}',
             )])
         elif state.get('status') == 'completed':
             text += t(
@@ -666,9 +676,11 @@ def build_quest_board_message(player: dict, location: dict) -> tuple[str, Inline
                 boards=build_contract_board_locations_line(active_contract, lang),
             ) + '\n'
         else:
+            from game.action_receipts import issue_actions
+            token = issue_actions(player['telegram_id'], 'contract_abandon', [active_contract.contract_key])[active_contract.contract_key]
             keyboard.append([InlineKeyboardButton(
                 t('location.quest_board_abandon_btn', lang),
-                callback_data='quest_board_abandon',
+                callback_data=f'quest_board_abandon_{token}',
             )])
     else:
         text += '\n' + t('location.quest_board_no_active', lang) + '\n'
@@ -1246,67 +1258,31 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
         await update.message.reply_text(t('location.lower_gather_stale', lang))
         return True
 
-    profiles = [
-        profile for profile in build_location_gather_source_profiles(resolve_location_id(str(player.get('location_id') or '')))
-        if profile.profession_key == profession
-    ]
-    if not profiles:
-        await update.message.reply_text(t('location.lower_gather_stale', lang))
+    from game.gathering_runtime import gather_resource
+    message_id = getattr(update.message, 'message_id', None)
+    if message_id is None:
+        await update.message.reply_text(t('chapter.stale_action', lang))
         return True
-
-    roll = random.random()
-    cumulative = 0.0
-    picked = None
-    for profile in profiles:
-        cumulative += max(0.0, float(profile.chance))
-        if roll < cumulative:
-            picked = profile
-            break
-
-    if not picked:
+    result = gather_resource(int(player['telegram_id']), profession,
+                             location_id=player['location_id'],
+                             request_id=f"gather:{getattr(update.message, 'chat_id', player['telegram_id'])}:{message_id}")
+    status = result['status']
+    if status == 'empty':
         await update.message.reply_text(t('location.gather_fail', lang))
         return True
-
-    profession_level = get_gathering_profession_level(
-        int(player['telegram_id']), picked.profession_key,
-    )
-    access = resolve_gather_access_decision(
-        item_id=picked.item_id,
-        player_profession_level=profession_level or 1,
-        zone_tier_band=picked.zone_tier_band,
-    )
-    if access is None or not access.is_allowed:
-        if access is not None and not access.level_allowed:
-            await update.message.reply_text(t(
-                'location.gather_profession_level_required',
-                lang,
-                current_level=access.player_profession_level,
-                required_level=access.required_profession_level,
-            ))
+    if status == 'denied':
+        access = result.get('access')
+        if access and not access.level_allowed:
+            await update.message.reply_text(t('location.gather_profession_level_required', lang,
+                current_level=access.player_profession_level, required_level=access.required_profession_level))
         else:
             await update.message.reply_text(t('location.gather_zone_denied', lang))
         return True
-
-    grant_result = grant_item_to_player(
-        int(player['telegram_id']),
-        picked.item_id,
-        quantity=1,
-        source='gathering',
-        source_level=max(1, int(player.get('level', 1) or 1)),
-    )
-    if isinstance(grant_result, dict) and not any(int(value) > 0 for value in grant_result.values()):
+    if status != 'gathered':
+        await update.message.reply_text(t(f'chapter.{status}', lang))
         return True
-
-    xp_awarded = gathering_profession_xp_for_success(
-        current_profession_level=access.player_profession_level,
-        required_profession_level=access.required_profession_level,
-    )
-    progression = add_gathering_profession_exp(
-        int(player['telegram_id']),
-        access.profession_key,
-        xp_awarded,
-    )
-    success_text = t('location.gather_success', lang, item=get_item_name(picked.item_id, lang))
+    progression = result['progression']
+    success_text = t('location.gather_success', lang, item=get_item_name(result['item_id'], lang))
     if progression.at_cap:
         progress_text = t(
             'location.gather_progress_cap',
@@ -1413,6 +1389,7 @@ def build_craftsmen_guild_message(player: dict, location: dict) -> tuple[str, In
     text = t('location.craftsmen_guild_title', lang, place=get_location_name(str(location.get('id') or ''), lang))
     text += '\n' + t('location.craftsmen_guild_body', lang)
     keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t('chapter.workshop', lang), callback_data='alpha_workshop')],
         [InlineKeyboardButton(t('location.craftsmen_handbook_btn', lang), callback_data='craftsmen_handbook')],
         [InlineKeyboardButton(t('location.craftsmen_back_to_location_btn', lang), callback_data='craftsmen_back_to_location')],
     ])
@@ -1464,7 +1441,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t('common.no_character', lang), show_alert=True)
             return
         route_key = data.replace('map_route_', '', 1)
-        text = _build_route_map_text(route_key, p.get('location_id'), lang)
+        text = _build_route_map_text(route_key, p['location_id'], lang)
         try:
             await query.edit_message_text(text, reply_markup=_build_map_route_keyboard(lang), parse_mode='HTML')
         except BadRequest as exc:
@@ -1922,7 +1899,10 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
-    if data == 'quest_board_claim':
+    if data == 'quest_board_claim' or data.startswith('quest_board_claim_'):
+        if data == 'quest_board_claim':
+            await query.answer(t('chapter.stale_action', lang), show_alert=True)
+            return
         location = get_location(p['location_id'])
         if not location:
             await query.answer(t('location.not_found', lang), show_alert=True)
@@ -1933,6 +1913,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
 
         ok, reason, reward_result = claim_completed_hunt_contract(
             player_id=int(user.id),
+            action_token=data.removeprefix('quest_board_claim_'),
             location_id=str(location['id']),
         )
         if not ok:
@@ -1979,7 +1960,10 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
-    if data == 'quest_board_abandon':
+    if data == 'quest_board_abandon' or data.startswith('quest_board_abandon_'):
+        if data == 'quest_board_abandon':
+            await query.answer(t('chapter.stale_action', lang), show_alert=True)
+            return
         location = get_location(p['location_id'])
         if not location:
             await query.answer(t('location.not_found', lang), show_alert=True)
@@ -1988,7 +1972,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
             return
 
-        ok, reason = abandon_hunt_contract(player_id=int(user.id))
+        ok, reason = abandon_hunt_contract(player_id=int(user.id), action_token=data.removeprefix('quest_board_abandon_'))
         if not ok:
             key_by_reason = {
                 'no_contract': 'location.quest_board_abandon_no_active',
@@ -2032,7 +2016,11 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         return
 
     if data.startswith('shop_buy_'):
-        item_id = data.replace('shop_buy_', '', 1)
+        raw = data.replace('shop_buy_', '', 1)
+        if '|' not in raw:
+            await query.answer(t('chapter.stale_action', lang), show_alert=True)
+            return
+        item_id, action_token = raw.split('|', 1)
         location = get_location(p['location_id'])
         if not location:
             await query.answer(t('location.not_found', lang), show_alert=True)
@@ -2046,6 +2034,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             location_id=location['id'],
             player_level=p['level'],
             item_id=item_id,
+            action_token=action_token,
         )
         if not result['ok']:
             if result['reason'] == 'level_required':
@@ -2106,18 +2095,31 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
 
         await asyncio.sleep(travel_seconds)
 
-        if is_pvp_mobility_blocked(int(user.id)):
+        if is_pvp_mobility_blocked(int(user.id)) or is_in_battle(user.id):
             await query.edit_message_text(t('location.pvp_mobility_block', lang), parse_mode='HTML')
             return
 
         conn = get_connection()
-        conn.execute(
-            'UPDATE players SET location_id=? WHERE telegram_id=?',
-            (canonical_new_loc_id, user.id)
-        )
-        conn.commit()
-        conn.close()
-        ensure_player_location_discovered(user.id, canonical_new_loc_id)
+        from game.action_receipts import peaceful_player, ActionRejected
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            peaceful_player(conn, user.id, location_id=current_location_id)
+            changed = conn.execute('''UPDATE players SET location_id=?, travel_revision=travel_revision+1
+                WHERE telegram_id=? AND location_id=? AND in_battle=0 AND travel_revision=?''',
+                (canonical_new_loc_id, user.id, current_location_id, dict(p).get('travel_revision', 0)))
+            if not changed.rowcount:
+                raise ActionRejected('stale_action')
+            ensure_player_location_discovered(user.id, canonical_new_loc_id, conn=conn)
+            conn.commit()
+        except ActionRejected:
+            conn.rollback()
+            await query.edit_message_text(t('chapter.stale_action', lang))
+            return
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
         clear_respawn_protection_on_dangerous_reentry(
             player_id=int(user.id),
             location_id=canonical_new_loc_id,

@@ -3,6 +3,8 @@
 # ============================================================
 
 import os, sys
+from html import escape
+import sqlite3
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -41,41 +43,20 @@ def build_stats_keyboard(stats: dict, points_left: int, lang: str = 'ru') -> Inl
 
     if points_left == 0:
         keyboard.append([InlineKeyboardButton(
-            '✅ ' + ('Начать игру!' if lang == 'ru' else 'Start game!' if lang == 'en' else '¡Comenzar!'),
+            t('chapter.registration_start', lang),
             callback_data='stat_confirm'
         )])
     else:
         keyboard.append([InlineKeyboardButton(
-            f"{'Осталось' if lang == 'ru' else 'Points left' if lang == 'en' else 'Puntos'}: {points_left}",
+            t('chapter.registration_points', lang, points=points_left),
             callback_data='stat_noop'
         )])
 
     return InlineKeyboardMarkup(keyboard)
 
 def stats_text(stats: dict, points_left: int, lang: str = 'ru') -> str:
-    hp   = calc_max_hp(stats['vitality'])
-    mana = calc_max_mana(stats['wisdom'])
-    if lang == 'ru':
-        return (
-            f"⚔️ <b>Распредели стартовые очки</b>\n\n"
-            f"Очков осталось: <b>{points_left}</b>\n\n"
-            f"❤️ HP: <b>{hp}</b>  |  🔵 Мана: <b>{mana}</b>\n\n"
-            f"Нажимай ➕ и ➖ чтобы распределить статы."
-        )
-    elif lang == 'en':
-        return (
-            f"⚔️ <b>Distribute starting points</b>\n\n"
-            f"Points left: <b>{points_left}</b>\n\n"
-            f"❤️ HP: <b>{hp}</b>  |  🔵 Mana: <b>{mana}</b>\n\n"
-            f"Press ➕ and ➖ to distribute stats."
-        )
-    else:
-        return (
-            f"⚔️ <b>Distribuye los puntos iniciales</b>\n\n"
-            f"Puntos restantes: <b>{points_left}</b>\n\n"
-            f"❤️ HP: <b>{hp}</b>  |  🔵 Maná: <b>{mana}</b>\n\n"
-            f"Presiona ➕ y ➖ para distribuir estadísticas."
-        )
+    return t('chapter.registration_stats', lang, points=points_left,
+             hp=calc_max_hp(stats['vitality']), mana=calc_max_mana(stats['wisdom']))
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -99,7 +80,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             t('start.welcome', lang) if False else (
                 f"👋 {'С возвращением' if lang == 'ru' else 'Welcome back' if lang == 'en' else 'Bienvenido de nuevo'}, "
-                f"<b>{player['name']}</b>!\n\n"
+                f"<b>{escape(player['name'])}</b>!\n\n"
                 f"❤️ HP: {player['hp']}/{player['max_hp']}  "
                 f"🔵 {t('common.mana', lang)}: {player['mana']}/{player['max_mana']}\n"
                 f"⭐ {t('common.level', lang)}: {player['level']}  |  "
@@ -108,10 +89,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{t('start.alpha_next_steps_title', lang)}\n• " + "\n• ".join(next_steps[:3])
             ),
             parse_mode='HTML',
-            reply_markup=main_keyboard()
+            reply_markup=main_keyboard(lang)
         )
         return
 
+    language_code = (getattr(user, 'language_code', '') or '').split('-')[0]
+    if language_code in ('ru', 'en', 'es'):
+        lang = language_code
     context.user_data['registering'] = True
     context.user_data['reg_lang']    = lang
     await update.message.reply_text(
@@ -145,7 +129,7 @@ async def handle_name_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     joke = (
         f"⚔️ {'Как-как' if lang == 'ru' else 'Wait what' if lang == 'en' else 'Espera'}, "
-        f"<b>{name}</b>{'... серьёзно? Ну ладно' if lang == 'ru' else '... seriously? Okay then' if lang == 'en' else '... ¿en serio? Bueno'}.\n\n"
+        f"<b>{escape(name)}</b>{'... серьёзно? Ну ладно' if lang == 'ru' else '... seriously? Okay then' if lang == 'en' else '... ¿en serio? Bueno'}.\n\n"
     )
     await update.message.reply_text(
         joke + stats_text(stats, points, lang),
@@ -166,25 +150,44 @@ async def handle_stat_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data == 'stat_noop':
         return
 
+    if player_exists(query.from_user.id):
+        from handlers.chapter import build_journal
+        text, keyboard = build_journal(dict(get_player(query.from_user.id)))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
     if not stats:
         await query.edit_message_text(t('common.error', lang))
         return
 
     if data.startswith('stat_plus_'):
         key = data.replace('stat_plus_', '')
+        if key not in stats:
+            return
         if points > 0:
             stats[key] += 1
             context.user_data['reg_points'] -= 1
 
     elif data.startswith('stat_minus_'):
         key = data.replace('stat_minus_', '')
+        if key not in stats:
+            return
         if stats[key] > 1:
             stats[key] -= 1
             context.user_data['reg_points'] += 1
 
     elif data == 'stat_confirm':
         user = query.from_user
-        create_player(user.id, user.username or '', name, stats)
+        if points != 0 or set(stats) != {'strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck'} or any(
+            type(value) is not int or value < 1 for value in stats.values()
+        ) or sum(stats.values()) != 12 or not name:
+            await query.edit_message_text(t('chapter.registration_invalid', lang))
+            return
+        try:
+            create_player(user.id, user.username or '', name, stats, lang=lang)
+        except sqlite3.IntegrityError:
+            if not player_exists(user.id):
+                raise
 
         hp   = calc_max_hp(stats['vitality'])
         mana = calc_max_mana(stats['wisdom'])
@@ -199,14 +202,17 @@ async def handle_stat_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         await context.bot.send_message(
             chat_id=user.id,
             text=t('start.distribute', lang, name=name) + "\n\n" + t('start.alpha_intro', lang),
-            reply_markup=main_keyboard()
+            reply_markup=main_keyboard(lang)
         )
+        from handlers.chapter import build_journal
+        text, keyboard = build_journal(dict(get_player(user.id)))
+        await context.bot.send_message(chat_id=user.id, text=text, reply_markup=keyboard, parse_mode='HTML')
         return
 
     points = context.user_data['reg_points']
     joke   = (
         f"⚔️ {'Как-как' if lang == 'ru' else 'Wait what' if lang == 'en' else 'Espera'}, "
-        f"<b>{name}</b>{'... серьёзно? Ну ладно' if lang == 'ru' else '... seriously? Okay then' if lang == 'en' else '... ¿en serio? Bueno'}.\n\n"
+        f"<b>{escape(name)}</b>{'... серьёзно? Ну ладно' if lang == 'ru' else '... seriously? Okay then' if lang == 'en' else '... ¿en serio? Bueno'}.\n\n"
     )
     await query.edit_message_text(
         joke + stats_text(stats, points, lang),

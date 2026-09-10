@@ -96,7 +96,11 @@ def test_quest_board_listing_respects_route_local_and_canonical_aliases():
     assert set(legacy.keys()) == set(canonical.keys())
     westwild_local = collect_open_world_route_mob_ids('route_westwild')
     for contract in canonical.values():
-        assert contract.target_mob_id in westwild_local
+        if contract.required_kills:
+            assert contract.target_mob_id in westwild_local
+        else:
+            assert contract.chapter_order and contract.objectives
+            assert contract.target_mob_id == ''
 
 
 def test_quest_board_visible_contract_coverage_for_all_numeric_ready_routes():
@@ -148,7 +152,10 @@ def test_contract_accept_progress_claim_smoke_all_numeric_ready_routes():
             )
             conn.commit()
             conn.close()
-            contract = next(c for c in list_route_hunt_contracts(route_id) if not c.required_hunter_rank)
+            # This smoke covers independent hunt contracts. The chapter has its own
+            # full ordinary-character journey, including prerequisites/non-kill goals.
+            contract = next(c for c in list_route_hunt_contracts(route_id)
+                            if not c.required_hunter_rank and not c.chapter_order)
             ok, reason = accept_hunt_contract(player_id=player_id, location_id=board_location, contract_key=contract.contract_key)
             assert (ok, reason) == (True, 'accepted')
             for _ in range(contract.required_kills):

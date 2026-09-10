@@ -129,6 +129,8 @@ def _is_player_busy_with_live_pvp_conn(conn, *, player_id: int) -> bool:
         ''',
         (player_id, player_id, *ENGAGEMENT_BUSY_STATES),
     ).fetchone()
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='pvp_engagement_reinforcements'").fetchone():
+        return bool(row)
     reinforcement_row = conn.execute(
         '''
         SELECT pr.id
@@ -237,7 +239,9 @@ def can_create_live_engagement(*, attacker_id: int, defender_id: int) -> tuple[b
     return True, None
 
 
-def is_player_busy_with_live_pvp(player_id: int) -> bool:
+def is_player_busy_with_live_pvp(player_id: int, *, conn=None) -> bool:
+    if conn is not None:
+        return _is_player_busy_with_live_pvp_conn(conn, player_id=player_id)
     _ensure_reinforcement_table()
     conn = get_connection()
     is_busy = _is_player_busy_with_live_pvp_conn(conn, player_id=player_id)

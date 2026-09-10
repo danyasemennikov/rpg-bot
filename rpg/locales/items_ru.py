@@ -66,3 +66,6 @@ ITEM_NAMES = {
     'marsh_mushroom': '🍄 Болотные грибы',
     'toxic_herb': '☣️ Ядовитая трава',
 }
+
+
+ITEM_NAMES.update({'practice_sword': 'Учебный меч', 'practice_bow': 'Учебный лук', 'practice_staff': 'Учебный посох', 'trail_vest': 'Походный жилет', 'field_ration': 'Походный паёк'})
