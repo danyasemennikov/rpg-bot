@@ -90,6 +90,7 @@ def init_db():
     _add_column_if_missing(conn, 'players', 'infamy', "INTEGER DEFAULT 0")
     _add_column_if_missing(conn, 'players', 'novice_protection', "INTEGER DEFAULT 1")
     _add_column_if_missing(conn, 'players', 'pvp_respawn_protection_until', "INTEGER DEFAULT 0")
+    _add_column_if_missing(conn, 'players', 'gear_revision', 'INTEGER NOT NULL DEFAULT 0')
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS player_gathering_professions (
@@ -200,6 +201,9 @@ def init_db():
             durability            INTEGER DEFAULT 100,
             max_durability        INTEGER DEFAULT 100,
             equipped_slot         TEXT,
+            revision              INTEGER NOT NULL DEFAULT 0,
+            source_settlement_id  TEXT,
+            source_metadata_json  TEXT NOT NULL DEFAULT '{}',
             created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (telegram_id) REFERENCES players(telegram_id),
             FOREIGN KEY (base_item_id) REFERENCES items(item_id)
@@ -339,6 +343,8 @@ def init_db():
 
     from game.alpha_schema import ensure_alpha_schema
     ensure_alpha_schema(conn)
+    from game.gear_progression import ensure_gear_progression_schema
+    ensure_gear_progression_schema(conn)
     conn.commit()
     conn.close()
     print('✅ База данных создана!')

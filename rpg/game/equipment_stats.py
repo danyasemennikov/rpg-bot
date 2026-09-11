@@ -79,22 +79,27 @@ def _parse_item_stat_bonus(item: dict | None) -> dict[str, int]:
     return out
 
 
-def get_equipped_item_ids(telegram_id: int) -> dict[str, str]:
+def get_equipped_item_ids(telegram_id: int, *, conn=None) -> dict[str, str]:
     """Returns equipped item_id by slot, instance-first with legacy fallback."""
-    return resolve_equipped_item_ids_with_fallback(telegram_id)
+    return resolve_equipped_item_ids_with_fallback(telegram_id, conn=conn)
 
 
-def aggregate_equipped_stat_bonuses(telegram_id: int) -> dict[str, int]:
+def aggregate_equipped_stat_bonuses(telegram_id: int, *, conn=None) -> dict[str, int]:
     total: dict[str, int] = {}
 
-    equipped_instances = get_equipped_gear_instances(telegram_id)
+    equipped_instances = get_equipped_gear_instances(telegram_id, conn=conn)
     occupied_slots = set(equipped_instances.keys())
     for instance_row in equipped_instances.values():
         resolved = resolve_gear_instance_item_data(instance_row)
         for stat_key, stat_value in resolved.get('resolved_stat_bonus', {}).items():
             total[stat_key] = total.get(stat_key, 0) + _safe_int(stat_value, 0)
+        # Base defense is an active physical-defense contribution.  It remains
+        # separate from rolled/base physical_defense bonuses and is added once.
+        total['physical_defense'] = total.get('physical_defense', 0) + _safe_int(resolved.get('defense', 0), 0)
 
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
         legacy = conn.execute('SELECT * FROM equipment WHERE telegram_id=?', (telegram_id,)).fetchone()
         if not legacy:
@@ -115,8 +120,10 @@ def aggregate_equipped_stat_bonuses(telegram_id: int) -> dict[str, int]:
             item = get_item(inv_row['item_id'])
             for stat_key, stat_value in _parse_item_stat_bonus(item).items():
                 total[stat_key] = total.get(stat_key, 0) + stat_value
+            total['physical_defense'] = total.get('physical_defense', 0) + _safe_int((item or {}).get('defense', 0), 0)
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()
 
     return total
 
@@ -192,22 +199,24 @@ def build_effective_player_stats(player: Any, equipment_bonuses: dict[str, int])
     }
 
 
-def get_player_effective_stats(telegram_id: int, player: Any) -> dict[str, Any]:
+def get_player_effective_stats(telegram_id: int, player: Any, *, conn=None) -> dict[str, Any]:
     player = _normalize_player_record(player)
-    equipment_bonuses = aggregate_equipped_stat_bonuses(telegram_id)
+    equipment_bonuses = aggregate_equipped_stat_bonuses(telegram_id, conn=conn)
     effective = build_effective_player_stats(player, equipment_bonuses)
     effective['equipment_bonuses'] = equipment_bonuses
     effective['runtime_equipment_bonuses'] = build_runtime_equipment_bonus_channels(equipment_bonuses)
     return effective
 
 
-def clamp_player_resources_to_effective_caps(telegram_id: int, player: Any = None) -> dict[str, int | bool]:
+def clamp_player_resources_to_effective_caps(telegram_id: int, player: Any = None, *, conn=None) -> dict[str, int | bool]:
     """
     Clamps current HP/Mana against effective caps derived from currently equipped gear.
     Returns clamped values and whether an UPDATE was executed.
     """
     loaded_player = player
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
         if loaded_player is None:
             row = conn.execute(
@@ -220,7 +229,7 @@ def clamp_player_resources_to_effective_caps(telegram_id: int, player: Any = Non
             loaded_player = dict(row)
 
         loaded_player = _normalize_player_record(loaded_player)
-        effective = get_player_effective_stats(telegram_id, loaded_player)
+        effective = get_player_effective_stats(telegram_id, loaded_player, conn=conn)
         clamped_hp = min(_safe_int(loaded_player.get('hp', 0)), effective['max_hp'])
         clamped_mana = min(_safe_int(loaded_player.get('mana', 0)), effective['max_mana'])
         changed = (
@@ -232,7 +241,8 @@ def clamp_player_resources_to_effective_caps(telegram_id: int, player: Any = Non
                 'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
                 (clamped_hp, clamped_mana, telegram_id),
             )
-            conn.commit()
+            if owns_connection:
+                conn.commit()
 
         return {
             'changed': changed,
@@ -242,4 +252,5 @@ def clamp_player_resources_to_effective_caps(telegram_id: int, player: Any = Non
             'max_mana': effective['max_mana'],
         }
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()

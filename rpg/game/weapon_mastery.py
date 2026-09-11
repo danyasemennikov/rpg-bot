@@ -11,7 +11,9 @@ MAX_MASTERY = 20
 
 def _normalize_weapon_id(weapon_id: str) -> str:
     from game.skills import normalize_weapon_family_key
-    return normalize_weapon_family_key(weapon_id)
+    from game.items_data import get_item
+    item = get_item(str(weapon_id or '')) or {}
+    return normalize_weapon_family_key(item.get('weapon_profile') or weapon_id)
 
 def _mastery_total_exp(level: int, exp: int) -> int:
     total = max(0, int(exp))
@@ -65,74 +67,86 @@ def mastery_exp_needed(level: int) -> int:
     """Опыт для следующего уровня владения."""
     return level * 50
 
-def get_mastery(telegram_id: int, weapon_id: str) -> dict:
+def get_mastery(telegram_id: int, weapon_id: str, *, conn=None) -> dict:
     """Получить данные владения оружием."""
     weapon_id = _normalize_weapon_id(weapon_id)
-    conn = get_connection()
-    row  = conn.execute(
-        '''SELECT * FROM weapon_mastery
-           WHERE telegram_id=? AND weapon_id=?''',
-        (telegram_id, weapon_id)
-    ).fetchone()
-    conn.close()
-
-    if row:
-        return dict(row)
-
-    conn = get_connection()
-    legacy_rows = conn.execute(
-        'SELECT * FROM weapon_mastery WHERE telegram_id=?',
-        (telegram_id,),
-    ).fetchall()
-    conn.close()
-    matching = [dict(r) for r in legacy_rows if _normalize_weapon_id(r['weapon_id']) == weapon_id]
-    if matching:
-        merged = _merge_rows(matching)
+    owns_connection = conn is None
+    if owns_connection:
         conn = get_connection()
-        conn.execute(
-            '''INSERT OR REPLACE INTO weapon_mastery
-               (telegram_id, weapon_id, level, exp, skill_points)
-               VALUES (?, ?, ?, ?, ?)''',
-            (telegram_id, weapon_id, merged['level'], merged['exp'], merged['skill_points'])
-        )
-        conn.commit()
-        conn.close()
-        return {
-            'telegram_id': telegram_id,
-            'weapon_id': weapon_id,
-            'level': merged['level'],
-            'exp': merged['exp'],
-            'skill_points': merged['skill_points'],
-        }
+    try:
+        row = conn.execute(
+            '''SELECT * FROM weapon_mastery
+               WHERE telegram_id=? AND weapon_id=?''',
+            (telegram_id, weapon_id)
+        ).fetchone()
+        if row:
+            return dict(row)
 
-    # Создаём запись если нет
-    return create_mastery(telegram_id, weapon_id)
+        legacy_rows = conn.execute(
+            'SELECT * FROM weapon_mastery WHERE telegram_id=?',
+            (telegram_id,),
+        ).fetchall()
+        matching = [dict(r) for r in legacy_rows if _normalize_weapon_id(r['weapon_id']) == weapon_id]
+        if matching:
+            merged = _merge_rows(matching)
+            conn.execute(
+                '''INSERT OR REPLACE INTO weapon_mastery
+                   (telegram_id, weapon_id, level, exp, skill_points)
+                   VALUES (?, ?, ?, ?, ?)''',
+                (telegram_id, weapon_id, merged['level'], merged['exp'], merged['skill_points'])
+            )
+            if owns_connection:
+                conn.commit()
+            return {
+                'telegram_id': telegram_id,
+                'weapon_id': weapon_id,
+                'level': merged['level'],
+                'exp': merged['exp'],
+                'skill_points': merged['skill_points'],
+            }
 
-def create_mastery(telegram_id: int, weapon_id: str) -> dict:
+        # Создаём запись если нет. A caller-owned connection remains part of
+        # its transaction; a locally owned connection must persist the row.
+        created = create_mastery(telegram_id, weapon_id, conn=conn)
+        if owns_connection:
+            conn.commit()
+        return created
+    finally:
+        if owns_connection:
+            conn.close()
+
+def create_mastery(telegram_id: int, weapon_id: str, *, conn=None) -> dict:
     """Создаёт запись владения если её нет."""
     weapon_id = _normalize_weapon_id(weapon_id)
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     conn.execute(
         '''INSERT OR IGNORE INTO weapon_mastery
            (telegram_id, weapon_id, level, exp, skill_points)
            VALUES (?, ?, 1, 0, 1)''',
         (telegram_id, weapon_id)
     )
-    conn.commit()
+    if owns_connection:
+        conn.commit()
     row = conn.execute(
         'SELECT * FROM weapon_mastery WHERE telegram_id=? AND weapon_id=?',
         (telegram_id, weapon_id)
     ).fetchone()
-    conn.close()
+    if owns_connection:
+        conn.close()
     return dict(row)
 
-def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int) -> dict:
+def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int, *, conn=None) -> dict:
     """
     Добавляет опыт владения оружием.
     Возвращает словарь с результатом (левелап, новые скиллы).
     """
     weapon_id  = _normalize_weapon_id(weapon_id)
-    mastery    = get_mastery(telegram_id, weapon_id)
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
+    mastery    = get_mastery(telegram_id, weapon_id, conn=conn)
     new_exp    = mastery['exp'] + exp
     new_level  = mastery['level']
     new_points = mastery['skill_points']
@@ -155,15 +169,15 @@ def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int) -> dict:
                 if skill and skill['unlock_mastery'] == new_level:
                     new_skills.append(skill)
 
-    conn = get_connection()
     conn.execute(
         '''UPDATE weapon_mastery SET
             level=?, exp=?, skill_points=?
            WHERE telegram_id=? AND weapon_id=?''',
         (new_level, new_exp, new_points, telegram_id, weapon_id)
     )
-    conn.commit()
-    conn.close()
+    if owns_connection:
+        conn.commit()
+        conn.close()
 
     return {
         'leveled_up':  leveled_up,
@@ -186,43 +200,49 @@ def get_skill_level(telegram_id: int, skill_id: str) -> int:
 
 def upgrade_skill(telegram_id: int, weapon_id: str, skill_id: str) -> dict:
     """Прокачать скилл на 1 уровень."""
-    from game.skills import get_skill
+    from game.skills import get_skill, get_weapon_tree
     weapon_id = _normalize_weapon_id(weapon_id)
     skill   = get_skill(skill_id)
-    mastery = get_mastery(telegram_id, weapon_id)
 
     if not skill:
-        return {'success': False, 'reason': 'Скилл не найден'}
-
-    if mastery['level'] < skill['unlock_mastery']:
-        return {'success': False, 'reason': f"Нужен уровень владения {skill['unlock_mastery']}"}
-
-    if mastery['skill_points'] <= 0:
-        return {'success': False, 'reason': 'Нет очков скиллов'}
-
-    current_level = get_skill_level(telegram_id, skill_id)
-    if current_level >= skill['max_level']:
-        return {'success': False, 'reason': f"Скилл уже максимального уровня ({skill['max_level']})"}
+        return {'success': False, 'reason': 'skill_not_found'}
+    family_skills = {tree_skill for skill_ids in get_weapon_tree(weapon_id).values() for tree_skill in skill_ids}
+    if skill_id not in family_skills:
+        return {'success': False, 'reason': 'upgrade_wrong_family'}
 
     conn = get_connection()
-
-    if current_level == 0:
-        conn.execute(
-            'INSERT INTO player_skills (telegram_id, skill_id, level) VALUES (?,?,1)',
-            (telegram_id, skill_id)
-        )
-    else:
-        conn.execute(
-            'UPDATE player_skills SET level=level+1 WHERE telegram_id=? AND skill_id=?',
-            (telegram_id, skill_id)
-        )
-
-    conn.execute(
-        'UPDATE weapon_mastery SET skill_points=skill_points-1 WHERE telegram_id=? AND weapon_id=?',
-        (telegram_id, weapon_id)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        mastery = get_mastery(telegram_id, weapon_id, conn=conn)
+        if mastery['level'] < skill['unlock_mastery']:
+            conn.rollback()
+            return {'success': False, 'reason': 'upgrade_mastery_required',
+                    'required': skill['unlock_mastery']}
+        if mastery['skill_points'] <= 0:
+            conn.rollback()
+            return {'success': False, 'reason': 'no_points'}
+        row = conn.execute('SELECT level FROM player_skills WHERE telegram_id=? AND skill_id=?',
+                           (telegram_id, skill_id)).fetchone()
+        current_level = int(row['level']) if row else 0
+        if current_level >= skill['max_level']:
+            conn.rollback()
+            return {'success': False, 'reason': 'upgrade_max_level', 'max': skill['max_level']}
+        if current_level == 0:
+            conn.execute('INSERT INTO player_skills (telegram_id, skill_id, level) VALUES (?,?,1)',
+                         (telegram_id, skill_id))
+        else:
+            conn.execute('UPDATE player_skills SET level=level+1 WHERE telegram_id=? AND skill_id=?',
+                         (telegram_id, skill_id))
+        updated = conn.execute('''UPDATE weapon_mastery SET skill_points=skill_points-1
+            WHERE telegram_id=? AND weapon_id=? AND skill_points>0''', (telegram_id, weapon_id))
+        if updated.rowcount != 1:
+            raise RuntimeError('mastery_point_concurrency_conflict')
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return {
         'success':    True,

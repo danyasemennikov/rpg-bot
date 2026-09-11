@@ -432,9 +432,30 @@ ITEMS['field_ration'] = {
     'consumable_family': 'food',
 }
 
+# Field Equipment V1 is generated from one validated static manifest.  The
+# ordinary item dictionary remains the runtime authority used by every rail.
+from game.field_catalog import FIELD_ITEMS
+ITEMS.update(FIELD_ITEMS)
+ITEM_REWARD_TAGS.update({item_id: {'reward_family': 'gear'} for item_id in FIELD_ITEMS})
+
 
 def get_item(item_id: str) -> dict:
-    return ITEMS.get(item_id)
+    item = ITEMS.get(item_id)
+    if item is not None:
+        return item
+    # Additive migrations intentionally keep unknown historical static rows.
+    # Read them as a safe legacy fallback instead of hiding or deleting owned
+    # inventory when the current in-code manifest no longer knows the ID.
+    try:
+        from database import get_connection
+        conn = get_connection()
+        try:
+            row = conn.execute('SELECT * FROM items WHERE item_id=?', (item_id,)).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
 
 
 def get_item_metadata(item_id: str) -> dict:

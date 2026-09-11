@@ -13,6 +13,7 @@ from game.balance import (
     normalize_weapon_profile,
 )
 from game.equipment_stats import get_equipped_item_ids, get_player_effective_stats
+from game.field_catalog import FIELD_REWARD_POLICY_VERSION
 from game.itemization import get_item_archetype_metadata
 from game.items_data import get_item, get_item_encumbrance
 from game.locations import get_location
@@ -152,7 +153,9 @@ def _ensure_pve_encounter_table() -> None:
             mob_json          TEXT NOT NULL,
             created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            finished_at       TIMESTAMP
+            finished_at       TIMESTAMP,
+            reward_policy_version TEXT NOT NULL DEFAULT 'legacy_v0',
+            reward_seed       TEXT
         )
         '''
     )
@@ -183,6 +186,10 @@ def _ensure_pve_encounter_table() -> None:
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN location_id TEXT")
     if 'anchor_spawn_instance_id' not in columns:
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN anchor_spawn_instance_id TEXT")
+    if 'reward_policy_version' not in columns:
+        conn.execute("ALTER TABLE pve_encounters ADD COLUMN reward_policy_version TEXT NOT NULL DEFAULT 'legacy_v0'")
+    if 'reward_seed' not in columns:
+        conn.execute("ALTER TABLE pve_encounters ADD COLUMN reward_seed TEXT")
     conn.commit()
     conn.close()
 
@@ -1560,8 +1567,9 @@ def create_pve_encounter(
     conn.execute(
         '''
         INSERT INTO pve_encounters (
-            encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id, anchor_spawn_instance_id
-        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?)
+            encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id,
+            anchor_spawn_instance_id, reward_policy_version, reward_seed
+        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             encounter_id,
@@ -1571,6 +1579,8 @@ def create_pve_encounter(
             _serialize_payload(mob or {}),
             str(location_id or battle_state.get('location_id') or ''),
             str(anchor_spawn_instance_id or battle_state.get('anchor_spawn_instance_id') or '') or None,
+            FIELD_REWARD_POLICY_VERSION,
+            uuid.uuid4().hex,
         ),
     )
 
