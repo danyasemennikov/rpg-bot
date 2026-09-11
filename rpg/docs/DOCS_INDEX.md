@@ -31,6 +31,11 @@
    - материалы по диапазонам `+1..+15`;
    - outcome-модель (успех/неудача/откат/поломка).
 
+5. `FIELD_LOOT_AND_GEAR_PROGRESSION_V1.md`
+   - review-branch specification for the 32-item field catalogue and regional pools;
+   - versioned reward settlement, migration, recovery, and legacy-review guarantees;
+   - frozen balance/acquisition evidence and focused reviewer risks.
+
 ---
 
 ## Как этим пользоваться

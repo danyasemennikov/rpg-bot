@@ -23,6 +23,7 @@ from game.gear_instances import (
     set_gear_instance_equipped_slot,
 )
 from game.i18n import t
+from game.gear_progression import issue_gear_intent
 from handlers.inventory import build_inventory_list, build_item_detail, get_equipped
 from handlers.inventory import handle_inventory_buttons
 from handlers.profile import _build_equipment_summary
@@ -499,7 +500,8 @@ class CrossModelExclusivityFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_cross_model_slot_exclusivity_and_no_resurrection(self):
         instance_id = create_gear_instance(3001, 'wooden_sword')  # g1
 
-        await self._run_callback(f'inv_equip_g{instance_id}_weapon_weapon')
+        token = issue_gear_intent(3001, 'equip', instance_id, target_slot='weapon')
+        await self._run_callback(f'inv_gequip_{token}_g{instance_id}_weapon')
 
         conn = get_connection()
         legacy_weapon = conn.execute('SELECT weapon FROM equipment WHERE telegram_id=?', (3001,)).fetchone()['weapon']

@@ -1059,7 +1059,7 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_group_victory_applies_rewards_to_all_surviving_participants(self):
         query = _DummyQuery('battle_attack_forest_wolf')
         context = _DummyContext(
-            battle_state={'pve_encounter_id': 'pve-enc-group', 'side_a_player_ids': [88001, 88002], 'participant_states': {
+            battle_state={'side_a_player_ids': [88001, 88002], 'participant_states': {
                 '88001': {'player_dead': False},
                 '88002': {'player_dead': False},
             }, 'weapon_id': 'unarmed'},
@@ -1457,7 +1457,6 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_group_victory_rewards_only_surviving_participants(self):
         battle_state = {
-            'pve_encounter_id': 'pve-enc-group',
             'side_a_player_ids': [88001, 88002],
             'participant_states': {
                 '88001': {'player_hp': 0, 'hp': 0, 'player_dead': True, 'defeated': True},

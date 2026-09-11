@@ -14,7 +14,6 @@ class QuestBoardBattleBridgeTests(unittest.IsolatedAsyncioTestCase):
         battle_state = {
             'spawn_profile': 'elite',
             'special_spawn_key': 'greyfang',
-            'pve_encounter_id': 'pve-test-1',
             'weapon_id': 'unarmed',
             'location_id': 'dark_forest',
         }

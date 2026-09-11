@@ -210,7 +210,7 @@ async def run_chapter(lang):
     await j.craft('trail_ration')
     gear = rows("SELECT id FROM gear_instances WHERE telegram_id=? AND base_item_id='trail_vest'", (PLAYER,))[0]['id']
     _, markup = build_item_detail(PLAYER, f'g{gear}', 'armor', lang)
-    await j.callback(next(b for b in buttons(markup) if b.startswith('inv_equip_')), handle_inventory_buttons)
+    await j.callback(next(b for b in buttons(markup) if b.startswith('inv_gequip_')), handle_inventory_buttons)
     await j.claim()
     await j.accept('chapter_homecoming')
     await j.travel('westwild_n5', 'westwild_n4', 'westwild_n3', 'westwild_n2', 'westwild_n1', 'capital_city')
