@@ -444,14 +444,21 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         battle_state = {'enemy_units': [{}, {}], 'pve_encounter_id': 'enc-reward-1', 'weapon_id': 'unarmed'}
         player = {'telegram_id': 501, 'lang': 'en', 'level': 1, 'exp': 0, 'gold': 0}
         captured = []
-        with patch('handlers.battle.claim_pve_encounter_victory', return_value=True), \
-             patch('handlers.battle.get_player', return_value=player), \
-             patch('handlers.battle.calc_rewards', side_effect=[{'exp': 10, 'gold': 5, 'loot': []}, {'exp': 10, 'gold': 5, 'loot': []}]), \
-             patch('handlers.battle.apply_rewards', side_effect=[{'leveled_up': True, 'new_level': 2, 'new_exp': 1, 'new_gold': 5}, {'leveled_up': False, 'new_level': 2, 'new_exp': 2, 'new_gold': 10}]), \
-             patch('handlers.battle.finish_solo_pve_encounter'), \
-             patch('handlers.battle.end_battle'), \
-             patch('handlers.battle.add_mastery_exp', return_value={'leveled_up': False}), \
-             patch('handlers.battle.register_hunt_kill_progress'), \
+        settlement_result = {
+            'recipients': [{
+                'player_id': 501,
+                'exp': 20,
+                'gold': 10,
+                'leveled_up': True,
+                'level_after': 2,
+                'stackable_items': [],
+                'gear': [],
+            }],
+            'mastery': {'leveled_up': False},
+        }
+        with patch('game.pve_reward_settlement.prepare_victory_settlement', return_value={'status': 'prepared'}), \
+             patch('game.pve_reward_settlement.apply_prepared_settlement', return_value={'status': 'applied', 'result': settlement_result}), \
+             patch('handlers.battle.clear_solo_pve_runtime'), \
              patch('handlers.battle.get_mob_name', return_value='wolf'), \
              patch('handlers.battle.t', side_effect=lambda key, lang='en', **kwargs: f"{key}:{kwargs}"), \
              patch('handlers.battle.safe_edit', side_effect=lambda _q, text, **_k: captured.append(text)):
