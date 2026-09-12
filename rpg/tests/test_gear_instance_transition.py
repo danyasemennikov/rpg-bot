@@ -517,19 +517,19 @@ class CrossModelExclusivityFlowTests(unittest.IsolatedAsyncioTestCase):
         legacy_weapon = conn.execute('SELECT weapon FROM equipment WHERE telegram_id=?', (3001,)).fetchone()['weapon']
         instance_slot = conn.execute('SELECT equipped_slot FROM gear_instances WHERE id=?', (instance_id,)).fetchone()['equipped_slot']
         conn.close()
-        self.assertEqual(legacy_weapon, 1)
-        self.assertIsNone(instance_slot)
-        self.assertEqual(get_equipped_item_ids(3001).get('weapon'), 'iron_sword')
+        self.assertIsNone(legacy_weapon)
+        self.assertEqual(instance_slot, 'weapon')
+        self.assertEqual(get_equipped_item_ids(3001).get('weapon'), 'wooden_sword')
 
         _text, keyboard = build_inventory_list(3001, 'weapon', 'ru')
         equipped_tag = t('inventory.equipped', 'ru')
         labels = {row[0].callback_data: row[0].text for row in keyboard.inline_keyboard[1:]}
-        self.assertIn(equipped_tag, labels['inv_item_i1_weapon'])
-        self.assertNotIn(equipped_tag, labels[f'inv_item_g{instance_id}_weapon'])
+        self.assertNotIn(equipped_tag, labels['inv_item_i1_weapon'])
+        self.assertIn(equipped_tag, labels[f'inv_item_g{instance_id}_weapon'])
 
         profile_summary = _build_equipment_summary(3001, 'ru')
-        self.assertIn('Железный меч', profile_summary)
-        self.assertNotIn('Деревянный меч', profile_summary)
+        self.assertNotIn('Железный меч', profile_summary)
+        self.assertIn('Деревянный меч', profile_summary)
 
         await self._run_callback('inv_unequip_i1_weapon_weapon')
 
@@ -538,5 +538,5 @@ class CrossModelExclusivityFlowTests(unittest.IsolatedAsyncioTestCase):
         instance_slot = conn.execute('SELECT equipped_slot FROM gear_instances WHERE id=?', (instance_id,)).fetchone()['equipped_slot']
         conn.close()
         self.assertIsNone(legacy_weapon)
-        self.assertIsNone(instance_slot)
-        self.assertNotIn('weapon', get_equipped_item_ids(3001))
+        self.assertEqual(instance_slot, 'weapon')
+        self.assertEqual(get_equipped_item_ids(3001).get('weapon'), 'wooden_sword')

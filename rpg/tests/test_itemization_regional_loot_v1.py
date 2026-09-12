@@ -47,7 +47,7 @@ from game.gear_ui import catalog_page, compare_instance_to_slot, get_field_sourc
 from game.i18n import get_item_description, get_item_name
 from game.items_data import get_item
 from game.itemization import get_generated_secondary_pool_for_item, get_secondary_count_budget_for_rarity
-from game.pve_live import create_pve_encounter
+from game.pve_live import create_pve_encounter, persist_solo_pve_encounter_state
 from game.pve_reward_settlement import (
     _roll_unit_rewards,
     apply_prepared_settlement,
@@ -311,9 +311,16 @@ def test_ring_comparison_targets_either_slot_and_reports_real_deltas():
     conn.commit(); conn.close()
     ring1 = compare_instance_to_slot(PID, candidate, 'ring1')
     ring2 = compare_instance_to_slot(PID, candidate, 'ring2')
-    assert ring1['deltas']['max_hp'] == -8 and ring1['deltas']['accuracy'] == 2
-    assert ring2['current_item_id'] is None and ring2['deltas']['accuracy'] == 2
     text, _ = build_gear_comparison(PID, f'g{candidate}', 'ring1', 'accessory', 'en')
+    before = get_player_effective_stats(PID, dict(get_player(PID)))
+    token = issue_gear_intent(PID, 'equip', candidate, target_slot='ring1')
+    assert apply_gear_intent(PID, 'equip', token)['status'] == 'equipped'
+    after = get_player_effective_stats(PID, dict(get_player(PID)))
+    assert ring1['deltas']['max_hp'] == after['max_hp'] - before['max_hp'] == -26
+    assert ring1['deltas']['physical_defense'] == (
+        after['effective_physical_defense'] - before['effective_physical_defense'])
+    assert ring1['deltas']['accuracy'] == after['accuracy_bonus'] - before['accuracy_bonus'] == 2
+    assert ring2['current_item_id'] is None and ring2['deltas']['accuracy'] == 2
     assert 'Accuracy' in text and 'Max HP' in text and 'better' not in text.lower()
 
 
@@ -468,20 +475,30 @@ def test_homecoming_shard_bridge_is_atomic_single_use_and_no_profession_xp():
     assert rows('SELECT * FROM player_crafting_professions WHERE player_id=?', (PID,)) == before_professions
 
 
-def make_terminal_encounter(player_id: int, encounter_id: str, *, location='westwild_n1', units=1):
+def make_terminal_encounter(player_id: int, encounter_id: str, *, location='westwild_n1', units=1,
+                            participant_ids: list[int] | None = None):
+    roster = participant_ids or [player_id]
     battle = {
         'pve_encounter_id': encounter_id, 'mob_id': 'contract_test_mob', 'mob_dead': True,
-        'location_id': location, 'weapon_id': 'field_sword_1h',
-        'participant_combat_states': {str(player_id): {'player_dead': False, 'hp': 10}},
+        'mob_hp': 0, 'location_id': location, 'weapon_id': 'field_sword_1h',
+        'side_a_player_ids': roster,
+        'participant_states': {
+            str(roster_player_id): {
+                'player_dead': False, 'defeated': False, 'player_hp': 10, 'hp': 10,
+                'weapon_id': 'field_sword_1h',
+            }
+            for roster_player_id in roster
+        },
         'enemy_units': [
             {'unit_id': f'u{i}', 'mob_id': 'contract_test_mob', 'spawn_profile': 'normal',
-             'spawn_instance_id': f's{i}', 'dead': True, 'hp': 0}
+             'dead': True, 'hp': 0}
             for i in range(units)
         ],
     }
     mob = {'id': 'contract_test_mob', 'level': 7, 'exp_reward': 9, 'gold_min': 3, 'gold_max': 3, 'loot_table': []}
-    create_pve_encounter(owner_player_id=player_id, side_a_player_ids=[player_id], battle_state=battle,
+    create_pve_encounter(owner_player_id=player_id, side_a_player_ids=roster, battle_state=battle,
                          mob=mob, encounter_id=encounter_id, location_id=location)
+    persist_solo_pve_encounter_state(encounter_id=encounter_id, battle_state=battle, mob=mob)
     return battle, mob
 
 
@@ -591,6 +608,7 @@ def test_stackable_and_upgrade_deduction_failure_points_roll_back():
     encounter_id = 'stackable-failure'
     battle, mob = make_terminal_encounter(PID, encounter_id)
     mob['loot_table'] = [('wolf_pelt', 1.0)]
+    persist_solo_pve_encounter_state(encounter_id=encounter_id, battle_state=battle, mob=mob)
     prepare_victory_settlement(encounter_id=encounter_id, battle_state=battle, mob=mob)
     before = settlement_snapshot(encounter_id, PID)
     with pytest.raises(RuntimeError, match='after_first_stackable_grant'):
@@ -630,12 +648,19 @@ def test_nonterminal_unknown_policy_and_duplicate_callbacks_fail_closed():
 def test_group_settlement_excludes_defeated_participant_and_preserves_personal_rewards(monkeypatch):
     make_player(location='westwild_n1')
     make_player(PID + 1, location='westwild_n1')
-    battle, mob = make_terminal_encounter(PID, 'group-settlement', units=2)
+    battle, mob = make_terminal_encounter(
+        PID, 'group-settlement', units=2, participant_ids=[PID, PID + 1])
     conn = get_connection()
-    conn.execute("INSERT INTO pve_encounter_participants(encounter_id,player_id,side_id,status) VALUES ('group-settlement',?,'side_a','defeated')", (PID + 1,))
+    conn.execute("UPDATE pve_encounter_participants SET status='defeated' WHERE encounter_id='group-settlement' AND player_id=?", (PID + 1,))
     conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id IN (?,?)', (PID, PID + 1))
     conn.commit(); conn.close()
-    battle['participant_combat_states'][str(PID + 1)] = {'player_dead': True, 'defeated': True, 'hp': 0}
+    battle['participant_states'][str(PID + 1)] = {
+        'player_dead': True, 'defeated': True, 'player_hp': 0, 'hp': 0,
+        'weapon_id': 'field_bow',
+    }
+    battle['side_a_player_ids'] = [PID]
+    persist_solo_pve_encounter_state(
+        encounter_id='group-settlement', battle_state=battle, mob=mob)
     before_defeated = dict(get_player(PID + 1))
     monkeypatch.setitem(GEAR_CHANCE_BY_SPAWN_PROFILE, 'normal', 0.0)
     prepare_victory_settlement(encounter_id='group-settlement', battle_state=battle, mob=mob)

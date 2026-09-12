@@ -14,6 +14,7 @@ from game.mobs import get_mob
 from game.pve_live import (
     claim_pve_encounter_victory,
     create_or_load_open_world_pve_encounter,
+    ensure_runtime_for_battle,
     finish_solo_pve_encounter,
     load_active_pve_encounter,
     persist_solo_pve_encounter_state,
@@ -112,6 +113,9 @@ async def _run_complete_alpha_core_loop():
     )
     assert status == 'created'
     battle_state['pve_encounter_id'] = encounter_id
+    ensure_runtime_for_battle(
+        player_id=PLAYER_ID, battle_state=battle_state, mob=mob,
+    )
     persist_solo_pve_encounter_state(
         encounter_id=encounter_id, battle_state=battle_state, mob=mob,
     )
@@ -228,15 +232,20 @@ async def _run_pre_reward_failure_retry():
     _create_player()
     mob = get_mob('forest_wolf')
     battle_state = init_battle(dict(get_player(PLAYER_ID)), mob)
-    battle_state.update({
-        'mob_dead': True, 'mob_hp': 0, 'location_id': 'westwild_n3',
-        'spawn_profile': 'normal',
-    })
+    battle_state.update({'location_id': 'westwild_n3', 'spawn_profile': 'normal'})
     encounter_id, _ = create_or_load_open_world_pve_encounter(
         owner_player_id=PLAYER_ID, location_id='westwild_n3',
         mob_id='forest_wolf', battle_state=battle_state, mob=mob,
     )
     battle_state['pve_encounter_id'] = encounter_id
+    ensure_runtime_for_battle(
+        player_id=PLAYER_ID, battle_state=battle_state, mob=mob,
+    )
+    battle_state['mob_dead'] = True
+    battle_state['mob_hp'] = 0
+    for unit in battle_state.get('enemy_units', []):
+        unit['dead'] = True
+        unit['hp'] = 0
     query = SimpleNamespace(edit_message_text=AsyncMock())
     context = SimpleNamespace(user_data={'battle': battle_state, 'battle_mob': mob})
     before = dict(get_player(PLAYER_ID))
