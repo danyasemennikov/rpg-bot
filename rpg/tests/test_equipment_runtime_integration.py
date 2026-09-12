@@ -360,7 +360,7 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
         bonuses = aggregate_equipped_stat_bonuses(1001)
         self.assertGreaterEqual(bonuses.get('accuracy', 0), 4)
 
-    def test_inventory_detail_does_not_overstate_unwired_scaled_defense(self):
+    def test_inventory_detail_shows_resolved_scaled_defense(self):
         instance_id = create_gear_instance(
             1001,
             'tracker_jacket',
@@ -369,7 +369,7 @@ class EquipmentRuntimeIntegrationTests(unittest.TestCase):
             secondary_rolls_json='[]',
         )
         text, _kb = build_item_detail(1001, f'g{instance_id}', 'armor', 'en')
-        self.assertIn('Defense: <b>7</b>', text)
+        self.assertIn('Defense: <b>12</b>', text)
         self.assertNotIn('Defense: <b>13</b>', text)
 
 
