@@ -10,6 +10,8 @@ Equipment goals are navigation preferences only. They never change drop chance, 
 
 Every instance mutation uses the existing persisted action-token rail. Previewed equip, unequip, enhancement, advancement, sale, purchase, and shard exchange actions are checked again under a SQLite write lock. Ownership, current location and travel revision, combat/PvP state, instance revision, player gear revision, slot, requirements, balances, materials, and the server-calculated cost reference are authoritative. A stale or duplicated action has no economic effect.
 
+The ordinary inventory keeps the existing tab/detail/action flow and paginates a deterministic mixed instance/legacy ordering at eight item rows per page. Page identity is carried through detail, refresh, equip, enhancement, and sale callbacks; a page that becomes empty after mutation safely clamps to the last available page.
+
 ## Frozen catalogue and acquisition
 
 All field items are level-1 templates. Field vendor output is always tier 1, common, +0, with no secondary rolls. Field gear always sells for 5 gold and never refunds upgrade materials.
@@ -53,7 +55,7 @@ An eligible drop selects from its regional pool 80% of the time and from the ful
 
 ## Drop policy and guarantee
 
-New encounters persist policy `field_loot_v1` and a reward seed when created. Active encounters created before this migration retain `legacy_v0` and finish through the new transactional settlement using their old loot table semantics.
+New encounters persist policy `field_loot_v1`, a reward seed, and an immutable pre-combat source-unit snapshot when created. The source snapshot records the exact unit IDs, source/spawn IDs, mob IDs, profiles, location, special provenance, and whether the original encounter used a unit roster or a single-enemy projection. Active encounters created before this migration retain `legacy_v0` and finish through the new transactional settlement using their old loot table semantics only when their original source identity remains independently provable.
 
 | Spawn profile | Gear chance per defeated unit | Dry-streak increment | Generated rarity weights |
 |---|---:|---:|---|
@@ -80,12 +82,12 @@ Weapon mastery and skill lookup normalize each field item through its canonical 
 
 Victory processing uses two database transactions and contains no Telegram I/O:
 
-1. T1 validates the persisted terminal victory, freezes the location/route, source units, eligible recipients, policy/seed, XP, gold, non-gear grants, exact gear specs and affixes, counter transitions, contract events, and mastery award. It persists the terminal snapshot and plan and marks the encounter `resolving_victory`.
+1. T1 validates the persisted terminal victory against the immutable pre-combat source-unit snapshot, then freezes the location/route, source units, eligible recipients, policy/seed, XP, gold, non-gear grants, exact gear specs and affixes, counter transitions, contract events, and mastery award. It persists the terminal snapshot and plan and marks the encounter `resolving_victory`.
 2. T2 locks the prepared row, applies every recipient's progression and grants, counter, contract progress, mastery, cooldown reset, encounter/participant finalization, and spawn consequences, then stores the display result and marks the settlement `applied` in one commit.
 
-One encounter has one settlement row. Delivery reads the persisted concrete plan and never rerolls. A retry of an applied settlement returns its stored result. Failure before T1 commit leaves the active encounter retryable. Failure after T1 leaves a prepared plan with no rewards. Any exception inside T2 rolls back XP, gold, stackables, instances, counters, contracts, mastery, locks, and finalization together. Failure after T2 commit may lose only the Telegram response; recent receipts expose the stored result.
+One encounter has one settlement row. Delivery reads the persisted concrete plan and never rerolls. A retry of an applied settlement returns its stored result. Failure before T1 commit leaves the active encounter retryable, including when the battle handler already committed a terminal `mob_dead` snapshot. Failure after T1 leaves a prepared plan with no rewards. Any exception inside T2 rolls back XP, gold, stackables, instances, counters, contracts, mastery, locks, and finalization together. Failure after T2 commit may lose only the Telegram response; recent receipts expose the stored result.
 
-Startup and `/start`, `/location`, and `/journal` perform bounded recovery of prepared settlements. Recovering one encounter does not clear another active PvE or PvP engagement. Recent rewards display the latest 20 player receipts, including the actual instances and whether the guarantee fired.
+Startup and `/start`, `/location`, and `/journal` perform bounded recovery. Recovery first discovers authoritative terminal-active encounters that have no settlement row, runs the existing T1/T2 path, and then applies already-prepared settlements. It requires no additional combat action. Recovering one encounter does not clear another active PvE or PvP engagement. Recent rewards display the latest 20 player receipts, including the actual instances and whether the guarantee fired.
 
 ## Additive migration and legacy review
 
@@ -96,15 +98,16 @@ Migration creates or extends:
 - `gear_mutation_receipts`;
 - `players.gear_revision` and `gear_instances.revision`, both defaulting to 0;
 - nullable instance settlement provenance and source metadata;
-- encounter reward-policy and seed metadata.
+- encounter reward-policy and seed metadata;
+- nullable `pve_encounters.source_units_json` pre-combat source authority.
 
 The migration is idempotent. It does not recreate existing templates or instances, reroll stats, alter enhancement/durability/ownership, infer historical dry streaks, or select a goal. Startup static reconciliation inserts missing field templates without mass-replacing existing rows. Unknown historical item rows remain readable through the database fallback.
 
-A pre-V1 encounter already stuck at `resolving_victory` without a plan is fundamentally ambiguous: the database cannot prove which rewards were delivered. Startup therefore creates a `legacy_review` record with the available encounter, battle, and mob evidence, excludes it from automatic settlement, and releases only its stale PvE lock when no other active engagement exists. `list_legacy_review_reports(player_id)` returns a bounded owner-readable evidence report. No automatic replay or compensation occurs; compensation requires a separate owner decision.
+A pre-V1 encounter already stuck at `resolving_victory` without a plan is fundamentally ambiguous: the database cannot prove which rewards were delivered. Startup therefore creates a `legacy_review` record with the available encounter, battle, and mob evidence, excludes it from automatic settlement, and releases only its stale PvE lock when no other active engagement exists. A pre-migration terminal-active encounter may resume automatically only when its anchored spawn rows prove the exact original roster and canonical unit identities; unprovable non-anchored rows fail closed. `list_legacy_review_reports(player_id)` returns a bounded owner-readable evidence report. No automatic replay or compensation occurs; compensation requires a separate owner decision.
 
 ## Verification evidence
 
-Focused coverage is in `tests/test_itemization_regional_loot_v1.py` plus the existing equipment, gear-transition, group/solo PvE, world encounter, mastery, tier-advancement, and action-token suites. It covers frozen values, localization parity, real source manifests, distribution constants, exact guarantee transitions, affix rules, vendor acquisition for all ten families, numeric starter-target diagnostics, Telegram limits, comparison, equipment aggregation, stale/foreign/busy mutations, atomic advancement/enhancement/sale/exchange, T1/T2 recovery and idempotency, every required T2 failure point, concurrent delivery, legacy migration/review, and safe legacy item display.
+Focused coverage is in `tests/test_itemization_regional_loot_v1.py` and `tests/test_itemization_fix_packet_pr230.py` plus the existing equipment, gear-transition, group/solo PvE, world encounter, mastery, tier-advancement, and action-token suites. It covers frozen values, localization parity, real source manifests, distribution constants, exact guarantee transitions, affix rules, mixed-inventory pagination, vendor-to-handler combat for all ten families, a real regional chase, twelve real failed-roll encounters and restart, real group join/departure/defeat/restart/settlement paths, gear longevity through enhancement and tier advancement, the Homecoming guild bridge, Telegram limits, comparison, equipment aggregation, stale/foreign/busy mutations, source-unit tamper rejection, terminal-active discovery, T1/T2 recovery and idempotency, every required T2 failure point, concurrent delivery, legacy migration/review, and safe legacy item display.
 
 The ten-family diagnostic allocates the same 12 starting points (7 in the weapon's primary attribute and 1 in each other attribute) and runs ten deterministic fights per family against `forest_wolf`; every family wins all ten seeds. This is isolated numeric evidence, not a substitute for production handler journeys.
 

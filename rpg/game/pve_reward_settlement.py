@@ -68,6 +68,75 @@ def _participant_snapshot(battle_state: dict, player_id: int) -> dict:
     return dict(raw) if isinstance(raw, dict) else {}
 
 
+def _source_unit_descriptor(raw_unit: dict, *, location_id: str) -> dict:
+    return {
+        'unit_id': str(raw_unit.get('unit_id') or ''),
+        'spawn_instance_id': str(raw_unit.get('spawn_instance_id') or '') or None,
+        'mob_id': str(raw_unit.get('mob_id') or ''),
+        'spawn_profile': str(raw_unit.get('spawn_profile') or 'normal').lower(),
+        'special_spawn_key': str(raw_unit.get('special_spawn_key') or '') or None,
+        'special_spawn_name': str(raw_unit.get('special_spawn_name') or '') or None,
+        'location_id': str(location_id or ''),
+    }
+
+
+def _terminal_source_units(state: dict, *, encounter_mob_id: str) -> list[dict]:
+    raw_units = state.get('enemy_units')
+    location_id = str(state.get('location_id') or '')
+    if isinstance(raw_units, list) and raw_units:
+        if any(not isinstance(unit, dict) for unit in raw_units):
+            raise ValueError('terminal_source_unit_invalid')
+        return [_source_unit_descriptor(unit, location_id=location_id) for unit in raw_units]
+    return [_source_unit_descriptor({
+        'unit_id': 'unit-1',
+        'spawn_instance_id': state.get('anchor_spawn_instance_id'),
+        'mob_id': state.get('mob_id') or encounter_mob_id,
+        'spawn_profile': state.get('spawn_profile', 'normal'),
+        'special_spawn_key': state.get('special_spawn_key'),
+        'special_spawn_name': state.get('special_spawn_name'),
+    }, location_id=location_id)]
+
+
+def _validate_source_units(*, encounter: dict, persisted_state: dict, spawn_rows: list) -> list[dict]:
+    """Validate terminal units against immutable start-time or legacy spawn authority."""
+    actual_units = _terminal_source_units(
+        persisted_state,
+        encounter_mob_id=str(encounter.get('mob_id') or ''),
+    )
+    source_payload = _load_json(encounter.get('source_units_json'))
+    raw_expected = source_payload.get('units') if source_payload else None
+    if isinstance(raw_expected, list) and raw_expected:
+        if int(source_payload.get('schema_version', 0) or 0) != 1:
+            raise ValueError('unknown_source_units_version')
+        if any(not isinstance(unit, dict) for unit in raw_expected):
+            raise ValueError('invalid_source_units')
+        expected_units = [
+            _source_unit_descriptor(unit, location_id=str(unit.get('location_id') or ''))
+            for unit in raw_expected
+        ]
+        actual_uses_enemy_units = bool(persisted_state.get('enemy_units'))
+        if bool(source_payload.get('uses_enemy_units')) != actual_uses_enemy_units:
+            raise ValueError('terminal_source_units_mismatch')
+        if _canonical_json({'units': actual_units}) != _canonical_json({'units': expected_units}):
+            raise ValueError('terminal_source_units_mismatch')
+        return expected_units
+
+    anchor_id = str(encounter.get('anchor_spawn_instance_id') or '')
+    if not anchor_id or not spawn_rows:
+        # Pre-migration non-anchored rows have no immutable source roster. Their
+        # mutable battle projection cannot safely authorize rewards.
+        raise ValueError('terminal_source_authority_missing')
+
+    units_by_spawn = {str(unit.get('spawn_instance_id') or ''): unit for unit in actual_units}
+    row_by_spawn = {str(row['spawn_instance_id']): row for row in spawn_rows}
+    if set(units_by_spawn) != set(row_by_spawn) or '' in units_by_spawn:
+        raise ValueError('terminal_spawn_roster_mismatch')
+    expected_unit_ids = {f'unit-{index}' for index in range(1, len(spawn_rows) + 1)}
+    if {str(unit.get('unit_id') or '') for unit in actual_units} != expected_unit_ids:
+        raise ValueError('terminal_unit_identity_mismatch')
+    return actual_units
+
+
 def _locked_roster(conn, encounter: dict) -> tuple[list[int], dict[int, str]]:
     encounter_id = str(encounter['encounter_id'])
     participant_rows = conn.execute('''SELECT player_id, status FROM pve_encounter_participants
@@ -143,9 +212,14 @@ def _validate_terminal_snapshot(*, conn, encounter: dict, supplied_state: dict, 
 
     anchor_id = str(encounter.get('anchor_spawn_instance_id') or '')
     spawn_rows = conn.execute('''SELECT spawn_instance_id, location_id, mob_id, spawn_profile,
-            special_spawn_key, state, linked_encounter_id
+            special_spawn_key, special_spawn_name, state, linked_encounter_id
         FROM pve_spawn_instances WHERE linked_encounter_id=? ORDER BY spawn_instance_id''',
         (encounter_id,)).fetchall()
+    source_units = _validate_source_units(
+        encounter=encounter,
+        persisted_state=persisted_state,
+        spawn_rows=list(spawn_rows),
+    )
     if anchor_id:
         if not spawn_rows or anchor_id not in {str(row['spawn_instance_id']) for row in spawn_rows}:
             raise ValueError('terminal_anchor_provenance_mismatch')
@@ -155,18 +229,23 @@ def _validate_terminal_snapshot(*, conn, encounter: dict, supplied_state: dict, 
         } if raw_units else {str(persisted_state.get('anchor_spawn_instance_id') or '')}
         if actual_spawn_ids != expected_spawn_ids:
             raise ValueError('terminal_spawn_roster_mismatch')
-        units_by_spawn = {str(unit.get('spawn_instance_id')): unit for unit in raw_units}
+        units_by_spawn = {str(unit.get('spawn_instance_id')): unit for unit in source_units}
         for row in spawn_rows:
             if str(row['state']) != 'active' or str(row['linked_encounter_id']) != encounter_id:
                 raise ValueError('terminal_spawn_state_mismatch')
-            unit = units_by_spawn.get(str(row['spawn_instance_id'])) if raw_units else persisted_state
-            if str(unit.get('mob_id') or encounter_mob_id) != str(row['mob_id']):
+            unit = units_by_spawn.get(str(row['spawn_instance_id']))
+            if not unit or str(unit.get('mob_id') or '') != str(row['mob_id']):
                 raise ValueError('terminal_spawn_mob_mismatch')
-            if str(unit.get('spawn_profile') or persisted_state.get('spawn_profile') or 'normal').lower() != str(row['spawn_profile']).lower():
+            if str(unit.get('spawn_profile') or '').lower() != str(row['spawn_profile']).lower():
                 raise ValueError('terminal_spawn_profile_mismatch')
-            if str(row['location_id']) != str(encounter.get('location_id') or ''):
+            if (
+                str(row['location_id']) != str(encounter.get('location_id') or '')
+                or str(unit.get('location_id') or '') != str(row['location_id'])
+            ):
                 raise ValueError('terminal_spawn_location_mismatch')
             if str(unit.get('special_spawn_key') or '') != str(row['special_spawn_key'] or ''):
+                raise ValueError('terminal_spawn_special_mismatch')
+            if str(unit.get('special_spawn_name') or '') != str(row['special_spawn_name'] or ''):
                 raise ValueError('terminal_spawn_special_mismatch')
     elif any(str(unit.get('spawn_instance_id') or '') for unit in raw_units):
         raise ValueError('terminal_unproven_spawn')
@@ -750,14 +829,91 @@ def get_reward_receipt_for_player(player_id: int, encounter_id: str) -> dict | N
     }
 
 
+def _is_terminal_victory_state(state: dict) -> bool:
+    if not bool(state.get('mob_dead')):
+        return False
+    units = state.get('enemy_units')
+    if isinstance(units, list) and units:
+        return all(
+            isinstance(unit, dict)
+            and bool(unit.get('dead'))
+            and int(unit.get('hp', 1) or 0) <= 0
+            for unit in units
+        )
+    return int(state.get('mob_hp', 1) or 0) <= 0
+
+
+def recover_unprepared_terminal_victories(
+    *,
+    limit: int = 20,
+    player_id: int | None = None,
+    prepare_failure_hook: FailureHook | None = None,
+    apply_failure_hook: FailureHook | None = None,
+) -> list[dict]:
+    """Discover persisted terminal victories even when T1 never committed."""
+    bounded_limit = max(1, min(100, int(limit)))
+    conn = get_connection()
+    try:
+        params: list[Any] = []
+        player_join = ''
+        player_filter = ''
+        if player_id is not None:
+            player_join = 'JOIN pve_encounter_participants p ON p.encounter_id=e.encounter_id'
+            player_filter = "AND p.player_id=? AND p.status IN ('active','defeated')"
+            params.append(int(player_id))
+        params.append(bounded_limit)
+        rows = conn.execute(f'''SELECT DISTINCT e.encounter_id, e.battle_state_json, e.mob_json
+            FROM pve_encounters e
+            {player_join}
+            WHERE e.status='active'
+              {player_filter}
+              AND json_valid(e.battle_state_json)
+              AND CAST(json_extract(e.battle_state_json, '$.mob_dead') AS INTEGER)=1
+              AND NOT EXISTS (
+                  SELECT 1 FROM pve_reward_settlements s WHERE s.encounter_id=e.encounter_id
+              )
+            ORDER BY e.updated_at, e.encounter_id LIMIT ?''', tuple(params)).fetchall()
+    finally:
+        conn.close()
+
+    recovered = []
+    for row in rows:
+        encounter_id = str(row['encounter_id'])
+        battle_state = _load_json(row['battle_state_json'])
+        mob = _load_json(row['mob_json'])
+        if not _is_terminal_victory_state(battle_state):
+            continue
+        try:
+            prepared = prepare_victory_settlement(
+                encounter_id=encounter_id,
+                battle_state=battle_state,
+                mob=mob,
+                failure_hook=prepare_failure_hook,
+            )
+            if prepared.get('status') == 'prepared':
+                applied = apply_prepared_settlement(
+                    encounter_id,
+                    failure_hook=apply_failure_hook,
+                )
+                recovered.append({'encounter_id': encounter_id, **applied})
+            elif prepared.get('status') == 'applied':
+                recovered.append({'encounter_id': encounter_id, **prepared})
+            else:
+                recovered.append({'encounter_id': encounter_id, **prepared})
+        except Exception:
+            logger.exception('Unprepared terminal victory recovery failed: encounter_id=%s', encounter_id)
+            recovered.append({'status': 'retryable', 'encounter_id': encounter_id})
+    return recovered
+
+
 def recover_prepared_settlements(limit: int = 20) -> list[dict]:
+    recovered = recover_unprepared_terminal_victories(limit=limit)
     conn = get_connection()
     try:
         rows = conn.execute("SELECT encounter_id FROM pve_reward_settlements WHERE status='prepared' "
                             "ORDER BY created_at LIMIT ?", (max(1, min(100, int(limit))),)).fetchall()
     finally:
         conn.close()
-    recovered = []
     for row in rows:
         encounter_id = str(row['encounter_id'])
         try:
@@ -770,6 +926,7 @@ def recover_prepared_settlements(limit: int = 20) -> list[dict]:
 
 def recover_player_settlements(player_id: int, limit: int = 20) -> dict:
     """Bounded entry-point recovery plus owner-readable legacy-review evidence."""
+    discovered = recover_unprepared_terminal_victories(limit=limit, player_id=player_id)
     conn = get_connection()
     try:
         rows = conn.execute('''SELECT DISTINCT s.encounter_id, s.status
@@ -780,8 +937,11 @@ def recover_player_settlements(player_id: int, limit: int = 20) -> dict:
             (player_id, max(1, min(20, int(limit))))).fetchall()
     finally:
         conn.close()
-    recovered = []
-    pending = []
+    recovered = [result for result in discovered if result.get('status') == 'applied']
+    pending = [
+        str(result.get('encounter_id')) for result in discovered
+        if result.get('status') not in {'applied', 'not_found'}
+    ]
     legacy_review = []
     for row in rows:
         if str(row['status']) == 'prepared':

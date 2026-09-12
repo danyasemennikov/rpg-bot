@@ -136,6 +136,8 @@ WEAPON_PROFILE_NAME = {
     'es': {'sword_1h': 'Espada 1M', 'sword_2h': 'Espada 2M', 'axe_2h': 'Hacha 2M', 'daggers': 'Dagas', 'bow': 'Arco', 'magic_staff': 'Bastón mágico', 'holy_staff': 'Bastón sagrado', 'wand': 'Varita', 'holy_rod': 'Vara sagrada', 'tome': 'Tomo', 'unarmed': 'Sin arma'},
 }
 
+INVENTORY_PAGE_SIZE = 8
+
 def get_inventory(telegram_id: int, item_type: str = None) -> list:
     conn = get_connection()
     if item_type:
@@ -414,6 +416,22 @@ def build_tab_keyboard(active_tab: str, lang: str) -> list:
     return row
 
 
+def _inventory_route(tab: str, page: int) -> str:
+    normalized_page = max(0, int(page))
+    return tab if normalized_page == 0 else f'{tab}~{normalized_page}'
+
+
+def _parse_inventory_route(raw_route: str) -> tuple[str, int] | None:
+    tab, separator, raw_page = str(raw_route or '').partition('~')
+    if tab not in TABS:
+        return None
+    if not separator:
+        return tab, 0
+    if not raw_page.isdigit():
+        return None
+    return tab, int(raw_page)
+
+
 def _parse_entry_token(token: str) -> tuple[str, int]:
     if token.startswith('g'):
         return 'gear_instance', int(token[1:])
@@ -445,7 +463,14 @@ def _load_inventory_entry(telegram_id: int, token: str) -> dict | None:
         conn.close()
 
 
-def build_inventory_list(telegram_id: int, active_tab: str, lang: str = 'ru') -> tuple:
+def build_inventory_list(
+        telegram_id: int, active_tab: str, lang: str = 'ru', page: int | None = None) -> tuple:
+    parsed_route = _parse_inventory_route(active_tab)
+    if parsed_route is None:
+        active_tab, route_page = 'weapon', 0
+    else:
+        active_tab, route_page = parsed_route
+    requested_page = route_page if page is None else max(0, int(page))
     items = []
     if active_tab in ('weapon', 'armor', 'accessory'):
         items.extend(get_gear_inventory_entries(telegram_id, active_tab))
@@ -453,17 +478,29 @@ def build_inventory_list(telegram_id: int, active_tab: str, lang: str = 'ru') ->
     for row in legacy_items:
         row['entry_type'] = 'legacy_inventory'
         items.append(row)
+    items.sort(key=lambda row: (
+        str(row.get('item_id') or ''),
+        0 if row.get('entry_type') == 'gear_instance' else 1,
+        int(row.get('id', 0)),
+    ))
+    page_count = max(1, (len(items) + INVENTORY_PAGE_SIZE - 1) // INVENTORY_PAGE_SIZE)
+    current_page = min(requested_page, page_count - 1)
+    visible_items = items[
+        current_page * INVENTORY_PAGE_SIZE:(current_page + 1) * INVENTORY_PAGE_SIZE
+    ]
+    current_route = _inventory_route(active_tab, current_page)
 
     eq = get_equipped(telegram_id)
     keyboard = [build_tab_keyboard(active_tab, lang)]
     keyboard.append([InlineKeyboardButton(t('gear.catalog_btn', lang), callback_data='inv_catalog')])
 
-    text = t('inventory.title', lang) + '\n\n'
+    text = t('inventory.title', lang) + '\n'
+    text += t('gear.page', lang, page=current_page + 1, pages=page_count) + '\n\n'
 
     if not items:
         text += t('inventory.empty', lang) + '\n'
     else:
-        for inv_row in items:
+        for inv_row in visible_items:
             item = get_item(inv_row['item_id'])
             if not item:
                 continue
@@ -480,8 +517,18 @@ def build_inventory_list(telegram_id: int, active_tab: str, lang: str = 'ru') ->
             label = f"{rarity} {get_item_name(inv_row['item_id'], lang)}{tier_tag}{enhance}{qty}{eq_mark}"
             keyboard.append([InlineKeyboardButton(
                 label,
-                callback_data=f"inv_item_{token}_{active_tab}"
+                callback_data=f"inv_item_{token}_{current_route}"
             )])
+
+    nav = []
+    if current_page > 0:
+        nav.append(InlineKeyboardButton('◀️', callback_data=f'inv_tab_{_inventory_route(active_tab, current_page - 1)}'))
+    if current_page + 1 < page_count:
+        nav.append(InlineKeyboardButton('▶️', callback_data=f'inv_tab_{_inventory_route(active_tab, current_page + 1)}'))
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton(
+        t('gear.refresh_btn', lang), callback_data=f'inv_tab_{current_route}')])
 
     return text, InlineKeyboardMarkup(keyboard)
 
@@ -1106,15 +1153,21 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
 
     # ── Смена вкладки ──
     if data.startswith('inv_tab_'):
-        tab = data.replace('inv_tab_', '')
-        text, keyboard = build_inventory_list(user.id, tab, lang)
+        route = data.removeprefix('inv_tab_')
+        if _parse_inventory_route(route) is None:
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        text, keyboard = build_inventory_list(user.id, route, lang)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
         return
 
     # ── Детальный вид ──
     if data.startswith('inv_item_'):
-        parts    = data.split('_')
+        parts = data.split('_')
+        if len(parts) != 4 or _parse_inventory_route(parts[3]) is None:
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
         entry_token = parts[2]
         back_tab = parts[3]
         text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
