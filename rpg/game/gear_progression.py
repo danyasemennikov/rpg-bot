@@ -17,6 +17,11 @@ from game.gear_instances import (
 from game.items_data import get_item, get_item_metadata
 from game.tier_advancement import resolve_advancement_cost
 
+EQUIPMENT_SLOTS = (
+    'weapon', 'offhand', 'helmet', 'chest', 'legs', 'boots', 'gloves',
+    'ring1', 'ring2', 'amulet',
+)
+
 
 def _columns(conn, table_name: str) -> set[str]:
     return {str(row['name']) for row in conn.execute(f"PRAGMA table_info('{table_name}')").fetchall()}
@@ -159,6 +164,165 @@ def issue_gear_intent(player_id: int, action: str, instance_id: int, *, target_s
         return None
     payload = str(preview['payload'])
     return issue_actions(player_id, f'gear_{action}', [payload]).get(payload)
+
+
+def issue_gear_equip_intents(player_id: int, instance_id: int, target_slots: list[str]) -> dict[str, str]:
+    previews = {
+        slot: build_gear_mutation_preview(player_id, 'equip', instance_id, target_slot=slot)
+        for slot in target_slots
+    }
+    payload_by_slot = {
+        slot: str(preview['payload']) for slot, preview in previews.items() if preview
+    }
+    tokens = issue_actions(player_id, 'gear_equip', list(payload_by_slot.values())) if payload_by_slot else {}
+    return {slot: tokens[payload] for slot, payload in payload_by_slot.items() if payload in tokens}
+
+
+def build_legacy_gear_mutation_preview(player_id: int, action: str, inventory_id: int,
+                                       *, target_slot: str | None = None) -> dict | None:
+    if action not in {'equip', 'unequip'}:
+        return None
+    conn = get_connection()
+    try:
+        row = conn.execute('''SELECT i.*, p.gear_revision FROM inventory i
+            JOIN players p ON p.telegram_id=i.telegram_id
+            WHERE i.id=? AND i.telegram_id=?''', (inventory_id, player_id)).fetchone()
+        equipment = conn.execute('SELECT * FROM equipment WHERE telegram_id=?', (player_id,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    inventory = dict(row)
+    item = get_item(str(inventory['item_id'])) or {}
+    if item.get('item_type') not in {'weapon', 'armor', 'accessory'}:
+        return None
+    equipped_slot = next(
+        (slot for slot in EQUIPMENT_SLOTS if equipment and equipment[slot] == inventory_id),
+        None,
+    )
+    if action == 'unequip' and not equipped_slot:
+        return None
+    payload = _json_payload(
+        action=action,
+        inventory_id=int(inventory_id),
+        item_id=str(inventory['item_id']),
+        quantity=int(inventory['quantity']),
+        gear_revision=int(inventory['gear_revision']),
+        target_slot=target_slot,
+        equipped_slot=equipped_slot,
+    )
+    return {'inventory': inventory, 'payload': payload, 'equipped_slot': equipped_slot}
+
+
+def issue_legacy_gear_intent(player_id: int, action: str, inventory_id: int,
+                             *, target_slot: str | None = None) -> str | None:
+    preview = build_legacy_gear_mutation_preview(
+        player_id, action, inventory_id, target_slot=target_slot)
+    if not preview:
+        return None
+    payload = str(preview['payload'])
+    return issue_actions(player_id, f'legacy_gear_{action}', [payload]).get(payload)
+
+
+def issue_legacy_gear_equip_intents(player_id: int, inventory_id: int,
+                                    target_slots: list[str]) -> dict[str, str]:
+    previews = {
+        slot: build_legacy_gear_mutation_preview(
+            player_id, 'equip', inventory_id, target_slot=slot)
+        for slot in target_slots
+    }
+    payload_by_slot = {
+        slot: str(preview['payload']) for slot, preview in previews.items() if preview
+    }
+    tokens = issue_actions(player_id, 'legacy_gear_equip', list(payload_by_slot.values())) if payload_by_slot else {}
+    return {slot: tokens[payload] for slot, payload in payload_by_slot.items() if payload in tokens}
+
+
+def _load_legacy_intent(conn, player_id: int, action: str, token: str) -> tuple[dict, dict, dict, Any]:
+    player = peaceful_player(conn, player_id)
+    raw = consume_action(conn, player_id, f'legacy_gear_{action}', token)
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ActionRejected('stale_action') from exc
+    if not isinstance(payload, dict) or payload.get('action') != action:
+        raise ActionRejected('stale_action')
+    inventory_id = int(payload.get('inventory_id', 0))
+    inventory = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?',
+                             (inventory_id, player_id)).fetchone()
+    equipment = conn.execute('SELECT * FROM equipment WHERE telegram_id=?', (player_id,)).fetchone()
+    if not inventory or not equipment:
+        raise ActionRejected('stale_action')
+    inventory = dict(inventory)
+    if (
+        str(inventory.get('item_id')) != str(payload.get('item_id'))
+        or int(inventory.get('quantity', 0)) != int(payload.get('quantity', -1))
+        or int(player.get('gear_revision', 0)) != int(payload.get('gear_revision', -1))
+    ):
+        raise ActionRejected('stale_action')
+    equipped_slot = next(
+        (slot for slot in EQUIPMENT_SLOTS if equipment[slot] == inventory_id),
+        None,
+    )
+    if equipped_slot != payload.get('equipped_slot'):
+        raise ActionRejected('stale_action')
+    return player, inventory, payload, equipment
+
+
+def apply_legacy_gear_intent(player_id: int, action: str, token: str, *, failure_hook=None) -> dict:
+    """Atomically consume a legacy gear intent and mutate its exact owned row."""
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        player, inventory, payload, equipment = _load_legacy_intent(conn, player_id, action, token)
+        inventory_id = int(inventory['id'])
+        item = get_item(str(inventory['item_id'])) or {}
+        if action == 'equip':
+            slot = str(payload.get('target_slot') or '')
+            if slot not in EQUIPMENT_SLOTS:
+                raise ActionRejected('wrong_equipment_slot')
+            identity = str(get_item_metadata(str(inventory['item_id'])).get('slot_identity') or '')
+            if identity != slot and not (identity == 'ring' and slot in {'ring1', 'ring2'}):
+                raise ActionRejected('wrong_equipment_slot')
+            for stat in ('level', 'strength', 'agility', 'intuition', 'wisdom'):
+                if int(player.get(stat, 0)) < int(item.get(f'req_{stat}', 0)):
+                    raise ActionRejected('equipment_requirements')
+            conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (player_id,))
+            conn.execute('UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 '
+                         'WHERE telegram_id=? AND equipped_slot=?', (player_id, slot))
+            if failure_hook:
+                failure_hook('after_target_slot_clear')
+            for previous_slot in EQUIPMENT_SLOTS:
+                if equipment[previous_slot] == inventory_id:
+                    conn.execute(f'UPDATE equipment SET {previous_slot}=NULL WHERE telegram_id=?', (player_id,))
+            conn.execute(f'UPDATE equipment SET {slot}=? WHERE telegram_id=?', (inventory_id, player_id))
+            conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (player_id,))
+            _clamp_with_conn(conn, player_id)
+            result = {'status': 'equipped', 'inventory_id': inventory_id, 'slot': slot}
+        elif action == 'unequip':
+            slot = str(payload.get('target_slot') or payload.get('equipped_slot') or '')
+            if slot not in EQUIPMENT_SLOTS or equipment[slot] != inventory_id:
+                raise ActionRejected('stale_action')
+            conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=? AND {slot}=?',
+                         (player_id, inventory_id))
+            conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (player_id,))
+            _clamp_with_conn(conn, player_id)
+            result = {'status': 'unequipped', 'inventory_id': inventory_id, 'slot': slot}
+        else:
+            raise ActionRejected('stale_action')
+        conn.execute('''INSERT INTO gear_mutation_receipts
+            (action_token, player_id, action_kind, result_json) VALUES (?, ?, ?, ?)''',
+            (token, player_id, f'legacy_{action}', json.dumps(result, ensure_ascii=False, sort_keys=True)))
+        conn.commit()
+        return result
+    except ActionRejected as exc:
+        conn.rollback()
+        return {'status': str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _load_intent(conn, player_id: int, action: str, token: str) -> tuple[dict, dict, dict]:

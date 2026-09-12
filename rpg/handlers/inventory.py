@@ -3,6 +3,7 @@
 # ============================================================
 
 import sys, json, os
+from collections import Counter
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,24 +11,25 @@ from telegram.ext import ContextTypes
 from database import get_player, get_connection, is_in_battle, is_location_discovered
 from game.items_data import get_item, get_item_metadata
 from game.i18n import t, get_player_lang, get_item_name, get_item_description, get_location_name
-from game.equipment_stats import get_player_effective_stats, clamp_player_resources_to_effective_caps
+from game.equipment_stats import get_player_effective_stats
 from game.gear_instances import (
     MAX_ENHANCE_LEVEL,
     get_enhance_requirements_for_target_level,
     get_enhance_outcome_chances_for_target_level,
     list_player_gear_instances,
     get_equipped_gear_instances,
-    equip_gear_instance_in_slot,
-    equip_legacy_inventory_in_slot,
     resolve_gear_instance_item_data,
-    unequip_slot_across_models,
 )
 from game.field_catalog import FIELD_ITEM_IDS, FIELD_VENDOR_LOCATIONS, get_field_category, is_field_item
 from game.gear_progression import (
     apply_gear_intent,
+    apply_legacy_gear_intent,
     build_gear_mutation_preview,
     get_equipment_goal,
     issue_gear_intent,
+    issue_gear_equip_intents,
+    issue_legacy_gear_intent,
+    issue_legacy_gear_equip_intents,
     set_equipment_goal,
 )
 from game.gear_ui import (
@@ -605,15 +607,43 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
     keyboard = []
     if item['item_type'] in ('weapon', 'armor', 'accessory'):
         if equipped:
-            intent = issue_gear_intent(telegram_id, 'unequip', inv_row['id'], target_slot=equipped_slot) if inv_row.get('entry_type') == 'gear_instance' else None
-            callback = f"inv_gunequip_{intent}_{entry_token}_{back_tab}" if intent else f"inv_unequip_{entry_token}_{equipped_slot}_{back_tab}"
-            keyboard.append([InlineKeyboardButton(t('inventory.unequip_btn', lang), callback_data=callback)])
+            if inv_row.get('entry_type') == 'gear_instance':
+                intent = issue_gear_intent(telegram_id, 'unequip', inv_row['id'], target_slot=equipped_slot)
+                callback = f"inv_gunequip_{intent}_{entry_token}_{back_tab}" if intent else None
+            else:
+                intent = issue_legacy_gear_intent(telegram_id, 'unequip', inv_row['id'], target_slot=equipped_slot)
+                callback = f"inv_lunequip_{intent}_{entry_token}_{back_tab}" if intent else None
+            if callback:
+                keyboard.append([InlineKeyboardButton(t('inventory.unequip_btn', lang), callback_data=callback)])
         else:
-            equip_slot = resolve_equip_slot_for_item(inv_row['item_id'], eq)
-            if equip_slot:
-                intent = issue_gear_intent(telegram_id, 'equip', inv_row['id'], target_slot=equip_slot) if inv_row.get('entry_type') == 'gear_instance' else None
-                callback = f"inv_gequip_{intent}_{entry_token}_{back_tab}" if intent else f"inv_equip_{entry_token}_{equip_slot}_{back_tab}"
-                keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=callback)])
+            identity = str(metadata.get('slot_identity') or '')
+            if identity == 'ring':
+                if inv_row.get('entry_type') == 'gear_instance':
+                    intents = issue_gear_equip_intents(telegram_id, inv_row['id'], ['ring1', 'ring2'])
+                    prefix = 'inv_gequip'
+                else:
+                    intents = issue_legacy_gear_equip_intents(telegram_id, inv_row['id'], ['ring1', 'ring2'])
+                    prefix = 'inv_lequip'
+                ring_buttons = []
+                for slot in ('ring1', 'ring2'):
+                    if slot in intents:
+                        ring_buttons.append(InlineKeyboardButton(
+                            t(f'gear.equip_{slot}_btn', lang),
+                            callback_data=f"{prefix}_{intents[slot]}_{entry_token}_{back_tab}",
+                        ))
+                if ring_buttons:
+                    keyboard.append(ring_buttons)
+            else:
+                equip_slot = resolve_equip_slot_for_item(inv_row['item_id'], eq)
+                if equip_slot:
+                    if inv_row.get('entry_type') == 'gear_instance':
+                        intent = issue_gear_intent(telegram_id, 'equip', inv_row['id'], target_slot=equip_slot)
+                        callback = f"inv_gequip_{intent}_{entry_token}_{back_tab}" if intent else None
+                    else:
+                        intent = issue_legacy_gear_intent(telegram_id, 'equip', inv_row['id'], target_slot=equip_slot)
+                        callback = f"inv_lequip_{intent}_{entry_token}_{back_tab}" if intent else None
+                    if callback:
+                        keyboard.append([InlineKeyboardButton(t('inventory.equip_btn', lang), callback_data=callback)])
         if inv_row.get('entry_type') == 'gear_instance' and instance_enhance < MAX_ENHANCE_LEVEL:
             intent = issue_gear_intent(telegram_id, 'enhance', inv_row['id'])
             if intent:
@@ -737,15 +767,20 @@ def build_field_catalog_detail(player: dict, item_id: str, category: str, page: 
     return '\n'.join(lines)[:4096], InlineKeyboardMarkup(rows)
 
 
-def build_recent_gear_receipts(player: dict) -> tuple[str, InlineKeyboardMarkup]:
+def build_recent_gear_receipts(player: dict, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
     from game.pve_reward_settlement import list_recent_reward_receipts
 
     lang = player.get('lang', 'ru')
     receipts = list_recent_reward_receipts(int(player['telegram_id']), limit=20)
-    lines = [t('gear.receipts_title', lang)]
+    page_size = 6
+    page_count = max(1, (len(receipts) + page_size - 1) // page_size)
+    page = max(0, min(page_count - 1, int(page)))
+    visible = receipts[page * page_size:(page + 1) * page_size]
+    lines = [t('gear.receipts_title', lang), t('gear.page', lang, page=page + 1, pages=page_count)]
+    rows = []
     if not receipts:
         lines.append(t('gear.receipts_empty', lang))
-    for receipt in receipts:
+    for receipt in visible:
         recipient = receipt['recipient']
         timestamp = str(receipt.get('applied_at') or '')[:16].replace('T', ' ')
         lines.append(t(
@@ -756,10 +791,64 @@ def build_recent_gear_receipts(player: dict) -> tuple[str, InlineKeyboardMarkup]
             gold=int(recipient.get('gold', 0)),
             gear=len(recipient.get('gear') or []),
         ))
-    return '\n'.join(lines)[:4096], InlineKeyboardMarkup([
-        [InlineKeyboardButton(t('gear.refresh_btn', lang), callback_data='inv_receipts')],
+        callback = f"inv_receipt_{receipt['encounter_id']}_{page}"
+        if len(callback.encode('utf-8')) <= 64:
+            rows.append([InlineKeyboardButton(
+                t('gear.receipt_open_btn', lang, time=timestamp),
+                callback_data=callback,
+            )])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton('◀️', callback_data=f'inv_rpage_{page - 1}'))
+    if page + 1 < page_count:
+        nav.append(InlineKeyboardButton('▶️', callback_data=f'inv_rpage_{page + 1}'))
+    if nav:
+        rows.append(nav)
+    rows.extend([
+        [InlineKeyboardButton(t('gear.refresh_btn', lang), callback_data=f'inv_rpage_{page}')],
         [InlineKeyboardButton(t('gear.back_btn', lang), callback_data='inv_catalog')],
     ])
+    return '\n'.join(lines)[:4096], InlineKeyboardMarkup(rows)
+
+
+def build_reward_receipt_detail(player: dict, encounter_id: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+    from game.pve_reward_settlement import get_reward_receipt_for_player
+
+    lang = player.get('lang', 'ru')
+    receipt = get_reward_receipt_for_player(int(player['telegram_id']), encounter_id)
+    if not receipt:
+        return t('gear.state_changed', lang), InlineKeyboardMarkup([[
+            InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'inv_rpage_{page}')]])
+    recipient = receipt['recipient']
+    timestamp = str(receipt.get('applied_at') or '')[:16].replace('T', ' ')
+    lines = [
+        t('gear.receipt_detail_title', lang),
+        t('gear.receipt_id', lang, id=encounter_id),
+        t('gear.receipt_time_place', lang, time=timestamp,
+          place=get_location_name(str(receipt.get('location_id') or ''), lang)),
+        t('gear.receipt_rewards', lang, exp=int(recipient.get('exp', 0)), gold=int(recipient.get('gold', 0))),
+        t('gear.receipt_guaranteed_yes' if recipient.get('guaranteed') else 'gear.receipt_guaranteed_no', lang),
+    ]
+    stackables = Counter(str(item_id) for item_id in recipient.get('stackable_items') or [])
+    gear_rows = list(recipient.get('gear') or [])
+    if not stackables and not gear_rows:
+        lines.append(t('gear.receipt_no_items', lang))
+    for item_id, quantity in sorted(stackables.items()):
+        lines.append(t('gear.receipt_stackable_line', lang,
+                       name=get_item_name(item_id, lang), quantity=quantity))
+    for gear in gear_rows:
+        rarity = RARITY_NAME.get(lang, RARITY_NAME['ru']).get(str(gear.get('rarity')), str(gear.get('rarity')))
+        lines.append(t(
+            'gear.receipt_gear_line', lang,
+            name=get_item_name(str(gear.get('base_item_id') or ''), lang),
+            id=int(gear.get('instance_id', 0)),
+            tier=int(gear.get('item_tier', 1)),
+            rarity=rarity,
+            enhance=int(gear.get('enhance_level', 0)),
+            guarantee=t('gear.receipt_gear_guaranteed', lang) if gear.get('guaranteed') else '',
+        ))
+    return '\n'.join(lines)[:4096], InlineKeyboardMarkup([[
+        InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'inv_rpage_{page}')]])
 
 
 def build_gear_comparison(player_id: int, entry_token: str, slot: str, back_tab: str, lang: str) -> tuple:
@@ -815,7 +904,8 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     effective_stats = get_player_effective_stats(user.id, p)
 
     if data.startswith(('inv_equip_', 'inv_unequip_', 'inv_enhance_', 'inv_drop_', 'inv_transfer_',
-                        'inv_gequip_', 'inv_gunequip_', 'inv_genh_', 'inv_sellask_', 'inv_gsell_')):
+                        'inv_gequip_', 'inv_gunequip_', 'inv_genh_', 'inv_lequip_', 'inv_lunequip_',
+                        'inv_sellask_', 'inv_gsell_')):
         from game.pvp_live import has_active_live_pvp_engagement
         if p['in_battle'] or has_active_live_pvp_engagement(user.id):
             await query.answer(t('chapter.in_battle', lang), show_alert=True)
@@ -832,7 +922,28 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         return
 
     if data == 'inv_receipts':
-        text, keyboard = build_recent_gear_receipts(p)
+        text, keyboard = build_recent_gear_receipts(p, 0)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('inv_rpage_'):
+        raw_page = data.removeprefix('inv_rpage_')
+        if not raw_page.isdigit():
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        text, keyboard = build_recent_gear_receipts(p, int(raw_page))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('inv_receipt_'):
+        raw = data.removeprefix('inv_receipt_')
+        encounter_id, separator, raw_page = raw.rpartition('_')
+        if not separator or not encounter_id or not raw_page.isdigit():
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        text, keyboard = build_reward_receipt_detail(p, encounter_id, int(raw_page))
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
         return
@@ -971,6 +1082,28 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
+    if data.startswith(('inv_lequip_', 'inv_lunequip_')):
+        parts = data.split('_')
+        if len(parts) != 5:
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        action = 'equip' if parts[1] == 'lequip' else 'unequip'
+        result = apply_legacy_gear_intent(user.id, action, parts[2])
+        expected = 'equipped' if action == 'equip' else 'unequipped'
+        if result.get('status') != expected:
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        entry = _load_inventory_entry(user.id, parts[3])
+        message = (
+            t('inventory.equipped_ok', lang, name=get_item_name((entry or {}).get('item_id', ''), lang))
+            if action == 'equip'
+            else t('inventory.unequipped_ok', lang)
+        )
+        await query.answer(message, show_alert=True)
+        text, keyboard = build_item_detail(user.id, parts[3], parts[4], lang)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
     # ── Смена вкладки ──
     if data.startswith('inv_tab_'):
         tab = data.replace('inv_tab_', '')
@@ -1006,59 +1139,14 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
 
     # ── Экипировать ──
     if data.startswith('inv_equip_'):
-        parts    = data.split('_')
-        entry_token = parts[2]
-        slot     = parts[3]
-        back_tab = parts[4]
-
-        inv_row = _load_inventory_entry(user.id, entry_token)
-        if not inv_row:
-            await query.answer(t('inventory.item_not_found', lang), show_alert=True)
-            return
-        item = get_item(inv_row['item_id'])
-
-        if inv_row.get('entry_type') == 'gear_instance':
-            await query.answer(t('gear.state_changed', lang), show_alert=True)
-            return
-
-        actual_slot = resolve_equip_slot_for_item(inv_row['item_id'], get_equipped(user.id))
-        if slot != actual_slot and not (slot in {'ring1', 'ring2'} and actual_slot in {'ring1', 'ring2'}):
-            await query.answer(t('chapter.stale_action', lang), show_alert=True)
-            return
-        if p['level']     < item['req_level']:     await query.answer(t('inventory.req_level',     lang, level=item['req_level']),     show_alert=True); return
-        if p['strength']  < item['req_strength']:  await query.answer(t('inventory.req_strength',  lang, val=item['req_strength']),    show_alert=True); return
-        if p['agility']   < item['req_agility']:   await query.answer(t('inventory.req_agility',   lang, val=item['req_agility']),     show_alert=True); return
-        if p['intuition'] < item['req_intuition']: await query.answer(t('inventory.req_intuition', lang, val=item['req_intuition']),   show_alert=True); return
-        if p['wisdom']    < item['req_wisdom']:    await query.answer(t('inventory.req_wisdom',    lang, val=item['req_wisdom']),      show_alert=True); return
-
-        if inv_row.get('entry_type') == 'gear_instance':
-            equip_gear_instance_in_slot(user.id, inv_row['id'], slot)
-        else:
-            equip_legacy_inventory_in_slot(user.id, inv_row['id'], slot)
-        clamp_player_resources_to_effective_caps(user.id)
-
-        await query.answer(t('inventory.equipped_ok', lang, name=get_item_name(inv_row['item_id'], lang)))
-        text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        # Reviewed-head callbacks carried mutable slot authority.  They remain
+        # parseable for backward compatibility but never mutate after V1.
+        await query.answer(t('gear.state_changed', lang), show_alert=True)
         return
 
     # ── Снять ──
     if data.startswith('inv_unequip_'):
-        parts    = data.split('_')
-        entry_token = parts[2]
-        slot     = parts[3]
-        back_tab = parts[4]
-
-        if entry_token.startswith('g'):
-            await query.answer(t('gear.state_changed', lang), show_alert=True)
-            return
-
-        unequip_slot_across_models(user.id, slot)
-        clamp_player_resources_to_effective_caps(user.id)
-
-        await query.answer(t('inventory.unequipped_ok', lang))
-        text, keyboard = build_item_detail(user.id, entry_token, back_tab, lang)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer(t('gear.state_changed', lang), show_alert=True)
         return
 
     # ── Использовать зелье ──

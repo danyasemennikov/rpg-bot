@@ -16,6 +16,7 @@ from game.field_catalog import (
 )
 from game.gear_instances import get_equipped_gear_instances, resolve_gear_instance_item_data
 from game.items_data import get_item
+from game.equipment_stats import aggregate_equipped_stat_bonuses, build_effective_player_stats
 
 CATALOG_PAGE_SIZE = 8
 COMPARISON_CHANNELS = (
@@ -128,21 +129,57 @@ def compare_instance_to_slot(player_id: int, instance_id: int, slot: str) -> dic
         identity = str(candidate.get('slot_identity') or '')
         if identity != slot and not (identity == 'ring' and slot in {'ring1', 'ring2'}):
             return None
-        candidate_values = contribution_from_resolved_item(resolve_gear_instance_item_data(candidate))
+        candidate_contribution = contribution_from_resolved_item(resolve_gear_instance_item_data(candidate))
 
         current_item_id = None
         equipped_instances = get_equipped_gear_instances(player_id, conn=conn)
         current_instance = equipped_instances.get(slot)
         if current_instance:
             current_item_id = str(current_instance['base_item_id'])
-            current_values = contribution_from_resolved_item(resolve_gear_instance_item_data(current_instance))
+            current_contribution = contribution_from_resolved_item(resolve_gear_instance_item_data(current_instance))
         else:
             equipment = conn.execute('SELECT * FROM equipment WHERE telegram_id=?', (player_id,)).fetchone()
             legacy_id = equipment[slot] if equipment else None
             legacy = conn.execute('SELECT item_id FROM inventory WHERE id=? AND telegram_id=?',
                                   (legacy_id, player_id)).fetchone() if legacy_id is not None else None
             current_item_id = str(legacy['item_id']) if legacy else None
-            current_values = contribution_from_resolved_item(get_item(current_item_id) if current_item_id else None)
+            current_contribution = contribution_from_resolved_item(get_item(current_item_id) if current_item_id else None)
+
+        player_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (player_id,)).fetchone()
+        if not player_row:
+            return None
+        before_bonuses = aggregate_equipped_stat_bonuses(player_id, conn=conn)
+        after_bonuses = dict(before_bonuses)
+        for key, value in current_contribution.items():
+            if key not in {'damage_min', 'damage_max'}:
+                after_bonuses[key] = int(after_bonuses.get(key, 0)) - int(value)
+        candidate_already_equipped = bool(candidate.get('equipped_slot'))
+        if not candidate_already_equipped or str(candidate.get('equipped_slot')) == slot:
+            for key, value in candidate_contribution.items():
+                if key not in {'damage_min', 'damage_max'}:
+                    after_bonuses[key] = int(after_bonuses.get(key, 0)) + int(value)
+
+        before_effective = build_effective_player_stats(dict(player_row), before_bonuses)
+        after_effective = build_effective_player_stats(dict(player_row), after_bonuses)
+        effective_key = {
+            'physical_defense': 'effective_physical_defense',
+            'magic_defense': 'effective_magic_defense',
+            'accuracy': 'accuracy_bonus',
+            'evasion': 'evasion_bonus',
+            'block_chance': 'block_chance_bonus',
+            'magic_power': 'magic_power_bonus',
+            'healing_power': 'healing_power_bonus',
+        }
+        current_values = {key: 0 for key in COMPARISON_CHANNELS}
+        candidate_values = {key: 0 for key in COMPARISON_CHANNELS}
+        for key in COMPARISON_CHANNELS:
+            if key in {'damage_min', 'damage_max'}:
+                current_values[key] = current_contribution[key]
+                candidate_values[key] = candidate_contribution[key]
+                continue
+            projection_key = effective_key.get(key, key)
+            current_values[key] = int(before_effective.get(projection_key, 0))
+            candidate_values[key] = int(after_effective.get(projection_key, 0))
         deltas = {key: candidate_values[key] - current_values[key] for key in COMPARISON_CHANNELS}
         return {
             'slot': slot,
