@@ -155,7 +155,8 @@ def _ensure_pve_encounter_table() -> None:
             updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             finished_at       TIMESTAMP,
             reward_policy_version TEXT NOT NULL DEFAULT 'legacy_v0',
-            reward_seed       TEXT
+            reward_seed       TEXT,
+            locked_roster_json TEXT
         )
         '''
     )
@@ -190,6 +191,8 @@ def _ensure_pve_encounter_table() -> None:
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN reward_policy_version TEXT NOT NULL DEFAULT 'legacy_v0'")
     if 'reward_seed' not in columns:
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN reward_seed TEXT")
+    if 'locked_roster_json' not in columns:
+        conn.execute("ALTER TABLE pve_encounters ADD COLUMN locked_roster_json TEXT")
     conn.commit()
     conn.close()
 
@@ -1101,6 +1104,9 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
             (encounter_id, SIDE_PLAYER),
         ).fetchall()
         final_roster = [int(row['player_id']) for row in roster_rows]
+        if not final_roster:
+            conn.rollback()
+            return None
 
         updated = conn.execute(
             '''
@@ -1114,6 +1120,12 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
         if updated <= 0:
             conn.rollback()
             return None
+
+        conn.execute(
+            '''UPDATE pve_encounters SET locked_roster_json=?, updated_at=CURRENT_TIMESTAMP
+               WHERE encounter_id=? AND status='active' ''',
+            (_serialize_payload({'player_ids': final_roster}), encounter_id),
+        )
 
         conn.commit()
         return final_roster
@@ -1568,8 +1580,8 @@ def create_pve_encounter(
         '''
         INSERT INTO pve_encounters (
             encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id,
-            anchor_spawn_instance_id, reward_policy_version, reward_seed
-        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+            anchor_spawn_instance_id, reward_policy_version, reward_seed, locked_roster_json
+        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             encounter_id,
@@ -1581,6 +1593,7 @@ def create_pve_encounter(
             str(anchor_spawn_instance_id or battle_state.get('anchor_spawn_instance_id') or '') or None,
             FIELD_REWARD_POLICY_VERSION,
             uuid.uuid4().hex,
+            None if anchor_spawn_instance_id else _serialize_payload({'player_ids': participant_ids}),
         ),
     )
 

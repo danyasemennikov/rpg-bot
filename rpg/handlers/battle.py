@@ -657,6 +657,14 @@ async def _handle_victory_cleanup(
     if encounter_id:
         from game.pve_reward_settlement import prepare_victory_settlement, apply_prepared_settlement
         try:
+            # The final combat transition becomes encounter authority before
+            # T1 plans any reward.  A failed T1 leaves this active terminal
+            # snapshot safely retryable and cannot mint from callback-only data.
+            persist_solo_pve_encounter_state(
+                encounter_id=encounter_id,
+                battle_state=battle_state,
+                mob=mob,
+            )
             prepared = prepare_victory_settlement(
                 encounter_id=encounter_id,
                 battle_state=battle_state,

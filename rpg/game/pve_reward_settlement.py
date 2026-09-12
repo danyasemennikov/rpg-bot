@@ -35,7 +35,14 @@ from game.gear_instances import (
 from game.gear_progression import ensure_gear_progression_schema
 from game.items_data import get_item
 from game.mobs import MOBS
-from game.reward_source_metadata import RewardSourceMetadata, build_open_world_combat_source_metadata
+from game.open_world_reward_pools import clamp_rarity_to_quality_floor
+from game.reward_source_metadata import (
+    RewardSourceMetadata,
+    build_open_world_combat_source_metadata,
+    classify_item_reward_family,
+    is_reward_family_allowed_for_source,
+)
+from game.enhancement_material_routing import resolve_enhancement_material_routing
 
 SETTLEMENT_SCHEMA_VERSION = 1
 SUPPORTED_POLICY_VERSIONS = {FIELD_REWARD_POLICY_VERSION, LEGACY_REWARD_POLICY_VERSION}
@@ -56,9 +63,115 @@ def _load_json(raw: str | None) -> dict:
 
 
 def _participant_snapshot(battle_state: dict, player_id: int) -> dict:
-    snapshots = battle_state.get('participant_combat_states') or {}
+    snapshots = battle_state.get('participant_states') or {}
     raw = snapshots.get(str(player_id), snapshots.get(player_id, {}))
     return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _locked_roster(conn, encounter: dict) -> tuple[list[int], dict[int, str]]:
+    encounter_id = str(encounter['encounter_id'])
+    participant_rows = conn.execute('''SELECT player_id, status FROM pve_encounter_participants
+        WHERE encounter_id=? AND side_id='side_a' ORDER BY joined_at, player_id''', (encounter_id,)).fetchall()
+    status_by_player = {int(row['player_id']): str(row['status']) for row in participant_rows}
+    persisted = _load_json(encounter.get('locked_roster_json'))
+    raw_locked = persisted.get('player_ids') if persisted else None
+    if isinstance(raw_locked, list):
+        locked = [int(player_id) for player_id in raw_locked]
+    else:
+        # Reviewed-head encounters predate locked_roster_json.  Leaving is only
+        # legal while forming, so active/defeated rows are the recoverable lock.
+        locked = [
+            int(row['player_id']) for row in participant_rows
+            if str(row['status']) in {'active', 'defeated'}
+        ]
+    if not locked or len(locked) != len(set(locked)):
+        raise ValueError('invalid_locked_roster')
+    if int(encounter['owner_player_id']) not in locked:
+        raise ValueError('owner_not_in_locked_roster')
+    if set(locked) != {
+        player_id for player_id, status in status_by_player.items()
+        if status in {'active', 'defeated'}
+    }:
+        raise ValueError('locked_roster_status_mismatch')
+    return locked, status_by_player
+
+
+def _validate_terminal_snapshot(*, conn, encounter: dict, supplied_state: dict, supplied_mob: dict) -> tuple[dict, dict]:
+    """Return the authoritative persisted terminal state or reject T1."""
+    encounter_id = str(encounter['encounter_id'])
+    persisted_state = _load_json(encounter.get('battle_state_json'))
+    persisted_mob = _load_json(encounter.get('mob_json'))
+    if not persisted_state or _canonical_json(persisted_state) != _canonical_json(supplied_state):
+        raise ValueError('terminal_snapshot_not_persisted')
+    if str(persisted_state.get('pve_encounter_id') or '') != encounter_id:
+        raise ValueError('terminal_encounter_identity_mismatch')
+    encounter_mob_id = str(encounter.get('mob_id') or '')
+    if not encounter_mob_id or str(persisted_mob.get('id') or supplied_mob.get('id') or '') != encounter_mob_id:
+        raise ValueError('terminal_mob_identity_mismatch')
+    if str(supplied_mob.get('id') or '') != encounter_mob_id:
+        raise ValueError('terminal_supplied_mob_mismatch')
+
+    locked_roster, status_by_player = _locked_roster(conn, encounter)
+    participant_states = persisted_state.get('participant_states')
+    if not isinstance(participant_states, dict):
+        raise ValueError('terminal_participant_states_missing')
+    snapshot_ids = {int(player_id) for player_id in participant_states if str(player_id).isdigit()}
+    if snapshot_ids != set(locked_roster):
+        raise ValueError('terminal_participant_roster_mismatch')
+    active_projection = {int(player_id) for player_id in persisted_state.get('side_a_player_ids', [])}
+    expected_active = {
+        player_id for player_id in locked_roster if status_by_player.get(player_id) == 'active'
+    }
+    if active_projection != expected_active:
+        raise ValueError('terminal_active_roster_mismatch')
+
+    raw_units = list(persisted_state.get('enemy_units') or [])
+    if raw_units:
+        unit_ids = [str(unit.get('unit_id') or '') for unit in raw_units]
+        spawn_ids = [str(unit.get('spawn_instance_id') or '') for unit in raw_units]
+        if any(not unit_id for unit_id in unit_ids) or len(unit_ids) != len(set(unit_ids)):
+            raise ValueError('terminal_unit_identity_mismatch')
+        nonempty_spawn_ids = [spawn_id for spawn_id in spawn_ids if spawn_id]
+        if len(nonempty_spawn_ids) != len(set(nonempty_spawn_ids)):
+            raise ValueError('terminal_duplicate_spawn')
+        if any(not bool(unit.get('dead')) or int(unit.get('hp', 1) or 0) > 0 for unit in raw_units):
+            raise ValueError('terminal_living_unit')
+    elif not bool(persisted_state.get('mob_dead')) or int(persisted_state.get('mob_hp', 1) or 0) > 0:
+        raise ValueError('terminal_living_unit')
+    if not bool(persisted_state.get('mob_dead')):
+        raise ValueError('terminal_mob_alive')
+
+    anchor_id = str(encounter.get('anchor_spawn_instance_id') or '')
+    spawn_rows = conn.execute('''SELECT spawn_instance_id, location_id, mob_id, spawn_profile,
+            special_spawn_key, state, linked_encounter_id
+        FROM pve_spawn_instances WHERE linked_encounter_id=? ORDER BY spawn_instance_id''',
+        (encounter_id,)).fetchall()
+    if anchor_id:
+        if not spawn_rows or anchor_id not in {str(row['spawn_instance_id']) for row in spawn_rows}:
+            raise ValueError('terminal_anchor_provenance_mismatch')
+        expected_spawn_ids = {str(row['spawn_instance_id']) for row in spawn_rows}
+        actual_spawn_ids = {
+            str(unit.get('spawn_instance_id') or '') for unit in raw_units
+        } if raw_units else {str(persisted_state.get('anchor_spawn_instance_id') or '')}
+        if actual_spawn_ids != expected_spawn_ids:
+            raise ValueError('terminal_spawn_roster_mismatch')
+        units_by_spawn = {str(unit.get('spawn_instance_id')): unit for unit in raw_units}
+        for row in spawn_rows:
+            if str(row['state']) != 'active' or str(row['linked_encounter_id']) != encounter_id:
+                raise ValueError('terminal_spawn_state_mismatch')
+            unit = units_by_spawn.get(str(row['spawn_instance_id'])) if raw_units else persisted_state
+            if str(unit.get('mob_id') or encounter_mob_id) != str(row['mob_id']):
+                raise ValueError('terminal_spawn_mob_mismatch')
+            if str(unit.get('spawn_profile') or persisted_state.get('spawn_profile') or 'normal').lower() != str(row['spawn_profile']).lower():
+                raise ValueError('terminal_spawn_profile_mismatch')
+            if str(row['location_id']) != str(encounter.get('location_id') or ''):
+                raise ValueError('terminal_spawn_location_mismatch')
+            if str(unit.get('special_spawn_key') or '') != str(row['special_spawn_key'] or ''):
+                raise ValueError('terminal_spawn_special_mismatch')
+    elif any(str(unit.get('spawn_instance_id') or '') for unit in raw_units):
+        raise ValueError('terminal_unproven_spawn')
+
+    return persisted_state, persisted_mob
 
 
 def _stable_units(battle_state: dict, fallback_mob: dict) -> list[dict]:
@@ -81,11 +194,12 @@ def _stable_units(battle_state: dict, fallback_mob: dict) -> list[dict]:
     return sorted(normalized, key=lambda unit: (str(unit.get('unit_id') or ''), str(unit.get('spawn_instance_id') or '')))
 
 
-def _roll_legacy_gear_spec(item_id: str, mob_level: int, rng: random.Random) -> dict:
+def _roll_legacy_gear_spec(item_id: str, mob_level: int, rng: random.Random,
+                           quality_floor: str | None = None) -> dict:
     from game.itemization import roll_generated_rarity
 
     item = get_item(item_id) or {}
-    rarity = roll_generated_rarity(rng=rng)
+    rarity = clamp_rarity_to_quality_floor(roll_generated_rarity(rng=rng), quality_floor)
     item_tier = determine_mob_drop_item_tier(mob_level=mob_level)
     rolls = generate_secondary_rolls_for_item(item, rarity=rarity, item_tier=item_tier, rng=rng)
     return {
@@ -111,6 +225,17 @@ def _roll_unit_rewards(*, unit: dict, fallback_mob: dict, route_id: str | None,
     non_gear: list[str] = []
     gear_specs: list[dict] = []
 
+    source_metadata = build_open_world_combat_source_metadata(
+        source_id=mob_id,
+        mob_level=mob_level,
+        source_category=mob.get('reward_source_category'),
+        creature_taxonomy=mob.get('creature_taxonomy'),
+        location_id=location_id,
+        encounter_role=unit.get('encounter_role'),
+        spawn_profile=spawn_profile,
+        spawn_identity=str(unit.get('spawn_instance_id') or '') or None,
+    )
+
     field_policy = (
         policy_version == FIELD_REWARD_POLICY_VERSION
         and route_id is not None
@@ -120,10 +245,17 @@ def _roll_unit_rewards(*, unit: dict, fallback_mob: dict, route_id: str | None,
         item = get_item(item_id) or {}
         if item.get('item_type') in {'weapon', 'armor', 'accessory'}:
             if not field_policy and rng.random() < float(chance):
-                gear_specs.append(_roll_legacy_gear_spec(item_id, mob_level, rng))
+                gear_specs.append(_roll_legacy_gear_spec(
+                    item_id, mob_level, rng, source_metadata.quality_floor_rarity))
             continue
         if rng.random() < float(chance):
-            non_gear.append(str(item_id))
+            reward_family = classify_item_reward_family(str(item_id))
+            allowed = is_reward_family_allowed_for_source(source_metadata, reward_family)
+            if reward_family == 'enhancement_material':
+                routing = resolve_enhancement_material_routing(str(item_id), source_metadata.source_category)
+                allowed = allowed and (routing is None or routing.is_allowed)
+            if allowed:
+                non_gear.append(str(item_id))
 
     counter_before = dry_streak
     guaranteed = False
@@ -165,16 +297,6 @@ def _roll_unit_rewards(*, unit: dict, fallback_mob: dict, route_id: str | None,
             else:
                 dry_streak = min(FIELD_DRY_STREAK_THRESHOLD - 1, dry_streak)
 
-    source_metadata = build_open_world_combat_source_metadata(
-        source_id=mob_id,
-        mob_level=mob_level,
-        source_category=None,
-        creature_taxonomy=mob.get('creature_taxonomy'),
-        location_id=location_id,
-        encounter_role=unit.get('encounter_role'),
-        spawn_profile=spawn_profile,
-        spawn_identity=str(unit.get('spawn_instance_id') or '') or None,
-    )
     return ({
         'unit_id': str(unit.get('unit_id') or ''),
         'spawn_instance_id': str(unit.get('spawn_instance_id') or '') or None,
@@ -204,20 +326,14 @@ def build_reward_plan(*, conn, encounter: dict, battle_state: dict, fallback_mob
     seed = str(encounter.get('reward_seed') or encounter_id)
     units = _stable_units(battle_state, fallback_mob)
 
-    participant_rows = conn.execute('''SELECT player_id, status FROM pve_encounter_participants
-        WHERE encounter_id=? AND side_id='side_a' ORDER BY joined_at, player_id''', (encounter_id,)).fetchall()
-    if participant_rows:
-        participant_ids = [int(row['player_id']) for row in participant_rows]
-        persisted_status = {int(row['player_id']): str(row['status']) for row in participant_rows}
-    else:
-        participant_ids = [int(encounter['owner_player_id'])]
-        persisted_status = {int(encounter['owner_player_id']): 'active'}
+    participant_ids, persisted_status = _locked_roster(conn, encounter)
     eligible = []
     defeated = []
     for player_id in participant_ids:
         snapshot = _participant_snapshot(battle_state, player_id)
-        if persisted_status.get(player_id) == 'defeated' or (
-            snapshot and bool(snapshot.get('player_dead', snapshot.get('defeated', False)))
+        if persisted_status.get(player_id) != 'active' or not snapshot or (
+            bool(snapshot.get('player_dead', snapshot.get('defeated', False)))
+            or int(snapshot.get('player_hp', snapshot.get('hp', 0)) or 0) <= 0
         ):
             defeated.append(player_id)
         else:
@@ -251,6 +367,8 @@ def build_reward_plan(*, conn, encounter: dict, battle_state: dict, fallback_mob
             'units': unit_results,
         })
 
+    owner_player_id = int(encounter['owner_player_id'])
+    owner_snapshot = _participant_snapshot(battle_state, owner_player_id)
     return {
         'schema_version': SETTLEMENT_SCHEMA_VERSION,
         'policy_version': policy_version,
@@ -264,11 +382,11 @@ def build_reward_plan(*, conn, encounter: dict, battle_state: dict, fallback_mob
         'defeated_participant_ids': defeated,
         'recipients': recipients,
         'owner_mastery': {
-            'player_id': int(encounter['owner_player_id']),
-            'weapon_id': str(battle_state.get('weapon_id') or 'unarmed'),
+            'player_id': owner_player_id,
+            'weapon_id': str(owner_snapshot.get('weapon_id') or 'unarmed'),
             # The historical +10 belongs to the encounter owner, but a
             # defeated owner is not an eligible victory-reward recipient.
-            'exp': 10 if int(encounter['owner_player_id']) in eligible else 0,
+            'exp': 10 if owner_player_id in eligible else 0,
         },
     }
 
@@ -292,21 +410,29 @@ def prepare_victory_settlement(*, encounter_id: str, battle_state: dict, mob: di
         if encounter['status'] != 'active':
             conn.rollback()
             return {'status': 'not_active'}
-        if not bool(battle_state.get('mob_dead')):
+        try:
+            authoritative_state, authoritative_mob = _validate_terminal_snapshot(
+                conn=conn,
+                encounter=encounter,
+                supplied_state=battle_state,
+                supplied_mob=mob,
+            )
+        except ValueError as exc:
             conn.rollback()
-            return {'status': 'invalid_outcome'}
-        state_encounter_id = str(battle_state.get('pve_encounter_id') or encounter_id)
-        if state_encounter_id != encounter_id:
-            conn.rollback()
-            return {'status': 'invalid_outcome'}
-        plan = build_reward_plan(conn=conn, encounter=encounter, battle_state=battle_state, fallback_mob=mob)
+            return {'status': 'invalid_outcome', 'reason': str(exc)}
+        plan = build_reward_plan(
+            conn=conn,
+            encounter=encounter,
+            battle_state=authoritative_state,
+            fallback_mob=authoritative_mob,
+        )
         conn.execute('''INSERT INTO pve_reward_settlements
             (encounter_id, schema_version, policy_version, status, plan_json)
             VALUES (?, ?, ?, 'prepared', ?)''',
             (encounter_id, SETTLEMENT_SCHEMA_VERSION, plan['policy_version'], _canonical_json(plan)))
         conn.execute('''UPDATE pve_encounters SET status='resolving_victory', battle_state_json=?,
             mob_json=?, updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND status='active' ''',
-            (_canonical_json(battle_state), _canonical_json(mob), encounter_id))
+            (_canonical_json(authoritative_state), _canonical_json(authoritative_mob), encounter_id))
         if failure_hook:
             failure_hook('before_t1_commit')
         conn.commit()
@@ -342,6 +468,49 @@ def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
         failure_hook('after_gold_update')
     return {'level_before': old_level, 'level_after': level, 'exp_after': exp_value,
             'gold_after': gold, 'leveled_up': level > old_level}
+
+
+def _stack_quantity(conn, player_id: int, item_id: str) -> int:
+    row = conn.execute('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory '
+                       'WHERE telegram_id=? AND item_id=?', (player_id, item_id)).fetchone()
+    return int(row['quantity']) if row else 0
+
+
+def _verify_gear_delivery(conn, *, player_id: int, instance_id: int, spec: dict,
+                          encounter_id: str) -> None:
+    row = conn.execute('SELECT * FROM gear_instances WHERE id=? AND telegram_id=?',
+                       (instance_id, player_id)).fetchone()
+    if not row:
+        raise RuntimeError('gear_delivery_missing')
+    actual = dict(row)
+    try:
+        actual_secondaries = json.loads(actual.get('secondary_rolls_json') or '[]')
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError('gear_delivery_invalid_secondaries') from exc
+    expected = {
+        'base_item_id': str(spec['base_item_id']),
+        'item_tier': int(spec['item_tier']),
+        'rarity': str(spec['rarity']),
+        'enhance_level': int(spec.get('enhance_level', 0)),
+        'durability': int(spec.get('durability', 100)),
+        'max_durability': int(spec.get('max_durability', 100)),
+        'source_settlement_id': encounter_id,
+    }
+    if any(actual.get(key) != value for key, value in expected.items()):
+        raise RuntimeError('gear_delivery_spec_mismatch')
+    if _canonical_json({'rolls': actual_secondaries}) != _canonical_json({'rolls': spec.get('secondary_rolls', [])}):
+        raise RuntimeError('gear_delivery_secondary_mismatch')
+
+
+def _has_other_live_engagement(conn, player_id: int, encounter_id: str) -> bool:
+    from game.pvp_live import is_player_busy_with_live_pvp
+
+    other_pve = conn.execute('''SELECT 1 FROM pve_encounter_participants p
+        JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+        WHERE p.player_id=? AND p.status='active' AND e.encounter_id<>?
+          AND e.status IN ('forming','active','resolving_victory') LIMIT 1''',
+        (int(player_id), encounter_id)).fetchone()
+    return bool(other_pve) or is_player_busy_with_live_pvp(int(player_id), conn=conn)
 
 
 def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | None = None) -> dict:
@@ -381,7 +550,25 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
             granted_gear = []
             for unit in units:
                 for item_index, item_id in enumerate(unit.get('non_gear', [])):
-                    grant_item_to_player(player_id, str(item_id), quantity=1, conn=conn)
+                    metadata_payload = unit.get('source_metadata') or {}
+                    source_metadata = RewardSourceMetadata(**metadata_payload) if metadata_payload else None
+                    before_quantity = _stack_quantity(conn, player_id, str(item_id))
+                    grant = grant_item_to_player(
+                        player_id,
+                        str(item_id),
+                        quantity=1,
+                        source='mob_drop',
+                        source_level=int(unit.get('mob_level', 1)),
+                        source_metadata=source_metadata,
+                        conn=conn,
+                    )
+                    after_quantity = _stack_quantity(conn, player_id, str(item_id))
+                    if (
+                        int(grant.get('stackable_added', 0)) != 1
+                        or int(grant.get('gear_instances_created', 0)) != 0
+                        or after_quantity != before_quantity + 1
+                    ):
+                        raise RuntimeError('stackable_delivery_mismatch')
                     granted_stackables.append(str(item_id))
                     if failure_hook and item_index == 0:
                         failure_hook('after_first_stackable_grant')
@@ -408,7 +595,17 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
                         conn=conn,
                     )
                     instance_ids = list(grant.get('instance_ids') or [])
-                    granted_gear.append({**spec, 'instance_id': instance_ids[0] if instance_ids else None})
+                    if int(grant.get('gear_instances_created', 0)) != 1 or len(instance_ids) != 1:
+                        raise RuntimeError('gear_delivery_mismatch')
+                    instance_id = int(instance_ids[0])
+                    _verify_gear_delivery(
+                        conn,
+                        player_id=player_id,
+                        instance_id=instance_id,
+                        spec=spec,
+                        encounter_id=encounter_id,
+                    )
+                    granted_gear.append({**spec, 'instance_id': instance_id})
                     if failure_hook and gear_index == 0:
                         failure_hook('after_first_gear_instance')
                 register_hunt_kill_progress(
@@ -429,7 +626,8 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
                     (player_id, route_id, int(recipient.get('counter_after', 0))))
                 if failure_hook:
                     failure_hook('after_counter_update')
-            conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (player_id,))
+            if not _has_other_live_engagement(conn, player_id, encounter_id):
+                conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?', (player_id,))
             recipient_results.append({
                 'player_id': player_id,
                 'exp': exp_gain,
@@ -457,14 +655,8 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
             failure_hook('before_final_encounter_update')
 
         all_participant_ids = list(plan.get('eligible_recipient_ids') or []) + list(plan.get('defeated_participant_ids') or [])
-        from game.pvp_live import is_player_busy_with_live_pvp
         for player_id in all_participant_ids:
-            other_pve = conn.execute('''SELECT 1 FROM pve_encounter_participants p
-                JOIN pve_encounters e ON e.encounter_id=p.encounter_id
-                WHERE p.player_id=? AND p.status='active' AND e.encounter_id<>?
-                  AND e.status IN ('forming','active','resolving_victory') LIMIT 1''',
-                (int(player_id), encounter_id)).fetchone()
-            if not other_pve and not is_player_busy_with_live_pvp(int(player_id), conn=conn):
+            if not _has_other_live_engagement(conn, int(player_id), encounter_id):
                 conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?', (int(player_id),))
         conn.execute("UPDATE pve_encounter_participants SET status='victory', updated_at=CURRENT_TIMESTAMP "
                      "WHERE encounter_id=? AND status='active'", (encounter_id,))
@@ -509,8 +701,16 @@ def get_settlement(encounter_id: str) -> dict | None:
 def list_recent_reward_receipts(player_id: int, limit: int = 20) -> list[dict]:
     conn = get_connection()
     try:
-        rows = conn.execute('''SELECT encounter_id, result_json, applied_at FROM pve_reward_settlements
-            WHERE status='applied' AND result_json IS NOT NULL ORDER BY applied_at DESC LIMIT 100''').fetchall()
+        rows = conn.execute('''SELECT s.encounter_id, s.result_json, s.applied_at
+            FROM pve_reward_settlements s
+            JOIN pve_encounter_participants p ON p.encounter_id=s.encounter_id
+            WHERE p.player_id=? AND s.status='applied' AND s.result_json IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM json_each(s.result_json, '$.recipients') recipient
+                  WHERE CAST(json_extract(recipient.value, '$.player_id') AS INTEGER)=?
+              )
+            ORDER BY s.applied_at DESC, s.encounter_id DESC LIMIT ?''',
+            (player_id, player_id, max(1, min(20, int(limit))))).fetchall()
     finally:
         conn.close()
     receipts = []
@@ -520,9 +720,34 @@ def list_recent_reward_receipts(player_id: int, limit: int = 20) -> list[dict]:
         if recipient:
             receipts.append({'encounter_id': row['encounter_id'], 'applied_at': row['applied_at'],
                              'location_id': result.get('location_id'), 'recipient': recipient})
-        if len(receipts) >= max(1, min(20, int(limit))):
-            break
     return receipts
+
+
+def get_reward_receipt_for_player(player_id: int, encounter_id: str) -> dict | None:
+    conn = get_connection()
+    try:
+        row = conn.execute('''SELECT s.encounter_id, s.result_json, s.applied_at
+            FROM pve_reward_settlements s
+            JOIN pve_encounter_participants p ON p.encounter_id=s.encounter_id
+            WHERE p.player_id=? AND s.encounter_id=? AND s.status='applied'
+              AND s.result_json IS NOT NULL LIMIT 1''', (player_id, encounter_id)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    result = _load_json(row['result_json'])
+    recipient = next(
+        (value for value in result.get('recipients', []) if int(value.get('player_id', 0)) == player_id),
+        None,
+    )
+    if not recipient:
+        return None
+    return {
+        'encounter_id': str(row['encounter_id']),
+        'applied_at': row['applied_at'],
+        'location_id': result.get('location_id'),
+        'recipient': recipient,
+    }
 
 
 def recover_prepared_settlements(limit: int = 20) -> list[dict]:
@@ -636,10 +861,7 @@ def review_ambiguous_legacy_victories() -> int:
                          "WHERE encounter_id=?", (row['encounter_id'],))
             for participant in participants:
                 player_id = int(participant['player_id'])
-                other = conn.execute('''SELECT 1 FROM pve_encounter_participants p JOIN pve_encounters e
-                    ON e.encounter_id=p.encounter_id WHERE p.player_id=? AND p.status='active'
-                    AND e.status IN ('forming','active','resolving_victory') LIMIT 1''', (player_id,)).fetchone()
-                if not other:
+                if not _has_other_live_engagement(conn, player_id, str(row['encounter_id'])):
                     conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?', (player_id,))
             count += 1
         conn.commit()
