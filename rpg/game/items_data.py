@@ -46,7 +46,7 @@ ITEMS = {
         'description': 'Посох начинающего мага.',
         'item_type': 'weapon', 'weapon_type': 'magic', 'weapon_profile': 'magic_staff',
         'rarity': 'uncommon',
-        'damage_min': 80, 'damage_max': 100, 'defense': 0, 'weight': 3,
+        'damage_min': 9, 'damage_max': 14, 'defense': 0, 'weight': 3,
         'req_level': 3, 'req_strength': 0, 'req_agility': 0,
         'req_intuition': 5, 'req_wisdom': 0,
         'buy_price': 300, 'sell_price': 80,

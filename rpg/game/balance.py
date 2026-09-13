@@ -462,13 +462,21 @@ def calc_luck_bonus(luck: int, stat_value: int) -> float:
     return round(stat_value * (luck * 0.002), 2)  # 0.2% за очко Удачи
 
 
-def calc_defense_mitigation_percent(defense_rating: int, *, school: str = 'physical') -> float:
+def calc_defense_mitigation_percent(
+    defense_rating: int,
+    *,
+    school: str = 'physical',
+    source_level: int = 1,
+    penetration_percent: float = 0.0,
+) -> float:
     """
     Нормализованный mitigation от defense rating с мягким убыванием.
     Используется для снижения входящего урона до hard-cap.
     """
     defense_rating = max(0, int(defense_rating))
-    scaling = PHYSICAL_DEFENSE_SCALING if school == 'physical' else MAGIC_DEFENSE_SCALING
+    ignored = max(0.0, min(60.0, float(penetration_percent)))
+    defense_rating = int(defense_rating * (1.0 - ignored / 100.0))
+    scaling = 120.0 + 6.0 * (max(1, int(source_level)) - 1)
     if defense_rating <= 0:
         return 0.0
     raw_percent = (defense_rating / (defense_rating + scaling)) * 100

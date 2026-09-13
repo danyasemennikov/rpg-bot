@@ -9,6 +9,9 @@ import random
 logger = logging.getLogger(__name__)
 
 from game.skill_engine import get_battle_skills
+from game.build_contract import RULES_VERSION
+from game.combat_identity import combat_seed, evaluate_action, evaluate_enemy_action
+from game.enemy_profiles import choose_enemy_action
 from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -1140,6 +1143,134 @@ def _apply_timeout_fallback_action(action, battle_state: dict, lang: str) -> Non
         )
 
 
+def _v1_log_events(battle_state: dict, events: list[dict]) -> None:
+    """Persist compact structural events; localized rendering stays at UI edge."""
+    battle_state.setdefault('combat_events_v1', []).extend(events)
+    # A bounded fallback log keeps old compact battle cards useful while the
+    # locale renderer consumes the structured events.
+    for event in events[-8:]:
+        kind = str(event.get('kind') or 'event')
+        if kind in {'direct', 'enemy_direct', 'retaliation', 'dot'}:
+            amount = int(event.get('hp_removed', event.get('amount', 0)) or 0)
+            battle_state.setdefault('log', []).append(f"{kind}: {amount}")
+        elif kind in {'heal', 'hot', 'mana'}:
+            battle_state.setdefault('log', []).append(f"{kind}: +{int(event.get('amount', 0) or 0)}")
+
+
+def _sync_v1_to_legacy_projection(battle_state: dict) -> None:
+    participants = battle_state.get('participant_states_v1') or {}
+    legacy = battle_state.setdefault('participant_states', {})
+    for pid, actor in participants.items():
+        target = legacy.setdefault(str(pid), {})
+        target.update({
+            'player_hp': int(actor.get('hp', 0)),
+            'hp': int(actor.get('hp', 0)),
+            'player_max_hp': int(actor.get('max_hp', 1)),
+            'max_hp': int(actor.get('max_hp', 1)),
+            'player_mana': int(actor.get('mana', 0)),
+            'mana': int(actor.get('mana', 0)),
+            'player_max_mana': int(actor.get('max_mana', 0)),
+            'max_mana': int(actor.get('max_mana', 0)),
+            'player_dead': not int(actor.get('hp', 0)) > 0,
+            'defeated': not int(actor.get('hp', 0)) > 0,
+            'effects_v1': list(actor.get('effects') or []),
+            'manual_contribution': bool(actor.get('manual_contribution')),
+            'snapshotted_family': actor.get('family'),
+        })
+    enemies = list(battle_state.get('enemy_states_v1') or [])
+    units = list(battle_state.get('enemy_units') or [])
+    for index, enemy in enumerate(enemies):
+        if index < len(units):
+            units[index]['hp'] = int(enemy.get('hp', 0))
+            units[index]['max_hp'] = int(enemy.get('max_hp', 1))
+            units[index]['dead'] = not int(enemy.get('hp', 0)) > 0
+            units[index]['effects_v1'] = list(enemy.get('effects') or [])
+    if units:
+        battle_state['enemy_units'] = units
+    active = next((enemy for enemy in enemies if int(enemy.get('hp', 0)) > 0), None)
+    if active:
+        battle_state['active_enemy_unit_id'] = active.get('unit_id')
+        battle_state['mob_hp'] = int(active.get('hp', 0))
+        battle_state['mob_max_hp'] = int(active.get('max_hp', 1))
+        battle_state['mob_dead'] = False
+    else:
+        battle_state['mob_hp'] = 0
+        battle_state['mob_dead'] = True
+
+
+def _dispatch_v1_player_action(action, *, battle_state: dict) -> None:
+    actor_id = int(getattr(action, 'participant_id', 0) or 0)
+    participants = dict(battle_state.get('participant_states_v1') or {})
+    actor = participants.get(str(actor_id))
+    if not actor:
+        return
+    opponents = list(battle_state.get('enemy_states_v1') or [])
+    action_type = str(getattr(action, 'action_type', '') or '')
+    if action_type == 'basic_attack':
+        action_payload = {'kind': 'normal', 'manual': True}
+    elif action_type == 'skill':
+        action_payload = {
+            'kind': 'skill', 'skill_id': getattr(action, 'skill_id', None),
+            'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
+            'manual': True,
+        }
+    elif action_type == 'fallback_guard':
+        action_payload = {'kind': 'timeout_guard', 'manual': False}
+    else:
+        action_payload = {'kind': 'guard', 'manual': True}
+    result = evaluate_action(
+        actor,
+        list(participants.values()),
+        opponents,
+        action_payload,
+        rng_seed=combat_seed(
+            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
+            actor_id, action_payload.get('target_id'), len(battle_state.get('combat_events_v1', [])),
+        ),
+        side_index=int(battle_state.get('turn_revision', 0)),
+    )
+    if not result.get('accepted'):
+        return
+    updated_participants = {str(item.get('actor_id')): item for item in result['allies']}
+    battle_state['participant_states_v1'] = updated_participants
+    battle_state['enemy_states_v1'] = result['opponents']
+    _v1_log_events(battle_state, result['events'])
+    _sync_v1_to_legacy_projection(battle_state)
+
+
+def _dispatch_v1_enemy_action(action, *, battle_state: dict) -> None:
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    enemy_index = resolve_enemy_unit_index_for_participant(
+        encounter_id=encounter_id,
+        battle_state=battle_state,
+        participant_id=int(getattr(action, 'participant_id', 0) or 0),
+    )
+    enemies = list(battle_state.get('enemy_states_v1') or [])
+    if enemy_index is None or enemy_index >= len(enemies):
+        enemy_index = next((index for index, enemy in enumerate(enemies) if int(enemy.get('hp', 0)) > 0), None)
+    if enemy_index is None:
+        return
+    enemy = enemies[enemy_index]
+    players = list((battle_state.get('participant_states_v1') or {}).values())
+    chosen = choose_enemy_action(enemy, enemies)
+    result = evaluate_enemy_action(
+        enemy, enemies, players, chosen,
+        rng_seed=combat_seed(
+            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
+            enemy.get('unit_id'), chosen.get('target_id'), len(battle_state.get('combat_events_v1', [])),
+        ),
+        side_index=int(battle_state.get('turn_revision', 0)),
+    )
+    if not result.get('accepted'):
+        return
+    battle_state['enemy_states_v1'] = result['allies']
+    battle_state['participant_states_v1'] = {
+        str(item.get('actor_id')): item for item in result['players']
+    }
+    _v1_log_events(battle_state, result['events'])
+    _sync_v1_to_legacy_projection(battle_state)
+
+
 def _run_group_enemy_side_action(
     *,
     action=None,
@@ -1149,6 +1280,9 @@ def _run_group_enemy_side_action(
     lang: str,
     include_pre_enemy_ticks: bool = False,
 ) -> None:
+    if battle_state.get('rules_version') == RULES_VERSION:
+        _dispatch_v1_enemy_action(action, battle_state=battle_state)
+        return
     enemy_side_total = int(battle_state.get('_pack_enemy_side_total') or 0)
     enemy_side_processed = int(battle_state.get('_pack_enemy_side_processed') or 0)
     pack_side_timing = enemy_side_total > 0
@@ -1320,6 +1454,9 @@ def _dispatch_group_player_action(
     battle_state: dict,
     lang: str,
 ) -> None:
+    if battle_state.get('rules_version') == RULES_VERSION:
+        _dispatch_v1_player_action(action, battle_state=battle_state)
+        return
     actor_id = int(getattr(action, 'participant_id', owner_player.get('telegram_id', 0)) or 0)
     if actor_id <= 0:
         return
@@ -1533,12 +1670,25 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         skill_id, mob_id = rest.split('|', 1)
 
         mob = context.user_data.get('battle_mob')
-        precheck_result = preview_skill_turn_precheck(
-            skill_id,
-            battle_state,
-            user_id=user.id,
-            lang=lang,
-        )
+        if battle_state.get('rules_version') == RULES_VERSION:
+            actor = (battle_state.get('participant_states_v1') or {}).get(str(user.id), {})
+            from game.build_contract import POWER_STRIKE, SKILL_SPECS, rank_mana_cost
+            spec = POWER_STRIKE if skill_id == 'power_strike' else SKILL_SPECS.get(skill_id)
+            rank = 1 if skill_id == 'power_strike' else int(actor.get('skill_ranks', {}).get(skill_id, 0))
+            remaining = max(0, int(actor.get('cooldowns', {}).get(skill_id, 0)) - int(actor.get('opportunity_index', 0)))
+            legal_family = skill_id == 'power_strike' or (spec and spec.family == actor.get('family'))
+            cost = rank_mana_cost(spec, rank) if spec and rank > 0 else 0
+            precheck_result = {
+                'success': bool(spec and rank > 0 and legal_family and remaining == 0 and int(actor.get('mana', 0)) >= cost),
+                'log': t('battle.turn_not_ready', lang),
+            }
+        else:
+            precheck_result = preview_skill_turn_precheck(
+                skill_id,
+                battle_state,
+                user_id=user.id,
+                lang=lang,
+            )
         if not precheck_result.get('success'):
             await query.answer(precheck_result.get('log', t('battle.turn_not_ready', lang)), show_alert=True)
             return
@@ -1555,6 +1705,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
         resolved_player_side = resolve_current_side_if_ready(
             player_id=user.id,
+            battle_state=battle_state,
             on_player_action=lambda action: _dispatch_group_player_action(
                 action,
                 owner_player=p,
@@ -1652,6 +1803,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
         resolved_player_side = resolve_current_side_if_ready(
             player_id=user.id,
+            battle_state=battle_state,
             on_player_action=lambda action: _dispatch_group_player_action(
                 action,
                 owner_player=p,
