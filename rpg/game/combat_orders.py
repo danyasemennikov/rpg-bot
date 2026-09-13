@@ -7,12 +7,107 @@ from datetime import datetime, timezone
 from typing import Any
 
 from database import get_connection
+from game.action_receipts import ActionRejected, consume_action, issue_actions
 from game.build_contract import RULES_VERSION
 from game.build_progression import ensure_build_schema
 
 
+COMBAT_UI_ACTION_KIND = "combat_v1"
+
+
 def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def issue_combat_intents(
+    player_id: int, *, encounter_id: str, turn_revision: int,
+    deadline_at: str, actions: list[dict[str, Any]],
+) -> dict[str, str]:
+    """Issue compact callback tokens for complete encounter/revision intents."""
+    payloads = [
+        _stable_json({
+            "rules_version": RULES_VERSION,
+            "encounter_kind": "pve",
+            "encounter_id": str(encounter_id),
+            "turn_revision": int(turn_revision),
+            "actor_id": int(player_id),
+            "deadline_at": str(deadline_at),
+            "action": action,
+            "target_id": (action.get("target_info") or {}).get("id"),
+        })
+        for action in actions
+    ]
+    raw_tokens = issue_actions(player_id, COMBAT_UI_ACTION_KIND, payloads)
+    return {
+        _stable_json(action): raw_tokens[payload]
+        for action, payload in zip(actions, payloads)
+        if payload in raw_tokens
+    }
+
+
+def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
+    """Atomically consume, revalidate and durably commit one UI order."""
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        ensure_build_schema(conn)
+        try:
+            raw = consume_action(conn, player_id, COMBAT_UI_ACTION_KIND, token)
+            payload = json.loads(raw)
+        except (ActionRejected, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ActionRejected("stale_action") from exc
+        if (
+            not isinstance(payload, dict)
+            or payload.get("rules_version") != RULES_VERSION
+            or payload.get("encounter_kind") != "pve"
+            or int(payload.get("actor_id", 0)) != int(player_id)
+        ):
+            raise ActionRejected("stale_action")
+        encounter_id = str(payload.get("encounter_id") or "")
+        revision = int(payload.get("turn_revision", -1))
+        encounter = conn.execute('''SELECT status, rules_version, turn_revision
+            FROM pve_encounters WHERE encounter_id=?''', (encounter_id,)).fetchone()
+        participant = conn.execute('''SELECT status FROM pve_encounter_participants
+            WHERE encounter_id=? AND player_id=?''', (encounter_id, player_id)).fetchone()
+        if (
+            not encounter or str(encounter["status"]) != "active"
+            or str(encounter["rules_version"]) != RULES_VERSION
+            or int(encounter["turn_revision"]) not in {revision, revision - 1}
+            or not participant or str(participant["status"]) != "active"
+        ):
+            raise ActionRejected("stale_action")
+        raw_deadline = str(payload.get("deadline_at") or "")
+        try:
+            deadline = datetime.fromisoformat(raw_deadline.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ActionRejected("stale_action") from exc
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > deadline.astimezone(timezone.utc):
+            raise ActionRejected("deadline_elapsed")
+        action = payload.get("action")
+        if not isinstance(action, dict):
+            raise ActionRejected("stale_action")
+        target_id = payload.get("target_id")
+        if action.get("kind") != "flee":
+            durable = submit_combat_order(
+                encounter_kind="pve", encounter_id=encounter_id,
+                turn_revision=revision, actor_id=player_id, action=action,
+                target_id=target_id, deadline_at=raw_deadline, order_kind="manual",
+                conn=conn,
+            )
+            if not durable.get("accepted"):
+                raise ActionRejected(str(durable.get("reason") or "stale_action"))
+        conn.commit()
+        return {"accepted": True, **payload}
+    except ActionRejected as exc:
+        conn.rollback()
+        return {"accepted": False, "reason": str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def submit_combat_order(
@@ -181,4 +276,3 @@ def replay_turn_result(*, encounter_kind: str, encounter_id: str, turn_revision:
     finally:
         if owns:
             conn.close()
-

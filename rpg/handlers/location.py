@@ -1249,8 +1249,14 @@ async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('location.not_found', lang))
         return
     encounters = get_pending_location_encounters(location_id=location['id'], limit=10)
+    build_label = {'ru': '🧭 PvP-билд', 'en': '🧭 PvP build', 'es': '🧭 Configuración JcJ'}.get(lang, '🧭 PvP build')
     if not encounters:
-        await update.message.reply_text(t('location.pvp_list_empty', lang))
+        await update.message.reply_text(
+            t('location.pvp_list_empty', lang),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(build_label, callback_data='bv_pvp'),
+            ]]),
+        )
         return
     text = t('location.pvp_list_title', lang, location=get_location_name(location['id'], lang)) + '\n\n'
     keyboard = []
@@ -1269,6 +1275,7 @@ async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             t('location.pvp_view_fight_btn', lang, id=encounter['id']),
             callback_data=f"pvp_view_{encounter['id']}",
         )])
+    keyboard.append([InlineKeyboardButton(build_label, callback_data='bv_pvp')])
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 

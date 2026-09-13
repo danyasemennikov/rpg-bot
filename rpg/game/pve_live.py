@@ -9,7 +9,7 @@ from database import get_connection
 from game.actor_snapshot import build_actor_snapshot
 from game.build_contract import RULES_VERSION
 from game.build_progression import ensure_build_schema
-from game.combat_orders import persist_turn_result, submit_combat_order
+from game.combat_orders import load_combat_orders, persist_turn_result, submit_combat_order
 from game.balance import (
     normalize_armor_class,
     normalize_encumbrance,
@@ -1650,7 +1650,11 @@ def create_pve_encounter(
     ensure_build_schema(conn)
     # Real encounters always have durable player rows.  The legacy fallback is
     # retained only for replay/test envelopes that predate persisted actors.
-    v1_ready = all(
+    v1_cutover = conn.execute(
+        "SELECT 1 FROM build_rules_state WHERE migration_key=? AND state='active'",
+        (RULES_VERSION,),
+    ).fetchone()
+    v1_ready = bool(v1_cutover) and all(
         conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (pid,)).fetchone()
         for pid in participant_ids
     )
@@ -2317,6 +2321,18 @@ def _to_iso(dt: datetime | None) -> str | None:
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
+def _from_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _remaining_seconds(deadline: datetime | None, now: datetime | None = None) -> int | None:
     if not deadline:
         return None
@@ -2562,13 +2578,63 @@ def ensure_runtime_for_battle(
             raise OpenWorldRuntimeStartBlocked('open_world_anchor_unavailable')
         # start_mode == active_resume | non_anchored: no extra lock step required.
 
+        active_side = str(battle_state.get('active_side') or SIDE_PLAYER)
+        if active_side not in {SIDE_PLAYER, SIDE_ENEMY}:
+            active_side = SIDE_PLAYER
         runtime_state = _SOLO_PVE_RUNTIME.create_encounter(
             encounter_id=encounter_id,
             side_a_participants=side_a_players,
             side_b_participants=expected_enemy_participants,
-            active_side_id=SIDE_PLAYER,
+            active_side_id=active_side,
         )
-        runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
+        persisted_revision = max(0, int(battle_state.get('turn_revision', 0) or 0))
+        candidate_orders = load_combat_orders(
+            encounter_kind='pve', encounter_id=encounter_id,
+            turn_revision=persisted_revision + 1,
+        )
+        restore_same_revision = (
+            not candidate_orders
+            and str(battle_state.get('side_turn_state')) in {'collecting_orders', 'ready_to_lock'}
+            and bool(battle_state.get('side_deadline_at'))
+        )
+        if candidate_orders or restore_same_revision:
+            restore_revision = persisted_revision + 1 if candidate_orders else persisted_revision
+            if candidate_orders:
+                # A completed persisted side points at the next active side.
+                runtime_state.active_side_id = active_side
+            runtime_state.turn_revision = restore_revision
+            runtime_state.round_index = max(1, int(battle_state.get('round_index', 1) or 1))
+            runtime_state.side_turn_state = 'collecting_orders'
+            deadline_source = (
+                candidate_orders[0].get('deadline_at') if candidate_orders
+                else battle_state.get('side_deadline_at')
+            )
+            runtime_state.side_deadline_at = _from_iso(str(deadline_source or '')) or (
+                check_now + timedelta(seconds=DEFAULT_SIDE_TURN_TIMEOUT_SECONDS)
+            )
+            for order in candidate_orders or load_combat_orders(
+                encounter_kind='pve', encounter_id=encounter_id,
+                turn_revision=restore_revision,
+            ):
+                action = order.get('action') or {}
+                action_kind = str(action.get('kind') or '')
+                action_type = 'fallback_guard' if action_kind == 'timeout_guard' else action_kind
+                committed = _SOLO_PVE_RUNTIME.commit_action(
+                    encounter_id=encounter_id,
+                    participant_id=int(order['actor_id']),
+                    action_type=action_type,
+                    target_info=action.get('target_info'),
+                    skill_id=action.get('skill_id'),
+                    item_id=action.get('item_id'),
+                    committed_at=_from_iso(str(order.get('created_at') or '')) or check_now,
+                    turn_revision=restore_revision,
+                )
+                if committed.accepted and str(order.get('order_kind')) == 'timeout':
+                    runtime_state.participants[int(order['actor_id'])].phase_state = 'auto_fallback'
+        else:
+            runtime_state.turn_revision = persisted_revision
+            runtime_state.side_turn_state = 'completed'
+            runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
     elif runtime_state.side_turn_state == 'completed':
         runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
 
@@ -2786,6 +2852,29 @@ def process_due_timeout_for_battle(
     on_enemy_action=None,
     now: datetime | None = None,
 ) -> bool:
+    encounter_id = _resolve_encounter_id(player_id=player_id, battle_state=battle_state)
+    runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id) if encounter_id else None
+    if runtime_state is not None and runtime_state.side_turn_state == 'ready_to_lock':
+        recovered_side = runtime_state.active_side_id
+        resolved = resolve_current_side_if_ready(
+            player_id=player_id,
+            battle_state=battle_state,
+            on_player_action=on_player_timeout_action or (lambda _action: None),
+            on_enemy_action=on_enemy_action or (lambda _action: None),
+        )
+        if not resolved:
+            return False
+        if not _encounter_continues_after_timeout_resolution(battle_state):
+            return True
+        if recovered_side == SIDE_PLAYER:
+            run_enemy_instant_side(
+                player_id=player_id,
+                battle_state=battle_state,
+                on_enemy_action=on_enemy_action or (lambda _action: None),
+            )
+        else:
+            open_next_player_side_turn(player_id=player_id, battle_state=battle_state)
+        return True
     timed_out = resolve_due_player_timeout_if_any(
         player_id=player_id,
         battle_state=battle_state,

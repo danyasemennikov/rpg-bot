@@ -11,7 +11,7 @@ from telegram.ext import (
 
 from database import init_db
 from handlers.start    import start_command, handle_name_input, handle_stat_buttons
-from handlers.profile  import help_command, profile_command, stats_command, handle_stats_buttons, unstuck_command, main_keyboard
+from handlers.profile  import help_command, profile_command, unstuck_command, main_keyboard
 from handlers.location import (
     location_command,
     pvp_command,
@@ -28,9 +28,15 @@ from handlers.location import (
 )
 from handlers.battle   import handle_battle_buttons
 from handlers.inventory import inventory_command, handle_inventory_buttons, handle_transfer_input
-from handlers.skills_ui import skills_command, handle_skills_buttons
 from handlers.settings import settings_command, handle_settings_buttons
 from handlers.chapter import journal_command, handle_chapter_buttons
+from handlers.build import (
+    build_attributes_command,
+    build_command,
+    build_skills_command,
+    handle_build_buttons,
+    handle_legacy_build_button,
+)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 LOCATION_CALLBACK_PATTERN = r'^(goto_|map_route_|noop|shop$|shop_back$|shop_page_|shop_preview_|shop_buy_|quest_board|inn|craftsmen_|pvp_|pve_)'
@@ -114,6 +120,8 @@ def initialize_runtime():
     _ensure_world_spawn_table()
     review_ambiguous_legacy_victories()
     recover_prepared_settlements(limit=20)
+    from game.build_progression import migrate_character_builds_v1
+    migrate_character_builds_v1()
 
 
 def main():
@@ -141,10 +149,11 @@ def main():
     app.add_handler(CommandHandler('go', go_command))
     app.add_handler(CommandHandler('enc',      enc_command))
     app.add_handler(CommandHandler('pvp',      pvp_command))
-    app.add_handler(CommandHandler('stats',    stats_command))
+    app.add_handler(CommandHandler('stats',    build_attributes_command))
     app.add_handler(CommandHandler('unstuck',  unstuck_command))
     app.add_handler(CommandHandler('inventory', inventory_command))
-    app.add_handler(CommandHandler('skills', skills_command))
+    app.add_handler(CommandHandler('skills', build_skills_command))
+    app.add_handler(CommandHandler('build', build_command))
     app.add_handler(CommandHandler('settings', settings_command))
     app.add_handler(CommandHandler('journal', journal_command))
 
@@ -153,9 +162,10 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_location_buttons, pattern=LOCATION_CALLBACK_PATTERN))
     app.add_handler(CallbackQueryHandler(handle_combat_buttons,   pattern='^(fight_|flee_)'))
     app.add_handler(CallbackQueryHandler(handle_battle_buttons,   pattern='^battle_'))
-    app.add_handler(CallbackQueryHandler(handle_stats_buttons,    pattern='^sp_'))
+    app.add_handler(CallbackQueryHandler(handle_legacy_build_button, pattern='^sp_'))
     app.add_handler(CallbackQueryHandler(handle_inventory_buttons, pattern='^inv_'))
-    app.add_handler(CallbackQueryHandler(handle_skills_buttons, pattern='^sk_'))
+    app.add_handler(CallbackQueryHandler(handle_legacy_build_button, pattern='^sk_'))
+    app.add_handler(CallbackQueryHandler(handle_build_buttons, pattern='^bv_'))
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
     app.add_handler(CallbackQueryHandler(handle_chapter_buttons, pattern='^alpha_'))
 
@@ -165,10 +175,10 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📍"), location_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🗺️"), map_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^👤"), profile_command))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊"), stats_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊"), build_attributes_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^❓"), help_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🎒"), inventory_command))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🔮"), skills_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🔮"), build_skills_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^⚙️"), settings_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📖"), journal_command))
    # app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋"), quests_command))  # когда будет готов

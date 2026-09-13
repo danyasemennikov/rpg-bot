@@ -180,10 +180,13 @@ def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int, *, conn=None) ->
         conn = get_connection()
     mastery    = get_mastery(telegram_id, weapon_id, conn=conn)
     if mastery['level'] >= MAX_MASTERY:
-        return {
+        result = {
             'leveled_up': False, 'new_level': MAX_MASTERY, 'new_exp': 0,
             'new_points': mastery['skill_points'], 'new_skills': [], 'exp_needed': 0,
         }
+        if owns_connection:
+            conn.close()
+        return result
     new_exp    = mastery['exp'] + max(0, int(exp))
     new_level  = mastery['level']
     new_points = mastery['skill_points']

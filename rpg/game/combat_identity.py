@@ -882,6 +882,12 @@ def evaluate_action(
             actor["manual_contribution"] = True
         return {"accepted": True, "actor": actor, "allies": allies, "opponents": opponents, "events": events}
 
+    if action_kind == "flee_failed":
+        actor["opportunity_index"] = cast_index + 1
+        actor["manual_contribution"] = True
+        events.append({"kind": "flee_failed", "actor_id": actor_id})
+        return {"accepted": True, "actor": actor, "allies": allies, "opponents": opponents, "events": events}
+
     skill_id = str(action.get("skill_id") or "") if action_kind == "skill" else ""
     rank = 1
     target_code = "S"

@@ -121,6 +121,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if p['stat_points'] > 0:
         text += f"\n🔸 {t('profile.stat_points', lang, val=p['stat_points'])} — /stats"
     text += _build_equipment_summary(user.id, lang)
+    text += "\n\n🧭 /build"
 
     await update.message.reply_text(text, parse_mode='HTML')
 
