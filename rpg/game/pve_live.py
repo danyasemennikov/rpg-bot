@@ -13,6 +13,7 @@ from game.balance import (
     normalize_weapon_profile,
 )
 from game.equipment_stats import get_equipped_item_ids, get_player_effective_stats
+from game.field_catalog import FIELD_REWARD_POLICY_VERSION
 from game.itemization import get_item_archetype_metadata
 from game.items_data import get_item, get_item_encumbrance
 from game.locations import get_location
@@ -39,6 +40,7 @@ SPAWN_STATE_RESPAWNING = 'respawning'
 DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS = 30
 FORMING_ENCOUNTER_TTL_SECONDS = 90
 DEFAULT_WORLD_SPAWN_PROFILE = 'normal'
+SOURCE_UNITS_SCHEMA_VERSION = 1
 PACK_ENABLED_MOB_IDS: frozenset[str] = get_pack_enabled_mob_ids()
 WORLD_SPAWN_PROFILES = ('normal', 'elite', 'rare')
 WORLD_SPAWN_PROFILE_COMBAT_MODIFIERS = {
@@ -152,7 +154,11 @@ def _ensure_pve_encounter_table() -> None:
             mob_json          TEXT NOT NULL,
             created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            finished_at       TIMESTAMP
+            finished_at       TIMESTAMP,
+            reward_policy_version TEXT NOT NULL DEFAULT 'legacy_v0',
+            reward_seed       TEXT,
+            locked_roster_json TEXT,
+            source_units_json TEXT
         )
         '''
     )
@@ -183,6 +189,17 @@ def _ensure_pve_encounter_table() -> None:
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN location_id TEXT")
     if 'anchor_spawn_instance_id' not in columns:
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN anchor_spawn_instance_id TEXT")
+    if 'reward_policy_version' not in columns:
+        conn.execute("ALTER TABLE pve_encounters ADD COLUMN reward_policy_version TEXT NOT NULL DEFAULT 'legacy_v0'")
+    if 'reward_seed' not in columns:
+        conn.execute("ALTER TABLE pve_encounters ADD COLUMN reward_seed TEXT")
+    if 'locked_roster_json' not in columns:
+        conn.execute("ALTER TABLE pve_encounters ADD COLUMN locked_roster_json TEXT")
+    if 'source_units_json' not in columns:
+        # Existing encounters are intentionally not backfilled from mutable
+        # terminal state. Recovery uses older authoritative evidence or fails
+        # closed when that evidence is unavailable.
+        conn.execute("ALTER TABLE pve_encounters ADD COLUMN source_units_json TEXT")
     conn.commit()
     conn.close()
 
@@ -1094,6 +1111,9 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
             (encounter_id, SIDE_PLAYER),
         ).fetchall()
         final_roster = [int(row['player_id']) for row in roster_rows]
+        if not final_roster:
+            conn.rollback()
+            return None
 
         updated = conn.execute(
             '''
@@ -1107,6 +1127,12 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
         if updated <= 0:
             conn.rollback()
             return None
+
+        conn.execute(
+            '''UPDATE pve_encounters SET locked_roster_json=?, updated_at=CURRENT_TIMESTAMP
+               WHERE encounter_id=? AND status='active' ''',
+            (_serialize_payload({'player_ids': final_roster}), encounter_id),
+        )
 
         conn.commit()
         return final_roster
@@ -1427,6 +1453,51 @@ def _deserialize_payload(raw_payload: str | None) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _build_source_units_snapshot(
+    *,
+    battle_state: dict,
+    mob: dict,
+    location_id: str,
+    anchor_spawn_instance_id: str | None,
+) -> dict:
+    """Freeze reward-source identity before combat can mutate the projection."""
+    raw_units = list(battle_state.get('enemy_units') or [])
+    uses_enemy_units = bool(raw_units)
+    if not raw_units:
+        raw_units = [{
+            'unit_id': 'unit-1',
+            'spawn_instance_id': anchor_spawn_instance_id,
+            'mob_id': battle_state.get('mob_id') or mob.get('id'),
+            'spawn_profile': battle_state.get('spawn_profile', DEFAULT_WORLD_SPAWN_PROFILE),
+            'special_spawn_key': battle_state.get('special_spawn_key'),
+            'special_spawn_name': battle_state.get('special_spawn_name'),
+        }]
+
+    units = []
+    for index, raw_unit in enumerate(raw_units, start=1):
+        units.append({
+            'unit_id': str(raw_unit.get('unit_id') or f'unit-{index}'),
+            'spawn_instance_id': str(raw_unit.get('spawn_instance_id') or '') or None,
+            'mob_id': str(raw_unit.get('mob_id') or battle_state.get('mob_id') or mob.get('id') or ''),
+            'spawn_profile': _normalize_spawn_profile(
+                raw_unit.get('spawn_profile', battle_state.get('spawn_profile'))
+            ),
+            'special_spawn_key': str(
+                raw_unit.get('special_spawn_key') or battle_state.get('special_spawn_key') or ''
+            ) or None,
+            'special_spawn_name': str(
+                raw_unit.get('special_spawn_name') or battle_state.get('special_spawn_name') or ''
+            ) or None,
+            'location_id': str(location_id or battle_state.get('location_id') or ''),
+        })
+    return {
+        'schema_version': SOURCE_UNITS_SCHEMA_VERSION,
+        'source_kind': 'anchored' if anchor_spawn_instance_id else 'non_anchored',
+        'uses_enemy_units': uses_enemy_units,
+        'units': units,
+    }
+
+
 def _deserialize_participant_state_map(raw_map: object) -> dict[str, dict]:
     if not isinstance(raw_map, dict):
         return {}
@@ -1553,6 +1624,16 @@ def create_pve_encounter(
         participant_ids.insert(0, owner_player_id)
 
     encounter_id = encounter_id or f'pve-enc-{uuid.uuid4().hex[:12]}'
+    resolved_location_id = str(location_id or battle_state.get('location_id') or '')
+    resolved_anchor_id = str(
+        anchor_spawn_instance_id or battle_state.get('anchor_spawn_instance_id') or ''
+    ) or None
+    source_units = _build_source_units_snapshot(
+        battle_state=battle_state,
+        mob=mob or {},
+        location_id=resolved_location_id,
+        anchor_spawn_instance_id=resolved_anchor_id,
+    )
     conn = get_connection()
 
     _supersede_active_encounters_for_players(conn, participant_ids)
@@ -1560,8 +1641,10 @@ def create_pve_encounter(
     conn.execute(
         '''
         INSERT INTO pve_encounters (
-            encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id, anchor_spawn_instance_id
-        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?)
+            encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id,
+            anchor_spawn_instance_id, reward_policy_version, reward_seed, locked_roster_json,
+            source_units_json
+        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             encounter_id,
@@ -1569,8 +1652,12 @@ def create_pve_encounter(
             str(battle_state.get('mob_id') or (mob or {}).get('id') or ''),
             _serialize_payload(battle_state),
             _serialize_payload(mob or {}),
-            str(location_id or battle_state.get('location_id') or ''),
-            str(anchor_spawn_instance_id or battle_state.get('anchor_spawn_instance_id') or '') or None,
+            resolved_location_id,
+            resolved_anchor_id,
+            FIELD_REWARD_POLICY_VERSION,
+            uuid.uuid4().hex,
+            None if resolved_anchor_id else _serialize_payload({'player_ids': participant_ids}),
+            _serialize_payload(source_units),
         ),
     )
 

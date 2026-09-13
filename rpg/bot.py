@@ -33,7 +33,7 @@ from handlers.settings import settings_command, handle_settings_buttons
 from handlers.chapter import journal_command, handle_chapter_buttons
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-LOCATION_CALLBACK_PATTERN = r'^(goto_|map_route_|noop|shop$|shop_back$|shop_buy_|quest_board|inn|craftsmen_|pvp_|pve_)'
+LOCATION_CALLBACK_PATTERN = r'^(goto_|map_route_|noop|shop$|shop_back$|shop_page_|shop_preview_|shop_buy_|quest_board|inn|craftsmen_|pvp_|pve_)'
 UNDERSCORE_NAV_COMMAND_PATTERN = r'^/(map|go|enc)_[a-z0-9_-]+(?:@\w+)?$'
 
 logging.basicConfig(
@@ -108,6 +108,12 @@ def initialize_runtime():
     init_db()
     from game.seed import seed_items
     seed_items()
+    from game.pve_live import _ensure_pve_encounter_table, _ensure_world_spawn_table
+    from game.pve_reward_settlement import recover_prepared_settlements, review_ambiguous_legacy_victories
+    _ensure_pve_encounter_table()
+    _ensure_world_spawn_table()
+    review_ambiguous_legacy_victories()
+    recover_prepared_settlements(limit=20)
 
 
 def main():

@@ -2,9 +2,11 @@
 # battle.py — обработчик боёв в Telegram
 # ============================================================
 
-import sys, json
+import sys, json, logging
 sys.path.append('/content/rpg_bot')
 import random
+
+logger = logging.getLogger(__name__)
 
 from game.skill_engine import get_battle_skills
 from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
@@ -23,6 +25,7 @@ from game.pve_live import (
     release_pve_encounter_victory_claim,
     create_or_load_open_world_pve_encounter,
     choose_enemy_target_participant_id,
+    clear_solo_pve_runtime,
     ensure_location_pve_spawn_instances,
     finish_solo_pve_encounter,
     get_active_pve_encounter_id_for_player,
@@ -650,6 +653,97 @@ async def _handle_victory_cleanup(
     levelup_before_loot: bool = False,
 ):
     """Общий post-victory cleanup для обычной атаки и скиллов."""
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    if encounter_id:
+        from game.pve_reward_settlement import prepare_victory_settlement, apply_prepared_settlement
+        try:
+            # The final combat transition becomes encounter authority before
+            # T1 plans any reward.  A failed T1 leaves this active terminal
+            # snapshot safely retryable and cannot mint from callback-only data.
+            persist_solo_pve_encounter_state(
+                encounter_id=encounter_id,
+                battle_state=battle_state,
+                mob=mob,
+            )
+            prepared = prepare_victory_settlement(
+                encounter_id=encounter_id,
+                battle_state=battle_state,
+                mob=mob,
+            )
+        except Exception:
+            logger.exception('PvE settlement preparation failed: encounter_id=%s player_id=%s', encounter_id, user_id)
+            await safe_edit(query, t('gear.settlement_pending', lang), parse_mode='HTML')
+            return
+        if prepared['status'] in {'prepared', 'applied'}:
+            try:
+                settled = (
+                    apply_prepared_settlement(encounter_id)
+                    if prepared['status'] == 'prepared'
+                    else {'status': 'applied', 'result': prepared.get('result', {}), 'already_applied': True}
+                )
+            except Exception:
+                logger.exception('PvE settlement application failed: encounter_id=%s player_id=%s', encounter_id, user_id)
+                await safe_edit(query, t('gear.settlement_pending', lang), parse_mode='HTML')
+                return
+            if settled['status'] != 'applied':
+                await safe_edit(query, t('gear.settlement_pending', lang), parse_mode='HTML')
+                return
+            result = settled.get('result') or {}
+            owner_result = next(
+                (row for row in result.get('recipients', []) if int(row.get('player_id', 0)) == user_id),
+                None,
+            )
+            owner_penalty = (battle_state.get('group_death_penalties') or {}).get(str(user_id))
+            owner_snapshot = _participant_snapshot(battle_state, user_id)
+            owner_dead = bool(owner_snapshot.get('player_dead', owner_snapshot.get('defeated', False)))
+            if owner_dead and owner_penalty:
+                victory_text = t(
+                    'battle.death', lang,
+                    exp_loss=owner_penalty.get('exp_loss', 0),
+                    gold_loss=owner_penalty.get('gold_loss', 0),
+                )
+            else:
+                victory_text = t(
+                    'battle.victory', lang,
+                    mob_name=get_mob_name(mob['id'], lang),
+                    exp=int((owner_result or {}).get('exp', 0)),
+                    gold=int((owner_result or {}).get('gold', 0)),
+                )
+            loot_ids = list((owner_result or {}).get('stackable_items') or [])
+            gear_rows = list((owner_result or {}).get('gear') or [])
+            loot_ids.extend(str(row.get('base_item_id')) for row in gear_rows)
+            loot_text = ''
+            if loot_ids:
+                loot_text = '\n' + t('battle.loot', lang, items=', '.join(get_item_name(item_id, lang) for item_id in loot_ids))
+            if any(bool(row.get('guaranteed')) for row in gear_rows):
+                loot_text += '\n' + t('gear.guaranteed_drop', lang)
+            levelup_text = ''
+            if owner_result and owner_result.get('leveled_up'):
+                levelup_text = '\n\n' + t('battle.levelup', lang, level=owner_result.get('level_after'))
+            mastery_text = _build_mastery_text(result.get('mastery') or {}, lang)
+            rows = [[InlineKeyboardButton(t('chapter.journal', lang), callback_data='alpha_home')]]
+            from game.hunting import HARVEST_ITEMS
+            if mob.get('id') in HARVEST_ITEMS and not owner_dead:
+                rows.insert(0, [InlineKeyboardButton(
+                    t('chapter.harvest', lang), callback_data=f'alpha_extract_{encounter_id}')])
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
+            clear_solo_pve_runtime(player_id=user_id, encounter_id=encounter_id)
+            await safe_edit(
+                query,
+                victory_text + (levelup_text + loot_text if levelup_before_loot else loot_text + levelup_text) + mastery_text,
+                reply_markup=InlineKeyboardMarkup(rows),
+                parse_mode='HTML',
+            )
+            return
+        await safe_edit(
+            query,
+            t('battle.already_over', lang) if prepared['status'] in {'not_found', 'not_active', 'invalid_outcome', 'legacy_review'}
+            else t('gear.settlement_pending', lang),
+            parse_mode='HTML',
+        )
+        return
+
     victory_claimed = claim_pve_encounter_victory(
         encounter_id=battle_state.get('pve_encounter_id'),
     )

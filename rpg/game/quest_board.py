@@ -607,8 +607,11 @@ def register_hunt_kill_progress(
     location_id: str | None = None,
     spawn_profile: str | None = None,
     special_spawn_key: str | None = None,
+    conn=None,
 ) -> dict:
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
         state = _get_player_hunt_contract_state_with_conn(conn, player_id)
         if not state or state.get('status') != 'active':
@@ -644,7 +647,8 @@ def register_hunt_kill_progress(
             ''',
             (next_progress, next_status, next_status, int(player_id)),
         )
-        conn.commit()
+        if owns_connection:
+            conn.commit()
         return {
             'updated': next_progress != current_progress,
             'completed_now': completed_now,
@@ -652,7 +656,8 @@ def register_hunt_kill_progress(
             'required_kills': contract.required_kills,
         }
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()
 
 
 def claim_completed_hunt_contract(*, player_id: int, location_id: str, action_token: str | None = None) -> tuple[bool, str, dict | None]:

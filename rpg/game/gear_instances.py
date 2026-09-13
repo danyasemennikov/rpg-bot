@@ -21,6 +21,7 @@ from game.open_world_reward_pools import (
     is_item_tier_band_allowed_for_bounds,
     is_open_world_source_category,
 )
+from game.field_catalog import is_field_item
 
 LEGACY_EQUIPMENT_SLOT_KEYS = (
     'weapon',
@@ -138,6 +139,9 @@ def create_gear_instance(
     enhance_level: int = 0,
     durability: int = 100,
     max_durability: int = 100,
+    revision: int = 0,
+    source_settlement_id: str | None = None,
+    source_metadata_json: str = '{}',
 ) -> int:
     item = get_item(base_item_id)
     if not is_gear_item(item):
@@ -153,8 +157,9 @@ def create_gear_instance(
         cur = conn.execute(
             '''INSERT INTO gear_instances (
                 telegram_id, base_item_id, slot_identity, item_tier, rarity,
-                secondary_rolls_json, enhance_level, durability, max_durability, equipped_slot
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)''',
+                secondary_rolls_json, enhance_level, durability, max_durability, equipped_slot,
+                revision, source_settlement_id, source_metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)''',
             (
                 telegram_id,
                 base_item_id,
@@ -165,8 +170,12 @@ def create_gear_instance(
                 enhance_level,
                 durability,
                 max_durability,
+                revision,
+                source_settlement_id,
+                source_metadata_json,
             ),
         )
+        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
         if owns_connection:
             conn.commit()
         return int(cur.lastrowid)
@@ -175,13 +184,15 @@ def create_gear_instance(
             conn.close()
 
 
-def list_player_gear_instances(telegram_id: int) -> list[dict[str, Any]]:
-    conn = get_connection()
+def list_player_gear_instances(telegram_id: int, *, conn=None) -> list[dict[str, Any]]:
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
         rows = conn.execute(
             '''SELECT id, telegram_id, base_item_id, slot_identity, item_tier, rarity,
                       secondary_rolls_json, enhance_level, durability, max_durability,
-                      equipped_slot, created_at
+                      equipped_slot, revision, source_settlement_id, source_metadata_json, created_at
                FROM gear_instances
                WHERE telegram_id=?
                ORDER BY id''',
@@ -189,12 +200,13 @@ def list_player_gear_instances(telegram_id: int) -> list[dict[str, Any]]:
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()
 
 
-def get_equipped_gear_instances(telegram_id: int) -> dict[str, dict[str, Any]]:
+def get_equipped_gear_instances(telegram_id: int, *, conn=None) -> dict[str, dict[str, Any]]:
     equipped: dict[str, dict[str, Any]] = {}
-    for row in list_player_gear_instances(telegram_id):
+    for row in list_player_gear_instances(telegram_id, conn=conn):
         equipped_slot = row.get('equipped_slot')
         if equipped_slot in LEGACY_EQUIPMENT_SLOT_KEYS:
             equipped[equipped_slot] = row
@@ -503,13 +515,15 @@ def enhance_gear_instance_once(telegram_id: int, instance_id: int, *, rng_roll: 
         conn.close()
 
 
-def resolve_equipped_item_ids_with_fallback(telegram_id: int) -> dict[str, str]:
+def resolve_equipped_item_ids_with_fallback(telegram_id: int, *, conn=None) -> dict[str, str]:
     equipped: dict[str, str] = {}
-    equipped_instances = get_equipped_gear_instances(telegram_id)
+    equipped_instances = get_equipped_gear_instances(telegram_id, conn=conn)
     for slot, row in equipped_instances.items():
         equipped[slot] = row['base_item_id']
 
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     try:
         legacy = conn.execute(
             'SELECT * FROM equipment WHERE telegram_id=?',
@@ -532,7 +546,8 @@ def resolve_equipped_item_ids_with_fallback(telegram_id: int) -> dict[str, str]:
                 equipped[slot] = inv_row['item_id']
         return equipped
     finally:
-        conn.close()
+        if owns_connection:
+            conn.close()
 
 
 def set_gear_instance_equipped_slot(telegram_id: int, instance_id: int, equipped_slot: str | None):
@@ -540,13 +555,14 @@ def set_gear_instance_equipped_slot(telegram_id: int, instance_id: int, equipped
     try:
         if equipped_slot is not None:
             conn.execute(
-                'UPDATE gear_instances SET equipped_slot=NULL WHERE telegram_id=? AND equipped_slot=?',
+                'UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 WHERE telegram_id=? AND equipped_slot=?',
                 (telegram_id, equipped_slot),
             )
         conn.execute(
-            'UPDATE gear_instances SET equipped_slot=? WHERE telegram_id=? AND id=?',
+            'UPDATE gear_instances SET equipped_slot=?, revision=revision+1 WHERE telegram_id=? AND id=?',
             (equipped_slot, telegram_id, instance_id),
         )
+        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
         conn.commit()
     finally:
         conn.close()
@@ -563,9 +579,10 @@ def clear_slot_ownership_across_models(telegram_id: int, slot: str):
     try:
         conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (telegram_id,))
         conn.execute(
-            'UPDATE gear_instances SET equipped_slot=NULL WHERE telegram_id=? AND equipped_slot=?',
+            'UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 WHERE telegram_id=? AND equipped_slot=?',
             (telegram_id, slot),
         )
+        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
         conn.commit()
     finally:
         conn.close()
@@ -592,10 +609,11 @@ def equip_gear_instance_in_slot(telegram_id: int, instance_id: int, slot: str, *
             if player[stat] < item.get(f'req_{stat}', 0):
                 raise ValueError('equipment_requirements')
         conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (telegram_id,))
-        conn.execute('UPDATE gear_instances SET equipped_slot=NULL WHERE telegram_id=? AND equipped_slot=?',
+        conn.execute('UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 WHERE telegram_id=? AND equipped_slot=?',
                      (telegram_id, slot))
-        conn.execute('UPDATE gear_instances SET equipped_slot=? WHERE telegram_id=? AND id=?',
+        conn.execute('UPDATE gear_instances SET equipped_slot=?, revision=revision+1 WHERE telegram_id=? AND id=?',
                      (slot, telegram_id, instance_id))
+        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
         if owns_connection:
             conn.commit()
     except Exception:
@@ -613,6 +631,7 @@ def equip_legacy_inventory_in_slot(telegram_id: int, inventory_id: int, slot: st
     conn = get_connection()
     try:
         conn.execute(f'UPDATE equipment SET {slot}=? WHERE telegram_id=?', (inventory_id, telegram_id))
+        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
         conn.commit()
     finally:
         conn.close()
@@ -663,6 +682,9 @@ def grant_item_to_player(
     source_level: int | None = None,
     source_metadata: RewardSourceMetadata | None = None,
     rng: random.Random | None = None,
+    gear_spec: dict[str, Any] | None = None,
+    source_settlement_id: str | None = None,
+    provenance: dict[str, Any] | None = None,
     conn=None,
 ) -> dict[str, int]:
     if quantity <= 0:
@@ -680,8 +702,18 @@ def grant_item_to_player(
 
         if is_gear_item_id(item_id) and is_open_world_source_category(source_metadata.source_category):
             item = get_item(item_id) or {}
-            item_level = _safe_int(item.get('req_level', 1), 1)
-            if (
+            item_level = _safe_int(
+                gear_spec.get('item_tier', 1) if gear_spec is not None else item.get('req_level', 1),
+                1,
+            )
+            # Field rewards are validated against their persisted generated tier
+            # (1..20) and versioned regional manifest.  The older generic rail
+            # maps raw world levels into 1..10 content bands, so applying it to
+            # the capped field tier would reject valid high-level capped drops.
+            if is_field_item(item_id):
+                if gear_spec is None or not 1 <= item_level <= 20:
+                    return {'gear_instances_created': 0, 'stackable_added': 0}
+            elif (
                 source_metadata.content_tier_band_min is not None
                 and source_metadata.content_tier_band_max is not None
                 and not is_item_tier_band_allowed_for_bounds(
@@ -691,7 +723,7 @@ def grant_item_to_player(
                 )
             ):
                 return {'gear_instances_created': 0, 'stackable_added': 0}
-            if not is_gear_item_allowed_for_open_world_content_identity(
+            if not is_field_item(item_id) and not is_gear_item_allowed_for_open_world_content_identity(
                 item_id=item_id,
                 source_id=source_metadata.content_identity,
             ):
@@ -699,18 +731,50 @@ def grant_item_to_player(
 
     if is_gear_item_id(item_id):
         created = 0
+        instance_ids: list[int] = []
         for _ in range(quantity):
-            _create_generated_gear_instance(
-                telegram_id,
-                item_id,
-                conn=conn,
-                source=source,
-                source_level=source_level,
-                source_metadata=source_metadata,
-                rng=rng,
-            )
+            if gear_spec is not None:
+                if str(gear_spec.get('base_item_id') or '') != item_id:
+                    raise ValueError('gear_spec_item_mismatch')
+                rarity = str(gear_spec.get('rarity') or '')
+                if rarity not in ORDINARY_GENERATED_RARITIES:
+                    raise ValueError('gear_spec_invalid_rarity')
+                item_tier = int(gear_spec.get('item_tier', 0))
+                if item_tier < 1 or item_tier > MAX_GENERATED_TIER:
+                    raise ValueError('gear_spec_invalid_tier')
+                secondaries = gear_spec.get('secondary_rolls', [])
+                expected_count = get_secondary_count_budget_for_rarity(rarity)
+                if len(secondaries) != expected_count:
+                    raise ValueError('gear_spec_secondary_count_mismatch')
+                allowed = set(get_generated_secondary_pool_for_item(get_item(item_id) or {}))
+                if any(str(roll.get('stat')) not in allowed for roll in secondaries if isinstance(roll, dict)):
+                    raise ValueError('gear_spec_secondary_not_allowed')
+                created_id = create_gear_instance(
+                    telegram_id,
+                    item_id,
+                    conn=conn,
+                    item_tier=item_tier,
+                    rarity=rarity,
+                    secondary_rolls_json=json.dumps(secondaries, ensure_ascii=False, sort_keys=True),
+                    enhance_level=int(gear_spec.get('enhance_level', 0)),
+                    durability=int(gear_spec.get('durability', 100)),
+                    max_durability=int(gear_spec.get('max_durability', 100)),
+                    source_settlement_id=source_settlement_id,
+                    source_metadata_json=json.dumps(provenance or {}, ensure_ascii=False, sort_keys=True),
+                )
+            else:
+                created_id = _create_generated_gear_instance(
+                    telegram_id,
+                    item_id,
+                    conn=conn,
+                    source=source,
+                    source_level=source_level,
+                    source_metadata=source_metadata,
+                    rng=rng,
+                )
             created += 1
-        return {'gear_instances_created': created, 'stackable_added': 0}
+            instance_ids.append(created_id)
+        return {'gear_instances_created': created, 'stackable_added': 0, 'instance_ids': instance_ids}
 
     owns_connection = conn is None
     if owns_connection:

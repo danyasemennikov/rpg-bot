@@ -69,3 +69,43 @@ ITEM_NAMES = {
 
 
 ITEM_NAMES.update({'practice_sword': 'Practice sword', 'practice_bow': 'Practice bow', 'practice_staff': 'Practice staff', 'trail_vest': 'Trail vest', 'field_ration': 'Field ration'})
+
+ITEM_NAMES.update({
+    'field_sword_1h': '⚔️ Field Arming Sword', 'field_sword_2h': '⚔️ Field Greatsword',
+    'field_axe_2h': '🪓 Field Greataxe', 'field_daggers': '🗡️ Field Daggers',
+    'field_bow': '🏹 Field Bow', 'field_magic_staff': '🔮 Field Arcane Staff',
+    'field_wand': '🪄 Field Wand', 'field_holy_staff': '✨ Field Holy Staff',
+    'field_holy_rod': '🌟 Field Holy Rod', 'field_tome': '📚 Field Tome',
+    'field_heavy_helmet': '⛑️ Field Heavy Helm', 'field_heavy_chest': '🛡️ Field Heavy Cuirass',
+    'field_heavy_legs': '🥾 Field Heavy Greaves', 'field_heavy_boots': '👢 Field Heavy Boots',
+    'field_heavy_gloves': '🧤 Field Heavy Gauntlets',
+    'field_medium_helmet': '⛑️ Field Medium Hood', 'field_medium_chest': '🥋 Field Medium Jacket',
+    'field_medium_legs': '🥾 Field Medium Leggings', 'field_medium_boots': '👢 Field Medium Boots',
+    'field_medium_gloves': '🧤 Field Medium Gloves',
+    'field_light_helmet': '⛑️ Field Light Cowl', 'field_light_chest': '🧥 Field Light Robe',
+    'field_light_legs': '🥾 Field Light Trousers', 'field_light_boots': '👢 Field Light Shoes',
+    'field_light_gloves': '🧤 Field Light Wraps',
+    'field_shield': '🛡️ Field Shield', 'field_focus': '🔮 Field Focus',
+    'field_censer': '🕯️ Field Censer', 'field_precision_ring': '💍 Field Precision Ring',
+    'field_guard_ring': '💍 Field Guard Ring', 'field_mind_ring': '💍 Field Mind Ring',
+    'field_prayer_amulet': '📿 Field Prayer Amulet',
+})
+
+ITEM_DESCRIPTIONS = {
+    **{item_id: 'Reliable field weapon using the existing combat family shown on its card.' for item_id in (
+        'field_sword_1h', 'field_sword_2h', 'field_axe_2h', 'field_daggers', 'field_bow',
+        'field_magic_staff', 'field_wand', 'field_holy_staff', 'field_holy_rod', 'field_tome')},
+    **{item_id: 'Heavy field armor: physical protection and a scaled health bonus.' for item_id in (
+        'field_heavy_helmet', 'field_heavy_chest', 'field_heavy_legs', 'field_heavy_boots', 'field_heavy_gloves')},
+    **{item_id: 'Medium field armor: balanced protection with scaled accuracy and evasion.' for item_id in (
+        'field_medium_helmet', 'field_medium_chest', 'field_medium_legs', 'field_medium_boots', 'field_medium_gloves')},
+    **{item_id: 'Light field armor: light protection with scaled mana and magic defense.' for item_id in (
+        'field_light_helmet', 'field_light_chest', 'field_light_legs', 'field_light_boots', 'field_light_gloves')},
+    'field_shield': 'A defensive offhand that adds health, block chance, and physical protection.',
+    'field_focus': 'A caster offhand that adds mana and magic power.',
+    'field_censer': 'A support offhand that adds mana and healing power.',
+    'field_precision_ring': 'A ring that adds accuracy and agility.',
+    'field_guard_ring': 'A ring that adds health and vitality.',
+    'field_mind_ring': 'A ring that adds mana and intuition.',
+    'field_prayer_amulet': 'An amulet that adds wisdom and healing power.',
+}

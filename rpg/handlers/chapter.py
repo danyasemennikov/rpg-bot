@@ -14,6 +14,7 @@ from game.quest_board import (
     build_objective_lines, build_contract_title,
 )
 from game.starter_kit import STARTER_WEAPONS, has_starter_kit, claim_starter_kit
+from game.gear_progression import get_equipment_goal
 
 
 def _button(text, data):
@@ -64,6 +65,12 @@ def build_journal(player: dict):
     finally:
         conn.close()
     location = get_location(player['location_id']) or {}
+    if 'chapter_homecoming' in history:
+        goal = get_equipment_goal(player_id)
+        next_step = t('gear.journal_goal_step', lang, name=get_item_name(goal, lang)) if goal else t('gear.journal_choose_goal', lang)
+        lines += ['', t('gear.journal_next_step', lang, step=next_step)]
+        rows.append(_button(t('gear.catalog_btn', lang), 'inv_catalog'))
+        rows.append(_button(t('gear.receipts_btn', lang), 'inv_receipts'))
     if 'quest_board' in location.get('services', []):
         rows.append(_button(t('location.quests_btn', lang), 'quest_board'))
     if 'craftsmen_guild' in location.get('services', []):
@@ -137,7 +144,18 @@ async def journal_command(update, context):
     if not player:
         await update.message.reply_text(t('common.no_character', 'ru'))
         return
+    from game.pve_reward_settlement import recover_player_settlements
+    recovery = recover_player_settlements(int(player['telegram_id']))
+    player = get_player(update.effective_user.id)
     text, keyboard = build_journal(dict(player))
+    notices = []
+    if recovery['recovered']:
+        notices.append(t('gear.settlement_recovered', player['lang'], count=len(recovery['recovered'])))
+    if recovery['pending']:
+        notices.append(t('gear.settlement_pending', player['lang']))
+    notices.extend(t('gear.legacy_review', player['lang'], id=encounter_id) for encounter_id in recovery['legacy_review'])
+    if notices:
+        text = '\n'.join(notices) + '\n\n' + text
     await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 
@@ -152,6 +170,18 @@ async def handle_chapter_buttons(update, context):
     status = None
     answered = False
     view = build_journal
+    if data == 'alpha_home':
+        from game.pve_reward_settlement import recover_player_settlements
+        recovery = recover_player_settlements(player_id)
+        if recovery['legacy_review']:
+            await query.answer(t('gear.legacy_review', lang, id=recovery['legacy_review'][0]), show_alert=True)
+            answered = True
+        elif recovery['recovered']:
+            await query.answer(t('gear.settlement_recovered', lang, count=len(recovery['recovered'])), show_alert=True)
+            answered = True
+        elif recovery['pending']:
+            await query.answer(t('gear.settlement_pending', lang), show_alert=True)
+            answered = True
     if data.startswith('alpha_kit_'):
         status = claim_starter_kit(player_id, data.removeprefix('alpha_kit_'))['status']
     elif data == 'alpha_workshop':

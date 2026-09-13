@@ -69,3 +69,43 @@ ITEM_NAMES = {
 
 
 ITEM_NAMES.update({'practice_sword': 'Учебный меч', 'practice_bow': 'Учебный лук', 'practice_staff': 'Учебный посох', 'trail_vest': 'Походный жилет', 'field_ration': 'Походный паёк'})
+
+ITEM_NAMES.update({
+    'field_sword_1h': '⚔️ Полевой одноручный меч', 'field_sword_2h': '⚔️ Полевой двуручный меч',
+    'field_axe_2h': '🪓 Полевой двуручный топор', 'field_daggers': '🗡️ Полевые парные кинжалы',
+    'field_bow': '🏹 Полевой лук', 'field_magic_staff': '🔮 Полевой магический посох',
+    'field_wand': '🪄 Полевая волшебная палочка', 'field_holy_staff': '✨ Полевой святой посох',
+    'field_holy_rod': '🌟 Полевой святой жезл', 'field_tome': '📚 Полевой фолиант',
+    'field_heavy_helmet': '⛑️ Полевой тяжёлый шлем', 'field_heavy_chest': '🛡️ Полевая тяжёлая кираса',
+    'field_heavy_legs': '🥾 Полевые тяжёлые поножи', 'field_heavy_boots': '👢 Полевые тяжёлые сапоги',
+    'field_heavy_gloves': '🧤 Полевые тяжёлые перчатки',
+    'field_medium_helmet': '⛑️ Полевой средний капюшон', 'field_medium_chest': '🥋 Полевая средняя куртка',
+    'field_medium_legs': '🥾 Полевые средние поножи', 'field_medium_boots': '👢 Полевые средние сапоги',
+    'field_medium_gloves': '🧤 Полевые средние перчатки',
+    'field_light_helmet': '⛑️ Полевой лёгкий капюшон', 'field_light_chest': '🧥 Полевая лёгкая роба',
+    'field_light_legs': '🥾 Полевые лёгкие штаны', 'field_light_boots': '👢 Полевая лёгкая обувь',
+    'field_light_gloves': '🧤 Полевые лёгкие обмотки',
+    'field_shield': '🛡️ Полевой щит', 'field_focus': '🔮 Полевой фокус',
+    'field_censer': '🕯️ Полевое кадило', 'field_precision_ring': '💍 Полевое кольцо точности',
+    'field_guard_ring': '💍 Полевое кольцо стража', 'field_mind_ring': '💍 Полевое кольцо разума',
+    'field_prayer_amulet': '📿 Полевой молитвенный амулет',
+})
+
+ITEM_DESCRIPTIONS = {
+    **{item_id: 'Надёжное полевое оружие существующего семейства, указанного в карточке.' for item_id in (
+        'field_sword_1h', 'field_sword_2h', 'field_axe_2h', 'field_daggers', 'field_bow',
+        'field_magic_staff', 'field_wand', 'field_holy_staff', 'field_holy_rod', 'field_tome')},
+    **{item_id: 'Тяжёлая полевая броня: физическая защита и масштабируемый бонус здоровья.' for item_id in (
+        'field_heavy_helmet', 'field_heavy_chest', 'field_heavy_legs', 'field_heavy_boots', 'field_heavy_gloves')},
+    **{item_id: 'Средняя полевая броня: сбалансированная защита, меткость и уклонение.' for item_id in (
+        'field_medium_helmet', 'field_medium_chest', 'field_medium_legs', 'field_medium_boots', 'field_medium_gloves')},
+    **{item_id: 'Лёгкая полевая броня: лёгкая защита, мана и магическая защита.' for item_id in (
+        'field_light_helmet', 'field_light_chest', 'field_light_legs', 'field_light_boots', 'field_light_gloves')},
+    'field_shield': 'Защитный оффхенд со здоровьем, блоком и физической защитой.',
+    'field_focus': 'Оффхенд заклинателя с маной и магической силой.',
+    'field_censer': 'Оффхенд поддержки с маной и силой лечения.',
+    'field_precision_ring': 'Кольцо, повышающее меткость и ловкость.',
+    'field_guard_ring': 'Кольцо, повышающее здоровье и живучесть.',
+    'field_mind_ring': 'Кольцо, повышающее ману и интуицию.',
+    'field_prayer_amulet': 'Амулет, повышающий мудрость и силу лечения.',
+}

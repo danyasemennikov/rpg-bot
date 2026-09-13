@@ -14,10 +14,12 @@ from game.mobs import get_mob
 from game.pve_live import (
     claim_pve_encounter_victory,
     create_or_load_open_world_pve_encounter,
+    ensure_runtime_for_battle,
     finish_solo_pve_encounter,
     load_active_pve_encounter,
     persist_solo_pve_encounter_state,
 )
+from game.pve_reward_settlement import get_settlement
 from game.quest_board import accept_hunt_contract, get_player_hunt_contract_state
 from handlers.battle import _handle_victory_cleanup, save_battle
 from handlers.location import handle_location_buttons, handle_lower_menu_gather_text
@@ -111,6 +113,9 @@ async def _run_complete_alpha_core_loop():
     )
     assert status == 'created'
     battle_state['pve_encounter_id'] = encounter_id
+    ensure_runtime_for_battle(
+        player_id=PLAYER_ID, battle_state=battle_state, mob=mob,
+    )
     persist_solo_pve_encounter_state(
         encounter_id=encounter_id, battle_state=battle_state, mob=mob,
     )
@@ -137,15 +142,9 @@ async def _run_complete_alpha_core_loop():
     assert restored_state['mob_hp'] == 0
     assert _encounter_status(encounter_id) == 'active'
 
-    deterministic_rewards = {
-        'exp': 11, 'gold': 7, 'loot': ['wolf_pelt'],
-        'mob_id': 'forest_wolf', 'mob_level': mob['level'],
-    }
     query = SimpleNamespace(edit_message_text=AsyncMock())
     context = SimpleNamespace(user_data={'battle': battle_state, 'battle_mob': mob})
     with (
-        patch('handlers.battle.calc_rewards', return_value=deterministic_rewards),
-        patch('handlers.battle.add_mastery_exp', return_value={'mastery_up': False}),
         patch('handlers.battle.safe_edit', new=AsyncMock()),
     ):
         before = dict(get_player(PLAYER_ID))
@@ -161,15 +160,17 @@ async def _run_complete_alpha_core_loop():
         )
 
     duplicate = dict(get_player(PLAYER_ID))
-    assert (after['exp'], after['gold']) == (before['exp'] + 11, before['gold'] + 7)
+    receipt = get_settlement(encounter_id)['result']['recipients'][0]
+    assert (after['exp'], after['gold']) == (receipt['exp_after'], receipt['gold_after'])
     assert (duplicate['exp'], duplicate['gold']) == (after['exp'], after['gold'])
     assert progress == get_player_hunt_contract_state(PLAYER_ID)['progress_kills'] == 1
     assert _encounter_status(encounter_id) == 'victory'
     assert not is_in_battle(PLAYER_ID)
     conn = get_connection()
-    assert conn.execute(
-        "SELECT quantity FROM inventory WHERE telegram_id=? AND item_id='wolf_pelt'", (PLAYER_ID,),
-    ).fetchone()['quantity'] == 1
+    for item_id in receipt['stackable_items']:
+        assert conn.execute(
+            'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?', (PLAYER_ID, item_id),
+        ).fetchone()['quantity'] >= receipt['stackable_items'].count(item_id)
     conn.close()
 
     profile = build_location_gather_source_profiles('westwild_n3')[0]
@@ -231,38 +232,36 @@ async def _run_pre_reward_failure_retry():
     _create_player()
     mob = get_mob('forest_wolf')
     battle_state = init_battle(dict(get_player(PLAYER_ID)), mob)
-    battle_state.update({
-        'mob_dead': True, 'mob_hp': 0, 'location_id': 'westwild_n3',
-        'spawn_profile': 'normal',
-    })
+    battle_state.update({'location_id': 'westwild_n3', 'spawn_profile': 'normal'})
     encounter_id, _ = create_or_load_open_world_pve_encounter(
         owner_player_id=PLAYER_ID, location_id='westwild_n3',
         mob_id='forest_wolf', battle_state=battle_state, mob=mob,
     )
     battle_state['pve_encounter_id'] = encounter_id
-    rewards = {
-        'exp': 11, 'gold': 7, 'loot': ['wolf_pelt'],
-        'mob_id': 'forest_wolf', 'mob_level': mob['level'],
-    }
+    ensure_runtime_for_battle(
+        player_id=PLAYER_ID, battle_state=battle_state, mob=mob,
+    )
+    battle_state['mob_dead'] = True
+    battle_state['mob_hp'] = 0
+    for unit in battle_state.get('enemy_units', []):
+        unit['dead'] = True
+        unit['hp'] = 0
     query = SimpleNamespace(edit_message_text=AsyncMock())
     context = SimpleNamespace(user_data={'battle': battle_state, 'battle_mob': mob})
     before = dict(get_player(PLAYER_ID))
 
     with (
-        patch('handlers.battle.calc_rewards', side_effect=RuntimeError('pre-reward failure')),
+        patch('game.pve_reward_settlement.build_reward_plan', side_effect=RuntimeError('pre-reward failure')),
         patch('handlers.battle.safe_edit', new=AsyncMock()),
     ):
-        with pytest.raises(RuntimeError, match='pre-reward failure'):
-            await _handle_victory_cleanup(
-                query=query, context=context, user_id=PLAYER_ID, player=before,
-                mob=mob, battle_state=battle_state, lang='en',
-            )
+        await _handle_victory_cleanup(
+            query=query, context=context, user_id=PLAYER_ID, player=before,
+            mob=mob, battle_state=battle_state, lang='en',
+        )
     assert _encounter_status(encounter_id) == 'active'
     assert dict(get_player(PLAYER_ID))['exp'] == before['exp']
 
     with (
-        patch('handlers.battle.calc_rewards', return_value=rewards),
-        patch('handlers.battle.add_mastery_exp', return_value={'mastery_up': False}),
         patch('handlers.battle.safe_edit', new=AsyncMock()),
     ):
         await _handle_victory_cleanup(
@@ -276,14 +275,16 @@ async def _run_pre_reward_failure_retry():
         )
 
     after = dict(get_player(PLAYER_ID))
-    assert (after['exp'], after['gold']) == (before['exp'] + 11, before['gold'] + 7)
+    receipt = get_settlement(encounter_id)['result']['recipients'][0]
+    assert (after['exp'], after['gold']) == (receipt['exp_after'], receipt['gold_after'])
     assert _encounter_status(encounter_id) == 'victory'
     conn = get_connection()
     try:
-        assert conn.execute(
-            "SELECT quantity FROM inventory WHERE telegram_id=? AND item_id='wolf_pelt'",
-            (PLAYER_ID,),
-        ).fetchone()['quantity'] == 1
+        for item_id in receipt['stackable_items']:
+            assert conn.execute(
+                'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?',
+                (PLAYER_ID, item_id),
+            ).fetchone()['quantity'] >= receipt['stackable_items'].count(item_id)
     finally:
         conn.close()
 

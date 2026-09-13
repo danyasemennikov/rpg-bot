@@ -2,9 +2,11 @@
 # location.py — отображение локации и агрессия мобов
 # ============================================================
 
-import sys, random, asyncio, re
+import sys, random, asyncio, re, json, logging
 from types import SimpleNamespace
 sys.path.append('/content/rpg_bot')
+
+logger = logging.getLogger(__name__)
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -128,6 +130,15 @@ CURATED_EQUIPMENT_VENDOR_STOCK = {
         {'item_id': 'dual_path_loop', 'level_min': 7},
     ],
 }
+
+from game.field_catalog import FIELD_ITEM_IDS, FIELD_VENDOR_LOCATIONS, is_field_item
+for _field_vendor_location in FIELD_VENDOR_LOCATIONS:
+    _known = {row['item_id'] for row in CURATED_EQUIPMENT_VENDOR_STOCK.setdefault(_field_vendor_location, [])}
+    CURATED_EQUIPMENT_VENDOR_STOCK[_field_vendor_location].extend(
+        {'item_id': item_id, 'level_min': 1}
+        for item_id in FIELD_ITEM_IDS
+        if item_id not in _known
+    )
 
 
 def _should_use_pvp_only_location_view(player: dict) -> bool:
@@ -550,8 +561,31 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
         if player['gold'] < price:
             return {'ok': False, 'reason': 'not_enough_gold', 'price': price}
         conn.execute('UPDATE players SET gold=gold-? WHERE telegram_id=?', (price, telegram_id))
-        require_item_delivery(grant_item_to_player(telegram_id, item_id, quantity=1, source='shop',
-                              source_level=max(player['level'], level_min), conn=conn), 1)
+        grant_kwargs = {}
+        if is_field_item(item_id):
+            grant_kwargs['gear_spec'] = {
+                'base_item_id': item_id,
+                'item_tier': 1,
+                'rarity': 'common',
+                'secondary_rolls': [],
+                'enhance_level': 0,
+                'durability': 100,
+                'max_durability': 100,
+            }
+        delivery = grant_item_to_player(
+            telegram_id, item_id, quantity=1, source='shop',
+            source_level=1 if is_field_item(item_id) else max(player['level'], level_min),
+            conn=conn, provenance={'source': 'vendor', 'location_id': resolve_location_id(location_id)},
+            **grant_kwargs,
+        )
+        require_item_delivery(delivery, 1)
+        if action_token is not None:
+            conn.execute('''INSERT INTO gear_mutation_receipts
+                (action_token, player_id, action_kind, result_json) VALUES (?, ?, 'purchase', ?)''',
+                (action_token, telegram_id, json.dumps({
+                    'status': 'purchased', 'item_id': item_id, 'price': price,
+                    'instance_ids': delivery.get('instance_ids', []),
+                }, ensure_ascii=False, sort_keys=True)))
         conn.commit()
         return {'ok': True, 'price': price}
     except ActionRejected as exc:
@@ -559,24 +593,28 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
         return {'ok': False, 'reason': str(exc)}
     except Exception:
         conn.rollback()
+        logger.exception('Shop delivery failed: player_id=%s location_id=%s item_id=%s',
+                         telegram_id, location_id, item_id)
         return {'ok': False, 'reason': 'delivery_failed'}
     finally:
         conn.close()
 
 
-def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
+def build_shop_message(player: dict, location: dict, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
     lang = player.get('lang', 'ru')
     stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location['id']), [])
     location_name = get_location_name(location['id'], lang)
     text = t('location.shop_title_named', lang, place=location_name) + '\n\n'
     keyboard = []
+    page_count = max(1, (len(stock_rows) + 7) // 8)
+    page = max(0, min(page_count - 1, int(page)))
+    visible_rows = stock_rows[page * 8:page * 8 + 8]
 
-    from game.action_receipts import issue_actions
-    tokens = issue_actions(player['telegram_id'], 'shop_buy', [row['item_id'] for row in stock_rows])
     if not stock_rows:
         text += t('location.shop_empty', lang)
     else:
-        for stock_row in stock_rows:
+        text += t('gear.page', lang, page=page + 1, pages=page_count) + '\n'
+        for stock_row in visible_rows:
             item = get_item(stock_row['item_id'])
             if not item:
                 continue
@@ -590,15 +628,49 @@ def build_shop_message(player: dict, location: dict) -> tuple[str, InlineKeyboar
                 level=req_level,
                 price=price,
             ) + '\n'
-            if player['level'] >= req_level and stock_row['item_id'] in tokens:
+            if player['level'] >= req_level:
                 keyboard.append([InlineKeyboardButton(
                     t('location.shop_buy_btn', lang, name=item_name, price=price),
-                    callback_data=f"shop_buy_{stock_row['item_id']}|{tokens[stock_row['item_id']]}",
+                    callback_data=f"shop_preview_{stock_row['item_id']}|{page}",
                 )])
 
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton('◀️', callback_data=f'shop_page_{page - 1}'))
+    if page + 1 < page_count:
+        nav.append(InlineKeyboardButton('▶️', callback_data=f'shop_page_{page + 1}'))
+    if nav:
+        keyboard.append(nav)
+
+    keyboard.append([InlineKeyboardButton(t('gear.catalog_btn', lang), callback_data='inv_catalog')])
     keyboard.append([InlineKeyboardButton(t('chapter.sell', lang), callback_data='alpha_sell')])
     keyboard.append([InlineKeyboardButton(t('location.shop_back_btn', lang), callback_data='shop_back')])
     return text, InlineKeyboardMarkup(keyboard)
+
+
+def build_shop_item_preview(player: dict, location: dict, item_id: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+    stock = {row['item_id']: row for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location['id']), [])}
+    row = stock.get(item_id)
+    item = get_item(item_id)
+    lang = player.get('lang', 'ru')
+    if not row or not item:
+        return t('location.shop_not_available', lang), InlineKeyboardMarkup([[
+            InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'shop_page_{page}')]])
+    from game.action_receipts import issue_actions
+    token = issue_actions(int(player['telegram_id']), 'shop_buy', [item_id]).get(item_id)
+    lines = [f"<b>{get_item_name(item_id, lang)}</b>",
+             t('location.shop_entry', lang, name=get_item_name(item_id, lang),
+               level=row.get('level_min', item.get('req_level', 1)), price=item.get('buy_price', 0))]
+    if is_field_item(item_id):
+        lines.append(t('gear.tier_rarity', lang, tier=1, rarity=t('inventory.rarity_common', lang), enhance=0))
+    keyboard = []
+    if token:
+        keyboard.append([InlineKeyboardButton(
+            t('gear.buy_here_btn', lang, gold=item.get('buy_price', 0)),
+            callback_data=f'shop_buy_{item_id}|{token}',
+        )])
+    keyboard.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'shop_page_{page}')])
+    return '\n'.join(lines), InlineKeyboardMarkup(keyboard)
 
 
 def build_quest_board_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
@@ -1055,6 +1127,10 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('common.no_character', lang))
         return
 
+    from game.pve_reward_settlement import recover_player_settlements
+    recovery = recover_player_settlements(user.id)
+    p = get_player(user.id)
+
     in_live_pvp = bool(p['in_battle']) and is_player_busy_with_live_pvp(user.id)
     if p['in_battle'] and not in_live_pvp:
         await update.message.reply_text(t('location.in_battle_block', lang))
@@ -1075,6 +1151,14 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         location,
         pvp_only_view=in_live_pvp,
     )
+    notices = []
+    if recovery['recovered']:
+        notices.append(t('gear.settlement_recovered', lang, count=len(recovery['recovered'])))
+    if recovery['pending']:
+        notices.append(t('gear.settlement_pending', lang))
+    notices.extend(t('gear.legacy_review', lang, id=encounter_id) for encounter_id in recovery['legacy_review'])
+    if notices:
+        text = '\n'.join(notices) + '\n\n' + text
     await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
     if not in_live_pvp:
         await _send_lower_menu_sync_message(update.message, dict(p))
@@ -1388,12 +1472,93 @@ def build_craftsmen_guild_message(player: dict, location: dict) -> tuple[str, In
     lang = str(player.get('lang') or 'ru')
     text = t('location.craftsmen_guild_title', lang, place=get_location_name(str(location.get('id') or ''), lang))
     text += '\n' + t('location.craftsmen_guild_body', lang)
-    keyboard = InlineKeyboardMarkup([
+    rows = [
         [InlineKeyboardButton(t('chapter.workshop', lang), callback_data='alpha_workshop')],
+        [InlineKeyboardButton(t('gear.advance_btn', lang), callback_data='craftsmen_advance_0')],
+    ]
+    conn = get_connection()
+    try:
+        homecoming = conn.execute("SELECT 1 FROM player_contract_history WHERE player_id=? AND contract_key='chapter_homecoming'",
+                                  (int(player['telegram_id']),)).fetchone()
+    finally:
+        conn.close()
+    if homecoming:
+        rows.append([InlineKeyboardButton(t('gear.exchange_btn', lang), callback_data='craftsmen_exchange')])
+    rows.extend([
         [InlineKeyboardButton(t('location.craftsmen_handbook_btn', lang), callback_data='craftsmen_handbook')],
         [InlineKeyboardButton(t('location.craftsmen_back_to_location_btn', lang), callback_data='craftsmen_back_to_location')],
     ])
+    keyboard = InlineKeyboardMarkup(rows)
     return text, keyboard
+
+
+def build_craftsmen_advancement_list(player: dict, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+    from game.gear_instances import list_player_gear_instances, resolve_gear_instance_item_data
+    from game.gear_progression import build_gear_mutation_preview
+
+    lang = str(player.get('lang') or 'ru')
+    eligible = []
+    for instance in list_player_gear_instances(int(player['telegram_id'])):
+        preview = build_gear_mutation_preview(int(player['telegram_id']), 'advance', int(instance['id']))
+        if preview:
+            eligible.append((instance, preview))
+    page_count = max(1, (len(eligible) + 7) // 8)
+    page = max(0, min(page_count - 1, int(page)))
+    visible = eligible[page * 8:page * 8 + 8]
+    lines = [t('gear.advance_title', lang), t('gear.page', lang, page=page + 1, pages=page_count)]
+    rows = []
+    for instance, _preview in visible:
+        resolved = resolve_gear_instance_item_data(instance)
+        rows.append([InlineKeyboardButton(
+            f"{get_item_name(instance['base_item_id'], lang)} · T{resolved['item_tier']} +{resolved['enhance_level']}",
+            callback_data=f"craftsmen_advance_item_{instance['id']}_{page}",
+        )])
+    if not visible:
+        lines.append(t('gear.advance_empty', lang))
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton('◀️', callback_data=f'craftsmen_advance_{page - 1}'))
+    if page + 1 < page_count:
+        nav.append(InlineKeyboardButton('▶️', callback_data=f'craftsmen_advance_{page + 1}'))
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(t('location.craftsmen_back_to_guild_btn', lang), callback_data='craftsmen_back_to_guild')])
+    return '\n'.join(lines), InlineKeyboardMarkup(rows)
+
+
+def build_craftsmen_advancement_detail(player: dict, instance_id: int, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+    from game.gear_progression import build_gear_mutation_preview, issue_gear_intent
+
+    lang = str(player.get('lang') or 'ru')
+    preview = build_gear_mutation_preview(int(player['telegram_id']), 'advance', instance_id)
+    if not preview:
+        return t('gear.state_changed', lang), InlineKeyboardMarkup([[
+            InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'craftsmen_advance_{page}')]])
+    instance, cost = preview['instance'], preview['cost']
+    token = issue_gear_intent(int(player['telegram_id']), 'advance', instance_id)
+    text = '\n'.join([
+        t('gear.advance_title', lang),
+        f"<b>{get_item_name(instance['base_item_id'], lang)}</b>",
+        t('gear.advance_cost', lang, before=instance['item_tier'], after=cost['target_tier'],
+          gold=cost['gold'], qty=cost['material_qty'], material=get_item_name(cost['material_id'], lang)),
+    ])
+    rows = []
+    if token:
+        rows.append([InlineKeyboardButton(t('common.confirm', lang), callback_data=f'craftsmen_advance_apply_{token}_{instance_id}_{page}')])
+    rows.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'craftsmen_advance_{page}')])
+    return text, InlineKeyboardMarkup(rows)
+
+
+def build_craftsmen_exchange_confirm(player: dict) -> tuple[str, InlineKeyboardMarkup]:
+    from game.gear_progression import issue_crystal_exchange_intent
+
+    lang = str(player.get('lang') or 'ru')
+    token = issue_crystal_exchange_intent(int(player['telegram_id']))
+    rows = []
+    if token:
+        rows.append([InlineKeyboardButton(t('common.confirm', lang), callback_data=f'craftsmen_exchange_apply_{token}')])
+    rows.append([InlineKeyboardButton(t('location.craftsmen_back_to_guild_btn', lang), callback_data='craftsmen_back_to_guild')])
+    return t('gear.exchange_confirm', lang), InlineKeyboardMarkup(rows)
 
 
 def build_craftsmen_handbook_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
@@ -1749,6 +1914,60 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
+    if data.startswith('craftsmen_advance_apply_'):
+        parts = data.split('_')
+        if len(parts) != 6:
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        from game.gear_progression import apply_gear_intent
+        result = apply_gear_intent(int(user.id), 'advance', parts[3])
+        if result.get('status') == 'advanced':
+            await query.answer(t('gear.advanced', lang, tier=result['after']), show_alert=True)
+        else:
+            key = result.get('status') if result.get('status') in {
+                'no_gold', 'no_material', 'max_tier', 'not_eligible'
+            } else 'state_changed'
+            await query.answer(t(f'gear.{key}', lang), show_alert=True)
+        text, keyboard = build_craftsmen_advancement_list(dict(get_player(user.id)), int(parts[5]))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('craftsmen_advance_item_'):
+        parts = data.split('_')
+        if len(parts) != 5 or not parts[3].isdigit():
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        text, keyboard = build_craftsmen_advancement_detail(dict(p), int(parts[3]), int(parts[4]))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('craftsmen_advance_'):
+        raw_page = data.removeprefix('craftsmen_advance_')
+        if not raw_page.isdigit():
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        text, keyboard = build_craftsmen_advancement_list(dict(p), int(raw_page))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('craftsmen_exchange_apply_'):
+        from game.gear_progression import exchange_enhancement_crystal
+        result = exchange_enhancement_crystal(int(user.id), data.removeprefix('craftsmen_exchange_apply_'))
+        key = 'exchanged' if result.get('status') == 'exchanged' else (
+            result.get('status') if result.get('status') in {'chapter_required', 'no_gold', 'no_material'} else 'state_changed')
+        await query.answer(t(f'gear.{key}', lang), show_alert=True)
+        text, keyboard = build_craftsmen_guild_message(dict(get_player(user.id)), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data == 'craftsmen_exchange':
+        text, keyboard = build_craftsmen_exchange_confirm(dict(p))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
     if data == 'craftsmen_handbook':
         text, keyboard = build_craftsmen_handbook_home(dict(p))
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -2011,6 +2230,32 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             return
 
         text, keyboard = _build_location_message_with_snapshot(context, dict(p), location)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('shop_page_'):
+        raw_page = data.removeprefix('shop_page_')
+        location = get_location(p['location_id'])
+        if not location or 'shop' not in location.get('services', []) or not raw_page.isdigit():
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        text, keyboard = build_shop_message(dict(p), location, int(raw_page))
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('shop_preview_'):
+        raw = data.removeprefix('shop_preview_')
+        if '|' not in raw:
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        item_id, raw_page = raw.rsplit('|', 1)
+        location = get_location(p['location_id'])
+        if not location or 'shop' not in location.get('services', []) or not raw_page.isdigit():
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        text, keyboard = build_shop_item_preview(dict(p), location, item_id, int(raw_page))
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
         return

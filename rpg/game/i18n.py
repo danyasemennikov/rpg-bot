@@ -112,6 +112,27 @@ def get_item_name(item_id: str, lang: str) -> str:
     item = get_item(item_id)
     return item['name'] if item else item_id
 
+
+def get_item_description(item_id: str, lang: str) -> str:
+    """Return localized item copy without making translated text authoritative."""
+    try:
+        if lang == 'ru':
+            from locales.items_ru import ITEM_DESCRIPTIONS
+        elif lang == 'en':
+            from locales.items_en import ITEM_DESCRIPTIONS
+        elif lang == 'es':
+            from locales.items_es import ITEM_DESCRIPTIONS
+        else:
+            from locales.items_ru import ITEM_DESCRIPTIONS
+        description = ITEM_DESCRIPTIONS.get(item_id)
+        if description:
+            return description
+    except (ImportError, AttributeError):
+        pass
+    from game.items_data import get_item
+    item = get_item(item_id)
+    return str(item.get('description') or '') if item else ''
+
 def get_location_name(location_id: str, lang: str) -> str:
     from game.locations import WORLD_LEGACY_LOCATION_ALIASES, resolve_location_id
     raw_location_id = str(location_id or '').strip()

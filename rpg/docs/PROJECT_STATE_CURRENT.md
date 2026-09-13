@@ -4,6 +4,14 @@ This file is the source of truth for the currently confirmed merged state of the
 
 Do not record planned, discussed, or unmerged work as confirmed state.
 
+## Itemization, Regional Loot & Reliable Gear Progression V1 — implemented in this PR, pending review
+
+This branch adds the exact 32-item field catalogue, three deterministic vendors, five regional pools, persisted dry-streak guarantees, instance-first equipment comparison and mutation flows, canonical weapon-family mastery, and a two-transaction versioned PvE reward settlement with bounded startup/player recovery. It also activates resolved armor/offhand base defense exactly once and adds ru/en/es catalogue, goal, source, guild, receipt, and recovery UX.
+
+The implementation is additive and preserves existing gear and legacy active encounters. Ambiguous pre-V1 resolving victories are quarantined for owner review without automatic replay. See [the branch specification, acquisition evidence, migration behavior, settlement guarantees, and risks](FIELD_LOOT_AND_GEAR_PROGRESSION_V1.md).
+
+The confirmed merged baseline below is unchanged until this Epic PR is reviewed and merged.
+
 ## Playable Alpha Vertical Slice V1 — implemented in this PR, pending merge
 
 This subsection describes the branch implementation for review. The confirmed merged

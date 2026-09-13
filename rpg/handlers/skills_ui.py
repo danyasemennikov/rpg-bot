@@ -275,7 +275,7 @@ async def handle_skills_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         result = upgrade_skill(user.id, weapon_id, skill_id)
 
         if not result['success']:
-            await query.answer(f"❌ {result['reason']}", show_alert=True)
+            await query.answer(t(f"skills.{result['reason']}", lang, **result), show_alert=True)
             return
 
         await query.answer(

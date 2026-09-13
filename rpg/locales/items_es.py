@@ -69,3 +69,43 @@ ITEM_NAMES = {
 
 
 ITEM_NAMES.update({'practice_sword': 'Espada de práctica', 'practice_bow': 'Arco de práctica', 'practice_staff': 'Bastón de práctica', 'trail_vest': 'Chaleco de viaje', 'field_ration': 'Ración de viaje'})
+
+ITEM_NAMES.update({
+    'field_sword_1h': '⚔️ Espada de campo', 'field_sword_2h': '⚔️ Mandoble de campo',
+    'field_axe_2h': '🪓 Gran hacha de campo', 'field_daggers': '🗡️ Dagas de campo',
+    'field_bow': '🏹 Arco de campo', 'field_magic_staff': '🔮 Bastón arcano de campo',
+    'field_wand': '🪄 Varita de campo', 'field_holy_staff': '✨ Bastón sagrado de campo',
+    'field_holy_rod': '🌟 Vara sagrada de campo', 'field_tome': '📚 Tomo de campo',
+    'field_heavy_helmet': '⛑️ Yelmo pesado de campo', 'field_heavy_chest': '🛡️ Coraza pesada de campo',
+    'field_heavy_legs': '🥾 Grebas pesadas de campo', 'field_heavy_boots': '👢 Botas pesadas de campo',
+    'field_heavy_gloves': '🧤 Guanteletes pesados de campo',
+    'field_medium_helmet': '⛑️ Capucha media de campo', 'field_medium_chest': '🥋 Chaqueta media de campo',
+    'field_medium_legs': '🥾 Perneras medias de campo', 'field_medium_boots': '👢 Botas medias de campo',
+    'field_medium_gloves': '🧤 Guantes medios de campo',
+    'field_light_helmet': '⛑️ Capucha ligera de campo', 'field_light_chest': '🧥 Túnica ligera de campo',
+    'field_light_legs': '🥾 Pantalones ligeros de campo', 'field_light_boots': '👢 Calzado ligero de campo',
+    'field_light_gloves': '🧤 Vendas ligeras de campo',
+    'field_shield': '🛡️ Escudo de campo', 'field_focus': '🔮 Foco de campo',
+    'field_censer': '🕯️ Incensario de campo', 'field_precision_ring': '💍 Anillo de precisión de campo',
+    'field_guard_ring': '💍 Anillo de guardia de campo', 'field_mind_ring': '💍 Anillo mental de campo',
+    'field_prayer_amulet': '📿 Amuleto de oración de campo',
+})
+
+ITEM_DESCRIPTIONS = {
+    **{item_id: 'Arma de campo fiable que usa la familia de combate indicada en su ficha.' for item_id in (
+        'field_sword_1h', 'field_sword_2h', 'field_axe_2h', 'field_daggers', 'field_bow',
+        'field_magic_staff', 'field_wand', 'field_holy_staff', 'field_holy_rod', 'field_tome')},
+    **{item_id: 'Armadura pesada de campo: protección física y bonificación de salud escalada.' for item_id in (
+        'field_heavy_helmet', 'field_heavy_chest', 'field_heavy_legs', 'field_heavy_boots', 'field_heavy_gloves')},
+    **{item_id: 'Armadura media de campo: protección equilibrada con precisión y evasión escaladas.' for item_id in (
+        'field_medium_helmet', 'field_medium_chest', 'field_medium_legs', 'field_medium_boots', 'field_medium_gloves')},
+    **{item_id: 'Armadura ligera de campo: protección ligera con maná y defensa mágica escalados.' for item_id in (
+        'field_light_helmet', 'field_light_chest', 'field_light_legs', 'field_light_boots', 'field_light_gloves')},
+    'field_shield': 'Mano secundaria defensiva con salud, bloqueo y protección física.',
+    'field_focus': 'Mano secundaria de lanzador con maná y poder mágico.',
+    'field_censer': 'Mano secundaria de apoyo con maná y poder de curación.',
+    'field_precision_ring': 'Anillo que añade precisión y agilidad.',
+    'field_guard_ring': 'Anillo que añade salud y vitalidad.',
+    'field_mind_ring': 'Anillo que añade maná e intuición.',
+    'field_prayer_amulet': 'Amuleto que añade sabiduría y poder de curación.',
+}

@@ -63,6 +63,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = get_player_lang(user.id)
 
     if player_exists(user.id):
+        from game.pve_reward_settlement import recover_player_settlements
+        recovery = recover_player_settlements(user.id)
         player = get_player(user.id)
         from handlers.profile import main_keyboard
         next_steps = build_alpha_next_steps(
@@ -77,8 +79,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             },
             lang=lang,
         )
+        recovery_lines = []
+        if recovery['recovered']:
+            recovery_lines.append(t('gear.settlement_recovered', lang, count=len(recovery['recovered'])))
+        if recovery['pending']:
+            recovery_lines.append(t('gear.settlement_pending', lang))
+        recovery_lines.extend(t('gear.legacy_review', lang, id=encounter_id) for encounter_id in recovery['legacy_review'])
+        recovery_text = ('\n'.join(recovery_lines) + '\n\n') if recovery_lines else ''
         await update.message.reply_text(
-            t('start.welcome', lang) if False else (
+            t('start.welcome', lang) if False else recovery_text + (
                 f"👋 {'С возвращением' if lang == 'ru' else 'Welcome back' if lang == 'en' else 'Bienvenido de nuevo'}, "
                 f"<b>{escape(player['name'])}</b>!\n\n"
                 f"❤️ HP: {player['hp']}/{player['max_hp']}  "

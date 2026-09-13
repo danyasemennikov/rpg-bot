@@ -47,7 +47,15 @@ def peaceful_player(conn, player_id: int, *, service: str | None = None,
     if not row:
         raise ActionRejected('no_player')
     player = dict(row)
-    if player['in_battle'] or is_player_busy_with_live_pvp(player_id, conn=conn):
+    pve_busy = False
+    pve_tables = conn.execute("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name IN ('pve_encounters','pve_encounter_participants')").fetchone()
+    if pve_tables and int(pve_tables['c']) == 2:
+        pve_busy = conn.execute('''SELECT 1 FROM pve_encounter_participants p
+            JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+            WHERE p.player_id=? AND p.status='active'
+              AND e.status IN ('forming', 'active', 'resolving_victory') LIMIT 1''',
+            (player_id,)).fetchone() is not None
+    if player['in_battle'] or pve_busy or is_player_busy_with_live_pvp(player_id, conn=conn):
         raise ActionRejected('in_battle')
     actual = resolve_location_id(player['location_id'])
     if location_id is not None and actual != resolve_location_id(location_id):
