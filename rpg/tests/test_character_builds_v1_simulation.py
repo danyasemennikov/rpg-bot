@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import json
+from pathlib import Path
 
 from game.build_contract import FAMILIES, RULES_VERSION
 from game.combat_identity_simulation import (
@@ -104,3 +106,16 @@ def test_role_plan_declares_two_axes_for_every_sibling_pair():
     assert len(ROLE_SCENARIOS) == 17
     assert sum(len(scenario['gates']) for scenario in ROLE_SCENARIOS) == 20
     assert {scenario['family'] for scenario in ROLE_SCENARIOS} == set(FAMILIES)
+
+
+def test_checked_evidence_has_exact_seed_budget_and_passes_frozen_gates():
+    path = Path(__file__).parents[1] / 'docs' / 'evidence' / 'character_builds_combat_identity_v1.json'
+    evidence = json.loads(path.read_text(encoding='utf-8'))
+    assert evidence['rules_version'] == RULES_VERSION
+    assert evidence['rng']['paired_seeds'] == list(range(200))
+    assert evidence['accessibility']['all_branches_pass'] is True
+    assert evidence['roles']['all_gates_pass'] is True
+    assert evidence['roles']['gate_count'] == 20
+    assert evidence['encounter_matrix']['result_count'] == 240
+    assert evidence['authority']['legacy_simulator_used'] is False
+    assert all(abs(row['relative_percent']) <= 15 for row in evidence['bounded_numerical_tuning'])
