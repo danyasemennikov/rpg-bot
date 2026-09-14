@@ -2948,6 +2948,22 @@ def resolve_current_side_if_ready(
                     legacy_units[index]['hp'] = int(item.get('hp', 0))
                     legacy_units[index]['dead'] = int(item.get('hp', 0)) <= 0
             battle_state['enemy_units'] = legacy_units
+            # Periodic damage resolves at the affected side boundary.  If that
+            # damage defeats the active/final enemy, refresh the compact battle
+            # projection immediately so post-action settlement runs instead of
+            # rendering a targetless card with legacy fallback buttons.
+            active_enemy = next(
+                (item for item in ticked['entities'] if int(item.get('hp', 0)) > 0),
+                None,
+            )
+            if active_enemy is None:
+                battle_state['mob_hp'] = 0
+                battle_state['mob_dead'] = True
+            else:
+                battle_state['active_enemy_unit_id'] = active_enemy.get('unit_id')
+                battle_state['mob_hp'] = int(active_enemy.get('hp', 0))
+                battle_state['mob_max_hp'] = int(active_enemy.get('max_hp', 1))
+                battle_state['mob_dead'] = False
         battle_state.setdefault('combat_events_v1', []).extend(ticked['events'])
 
     _SOLO_PVE_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)

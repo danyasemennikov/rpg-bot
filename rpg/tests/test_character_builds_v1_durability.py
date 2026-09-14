@@ -11,6 +11,11 @@ from game.build_progression import ensure_build_schema
 from game.build_progression import migrate_character_builds_v1
 from game.combat_orders import consume_combat_intent, issue_combat_intents, load_combat_orders
 from game.pve_reward_settlement import _v1_mastery_awards
+from game.pve_live import (
+    ensure_runtime_for_battle,
+    reset_solo_pve_runtime_store,
+    run_enemy_instant_side,
+)
 from game.pvp_live import (
     _LIVE_PVP_RUNTIME_STORE,
     _deserialize_reason_context,
@@ -187,3 +192,51 @@ def test_v1_mob_first_uses_shared_enemy_side_not_legacy_strike():
 
     enemy_side.assert_called_once()
     assert battle['active_side'] == 'side_b'
+
+
+def test_enemy_side_dot_kill_refreshes_terminal_projection_for_settlement():
+    reset_solo_pve_runtime_store()
+    migrate_character_builds_v1()
+    effect = {
+        'kind': 'bleed', 'source_id': '1', 'skill_id': 'bleeding_cut',
+        'duration': 1, 'value': 0, 'created_side_index': 0,
+        'school': 'physical', 'raw_tick': 5,
+        'metadata': {'source_level': 1, 'weakness_snapshot': 0},
+    }
+    battle = {
+        'rules_version': RULES_VERSION,
+        'mob_id': 'westwild_rabbit',
+        'mob_hp': 1,
+        'mob_dead': False,
+        'active_side': 'side_b',
+        'log': [],
+        'participant_states_v1': {
+            '1': {'actor_id': 1, 'hp': 100, 'max_hp': 100, 'mana': 50,
+                  'max_mana': 50, 'effects': [], 'cooldowns': {}},
+        },
+        'enemy_states_v1': [
+            {'unit_id': 'enemy-dot', 'mob_id': 'westwild_rabbit', 'hp': 1,
+             'max_hp': 22, 'effects': [effect]},
+        ],
+        'enemy_units': [
+            {'unit_id': 'enemy-dot', 'mob_id': 'westwild_rabbit', 'hp': 1,
+             'max_hp': 22, 'dead': False},
+        ],
+    }
+    ensure_runtime_for_battle(
+        player_id=1, battle_state=battle,
+        mob={'id': 'westwild_rabbit', 'hp': 22},
+    )
+    battle['enemy_states_v1'][0].update({'hp': 1, 'effects': [effect]})
+    battle['enemy_units'][0].update({'hp': 1, 'dead': False})
+    battle['mob_hp'] = 1
+    battle['mob_dead'] = False
+    run_enemy_instant_side(
+        player_id=1, battle_state=battle,
+        on_enemy_action=lambda _action: None,
+    )
+
+    assert battle['enemy_states_v1'][0]['hp'] == 0
+    assert battle['enemy_units'][0]['dead'] is True
+    assert battle['mob_hp'] == 0
+    assert battle['mob_dead'] is True
