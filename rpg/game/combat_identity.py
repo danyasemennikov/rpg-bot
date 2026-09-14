@@ -13,7 +13,7 @@ import math
 import random
 from typing import Any, Iterable
 
-from game.actor_snapshot import healing_power, raw_power_range
+from game.actor_state import healing_power, raw_power_range
 from game.build_contract import (
     POWER_STRIKE,
     RULES_VERSION,
@@ -746,13 +746,17 @@ def _on_hit(
         add("slow", 2); add("chilled", 3)
     elif skill_id == "hex_bolt": add("weakness", 2, _ranked_percent(.15, rank))
     elif skill_id == "mana_feint":
-        add("slow", 2); _restore_mana(actor, _ranked(4, rank))
+        add("slow", 2)
+        events.append({"kind": "mana", "target_id": source, "amount": _restore_mana(actor, _ranked(4, rank)), "skill_id": skill_id})
     elif skill_id == "judgment_mark": add("dawn_mark", 3, _ranked_percent(.12, rank))
     elif skill_id == "judgment": add("judgment", 3)
     elif skill_id == "rod_consecration": add("burn", 3, school="holy", raw_tick=int(base_power * _ranked(.20, rank)))
     elif skill_id == "borrowed_flame": add("burn", 3, school="magic", raw_tick=int(base_power * _ranked(.15, rank)))
     elif skill_id == "borrowed_grace":
-        _heal(actor, healing_power(actor) * _ranked(.35, rank))
+        events.append({
+            "kind": "heal", "actor_id": source, "target_id": source,
+            "amount": _heal(actor, healing_power(actor) * _ranked(.35, rank)), "skill_id": skill_id,
+        })
         _add_effect(actor, _effect("grace", actor, 2, value=.20, skill_id=skill_id, side_index=side_index))
     if _has(actor, "envenom", source_id=source) and normalize_family(actor.get("family")) == "daggers":
         add("poison", 3, school="physical", raw_tick=int(base_power * .25 * _effect_value(actor, "envenom", source_id=source)))
@@ -787,7 +791,7 @@ def _on_hit(
                 target, raw=int(budget * .80), school="poison",
                 source_level=source_level, weakness=weighted_weakness,
             )
-            events.append({"kind": "poison_rupture", "target_id": _id(target), **result})
+            events.append({"kind": "poison_rupture", "actor_id": source, "source_id": source, "target_id": _id(target), **result})
     if flags.get("consume_burn"):
         burns = _find_effect(target, "burn", source_id=source, school="magic")
         packets = [
@@ -807,17 +811,21 @@ def _on_hit(
                 target, raw=int(budget * .60), school="magic",
                 source_level=source_level, weakness=weighted_weakness,
             )
-            events.append({"kind": "burn_consumed", "target_id": _id(target), **result})
+            events.append({"kind": "burn_consumed", "actor_id": source, "source_id": source, "target_id": _id(target), **result})
     if flags.get("barrage_refund"):
         events.append({"kind": "mana", "target_id": source, "amount": _restore_mana(actor, _ranked(8, rank))})
     heal_factor = 1 + min(40, max(0, int(actor.get("healing_power", 0)))) / 100
-    if skill_id == "last_roar": _heal(actor, min(int(actual_damage * .15 * heal_factor), int(actor.get("max_hp", 1) * .12)))
-    if skill_id == "smite": _heal(actor, min(int(actual_damage * .15 * heal_factor), int(actor.get("max_hp", 1) * .08)))
-    if flags.get("radiant_heal"): _heal(actor, min(int(actual_damage * .20 * heal_factor), int(actor.get("max_hp", 1) * .10)))
+    if skill_id == "last_roar":
+        events.append({"kind": "heal", "actor_id": source, "target_id": source, "amount": _heal(actor, min(int(actual_damage * .15 * heal_factor), int(actor.get("max_hp", 1) * .12))), "skill_id": skill_id})
+    if skill_id == "smite":
+        events.append({"kind": "heal", "actor_id": source, "target_id": source, "amount": _heal(actor, min(int(actual_damage * .15 * heal_factor), int(actor.get("max_hp", 1) * .08))), "skill_id": skill_id})
+    if flags.get("radiant_heal"):
+        events.append({"kind": "heal", "actor_id": source, "target_id": source, "amount": _heal(actor, min(int(actual_damage * .20 * heal_factor), int(actor.get("max_hp", 1) * .10))), "skill_id": skill_id})
     if flags.get("verdict"):
-        _heal(actor, min(int(actual_damage * .25 * heal_factor), int(actor.get("max_hp", 1) * .18)))
+        events.append({"kind": "heal", "actor_id": source, "target_id": source, "amount": _heal(actor, min(int(actual_damage * .25 * heal_factor), int(actor.get("max_hp", 1) * .18))), "skill_id": skill_id})
         _remove_effects(target, {"judgment"}, source_id=source)
-    if flags.get("thesis_heal"): _heal(actor, healing_power(actor) * _ranked(.35, rank))
+    if flags.get("thesis_heal"):
+        events.append({"kind": "heal", "actor_id": source, "target_id": source, "amount": _heal(actor, healing_power(actor) * _ranked(.35, rank)), "skill_id": skill_id})
     if skill_id == "duel_arc" and flags.get("consume_reprisal"):
         _apply_barrier(actor, actor, int(healing_power(actor) * _ranked(.45, rank)), 2, skill_id, side_index)
 

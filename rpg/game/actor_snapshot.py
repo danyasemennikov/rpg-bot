@@ -4,12 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from game.balance import (
-    calc_crit_chance,
-    calc_profile_primary_offense_bonus,
-    calc_profile_secondary_offense_bonus,
-    normalize_damage_school,
-)
+from game.balance import normalize_damage_school
+from game.actor_state import finalize_actor_snapshot, healing_power, raw_power_range
 from game.build_contract import RULES_VERSION, normalize_family
 from game.build_progression import create_family_if_needed, family_skill_ranks
 from game.equipment_stats import get_player_effective_stats
@@ -95,7 +91,7 @@ def build_actor_snapshot(
             for cd in conn.execute('''SELECT skill_id, turns_left FROM skill_cooldowns
                 WHERE telegram_id=? AND turns_left>0''', (player_id,))
         }
-    return {
+    return finalize_actor_snapshot({
         "rules_version": RULES_VERSION,
         "actor_id": int(player_id),
         "name": str(player.get("name") or player_id),
@@ -139,28 +135,7 @@ def build_actor_snapshot(
         "opportunity_index": 0,
         "manual_contribution": False,
         "death_prevention_used": False,
-    }
-
-
-def raw_power_range(snapshot: dict[str, Any]) -> tuple[int, int]:
-    profile = str(snapshot.get("family") or "unarmed")
-    primary = calc_profile_primary_offense_bonus(snapshot, profile)
-    secondary = calc_profile_secondary_offense_bonus(snapshot, profile)
-    school_multiplier = 1.0
-    if snapshot.get("damage_school") in {"magic", "holy"}:
-        school_multiplier += min(40, max(0, int(snapshot.get("magic_power", 0)))) / 100
-    return (
-        max(1, int((int(snapshot.get("weapon_min", 5)) + primary + secondary) * school_multiplier)),
-        max(1, int((int(snapshot.get("weapon_max", 5)) + primary + secondary) * school_multiplier)),
-    )
-
-
-def healing_power(snapshot: dict[str, Any], *, weapon_roll: float | None = None) -> int:
-    if weapon_roll is None:
-        weapon_roll = (int(snapshot.get("weapon_min", 5)) + int(snapshot.get("weapon_max", 5))) / 2
-    raw = 30 + 3 * int(snapshot.get("wisdom", 0)) + .5 * float(weapon_roll)
-    raw *= 1 + min(40, max(0, int(snapshot.get("healing_power", 0)))) / 100
-    return max(1, int(raw))
+    })
 
 
 def snapshot_cache_key(snapshot: dict[str, Any]) -> tuple[int, int, int]:
@@ -169,4 +144,3 @@ def snapshot_cache_key(snapshot: dict[str, Any]) -> tuple[int, int, int]:
         int(snapshot.get("build_revision", 0)),
         int(snapshot.get("gear_revision", 0)),
     )
-
