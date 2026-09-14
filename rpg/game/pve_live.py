@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 import zlib
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from database import get_connection
@@ -542,6 +543,43 @@ def list_location_available_spawn_instances(*, location_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def list_location_available_mixed_encounters(*, location_id: str) -> list[dict]:
+    """List recipes whose exact normal source roster is currently idle."""
+    from game.enemy_profiles import MIXED_ENCOUNTERS
+
+    recipes = [
+        (recipe_id, recipe)
+        for recipe_id, recipe in MIXED_ENCOUNTERS.items()
+        if str(recipe.get('location_id') or '') == str(location_id)
+    ]
+    if not recipes:
+        return []
+    ensure_location_pve_spawn_instances(location_id=location_id)
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT mob_id, COUNT(*) AS available
+        FROM pve_spawn_instances
+        WHERE location_id=?
+          AND spawn_profile=?
+          AND COALESCE(TRIM(special_spawn_key), '')=''
+          AND COALESCE(TRIM(special_spawn_name), '')=''
+          AND state=?
+          AND linked_encounter_id IS NULL
+        GROUP BY mob_id
+        ''',
+        (location_id, DEFAULT_WORLD_SPAWN_PROFILE, SPAWN_STATE_IDLE),
+    ).fetchall()
+    conn.close()
+    available_counts = {str(row['mob_id']): int(row['available']) for row in rows}
+    result = []
+    for recipe_id, recipe in recipes:
+        required = Counter(str(mob_id) for mob_id, _formation in recipe.get('units', ()))
+        if all(available_counts.get(mob_id, 0) >= count for mob_id, count in required.items()):
+            result.append({'recipe_id': recipe_id, **recipe})
+    return result
+
+
 def resolve_available_spawn_for_group_click(*, location_id: str, clicked_spawn_instance_id: str) -> dict | None:
     ensure_location_pve_spawn_instances(location_id=location_id)
     conn = get_connection()
@@ -666,7 +704,8 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
         conn.commit()
     rows = conn.execute(
         '''
-        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state,
+        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id,
+               e.battle_state_json, s.state AS spawn_state,
                s.spawn_profile, s.special_spawn_key, s.special_spawn_name
         FROM pve_encounters e
         JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
@@ -682,6 +721,8 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
     encounters: list[dict] = []
     for row in rows:
         encounter = dict(row)
+        battle_state = _deserialize_payload(encounter.pop('battle_state_json', None))
+        encounter['mixed_encounter_id'] = battle_state.get('mixed_encounter_id')
         participant_count = conn.execute(
             '''
             SELECT COUNT(*) AS total
@@ -729,6 +770,7 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
         'e.mob_id',
         'e.location_id',
         'e.anchor_spawn_instance_id',
+        'e.battle_state_json',
         's.state AS spawn_state',
     ]
     if has_spawn_profile_column:
@@ -781,6 +823,8 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     ).fetchone()
     conn.close()
     detail = dict(encounter_row)
+    battle_state = _deserialize_payload(detail.pop('battle_state_json', None))
+    detail['mixed_encounter_id'] = battle_state.get('mixed_encounter_id')
     if 'spawn_profile' not in detail:
         detail['spawn_profile'] = DEFAULT_WORLD_SPAWN_PROFILE
     if 'special_spawn_key' not in detail:
@@ -1621,8 +1665,11 @@ def create_pve_encounter(
     encounter_id: str | None = None,
     location_id: str | None = None,
     anchor_spawn_instance_id: str | None = None,
+    conn=None,
 ) -> str:
-    _ensure_pve_encounter_table()
+    owns_connection = conn is None
+    if owns_connection:
+        _ensure_pve_encounter_table()
     participant_ids = _normalize_player_ids(side_a_player_ids)
     if not participant_ids:
         raise ValueError('side_a_player_ids must include at least one player id.')
@@ -1645,8 +1692,9 @@ def create_pve_encounter(
         location_id=resolved_location_id,
         anchor_spawn_instance_id=resolved_anchor_id,
     )
-    conn = get_connection()
-    conn.execute('BEGIN IMMEDIATE')
+    if owns_connection:
+        conn = get_connection()
+        conn.execute('BEGIN IMMEDIATE')
     ensure_build_schema(conn)
     # Real encounters always have durable player rows.  The legacy fallback is
     # retained only for replay/test envelopes that predate persisted actors.
@@ -1729,8 +1777,9 @@ def create_pve_encounter(
             (encounter_id, int(player_id), SIDE_PLAYER),
         )
 
-    conn.commit()
-    conn.close()
+    if owns_connection:
+        conn.commit()
+        conn.close()
     return encounter_id
 
 
@@ -1753,6 +1802,130 @@ def create_solo_pve_encounter(*, player_id: int, battle_state: dict, mob: dict |
         battle_state=battle_state,
         mob=mob,
     )
+
+
+def create_mixed_open_world_pve_encounter(
+    *,
+    owner_player_id: int,
+    recipe_id: str,
+    battle_state: dict,
+    side_a_player_ids: list[int] | None = None,
+) -> tuple[str | None, str]:
+    """Atomically reserve a frozen mixed recipe and its durable encounter."""
+    from game.enemy_profiles import MIXED_ENCOUNTERS
+    from game.mobs import get_mob
+
+    recipe = MIXED_ENCOUNTERS.get(str(recipe_id))
+    if not recipe:
+        return None, 'spawn_unavailable'
+    location_id = str(recipe.get('location_id') or '')
+    units_recipe = tuple(recipe.get('units') or ())
+    if not location_id or not units_recipe:
+        return None, 'spawn_unavailable'
+
+    _ensure_pve_encounter_table()
+    ensure_location_pve_spawn_instances(location_id=location_id)
+    encounter_id = f'pve-enc-{uuid.uuid4().hex[:12]}'
+    participant_ids = side_a_player_ids or [int(owner_player_id)]
+    required_counts = Counter(str(mob_id) for mob_id, _formation in units_recipe)
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        selected_by_mob: dict[str, list[str]] = {}
+        selected_spawn_ids: list[str] = []
+        for mob_id, required_count in required_counts.items():
+            rows = conn.execute(
+                '''
+                SELECT spawn_instance_id
+                FROM pve_spawn_instances
+                WHERE location_id=?
+                  AND mob_id=?
+                  AND spawn_profile=?
+                  AND COALESCE(TRIM(special_spawn_key), '')=''
+                  AND COALESCE(TRIM(special_spawn_name), '')=''
+                  AND state=?
+                  AND linked_encounter_id IS NULL
+                ORDER BY spawn_instance_id ASC
+                LIMIT ?
+                ''',
+                (location_id, mob_id, DEFAULT_WORLD_SPAWN_PROFILE, SPAWN_STATE_IDLE, required_count),
+            ).fetchall()
+            spawn_ids = [str(row['spawn_instance_id']) for row in rows]
+            if len(spawn_ids) != required_count:
+                conn.rollback()
+                return None, 'spawn_unavailable'
+            selected_by_mob[mob_id] = spawn_ids
+            selected_spawn_ids.extend(spawn_ids)
+
+        placeholders = ','.join('?' for _ in selected_spawn_ids)
+        updated = conn.execute(
+            f'''
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=?, updated_at=CURRENT_TIMESTAMP
+            WHERE spawn_instance_id IN ({placeholders})
+              AND state=?
+              AND linked_encounter_id IS NULL
+            ''',
+            (SPAWN_STATE_FORMING, encounter_id, *selected_spawn_ids, SPAWN_STATE_IDLE),
+        ).rowcount
+        if updated != len(selected_spawn_ids):
+            conn.rollback()
+            return None, 'spawn_unavailable'
+
+        claimed_by_mob = {mob_id: iter(spawn_ids) for mob_id, spawn_ids in selected_by_mob.items()}
+        enemy_units = []
+        primary_mob = None
+        for index, (mob_id, formation) in enumerate(units_recipe, start=1):
+            unit_mob = get_mob(str(mob_id))
+            if not unit_mob:
+                raise ValueError(f'Unknown mixed encounter mob: {mob_id}')
+            primary_mob = primary_mob or unit_mob
+            spawn_id = next(claimed_by_mob[str(mob_id)])
+            max_hp = max(1, int(unit_mob.get('hp', 1) or 1))
+            enemy_units.append({
+                'unit_id': f'unit-{index}',
+                'spawn_instance_id': spawn_id,
+                'mob_id': str(mob_id),
+                'spawn_profile': DEFAULT_WORLD_SPAWN_PROFILE,
+                'special_spawn_key': '',
+                'special_spawn_name': '',
+                'hp': max_hp,
+                'max_hp': max_hp,
+                'dead': False,
+                'mob_effects': [],
+                'formation_line': str(formation),
+            })
+
+        anchor_spawn_id = str(enemy_units[0]['spawn_instance_id'])
+        battle_state.update({
+            'location_id': location_id,
+            'mob_id': str(enemy_units[0]['mob_id']),
+            'anchor_spawn_instance_id': anchor_spawn_id,
+            'encounter_kind': 'pve',
+            'mixed_encounter_id': str(recipe_id),
+            'mixed_encounter_label': dict(recipe.get('label') or {}),
+            'enemy_units': enemy_units,
+            'active_enemy_unit_id': str(enemy_units[0]['unit_id']),
+            'pack_size': len(enemy_units),
+            'pack_archetype': {'pack_archetype_id': str(recipe_id), 'mixed': True},
+        })
+        create_pve_encounter(
+            owner_player_id=int(owner_player_id),
+            side_a_player_ids=participant_ids,
+            battle_state=battle_state,
+            mob=primary_mob,
+            encounter_id=encounter_id,
+            location_id=location_id,
+            anchor_spawn_instance_id=anchor_spawn_id,
+            conn=conn,
+        )
+        conn.commit()
+        return encounter_id, 'created'
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def create_or_load_open_world_pve_encounter(

@@ -31,6 +31,7 @@ from game.combat import (
 from game.pve_live import (
     claim_pve_encounter_victory,
     release_pve_encounter_victory_claim,
+    create_mixed_open_world_pve_encounter,
     create_or_load_open_world_pve_encounter,
     choose_enemy_target_participant_id,
     clear_solo_pve_runtime,
@@ -590,6 +591,7 @@ async def start_battle(
     mob_id: str,
     mob_first: bool = False,
     spawn_instance_id: str | None = None,
+    mixed_encounter_id: str | None = None,
     open_runtime_now: bool = True,
 ):
     """Запускает бой — вызывается из location.py."""
@@ -600,7 +602,15 @@ async def start_battle(
     app_state = context.application.user_data.setdefault(user.id, {}) if context is not None else {}
     aggro_prelock = _is_aggro_prelock_start(player_row=p, app_state=app_state)
 
-    if spawn_instance_id:
+    if mixed_encounter_id:
+        from game.enemy_profiles import MIXED_ENCOUNTERS
+        recipe = MIXED_ENCOUNTERS.get(str(mixed_encounter_id))
+        if not recipe or str(recipe.get('location_id') or '') != str(p.get('location_id') or ''):
+            _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
+            await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)
+            return
+        mob_id = str(recipe['units'][0][0])
+    elif spawn_instance_id:
         location_id = str(p.get('location_id') or '')
         ensure_location_pve_spawn_instances(location_id=location_id)
         spawn_rows = list_location_available_spawn_instances(location_id=location_id)
@@ -714,16 +724,24 @@ async def start_battle(
     battle_state['weapon_id']     = actual_weapon_id
     battle_state['mastery_level'] = mastery['level']
     battle_state['mastery_exp']   = mastery['exp']
-    encounter_id, encounter_status = create_or_load_open_world_pve_encounter(
-        owner_player_id=user.id,
-        location_id=str(p.get('location_id') or ''),
-        mob_id=mob_id,
-        battle_state=battle_state,
-        mob=mob,
-        side_a_player_ids=[user.id],
-        spawn_instance_id=spawn_instance_id,
-        pack_claim_from_visible_group=True,
-    )
+    if mixed_encounter_id:
+        encounter_id, encounter_status = create_mixed_open_world_pve_encounter(
+            owner_player_id=user.id,
+            recipe_id=str(mixed_encounter_id),
+            battle_state=battle_state,
+            side_a_player_ids=[user.id],
+        )
+    else:
+        encounter_id, encounter_status = create_or_load_open_world_pve_encounter(
+            owner_player_id=user.id,
+            location_id=str(p.get('location_id') or ''),
+            mob_id=mob_id,
+            battle_state=battle_state,
+            mob=mob,
+            side_a_player_ids=[user.id],
+            spawn_instance_id=spawn_instance_id,
+            pack_claim_from_visible_group=True,
+        )
     if not encounter_id:
         _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
         await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)

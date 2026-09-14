@@ -48,8 +48,10 @@ from game.pve_live import (
     join_open_world_pve_encounter,
     leave_open_world_pve_encounter,
     list_location_active_pve_encounters,
+    list_location_available_mixed_encounters,
     list_location_available_spawn_instances,
 )
+from game.enemy_profiles import MIXED_ENCOUNTERS
 from game.quest_board import (
     accept_hunt_contract,
     abandon_hunt_contract,
@@ -451,11 +453,15 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         return t('location.pve_no_encounter', lang), InlineKeyboardMarkup([])
 
     profile_marker = _format_spawn_profile_marker(str(detail.get('spawn_profile') or 'normal'), lang)
-    display_name = _resolve_world_spawn_display_name(
-        mob_id=str(detail.get('mob_id') or ''),
-        lang=lang,
-        special_spawn_key=str(detail.get('special_spawn_key') or ''),
-        special_spawn_name=str(detail.get('special_spawn_name') or ''),
+    mixed_recipe = MIXED_ENCOUNTERS.get(str(detail.get('mixed_encounter_id') or ''))
+    display_name = (
+        str((mixed_recipe.get('label') or {}).get(lang) or (mixed_recipe.get('label') or {}).get('en'))
+        if mixed_recipe else _resolve_world_spawn_display_name(
+            mob_id=str(detail.get('mob_id') or ''),
+            lang=lang,
+            special_spawn_key=str(detail.get('special_spawn_key') or ''),
+            special_spawn_name=str(detail.get('special_spawn_name') or ''),
+        )
     )
     mob_name = f"{profile_marker} {display_name}".strip()
     status_key = 'location.pve_status_locked'
@@ -1011,6 +1017,15 @@ def build_location_message(
             for encounter in active_pve_encounters:
                 mob_id = str(encounter.get('mob_id') or '')
                 profile_marker = _format_spawn_profile_marker(str(encounter.get('spawn_profile') or 'normal'), lang)
+                mixed_recipe = MIXED_ENCOUNTERS.get(str(encounter.get('mixed_encounter_id') or ''))
+                encounter_name = (
+                    str((mixed_recipe.get('label') or {}).get(lang) or (mixed_recipe.get('label') or {}).get('en'))
+                    if mixed_recipe else _resolve_world_spawn_display_name(
+                        mob_id=mob_id, lang=lang,
+                        special_spawn_key=str(encounter.get('special_spawn_key') or ''),
+                        special_spawn_name=str(encounter.get('special_spawn_name') or ''),
+                    )
+                )
                 participant_ids = {
                     int(pid) for pid in encounter.get('participant_player_ids', [])
                 } if isinstance(encounter.get('participant_player_ids'), list) else set()
@@ -1020,7 +1035,7 @@ def build_location_message(
                     'location.pve_encounter_row',
                     lang,
                     id=encounter['encounter_id'],
-                    mob=f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=mob_id, lang=lang, special_spawn_key=str(encounter.get('special_spawn_key') or ''), special_spawn_name=str(encounter.get('special_spawn_name') or ''))}".strip(),
+                    mob=f"{profile_marker} {encounter_name}".strip(),
                     players=int(encounter.get('participant_count', 0)),
                     join_state=t(
                         (
@@ -1031,6 +1046,15 @@ def build_location_message(
                         lang,
                     ),
                 ) + f" | /enc {encounter['encounter_id']}")
+
+        for mixed in list_location_available_mixed_encounters(location_id=location['id']):
+            mixed_label = str((mixed.get('label') or {}).get(lang) or (mixed.get('label') or {}).get('en'))
+            unit_names = ', '.join(get_mob_name(str(mob_id), lang) for mob_id, _formation in mixed.get('units', ()))
+            mob_lines.append(f"• ⚔️ {mixed_label} ×{len(mixed.get('units', ()))} — {unit_names}")
+            keyboard.append([InlineKeyboardButton(
+                f"⚔️ {mixed_label} ×{len(mixed.get('units', ()))}",
+                callback_data=f"fight_mixed_{mixed['recipe_id']}",
+            )])
 
         available_spawns = list_location_available_spawn_instances(location_id=location['id'])
         if available_spawns:
@@ -2529,6 +2553,18 @@ async def handle_combat_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             mob_id='',
             mob_first=False,
             spawn_instance_id=spawn_instance_id,
+            open_runtime_now=False,
+        )
+
+    elif data.startswith('fight_mixed_'):
+        mixed_encounter_id = data.replace('fight_mixed_', '', 1)
+        from handlers.battle import start_battle
+        await start_battle(
+            update,
+            context,
+            mob_id='',
+            mob_first=False,
+            mixed_encounter_id=mixed_encounter_id,
             open_runtime_now=False,
         )
 
