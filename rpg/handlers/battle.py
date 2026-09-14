@@ -1995,6 +1995,15 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
         context.user_data['battle'] = battle_state
         update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
+        # The player side and instant enemy side have both advanced the shared
+        # runtime at this point.  Persist that new revision before any render
+        # or participant re-entry can reload the just-resolved side and issue
+        # stale action tokens for it.
+        persist_solo_pve_encounter_state(
+            encounter_id=str(battle_state.get('pve_encounter_id', '')),
+            battle_state=battle_state,
+            mob=mob,
+        )
         handled = await _resolve_post_attack_combat_resolution(
             query=query, context=context, user_id=user.id, player=p, mob=mob,
             battle_state=battle_state, lang=lang,

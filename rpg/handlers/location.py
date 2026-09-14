@@ -1669,7 +1669,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer(t('location.pvp_context_block', lang), show_alert=True)
         return
     
-    if p and p['in_battle'] and not data.startswith('pvp_'):
+    if (
+        p
+        and p['in_battle']
+        and not data.startswith('pvp_')
+        and not data.startswith('pve_enter_')
+    ):
         await query.answer(t('location.in_battle_block', lang), show_alert=True)
         return
 

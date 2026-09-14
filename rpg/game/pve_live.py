@@ -2816,6 +2816,31 @@ def ensure_runtime_for_battle(
         participant_ids=side_a_players,
         preferred_player_id=player_id,
     )
+    if battle_state.get('rules_version') == RULES_VERSION:
+        # A forming source encounter is persisted when the owner clicks it,
+        # before other players join.  Locking the roster must therefore extend
+        # the authoritative V1 actor map as well as the legacy projection; a
+        # joiner may never fall back to legacy buttons or lose ally targeting.
+        participant_states_v1 = {
+            str(key): dict(value)
+            for key, value in (battle_state.get('participant_states_v1') or {}).items()
+            if isinstance(value, dict)
+        }
+        missing_ids = [
+            int(pid) for pid in side_a_players
+            if str(int(pid)) not in participant_states_v1
+        ]
+        if missing_ids:
+            conn = get_connection()
+            try:
+                for participant_id in missing_ids:
+                    participant_states_v1[str(participant_id)] = build_actor_snapshot(
+                        participant_id,
+                        conn=conn,
+                    )
+            finally:
+                conn.close()
+        battle_state['participant_states_v1'] = participant_states_v1
     sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state, now=check_now)
     return runtime_state
 

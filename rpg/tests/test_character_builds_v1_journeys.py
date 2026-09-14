@@ -263,14 +263,26 @@ class ProductionJourney:
         assert rows, callback
         return json.loads(rows[0]["payload"])
 
-    def _find_combat_action(self, *, kind: str, skill_id: str | None = None) -> str:
+    def _find_combat_action(
+        self,
+        *,
+        kind: str,
+        skill_id: str | None = None,
+        target_id: str | int | None = None,
+    ) -> str:
         for callback in _callbacks(self.messages[-1][1]):
             if not callback.startswith("battle_v1_"):
                 continue
             action = self._intent_for_callback(callback).get("action") or {}
-            if action.get("kind") == kind and action.get("skill_id") == skill_id:
+            selected_target = (action.get("target_info") or {}).get("id")
+            target_matches = target_id is None or str(selected_target) == str(target_id)
+            if (
+                action.get("kind") == kind
+                and action.get("skill_id") == skill_id
+                and target_matches
+            ):
                 return callback
-        raise AssertionError((kind, skill_id, _callbacks(self.messages[-1][1])))
+        raise AssertionError((kind, skill_id, target_id, _callbacks(self.messages[-1][1])))
 
     async def fight(self, mob_id: str, *, opening: tuple[tuple[str, str | None], ...] = ()) -> dict:
         spawn_id = self._accelerate_respawn(mob_id)
@@ -382,7 +394,10 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
     if SKILL_SPECS[capstone].passive:
         capstone_fight = await journey.fight(
             "forest_boar",
-            opening=(("skill", "defensive_stance"), ("basic_attack", None)),
+            opening=(
+                ("skill", "defensive_stance"),
+                *(("guard", None),) * 6,
+            ),
         )
         assert any(
             event.get("kind") == "retaliation" and event.get("trigger") == capstone

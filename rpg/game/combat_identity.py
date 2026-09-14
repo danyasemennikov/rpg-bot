@@ -596,7 +596,12 @@ def _apply_skill_support(
     elif skill_id == "grand_enchantment":
         for target in targets:
             _add_effect(target, _effect("ward", actor, 2, value=_ranked_percent(.20, rank), skill_id=skill_id, side_index=side_index))
-            events.append({"kind": "mana", "target_id": _id(target), "amount": _restore_mana(target, _ranked(14, rank))})
+            events.append({
+                "kind": "mana",
+                "target_id": _id(target),
+                "amount": _restore_mana(target, _ranked(14, rank)),
+                "skill_id": skill_id,
+            })
     else:
         raise ValueError("unsupported_support_skill")
 
