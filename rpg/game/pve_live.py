@@ -733,10 +733,12 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
         ).fetchone()
         participant_rows = conn.execute(
             '''
-            SELECT player_id
-            FROM pve_encounter_participants
-            WHERE encounter_id=? AND status='active' AND side_id=?
-            ORDER BY joined_at ASC, player_id ASC
+            SELECT p.player_id
+            FROM pve_encounter_participants p
+            JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+            WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+            ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                     p.joined_at ASC, p.player_id ASC
             ''',
             (encounter['encounter_id'], SIDE_PLAYER),
         ).fetchall()
@@ -806,10 +808,12 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     ).fetchone()
     participant_rows = conn.execute(
         '''
-        SELECT player_id
-        FROM pve_encounter_participants
-        WHERE encounter_id=? AND status='active' AND side_id=?
-        ORDER BY joined_at ASC, player_id ASC
+        SELECT p.player_id
+        FROM pve_encounter_participants p
+        JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+        WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+        ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                 p.joined_at ASC, p.player_id ASC
         ''',
         (encounter_id, SIDE_PLAYER),
     ).fetchall()
@@ -1155,10 +1159,12 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
 
         roster_rows = conn.execute(
             '''
-            SELECT player_id
-            FROM pve_encounter_participants
-            WHERE encounter_id=? AND status='active' AND side_id=?
-            ORDER BY joined_at ASC, player_id ASC
+            SELECT p.player_id
+            FROM pve_encounter_participants p
+            JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+            WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+            ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                     p.joined_at ASC, p.player_id ASC
             ''',
             (encounter_id, SIDE_PLAYER),
         ).fetchall()
@@ -2219,10 +2225,12 @@ def get_pve_encounter_player_ids(*, encounter_id: str, side_id: str = SIDE_PLAYE
     conn = get_connection()
     rows = conn.execute(
         '''
-        SELECT player_id
-        FROM pve_encounter_participants
-        WHERE encounter_id=? AND status='active' AND side_id=?
-        ORDER BY joined_at ASC, player_id ASC
+        SELECT p.player_id
+        FROM pve_encounter_participants p
+        JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+        WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+        ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                 p.joined_at ASC, p.player_id ASC
         ''',
         (encounter_id, side_id),
     ).fetchall()

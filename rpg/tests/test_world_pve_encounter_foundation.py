@@ -1067,6 +1067,47 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertEqual(runtime_roster, [self.player_id, self.player2_id])
         self.assertEqual(db_roster, [self.player_id, self.player2_id])
 
+    def test_roster_keeps_owner_first_when_join_timestamps_tie(self):
+        encounter_id, status = create_or_load_open_world_pve_encounter(
+            owner_player_id=self.player2_id,
+            location_id=self.location_id,
+            mob_id='forest_wolf',
+            battle_state={'mob_id': 'forest_wolf', 'log': []},
+            mob={'id': 'forest_wolf', 'hp': 20},
+            side_a_player_ids=[self.player2_id],
+        )
+        self.assertEqual(status, 'created')
+        self.assertEqual(
+            join_open_world_pve_encounter(
+                encounter_id=encounter_id,
+                player_id=self.player_id,
+            ),
+            (True, 'joined'),
+        )
+        conn = get_connection()
+        conn.execute(
+            'UPDATE pve_encounter_participants SET joined_at=? WHERE encounter_id=?',
+            ('2026-01-01 00:00:00', encounter_id),
+        )
+        conn.commit()
+        conn.close()
+
+        expected = [self.player2_id, self.player_id]
+        active = next(
+            row for row in list_location_active_pve_encounters(location_id=self.location_id)
+            if row['encounter_id'] == encounter_id
+        )
+        self.assertEqual(active['participant_player_ids'], expected)
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        self.assertEqual(detail['participant_player_ids'], expected)
+        self.assertEqual(get_pve_encounter_player_ids(encounter_id=encounter_id), expected)
+        self.assertEqual(
+            lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id),
+            expected,
+        )
+
     def test_hot_helpers_do_not_invoke_schema_ensure_in_runtime_join_paths(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
             owner_player_id=self.player_id,
