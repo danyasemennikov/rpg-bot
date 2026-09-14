@@ -5,8 +5,19 @@ from datetime import datetime, timedelta, timezone
 from database import get_connection
 from game.build_contract import RULES_VERSION
 from game.build_progression import ensure_build_schema
+from game.build_progression import migrate_character_builds_v1
 from game.combat_orders import consume_combat_intent, issue_combat_intents, load_combat_orders
 from game.pve_reward_settlement import _v1_mastery_awards
+from game.pvp_live import (
+    _LIVE_PVP_RUNTIME_STORE,
+    _deserialize_reason_context,
+    _ensure_live_runtime_for_battle,
+    _init_live_battle_payload,
+    _write_engagement_state,
+    create_live_engagement,
+    issue_manual_pvp_action_labels,
+    resolve_live_battle_turn,
+)
 
 
 def test_mastery_awards_only_manual_survivors_with_frozen_family_and_caps_at_80():
@@ -64,3 +75,58 @@ def test_pve_ui_intent_is_single_use_deadline_bound_and_durable():
     assert len(orders) == 1
     assert orders[0]["action"] == action
 
+
+def test_v1_pvp_uses_opaque_durable_order_and_recovers_it_after_runtime_loss():
+    migrate_character_builds_v1()
+    attacker = 1
+    defender = 777
+    conn = get_connection()
+    attacker_row = dict(conn.execute("SELECT * FROM players WHERE telegram_id=?", (attacker,)).fetchone())
+    defender_row = dict(conn.execute("SELECT * FROM players WHERE telegram_id=?", (defender,)).fetchone())
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker_row, defender=defender_row,
+        location_id="capital_city", illegal_aggression=False,
+    )
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM pvp_engagements WHERE id=?", (engagement_id,)).fetchone()
+    conn.close()
+    battle = _init_live_battle_payload(
+        attacker_id=attacker, defender_id=defender, now=datetime.now(timezone.utc),
+    )
+    _ensure_live_runtime_for_battle(engagement_row=row, battle=battle)
+    initial_attacker_mana = battle["participants_v1"][str(attacker)]["mana"]
+    payload = {"flow": "open_world_1v1", "battle": battle}
+    _write_engagement_state(engagement_id=engagement_id, state="converted_to_battle", payload=payload)
+
+    actions = issue_manual_pvp_action_labels(
+        engagement_id=engagement_id, player_id=attacker, lang="en", battle=battle,
+        attacker_id=attacker, defender_id=defender,
+    )
+    assert len(actions) == 3  # normal, Guard, universal Power Strike
+    normal_token = actions[0][0]
+    consumed = consume_combat_intent(attacker, normal_token)
+    assert consumed["accepted"] is True
+    assert consumed["encounter_kind"] == "pvp"
+
+    # Simulate a process crash after the atomic order insert but before the
+    # in-memory runtime receives/resolves that order.
+    _LIVE_PVP_RUNTIME_STORE.reset()
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM pvp_engagements WHERE id=?", (engagement_id,)).fetchone()
+    conn.close()
+    status, result_payload = resolve_live_battle_turn(
+        row, actor_id=attacker, selected_action_id=None,
+    )
+    assert status == "resolved"
+    assert result_payload["battle"]["turn_owner"] == defender
+    assert result_payload["battle"]["participants_v1"][str(attacker)]["mana"] > initial_attacker_mana
+    conn = get_connection()
+    result = conn.execute(
+        "SELECT result_json FROM combat_turn_results_v1 WHERE encounter_kind='pvp' AND encounter_id=?",
+        (str(engagement_id),),
+    ).fetchone()
+    persisted = conn.execute("SELECT reason_context FROM pvp_engagements WHERE id=?", (engagement_id,)).fetchone()
+    conn.close()
+    assert result is not None
+    assert _deserialize_reason_context(persisted["reason_context"])["battle"]["turn_owner"] == defender

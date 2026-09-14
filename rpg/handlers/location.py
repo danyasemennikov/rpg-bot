@@ -79,6 +79,7 @@ from game.pvp_live import (
     invite_reinforcement_ally,
     is_pvp_mobility_blocked,
     get_manual_pvp_action_labels,
+    issue_manual_pvp_action_labels,
     is_player_busy_with_live_pvp,
     join_pending_encounter_side,
     list_reinforcement_candidates,
@@ -86,6 +87,8 @@ from game.pvp_live import (
     resolve_engagement_escape,
     resolve_live_battle_turn,
 )
+from game.combat_orders import consume_combat_intent
+from game.build_contract import RULES_VERSION
 from game.pvp_rules import (
     clear_respawn_protection,
     clear_respawn_protection_on_dangerous_reentry,
@@ -970,18 +973,34 @@ def build_location_message(
                         lang,
                     ),
                 ) + '\n'
+                if battle.get('rules_version') == RULES_VERSION and battle.get('events_v1'):
+                    from handlers.battle import _render_v1_event
+                    rendered = [
+                        line for line in (
+                            _render_v1_event(event, battle, lang)
+                            for event in (battle.get('events_v1') or [])[-6:]
+                        ) if line
+                    ][-3:]
+                    if rendered:
+                        text += '\n' + '\n'.join(f'▫️ {line}' for line in rendered) + '\n'
                 if turn_owner_id == int(player['telegram_id']):
-                    for action_id, action_label in get_manual_pvp_action_labels(
-                        player_id=int(player['telegram_id']),
-                        lang=lang,
-                        battle=battle,
-                        attacker_id=int(engagement_row['attacker_id']),
-                        defender_id=int(engagement_row['defender_id']),
-                    ):
-                        keyboard.append([InlineKeyboardButton(
-                            action_label,
-                            callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
-                        )])
+                    if battle.get('rules_version') == RULES_VERSION:
+                        for token, action_label in issue_manual_pvp_action_labels(
+                            engagement_id=int(engagement_row['id']),
+                            player_id=int(player['telegram_id']), lang=lang, battle=battle,
+                            attacker_id=int(engagement_row['attacker_id']),
+                            defender_id=int(engagement_row['defender_id']),
+                        ):
+                            keyboard.append([InlineKeyboardButton(action_label, callback_data=f"pvp_v1_{token}")])
+                    else:
+                        for action_id, action_label in get_manual_pvp_action_labels(
+                            player_id=int(player['telegram_id']), lang=lang, battle=battle,
+                            attacker_id=int(engagement_row['attacker_id']),
+                            defender_id=int(engagement_row['defender_id']),
+                        ):
+                            keyboard.append([InlineKeyboardButton(
+                                action_label, callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
+                            )])
             else:
                 text += t('location.pvp_reinforcement_commitment_released', lang) + '\n'
 
@@ -1862,6 +1881,38 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             context,
             refreshed_player,
             location,
+            pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_v1_'):
+        consumed = consume_combat_intent(int(user.id), data.removeprefix('pvp_v1_'))
+        if not consumed.get('accepted'):
+            await query.answer(t('location.pvp_action_not_ready', lang), show_alert=True)
+            return
+        action = consumed.get('action') or {}
+        kind = str(action.get('kind') or '')
+        action_id = (
+            'normal_attack' if kind == 'normal' else 'guard' if kind == 'guard'
+            else f"skill:{action.get('skill_id')}" if kind == 'skill' else ''
+        )
+        engagement_id = int(consumed['encounter_id'])
+        conn = get_connection()
+        engagement_row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        status, _payload = resolve_live_battle_turn(
+            engagement_row, actor_id=int(user.id), selected_action_id=action_id,
+        ) if engagement_row and action_id else ('invalid_action', {})
+        status_key = {
+            'waiting': 'location.pvp_wait_turn_timeout', 'invalid_action': 'location.pvp_action_not_ready',
+            'not_your_turn': 'location.pvp_not_your_turn', 'finished': 'location.pvp_battle_finished',
+        }.get(status, 'location.pvp_action_done')
+        await query.answer(t(status_key, lang), show_alert=True)
+        refreshed_player = dict(get_player(user.id))
+        location = get_location(refreshed_player['location_id'])
+        text, keyboard = _build_location_message_with_snapshot(
+            context, refreshed_player, location,
             pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
         )
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')

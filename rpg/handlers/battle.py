@@ -310,7 +310,7 @@ _V1_EFFECT_COPY = {
 
 def _v1_name_map(battle_state: dict) -> dict[str, str]:
     result = {}
-    for actor in (battle_state.get('participant_states_v1') or {}).values():
+    for actor in (battle_state.get('participant_states_v1') or battle_state.get('participants_v1') or {}).values():
         result[str(actor.get('actor_id'))] = str(actor.get('name') or actor.get('actor_id'))
     for enemy in battle_state.get('enemy_states_v1') or []:
         result[str(enemy.get('unit_id'))] = str(enemy.get('name') or enemy.get('mob_id') or enemy.get('unit_id'))

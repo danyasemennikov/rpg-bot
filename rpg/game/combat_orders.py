@@ -21,19 +21,19 @@ def _stable_json(value: Any) -> str:
 
 def issue_combat_intents(
     player_id: int, *, encounter_id: str, turn_revision: int,
-    deadline_at: str, actions: list[dict[str, Any]],
+    deadline_at: str, actions: list[dict[str, Any]], encounter_kind: str = "pve",
 ) -> dict[str, str]:
     """Issue compact callback tokens for complete encounter/revision intents."""
     payloads = [
         _stable_json({
             "rules_version": RULES_VERSION,
-            "encounter_kind": "pve",
+            "encounter_kind": str(encounter_kind),
             "encounter_id": str(encounter_id),
             "turn_revision": int(turn_revision),
             "actor_id": int(player_id),
             "deadline_at": str(deadline_at),
             "action": action,
-            "target_id": (action.get("target_info") or {}).get("id"),
+            "target_id": action.get("target_id", (action.get("target_info") or {}).get("id")),
         })
         for action in actions
     ]
@@ -59,21 +59,36 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
         if (
             not isinstance(payload, dict)
             or payload.get("rules_version") != RULES_VERSION
-            or payload.get("encounter_kind") != "pve"
+            or payload.get("encounter_kind") not in {"pve", "pvp"}
             or int(payload.get("actor_id", 0)) != int(player_id)
         ):
             raise ActionRejected("stale_action")
+        encounter_kind = str(payload.get("encounter_kind"))
         encounter_id = str(payload.get("encounter_id") or "")
         revision = int(payload.get("turn_revision", -1))
-        encounter = conn.execute('''SELECT status, rules_version, turn_revision
-            FROM pve_encounters WHERE encounter_id=?''', (encounter_id,)).fetchone()
-        participant = conn.execute('''SELECT status FROM pve_encounter_participants
-            WHERE encounter_id=? AND player_id=?''', (encounter_id, player_id)).fetchone()
+        if encounter_kind == "pve":
+            encounter = conn.execute('''SELECT status, rules_version, turn_revision
+                FROM pve_encounters WHERE encounter_id=?''', (encounter_id,)).fetchone()
+            participant = conn.execute('''SELECT status FROM pve_encounter_participants
+                WHERE encounter_id=? AND player_id=?''', (encounter_id, player_id)).fetchone()
+            valid_encounter = bool(
+                encounter and str(encounter["status"]) == "active"
+                and participant and str(participant["status"]) == "active"
+            )
+        else:
+            if not encounter_id.isdigit():
+                raise ActionRejected("stale_action")
+            encounter = conn.execute('''SELECT engagement_state AS status, rules_version,
+                    turn_revision, attacker_id, defender_id
+                FROM pvp_engagements WHERE id=?''', (int(encounter_id),)).fetchone()
+            valid_encounter = bool(
+                encounter and str(encounter["status"]) == "converted_to_battle"
+                and int(player_id) in {int(encounter["attacker_id"]), int(encounter["defender_id"])}
+            )
         if (
-            not encounter or str(encounter["status"]) != "active"
+            not valid_encounter
             or str(encounter["rules_version"]) != RULES_VERSION
             or int(encounter["turn_revision"]) not in {revision, revision - 1}
-            or not participant or str(participant["status"]) != "active"
         ):
             raise ActionRejected("stale_action")
         raw_deadline = str(payload.get("deadline_at") or "")
@@ -91,7 +106,7 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
         target_id = payload.get("target_id")
         if action.get("kind") != "flee":
             durable = submit_combat_order(
-                encounter_kind="pve", encounter_id=encounter_id,
+                encounter_kind=encounter_kind, encounter_id=encounter_id,
                 turn_revision=revision, actor_id=player_id, action=action,
                 target_id=target_id, deadline_at=raw_deadline, order_kind="manual",
                 conn=conn,

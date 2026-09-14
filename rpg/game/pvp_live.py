@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import json
 import random
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 
 from database import get_connection
+from game.actor_snapshot import build_actor_snapshot
+from game.build_contract import PVP_SKILL_ALLOWLIST, POWER_STRIKE, RULES_VERSION, SKILL_SPECS, rank_mana_cost
+from game.build_progression import ensure_build_schema
+from game.combat_identity import advance_affected_side, combat_seed, cooldown_remaining, evaluate_action, legal_actions
+from game.combat_orders import issue_combat_intents, load_combat_orders, persist_turn_result, submit_combat_order
 from game.balance import (
     calc_crit_chance,
     calc_defense_mitigation_percent,
@@ -451,7 +457,35 @@ def _ensure_live_runtime_for_battle(*, engagement_row, battle: dict, now: dateti
             side_b_participants=[int(engagement_row['defender_id'])],
             active_side_id=active_side_id,
         )
-        state = _LIVE_PVP_RUNTIME.open_side_turn(encounter_id=encounter_id, now=turn_started_at)
+        persisted_revision = max(0, int(battle.get('turn_revision', 0) or 0))
+        if battle.get('rules_version') == RULES_VERSION and str(battle.get('side_turn_state')) in {'collecting_orders', 'ready_to_lock'}:
+            state.turn_revision = persisted_revision
+            state.side_turn_state = 'collecting_orders'
+            state.side_deadline_at = _from_iso(str(battle.get('side_deadline_at'))) if battle.get('side_deadline_at') else (
+                turn_started_at + timedelta(seconds=DEFAULT_SIDE_TURN_TIMEOUT_SECONDS)
+            )
+            for order in load_combat_orders(
+                encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
+                turn_revision=persisted_revision,
+            ):
+                action = order.get('action') or {}
+                kind = str(action.get('kind') or '')
+                action_type = 'fallback_guard' if kind == 'timeout_guard' else (
+                    f"skill:{action.get('skill_id')}" if kind == 'skill' else 'normal_attack' if kind == 'normal' else kind
+                )
+                committed = _LIVE_PVP_RUNTIME.commit_action(
+                    encounter_id=encounter_id,
+                    participant_id=int(order['actor_id']), action_type=action_type,
+                    target_info={'id': action.get('target_id')}, skill_id=action.get('skill_id'),
+                    item_id=None, committed_at=_from_iso(str(order.get('created_at'))),
+                    turn_revision=persisted_revision,
+                )
+                if committed.accepted and str(order.get('order_kind')) == 'timeout':
+                    state.participants[int(order['actor_id'])].phase_state = 'auto_fallback'
+        else:
+            state.turn_revision = persisted_revision
+            state.side_turn_state = 'completed'
+            state = _LIVE_PVP_RUNTIME.open_side_turn(encounter_id=encounter_id, now=turn_started_at)
     elif state.side_turn_state == 'completed':
         state = _LIVE_PVP_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
     _sync_battle_projection_from_runtime(battle=battle, engagement_row=engagement_row, runtime_state=state)
@@ -462,6 +496,21 @@ def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: dateti
     conn = get_connection()
     attacker_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (attacker_id,)).fetchone()
     defender_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (defender_id,)).fetchone()
+    try:
+        v1_cutover = conn.execute(
+            "SELECT 1 FROM build_rules_state WHERE migration_key=? AND state='active'", (RULES_VERSION,),
+        ).fetchone()
+    except Exception:
+        # Compatibility for imported replay/test connections predating the
+        # additive cutover table. Production startup installs it first.
+        v1_cutover = None
+    v1_snapshots = None
+    if v1_cutover and attacker_row and defender_row:
+        v1_snapshots = {
+            str(attacker_id): build_actor_snapshot(attacker_id, conn=conn),
+            str(defender_id): build_actor_snapshot(defender_id, conn=conn),
+        }
+    conn.commit()
     conn.close()
     attacker = dict(attacker_row) if attacker_row else {'max_hp': 100}
     defender = dict(defender_row) if defender_row else {'max_hp': 100}
@@ -469,7 +518,7 @@ def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: dateti
     defender_effective = get_player_effective_stats(defender_id, defender)
     attacker_profile = _resolve_combat_profile(attacker_id, attacker)
     defender_profile = _resolve_combat_profile(defender_id, defender)
-    return {
+    battle = {
         'state': PVP_BATTLE_STATE_LIVE,
         'attacker_hp': max(1, min(int(attacker.get('hp', 1)), int(attacker_effective.get('max_hp', attacker.get('max_hp', 100))))),
         'defender_hp': max(1, min(int(defender.get('hp', 1)), int(defender_effective.get('max_hp', defender.get('max_hp', 100))))),
@@ -485,18 +534,41 @@ def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: dateti
         'attacker_formation_line': attacker_profile['formation_line'],
         'defender_formation_line': defender_profile['formation_line'],
     }
+    if v1_snapshots:
+        battle.update({
+            'rules_version': RULES_VERSION,
+            'combat_seed': uuid.uuid4().hex,
+            'participants_v1': v1_snapshots,
+            'events_v1': [],
+            'turn_revision': 0,
+        })
+        for role, player_id in (('attacker', attacker_id), ('defender', defender_id)):
+            actor = v1_snapshots[str(player_id)]
+            battle[f'{role}_hp'] = int(actor['hp'])
+            battle[f'{role}_max_hp'] = int(actor['max_hp'])
+            battle[f'{role}_mana'] = int(actor['mana'])
+            battle[f'{role}_max_mana'] = int(actor['max_mana'])
+            battle[f'{role}_formation_line'] = actor['formation']
+    return battle
 
 
 def _write_engagement_state(*, engagement_id: int, state: str, payload: dict) -> None:
     _ensure_reinforcement_table()
     conn = get_connection()
+    ensure_build_schema(conn)
     conn.execute(
         '''
         UPDATE pvp_engagements
-        SET engagement_state=?, reason_context=?, updated_at=CURRENT_TIMESTAMP
+        SET engagement_state=?, reason_context=?, rules_version=?, combat_seed=?, turn_revision=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=?
         ''',
-        (state, _serialize_reason_context(payload), engagement_id),
+        (
+            state, _serialize_reason_context(payload),
+            str((payload.get('battle') or {}).get('rules_version') or 'legacy_v0'),
+            (payload.get('battle') or {}).get('combat_seed'),
+            int((payload.get('battle') or {}).get('turn_revision', 0) or 0),
+            engagement_id,
+        ),
     )
     if state != ENGAGEMENT_STATE_PENDING:
         conn.execute(
@@ -898,18 +970,9 @@ def _get_action_options() -> list[PvpActionOption]:
 
 
 def _build_player_skill_actions(player_id: int, weapon_id: str, mastery_level: int, weapon_profile: str) -> list[str]:
-    allowed_skill_ids = {
-        'power_strike',
-        'quick_shot',
-        'fireball',
-        'ice_spike',
-        'holy_bolt',
-        'smite',
-        'poison_stab',
-    }
     actions: list[str] = []
     for skill in get_battle_skills(player_id, weapon_id, mastery_level, weapon_profile):
-        if skill['id'] not in allowed_skill_ids:
+        if skill['id'] not in PVP_SKILL_ALLOWLIST:
             continue
         actions.append(f"skill:{skill['id']}")
     return actions
@@ -952,6 +1015,48 @@ def get_manual_pvp_action_labels(
             continue
         labels.append((action, f"🔮 {get_skill_name(skill_id, lang)}"))
     return labels
+
+
+def issue_manual_pvp_action_labels(
+    *, engagement_id: int, player_id: int, lang: str, battle: dict,
+    attacker_id: int, defender_id: int,
+) -> list[tuple[str, str]]:
+    """Return localized labels bound to opaque V1 combat action tokens."""
+    if battle.get('rules_version') != RULES_VERSION or int(battle.get('turn_owner', 0)) != int(player_id):
+        return []
+    actor = (battle.get('participants_v1') or {}).get(str(player_id))
+    if not actor:
+        return []
+    target_id = int(defender_id) if int(player_id) == int(attacker_id) else int(attacker_id)
+    definitions = []
+    for action_id in legal_actions(actor, pvp=True):
+        if action_id == 'normal':
+            action = {'kind': 'normal', 'target_id': target_id, 'manual': True}
+            label = t('location.pvp_action_attack_btn', lang) + (' · +6 MP' if lang == 'en' else ' · +6 МП' if lang == 'ru' else ' · +6 PM')
+        elif action_id == 'guard':
+            action = {'kind': 'guard', 'target_id': player_id, 'manual': True}
+            label = t('location.pvp_action_guard_btn', lang) + ' · Ward 20%'
+        else:
+            spec = POWER_STRIKE if action_id == 'power_strike' else SKILL_SPECS[action_id]
+            rank = 1 if action_id == 'power_strike' else int(actor.get('skill_ranks', {}).get(action_id, 0))
+            action = {'kind': 'skill', 'skill_id': action_id, 'target_id': target_id, 'manual': True}
+            remaining = cooldown_remaining(actor, action_id)
+            suffix = f'⏳{remaining}' if remaining else f'🔵{rank_mana_cost(spec, rank)}'
+            label = f"🔮 {get_skill_name(action_id, lang)} · {suffix}"
+        definitions.append((action, label))
+    deadline = str(battle.get('side_deadline_at') or '')
+    if not deadline:
+        return []
+    tokens = issue_combat_intents(
+        int(player_id), encounter_kind='pvp', encounter_id=str(int(engagement_id)),
+        turn_revision=int(battle.get('turn_revision', 0)), deadline_at=deadline,
+        actions=[action for action, _ in definitions],
+    )
+    return [
+        (tokens[json.dumps(action, ensure_ascii=False, sort_keys=True, separators=(',', ':'))], label)
+        for action, label in definitions
+        if json.dumps(action, ensure_ascii=False, sort_keys=True, separators=(',', ':')) in tokens
+    ]
 
 
 def _build_turn_action_options(
@@ -1131,6 +1236,72 @@ def _resolve_skill_action(
     return target_damage, next_mana, f'skill_ok:{skill_id}'
 
 
+def _v1_action_payload(selected_action_id: str, *, actor_id: int, target_id: int, manual: bool = True) -> dict:
+    if selected_action_id == 'normal_attack':
+        return {'kind': 'normal', 'target_id': target_id, 'manual': manual}
+    if selected_action_id in {'guard', 'fallback_guard'}:
+        return {'kind': 'guard' if manual else 'timeout_guard', 'target_id': actor_id, 'manual': manual}
+    if selected_action_id.startswith('skill:'):
+        return {
+            'kind': 'skill', 'skill_id': selected_action_id.removeprefix('skill:'),
+            'target_id': target_id, 'manual': manual,
+        }
+    return {'kind': 'unknown', 'manual': manual}
+
+
+def _v1_action_ready(actor: dict, selected_action_id: str) -> bool:
+    if selected_action_id in {'normal_attack', 'guard'}:
+        return True
+    if not selected_action_id.startswith('skill:'):
+        return False
+    skill_id = selected_action_id.removeprefix('skill:')
+    if skill_id not in legal_actions(actor, pvp=True) or skill_id not in PVP_SKILL_ALLOWLIST:
+        return False
+    spec = POWER_STRIKE if skill_id == 'power_strike' else SKILL_SPECS.get(skill_id)
+    rank = 1 if skill_id == 'power_strike' else int(actor.get('skill_ranks', {}).get(skill_id, 0))
+    return bool(
+        spec and rank > 0 and cooldown_remaining(actor, skill_id) == 0
+        and int(actor.get('mana', 0)) >= rank_mana_cost(spec, rank)
+    )
+
+
+def _resolve_v1_pvp_submission(
+    *, battle: dict, actor_id: int, target_id: int,
+    selected_action_id: str, turn_revision: int, manual: bool,
+) -> bool:
+    actors = dict(battle.get('participants_v1') or {})
+    actor = actors.get(str(actor_id))
+    target = actors.get(str(target_id))
+    if not actor or not target:
+        return False
+    result = evaluate_action(
+        actor, [actor], [target],
+        _v1_action_payload(selected_action_id, actor_id=actor_id, target_id=target_id, manual=manual),
+        rng_seed=combat_seed(
+            battle.get('combat_seed'), turn_revision, actor_id, target_id,
+            len(battle.get('events_v1') or []),
+        ),
+        side_index=turn_revision,
+    )
+    if not result.get('accepted'):
+        return False
+    ticked = advance_affected_side(result['allies'], side_index=turn_revision)
+    for item in ticked['entities']:
+        actors[str(item['actor_id'])] = item
+    for item in result['opponents']:
+        actors[str(item['actor_id'])] = item
+    battle['participants_v1'] = actors
+    battle.setdefault('events_v1', []).extend(list(result['events']) + list(ticked['events']))
+    for role, player_id in (('attacker', int(battle['attacker_id'])), ('defender', int(battle['defender_id']))):
+        snapshot = actors[str(player_id)]
+        battle[f'{role}_hp'] = int(snapshot.get('hp', 0))
+        battle[f'{role}_mana'] = int(snapshot.get('mana', 0))
+        battle[f'{role}_max_hp'] = int(snapshot.get('max_hp', 1))
+        battle[f'{role}_max_mana'] = int(snapshot.get('max_mana', 0))
+    battle['last_log'] = json.dumps((list(result['events']) + list(ticked['events']))[-1:], ensure_ascii=False)
+    return True
+
+
 def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_id: str | None) -> tuple[str, dict]:
     payload = _deserialize_reason_context(engagement_row['reason_context'])
     battle = payload.get('battle') or {}
@@ -1144,37 +1315,58 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
     active_player_id = _runtime_active_player_id(engagement_row=engagement_row, state=runtime_state)
     if actor_id != active_player_id:
         return 'not_your_turn', payload
+    recovered_ready = runtime_state.side_turn_state == 'ready_to_lock'
 
     attacker_id = int(engagement_row['attacker_id'])
     defender_id = int(engagement_row['defender_id'])
-    conn = get_connection()
-    actor_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (actor_id,)).fetchone()
-    conn.close()
-    if not actor_row:
-        return 'not_live', payload
-    actor_profile = _resolve_combat_profile(actor_id, dict(actor_row))
-    lang = get_player_lang(actor_id)
-    available_options = _build_turn_action_options(
-        actor_id=actor_id,
-        battle=battle,
-        actor_profile=actor_profile,
-        is_attacker_side=(actor_id == attacker_id),
-        lang=lang,
-    )
-    if selected_action_id:
-        selected_ready = any(
-            option.action_id == selected_action_id and option.is_ready
-            for option in available_options
-        )
-        if not selected_ready:
+    is_v1 = battle.get('rules_version') == RULES_VERSION
+    if is_v1:
+        battle['attacker_id'] = attacker_id
+        battle['defender_id'] = defender_id
+        v1_actor = (battle.get('participants_v1') or {}).get(str(actor_id))
+        if not v1_actor:
+            return 'not_live', payload
+        if selected_action_id and not _v1_action_ready(v1_actor, selected_action_id):
             return 'invalid_action', payload
+    else:
+        conn = get_connection()
+        actor_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (actor_id,)).fetchone()
+        conn.close()
+        if not actor_row:
+            return 'not_live', payload
+        actor_profile = _resolve_combat_profile(actor_id, dict(actor_row))
+        lang = get_player_lang(actor_id)
+        available_options = _build_turn_action_options(
+            actor_id=actor_id, battle=battle, actor_profile=actor_profile,
+            is_attacker_side=(actor_id == attacker_id), lang=lang,
+        )
+        if selected_action_id:
+            selected_ready = any(option.action_id == selected_action_id and option.is_ready for option in available_options)
+            if not selected_ready:
+                return 'invalid_action', payload
     encounter_id = _runtime_encounter_id(int(engagement_row['id']))
-    if selected_action_id:
+    target_id = defender_id if actor_id == attacker_id else attacker_id
+    if recovered_ready:
+        pass
+    elif selected_action_id:
+        if is_v1:
+            durable_action = _v1_action_payload(
+                selected_action_id, actor_id=actor_id, target_id=target_id,
+            )
+            durable = submit_combat_order(
+                encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
+                turn_revision=runtime_state.turn_revision, actor_id=actor_id,
+                action=durable_action, target_id=durable_action.get('target_id'),
+                deadline_at=_to_iso(runtime_state.side_deadline_at or _utc_now()),
+                order_kind='manual',
+            )
+            if not durable.get('accepted'):
+                return 'not_your_turn', payload
         commit_result = _LIVE_PVP_RUNTIME.commit_action(
             encounter_id=encounter_id,
             participant_id=actor_id,
             action_type=selected_action_id,
-            target_info={'target_id': defender_id if actor_id == attacker_id else attacker_id},
+            target_info={'id': target_id},
             skill_id=selected_action_id.replace('skill:', '', 1) if selected_action_id.startswith('skill:') else None,
             item_id=None,
             committed_at=_utc_now(),
@@ -1193,6 +1385,14 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
         )
         if fallback_assigned <= 0:
             return 'waiting', payload
+        if is_v1:
+            submit_combat_order(
+                encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
+                turn_revision=runtime_state.turn_revision, actor_id=actor_id,
+                action={'kind': 'timeout_guard', 'target_id': actor_id, 'manual': False},
+                target_id=actor_id, deadline_at=_to_iso(runtime_state.side_deadline_at or _utc_now()),
+                order_kind='timeout',
+            )
 
     runtime_state = _LIVE_PVP_RUNTIME_STORE.get(encounter_id)
     if not runtime_state or runtime_state.side_turn_state != 'ready_to_lock':
@@ -1205,7 +1405,6 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
     if not claimed.claimed:
         return 'resolved', payload
 
-    target_id = defender_id if actor_id == attacker_id else attacker_id
     is_attacker_side = actor_id == attacker_id
     actor_mana_key = 'attacker_mana' if is_attacker_side else 'defender_mana'
     target_guarded = battle.get('guarded_player_id') == target_id
@@ -1226,7 +1425,14 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
     resolved_action_id = 'guard' if submission.action_type == 'fallback_guard' else submission.action_type
     action_source = 'auto' if submission.source == 'fallback' else 'player'
 
-    if resolved_action_id == 'guard':
+    if is_v1:
+        if not _resolve_v1_pvp_submission(
+            battle=battle, actor_id=actor_id, target_id=target_id,
+            selected_action_id=resolved_action_id, turn_revision=turn_revision,
+            manual=submission.source != 'fallback',
+        ):
+            return 'invalid_action', payload
+    elif resolved_action_id == 'guard':
         battle['guarded_player_id'] = actor_id
         battle['last_log'] = f'{actor_id}:{action_source}:guard:0'
     elif resolved_action_id.startswith('skill:'):
@@ -1259,7 +1465,8 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
         battle['guarded_player_id'] = None
         battle['last_log'] = f'{actor_id}:{action_source}:{resolved_action_id}:{damage}:{int(is_crit)}:{int(did_hit)}'
 
-    tick_cooldowns(actor_id)
+    if not is_v1:
+        tick_cooldowns(actor_id)
 
     winner_id = None
     loser_id = None
@@ -1272,6 +1479,16 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
 
     payload['battle'] = battle
     if winner_id and loser_id:
+        if is_v1:
+            _LIVE_PVP_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)
+            _sync_battle_projection_from_runtime(battle=battle, engagement_row=engagement_row, runtime_state=runtime_state)
+            payload['battle'] = battle
+            persist_turn_result(
+                encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
+                turn_revision=turn_revision,
+                result={'actor_id': actor_id, 'action': resolved_action_id, 'winner_id': winner_id},
+                complete_state=payload,
+            )
         _finalize_pvp_battle(
             engagement_row=engagement_row,
             payload=payload,
@@ -1283,6 +1500,14 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
     _LIVE_PVP_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)
     runtime_state = _LIVE_PVP_RUNTIME.open_side_turn(encounter_id=encounter_id, now=_utc_now())
     _sync_battle_projection_from_runtime(battle=battle, engagement_row=engagement_row, runtime_state=runtime_state)
+    payload['battle'] = battle
+    if is_v1:
+        persist_turn_result(
+            encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
+            turn_revision=turn_revision,
+            result={'actor_id': actor_id, 'action': resolved_action_id},
+            complete_state=payload,
+        )
     _write_engagement_state(
         engagement_id=int(engagement_row['id']),
         state=ENGAGEMENT_STATE_CONVERTED_TO_BATTLE,
