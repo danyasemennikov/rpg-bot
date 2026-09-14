@@ -3166,6 +3166,14 @@ def _sync_runtime_enemy_roster_for_pack(
     side_a_participants = list(side_a.participant_order if side_a else [])
     if not side_a_participants:
         side_a_participants = list(battle_state.get('side_a_player_ids') or [])
+    previous_revision = int(runtime_state.turn_revision)
+    previous_round = int(runtime_state.round_index)
+    previous_claimed_revision = runtime_state.last_claimed_revision
+    permanently_unavailable = {
+        participant_id: participant.phase_state
+        for participant_id, participant in runtime_state.participants.items()
+        if participant.phase_state in {'defeated', 'fled', 'released'}
+    }
     _SOLO_PVE_RUNTIME_STORE.remove(encounter_id)
     recreated = _SOLO_PVE_RUNTIME.create_encounter(
         encounter_id=encounter_id,
@@ -3173,6 +3181,16 @@ def _sync_runtime_enemy_roster_for_pack(
         side_b_participants=expected_enemy_participants,
         active_side_id=SIDE_ENEMY,
     )
+    # Replacing defeated pack units changes membership, not combat history.
+    # Keep revisions monotonic so durable orders/results and newly rendered UI
+    # tokens continue to describe the same authoritative side sequence.
+    recreated.turn_revision = previous_revision
+    recreated.round_index = previous_round
+    recreated.last_claimed_revision = previous_claimed_revision
+    for participant_id, phase_state in permanently_unavailable.items():
+        participant = recreated.participants.get(participant_id)
+        if participant is not None:
+            participant.phase_state = phase_state
     return _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=now, timeout_seconds=0)
 
 
@@ -3186,6 +3204,16 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
         runtime_state = _sync_runtime_enemy_roster_for_pack(encounter_id=encounter_id, battle_state=battle_state, now=now)
     if runtime_state is None:
         runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=now, timeout_seconds=0)
+    elif runtime_state.side_turn_state == 'completed':
+        # A pack whose roster already matches the durable unit list still
+        # needs its newly active enemy side opened before AI orders can commit.
+        # Roster recreation opens the side itself, so only the existing-state
+        # path reaches this branch.
+        runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(
+            encounter_id=encounter_id,
+            now=now,
+            timeout_seconds=0,
+        )
     enemy_participants = enemy_participant_ids_for_battle(encounter_id=encounter_id, battle_state=battle_state)
     is_pack_side = bool(battle_state.get('enemy_units'))
     if is_pack_side:

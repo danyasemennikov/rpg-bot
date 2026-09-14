@@ -117,10 +117,14 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         ensure_runtime_for_battle(player_id=1001, battle_state=battle_state, mob={'id': 'forest_wolf', 'hp': 10})
         submit_player_commit(player_id=1001, action_type='basic_attack', battle_state=battle_state)
         resolve_current_side_if_ready(player_id=1001, battle_state=battle_state, on_player_action=lambda _a: None, on_enemy_action=lambda _a: None)
+        before_enemy_revision = _SOLO_PVE_RUNTIME_STORE.get('enc-pack-live-1').turn_revision
         battle_state['enemy_units'][0]['dead'] = True
         events = []
         run_enemy_instant_side(player_id=1001, battle_state=battle_state, on_enemy_action=lambda action: events.append(action))
         self.assertEqual(sum(1 for a in events if str(a.action_type) == 'enemy_basic_attack'), 2)
+        after = _SOLO_PVE_RUNTIME_STORE.get('enc-pack-live-1')
+        self.assertEqual(after.turn_revision, before_enemy_revision + 2)
+        self.assertEqual(battle_state['turn_revision'], before_enemy_revision + 2)
 
     def test_pack_enemy_actions_use_per_unit_projection_and_writeback(self):
         battle_state = {

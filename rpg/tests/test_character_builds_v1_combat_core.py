@@ -80,6 +80,17 @@ def test_normal_attack_restores_six_mana_after_a_valid_attempt():
     assert any(event.get("source") == "normal" and event["amount"] == 6 for event in result["events"])
 
 
+def test_universal_power_strike_uses_the_shared_damage_evaluator():
+    hero = actor(family="tome", skill_ranks={})
+    result = evaluate_action(
+        hero, [hero], [enemy()], {"kind": "skill", "skill_id": "power_strike"},
+        rng_seed=3,
+    )
+    assert result["accepted"] is True
+    assert direct_event(result)["skill_id"] == "power_strike"
+    assert result["actor"]["mana"] < hero["mana"]
+
+
 def test_target_lost_fallback_is_cost_and_cooldown_free_guard():
     hero = actor(family="magic_staff", skill_ranks={"fireball": 1}, mana=50)
     result = evaluate_action(

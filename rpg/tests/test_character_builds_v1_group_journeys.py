@@ -5,11 +5,20 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import deque
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 from database import get_connection, get_player
-from game.build_contract import BRANCH_IDENTITIES
+from game.build_contract import (
+    BRANCH_IDENTITIES,
+    POWER_STRIKE,
+    SKILL_SPECS,
+    rank_mana_cost,
+)
 from game.build_progression import migrate_character_builds_v1
 from game.combat_identity import cooldown_remaining
+from game.enemy_profiles import MIXED_ENCOUNTERS
 from game.locations import WORLD_LOCATIONS
 from game.pve_live import reset_solo_pve_runtime_store
 from game.pve_reward_settlement import get_settlement
@@ -22,6 +31,19 @@ from tests.test_character_builds_v1_journeys import (
     _callbacks,
     _run_branch_journey,
 )
+
+
+@contextmanager
+def _frozen_combat_clock():
+    """Keep production deadlines stable while the fake Telegram UI renders."""
+    frozen_now = datetime.now(timezone.utc)
+    with (
+        patch("game.pve_live._utc_now", return_value=frozen_now),
+        patch("game.combat_orders.datetime", wraps=datetime) as order_datetime,
+    ):
+        order_datetime.now.return_value = frozen_now
+        order_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        yield
 
 
 def _encounter_state(encounter_id: str) -> dict:
@@ -105,9 +127,38 @@ async def _start_group(
     *,
     mob_id: str,
 ) -> tuple[str, list[ProductionJourney], dict[int, dict]]:
+    spawn_id = owner._accelerate_respawn(mob_id)
+    return await _open_group(
+        owner,
+        joiners,
+        start_callback=f"fight_spawn_{spawn_id}",
+    )
+
+
+async def _start_mixed_group(
+    owner: ProductionJourney,
+    joiners: list[ProductionJourney],
+    *,
+    recipe_id: str,
+) -> tuple[str, list[ProductionJourney], dict[int, dict]]:
+    recipe = MIXED_ENCOUNTERS[recipe_id]
+    for mob_id in {str(unit[0]) for unit in recipe["units"]}:
+        owner._accelerate_respawn(mob_id)
+    return await _open_group(
+        owner,
+        joiners,
+        start_callback=f"fight_mixed_{recipe_id}",
+    )
+
+
+async def _open_group(
+    owner: ProductionJourney,
+    joiners: list[ProductionJourney],
+    *,
+    start_callback: str,
+) -> tuple[str, list[ProductionJourney], dict[int, dict]]:
     location_id = str(get_player(owner.player_id)["location_id"])
     assert all(str(get_player(item.player_id)["location_id"]) == location_id for item in joiners)
-    spawn_id = owner._accelerate_respawn(mob_id)
     mastery_before = {
         item.player_id: get_mastery(
             item.player_id,
@@ -115,7 +166,7 @@ async def _start_group(
         )
         for item in [owner, *joiners]
     }
-    await owner.callback(f"fight_spawn_{spawn_id}", handle_combat_buttons)
+    await owner.callback(start_callback, handle_combat_buttons)
     enter_callback = next(
         callback for callback in _callbacks(owner.messages[-1][1])
         if callback.startswith("pve_enter_")
@@ -149,8 +200,13 @@ def _encounter_state_for_player(player_id: int) -> dict:
         ).fetchone()
     finally:
         conn.close()
-    assert row is not None
-    return {"family": str(row["base_item_id"]).removeprefix("field_")}
+    return {
+        "family": (
+            str(row["base_item_id"]).removeprefix("field_")
+            if row is not None
+            else "unarmed"
+        )
+    }
 
 
 async def _commit_round(
@@ -198,13 +254,29 @@ def _assert_once_settlement(
     encounter_id: str,
     members: list[ProductionJourney],
     mastery_before: dict[int, dict],
+    *,
+    expected_unit_count: int = 1,
 ) -> dict:
     settlement = get_settlement(encounter_id)
     assert settlement and settlement["status"] == "applied"
+    planned_recipients = settlement["plan"]["recipients"]
+    assert {row["player_id"] for row in planned_recipients} == {
+        item.player_id for item in members
+    }
+    assert all(len(row["units"]) == expected_unit_count for row in planned_recipients)
+    assert all(
+        len({unit["spawn_instance_id"] for unit in row["units"]}) == expected_unit_count
+        for row in planned_recipients
+    )
     awards = settlement["result"]["mastery_awards"]
     assert {row["player_id"] for row in awards} == {item.player_id for item in members}
     assert len({row["player_id"] for row in awards}) == len(members)
-    assert all(row["exp"] == 20 for row in awards)
+    planned_awards = {
+        row["player_id"]: row["exp"]
+        for row in settlement["plan"]["mastery_awards"]
+    }
+    assert all(row["exp"] == planned_awards[row["player_id"]] for row in awards)
+    assert all(0 < row["exp"] <= 80 for row in awards)
     for member in members:
         family = _encounter_family(member.player_id)
         after = get_mastery(member.player_id, family)
@@ -220,6 +292,8 @@ async def _finish_group(
     mastery_before: dict[int, dict],
     *,
     max_rounds: int = 20,
+    expected_unit_count: int = 1,
+    sustain: bool = False,
 ) -> dict:
     for _ in range(max_rounds):
         state = _encounter_state(encounter_id)
@@ -235,12 +309,72 @@ async def _finish_group(
             for member in members
             if member.player_id in living
         }
+        if sustain:
+            actors = state.get("participant_states_v1") or {}
+            living_actors = [
+                actor for actor in actors.values()
+                if int(actor.get("hp", 0)) > 0
+            ]
+            lowest = min(
+                living_actors,
+                key=lambda actor: (
+                    int(actor["hp"]) / max(1, int(actor["max_hp"])),
+                    int(actor["actor_id"]),
+                ),
+            )
+            for member in members:
+                actor = actors.get(str(member.player_id)) or {}
+                ranks = actor.get("skill_ranks") or {}
+                for skill_id in ("halo_of_dawn", "smite", "sword_rush"):
+                    if (
+                        skill_id in ranks
+                        and cooldown_remaining(actor, skill_id) == 0
+                        and int(actor.get("mana", 0)) >= rank_mana_cost(
+                            SKILL_SPECS[skill_id], int(ranks[skill_id]),
+                        )
+                    ):
+                        actions[member.player_id] = ("skill", skill_id, None)
+                        break
+                else:
+                    if (
+                        cooldown_remaining(actor, "power_strike") == 0
+                        and int(actor.get("mana", 0)) >= rank_mana_cost(POWER_STRIKE, 1)
+                    ):
+                        actions[member.player_id] = (
+                            "skill", "power_strike", None,
+                        )
+                if (
+                    "sacred_shield" in ranks
+                    and cooldown_remaining(actor, "sacred_shield") == 0
+                    and int(actor.get("mana", 0)) >= rank_mana_cost(
+                        SKILL_SPECS["sacred_shield"], int(ranks["sacred_shield"]),
+                    )
+                ):
+                    actions[member.player_id] = (
+                        "skill", "sacred_shield", lowest["actor_id"],
+                    )
+                if (
+                    "heal" in ranks
+                    and int(lowest["hp"]) * 5 <= int(lowest["max_hp"]) * 3
+                    and cooldown_remaining(actor, "heal") == 0
+                    and int(actor.get("mana", 0)) >= rank_mana_cost(
+                        SKILL_SPECS["heal"], int(ranks["heal"]),
+                    )
+                ):
+                    actions[member.player_id] = (
+                        "skill", "heal", lowest["actor_id"],
+                    )
         await _commit_round(encounter_id, [m for m in members if m.player_id in living], actions)
         if get_settlement(encounter_id):
             break
     else:
         raise AssertionError(_encounter_state(encounter_id))
-    return _assert_once_settlement(encounter_id, members, mastery_before)
+    return _assert_once_settlement(
+        encounter_id,
+        members,
+        mastery_before,
+        expected_unit_count=expected_unit_count,
+    )
 
 
 async def _exercise_protector_healer_group(
@@ -462,6 +596,70 @@ async def _exercise_dawn_enchanter_group(
     }
 
 
+async def _exercise_multi_source_content(
+    members: list[ProductionJourney],
+) -> dict:
+    results: dict[str, dict] = {}
+    for recipe_id, location_id in (
+        ("westwild_n8_mixed", "westwild_n8"),
+        ("ashen_n3c1_mixed", "ashen_n3c1"),
+    ):
+        for member in members:
+            await _rest_at_capital(member)
+            await _move(member, location_id)
+        with _frozen_combat_clock():
+            encounter_id, roster, mastery_before = await _start_mixed_group(
+                members[0], members[1:], recipe_id=recipe_id,
+            )
+            state = _encounter_state(encounter_id)
+            expected_units = list(MIXED_ENCOUNTERS[recipe_id]["units"])
+            assert [
+                (unit["mob_id"], unit["formation_line"])
+                for unit in state["enemy_units"]
+            ] == expected_units
+            settlement = await _finish_group(
+                encounter_id,
+                roster,
+                mastery_before,
+                max_rounds=30,
+                expected_unit_count=len(expected_units),
+                sustain=True,
+            )
+        assert all(
+            int(recipient["exp"]) > 0 and int(recipient["gold"]) >= 0
+            for recipient in settlement["result"]["recipients"]
+        )
+        results[recipe_id] = {
+            "encounter_id": encounter_id,
+            "source_units": [unit["mob_id"] for unit in settlement["plan"]["enemy_units"]],
+        }
+
+    for member in members:
+        await _rest_at_capital(member)
+        await _move(member, "westwild_n7")
+    with _frozen_combat_clock():
+        encounter_id, roster, mastery_before = await _start_group(
+            members[0], members[1:], mob_id="forest_wolf",
+        )
+        state = _encounter_state(encounter_id)
+        pack_units = list(state.get("enemy_units") or [])
+        assert len(pack_units) >= 2
+        assert {unit["mob_id"] for unit in pack_units} == {"forest_wolf"}
+        settlement = await _finish_group(
+            encounter_id,
+            roster,
+            mastery_before,
+            max_rounds=30,
+            expected_unit_count=len(pack_units),
+            sustain=True,
+        )
+    results["homogeneous_pack"] = {
+        "encounter_id": encounter_id,
+        "source_units": [unit["mob_id"] for unit in settlement["plan"]["enemy_units"]],
+    }
+    return results
+
+
 async def _run_group_identity_journey() -> dict:
     reset_solo_pve_runtime_store()
     migrate_character_builds_v1()
@@ -511,12 +709,22 @@ async def _run_group_identity_journey() -> dict:
         await _rest_at_capital(member)
         await _move(member, "westwild_n8")
     caster = await _exercise_dawn_enchanter_group(*second_party)
-    return {"venom": venom, "reverse": reverse, "caster": caster}
+    content_party = [trained["guardian"], trained["dawn"], trained["healer"]]
+    content = await _exercise_multi_source_content(content_party)
+    return {
+        "venom": venom,
+        "reverse": reverse,
+        "caster": caster,
+        "content": content,
+    }
 
 
-def test_earned_group_identities_survive_real_sources_and_reverse_join_order():
+def test_earned_group_identities_survive_real_content_and_reverse_join_order():
     result = asyncio.run(_run_group_identity_journey())
-    assert set(result) == {"venom", "reverse", "caster"}
+    assert set(result) == {"venom", "reverse", "caster", "content"}
+    assert set(result["content"]) == {
+        "westwild_n8_mixed", "ashen_n3c1_mixed", "homogeneous_pack",
+    }
 
 
 def test_late_joiners_receive_v1_snapshots_and_can_commit_consecutive_rounds():
@@ -550,5 +758,41 @@ def test_late_joiners_receive_v1_snapshots_and_can_commit_consecutive_rounds():
             })
             revisions.append(int(_encounter_state(encounter_id)["turn_revision"]))
         assert revisions[1] > revisions[0]
+
+    asyncio.run(journey())
+
+
+def test_mixed_v1_group_resolves_enemy_side_and_rotates_units():
+    async def journey() -> None:
+        reset_solo_pve_runtime_store()
+        migrate_character_builds_v1()
+        conn = get_connection()
+        conn.execute(
+            """UPDATE players
+               SET location_id='westwild_n8', strength=50, vitality=50,
+                   hp=1000, max_hp=1000
+               WHERE telegram_id IN (1,777)"""
+        )
+        conn.commit()
+        conn.close()
+        owner = ProductionJourney(1)
+        joiner = ProductionJourney(777)
+        with _frozen_combat_clock():
+            encounter_id, members, _ = await _start_mixed_group(
+                owner, [joiner], recipe_id="westwild_n8_mixed",
+            )
+            for _ in range(4):
+                await _commit_round(encounter_id, members, {
+                    1: ("basic_attack", None, None),
+                    777: ("basic_attack", None, None),
+                })
+                state = _encounter_state(encounter_id)
+                if get_settlement(encounter_id):
+                    break
+        assert get_settlement(encounter_id)
+        assert len([
+            enemy for enemy in state["enemy_states_v1"]
+            if int(enemy["hp"]) <= 0
+        ]) == 3
 
     asyncio.run(journey())

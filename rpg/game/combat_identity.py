@@ -610,7 +610,7 @@ def _skill_context(
     actor: dict[str, Any], target: dict[str, Any], skill_id: str, rank: int,
 ) -> tuple[float, float, str, dict[str, Any]]:
     """Return base coefficient, penetration, school and named conditions."""
-    spec = SKILL_SPECS[skill_id]
+    spec = POWER_STRIKE if skill_id == "power_strike" else SKILL_SPECS[skill_id]
     coefficient = spec.power * rank_multiplier(rank)
     penetration = 0.0
     school = spec.school or str(actor.get("damage_school") or "physical")
