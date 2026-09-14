@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from database import get_connection
 from game.build_contract import RULES_VERSION
@@ -18,6 +21,7 @@ from game.pvp_live import (
     issue_manual_pvp_action_labels,
     resolve_live_battle_turn,
 )
+from handlers import battle as battle_handler
 
 
 def test_mastery_awards_only_manual_survivors_with_frozen_family_and_caps_at_80():
@@ -130,3 +134,56 @@ def test_v1_pvp_uses_opaque_durable_order_and_recovers_it_after_runtime_loss():
     conn.close()
     assert result is not None
     assert _deserialize_reason_context(persisted["reason_context"])["battle"]["turn_owner"] == defender
+
+
+def test_v1_mob_first_uses_shared_enemy_side_not_legacy_strike():
+    player = {
+        'telegram_id': 1, 'name': 'Hero', 'lang': 'en', 'location_id': 'westwild_n1',
+        'hp': 118, 'mana': 62, 'level': 1, 'strength': 1, 'agility': 1,
+        'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1,
+    }
+    effective = {
+        **{key: player[key] for key in ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')},
+        'max_hp': 118, 'max_mana': 62, 'physical_defense_bonus': 0,
+        'magic_defense_bonus': 0, 'accuracy_bonus': 0, 'evasion_bonus': 0,
+        'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+    }
+    battle = {
+        'mob_id': 'westwild_rabbit', 'log': [], 'player_hp': 118, 'player_max_hp': 118,
+        'player_mana': 62, 'player_max_mana': 62,
+    }
+    query = SimpleNamespace(
+        from_user=SimpleNamespace(id=1), answer=AsyncMock(), edit_message_text=AsyncMock(),
+    )
+    context = SimpleNamespace(user_data={}, application=SimpleNamespace(user_data={1: {}}))
+
+    def create_v1(**kwargs):
+        kwargs['battle_state'].update({
+            'rules_version': RULES_VERSION, 'participant_states_v1': {
+                '1': {'actor_id': 1, 'hp': 118, 'max_hp': 118, 'mana': 62, 'max_mana': 62},
+            },
+            'enemy_states_v1': [{'unit_id': 'enemy-1', 'hp': 20, 'max_hp': 20}],
+        })
+        return 'v1-first', 'created'
+
+    with patch('handlers.battle.get_player', return_value=player), \
+         patch('handlers.battle.get_mob', return_value={'id': 'westwild_rabbit', 'hp': 20, 'level': 1}), \
+         patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+         patch('handlers.battle.get_player_effective_stats', return_value=effective), \
+         patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+         patch('handlers.battle.init_battle', return_value=battle), \
+         patch('handlers.battle.create_or_load_open_world_pve_encounter', side_effect=create_v1), \
+         patch('handlers.battle.ensure_runtime_for_battle'), \
+         patch('handlers.battle.run_enemy_instant_side') as enemy_side, \
+         patch('handlers.battle.sync_projection_for_participant'), \
+         patch('handlers.battle.update_participant_combat_state_from_projection'), \
+         patch('handlers.battle.persist_solo_pve_encounter_state'), \
+         patch('handlers.battle.save_battle'), \
+         patch('handlers.battle.build_battle_message', return_value=('battle', None)), \
+         patch('game.combat.mob_attack', side_effect=AssertionError('legacy bypass')):
+        asyncio.run(battle_handler.start_battle(
+            SimpleNamespace(callback_query=query), context, 'westwild_rabbit', mob_first=True,
+        ))
+
+    enemy_side.assert_called_once()
+    assert battle['active_side'] == 'side_b'

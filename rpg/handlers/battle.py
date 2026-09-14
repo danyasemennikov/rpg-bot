@@ -29,6 +29,7 @@ from game.combat import (
     process_enemy_side_turn, apply_timeout_fallback_guard, preview_skill_turn_precheck,
 )
 from game.pve_live import (
+    SIDE_ENEMY,
     claim_pve_encounter_victory,
     release_pve_encounter_victory_claim,
     create_mixed_open_world_pve_encounter,
@@ -752,8 +753,44 @@ async def start_battle(
         return
     battle_state['pve_encounter_id'] = encounter_id
 
-    # Если моб ходит первым — сразу обрабатываем его ход
-    if mob_first:
+    # V1 aggression uses the same durable enemy-side runtime/evaluator as every
+    # later enemy turn. The legacy strike remains only for legacy encounters.
+    if mob_first and battle_state.get('rules_version') == RULES_VERSION:
+        battle_state['active_side'] = SIDE_ENEMY
+        try:
+            ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
+        except OpenWorldRuntimeStartBlocked:
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
+            await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
+            return
+        run_enemy_instant_side(
+            player_id=user.id,
+            battle_state=battle_state,
+            on_enemy_action=lambda action: _run_group_enemy_side_action(
+                action=action, owner_player=p, mob=mob,
+                battle_state=battle_state, lang=lang,
+            ),
+        )
+        sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
+        if battle_state.get('player_dead'):
+            penalty = apply_death(user.id, p)
+            finish_solo_pve_encounter(
+                player_id=user.id,
+                encounter_id=battle_state.get('pve_encounter_id'),
+                status='death',
+            )
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
+            await query.edit_message_text(
+                t('battle.death_first_strike', lang,
+                  mob_name=get_mob_name(mob['id'], lang),
+                  exp_loss=penalty['exp_loss'], gold_loss=penalty['gold_loss']),
+                parse_mode='HTML',
+            )
+            return
+    elif mob_first:
         from game.combat import mob_attack
         mob_result = mob_attack(mob, p)
         p['hp']    = mob_result['player_hp']
