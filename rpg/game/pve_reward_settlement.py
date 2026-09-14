@@ -582,7 +582,11 @@ def prepare_victory_settlement(*, encounter_id: str, battle_state: dict, mob: di
 
 def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
                        failure_hook: FailureHook | None = None) -> dict:
-    row = conn.execute('SELECT level, exp, gold, stat_points FROM players WHERE telegram_id=?', (player_id,)).fetchone()
+    row = conn.execute(
+        '''SELECT level, exp, gold, stat_points, attribute_budget, build_revision
+           FROM players WHERE telegram_id=?''',
+        (player_id,),
+    ).fetchone()
     if not row:
         raise RuntimeError(f'settlement_player_missing:{player_id}')
     old_level = int(row['level'])
@@ -591,10 +595,19 @@ def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
     while exp_value >= exp_to_next_level(level):
         exp_value -= exp_to_next_level(level)
         level += 1
-    stat_points = int(row['stat_points']) + (level - old_level) * 3
+    levels_gained = level - old_level
+    earned_points = levels_gained * 3
+    stat_points = int(row['stat_points']) + earned_points
+    attribute_budget = (
+        None if row['attribute_budget'] is None
+        else int(row['attribute_budget']) + earned_points
+    )
     gold = int(row['gold']) + gold_gain
-    conn.execute('UPDATE players SET level=?, exp=?, stat_points=? WHERE telegram_id=?',
-                 (level, exp_value, stat_points, player_id))
+    conn.execute(
+        '''UPDATE players SET level=?, exp=?, stat_points=?, attribute_budget=?,
+           build_revision=build_revision+? WHERE telegram_id=?''',
+        (level, exp_value, stat_points, attribute_budget, int(levels_gained > 0), player_id),
+    )
     if failure_hook:
         failure_hook('after_xp_update')
     conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (gold, player_id))

@@ -717,10 +717,23 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str, action_to
         conn.execute(
             '''
             UPDATE players
-            SET exp=?, gold=?, level=?, stat_points=?
+            SET exp=?, gold=?, level=?, stat_points=?,
+                attribute_budget=CASE
+                    WHEN attribute_budget IS NULL THEN NULL
+                    ELSE attribute_budget + ?
+                END,
+                build_revision=build_revision + ?
             WHERE telegram_id=?
             ''',
-            (exp_value, gold_value, level, stat_points, int(player_id)),
+            (
+                exp_value,
+                gold_value,
+                level,
+                stat_points,
+                levels_gained * 3,
+                int(levels_gained > 0),
+                int(player_id),
+            ),
         )
 
         if contract.bonus_item_id:

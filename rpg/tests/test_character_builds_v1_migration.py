@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from database import get_connection
+from game.balance import exp_to_next_level
 from game.build_contract import MASTERY_MODEL_VERSION, RULES_VERSION
 from game.build_progression import (
     apply_attribute_redistribution,
@@ -13,6 +14,8 @@ from game.build_progression import (
     issue_skill_purchase_intent,
     migrate_character_builds_v1,
 )
+from game.pve_reward_settlement import _apply_progression
+from handlers.battle import apply_rewards
 
 
 def test_migration_archives_and_uses_greatest_alias_evidence_and_preserves_live_resources():
@@ -147,3 +150,68 @@ def test_attribute_redistribution_uses_frozen_budget_and_recomputes_caps():
     assert player["max_mana"] == 62
     assert player["carry_weight"] == 25
 
+
+def test_settlement_level_up_extends_budget_and_invalidates_prelevel_draft():
+    migrate_character_builds_v1()
+    attributes = {
+        "strength": 10, "agility": 10, "intuition": 10,
+        "vitality": 10, "wisdom": 10, "luck": 10,
+    }
+    preview = attribute_redistribution_preview(1, attributes)
+    assert preview["success"] is True
+
+    conn = get_connection()
+    conn.execute("BEGIN IMMEDIATE")
+    progression = _apply_progression(conn, 1, 100, 0)
+    conn.commit()
+    player = dict(conn.execute("SELECT * FROM players WHERE telegram_id=1").fetchone())
+    conn.close()
+
+    assert progression["level_after"] == 2
+    assert player["stat_points"] == 3
+    assert player["attribute_budget"] == 57
+    assert apply_attribute_redistribution(1, preview["token"]) == {
+        "success": False, "reason": "stale_build",
+    }
+    assert build_migration_audit()["attribute_invariant_failures"] == []
+
+
+def test_legacy_reward_level_up_extends_budget_and_invalidates_prelevel_draft():
+    migrate_character_builds_v1()
+    preview = attribute_redistribution_preview(1, {
+        "strength": 10, "agility": 10, "intuition": 10,
+        "vitality": 10, "wisdom": 10, "luck": 10,
+    })
+    assert preview["success"] is True
+
+    conn = get_connection()
+    player = dict(conn.execute("SELECT * FROM players WHERE telegram_id=1").fetchone())
+    old_budget = int(player["attribute_budget"])
+    conn.execute(
+        "UPDATE players SET exp=? WHERE telegram_id=1",
+        (exp_to_next_level(int(player["level"])) - 10,),
+    )
+    conn.commit()
+    player = dict(conn.execute("SELECT * FROM players WHERE telegram_id=1").fetchone())
+    conn.close()
+
+    result = apply_rewards(1, player, {
+        "exp": 10,
+        "gold": 0,
+        "loot": [],
+        "mob_id": "forest_boar",
+        "mob_level": 1,
+        "location_id": "westwild_n2",
+    })
+    assert result["new_level"] == int(player["level"]) + 1
+
+    conn = get_connection()
+    advanced = dict(conn.execute("SELECT * FROM players WHERE telegram_id=1").fetchone())
+    conn.close()
+    assert advanced["stat_points"] == int(player["stat_points"]) + 3
+    assert advanced["attribute_budget"] == old_budget + 3
+    assert advanced["build_revision"] == int(player["build_revision"]) + 1
+    assert apply_attribute_redistribution(1, preview["token"]) == {
+        "success": False, "reason": "stale_build",
+    }
+    assert build_migration_audit()["attribute_invariant_failures"] == []

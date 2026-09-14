@@ -20,7 +20,7 @@ from game.build_contract import (
     SKILL_SPECS,
     SKILL_TREES,
 )
-from game.build_progression import migrate_character_builds_v1
+from game.build_progression import build_migration_audit, migrate_character_builds_v1
 from game.field_catalog import FIELD_ITEMS
 from game.gear_instances import get_equipped_gear_instances
 from game.pve_live import ensure_location_pve_spawn_instances, reset_solo_pve_runtime_store
@@ -419,6 +419,9 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
         assert get_mastery(player_id, family)["skill_points"] == 0
 
     mastery = get_mastery(player_id, family)
+    final_player = dict(get_player(player_id))
+    assert final_player["attribute_budget"] == 6 + 3 * (final_player["level"] - 1)
+    assert build_migration_audit()["attribute_invariant_failures"] == []
     return {
         "player_id": player_id,
         "family": family,
@@ -441,6 +444,13 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
             "level": mastery["level"],
             "exp": mastery["exp"],
             "skill_points": mastery["skill_points"],
+        },
+        "character_progression": {
+            "level": final_player["level"],
+            "exp": final_player["exp"],
+            "gold": final_player["gold"],
+            "attribute_budget": final_player["attribute_budget"],
+            "unspent_stat_points": final_player["stat_points"],
         },
         "m8_receipts": [row["token"] for row in m8_receipts],
         "deep_receipts": [row["token"] for row in deep_receipts],
