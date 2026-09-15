@@ -1319,6 +1319,7 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
 
     attacker_id = int(engagement_row['attacker_id'])
     defender_id = int(engagement_row['defender_id'])
+    target_id = defender_id if actor_id == attacker_id else attacker_id
     is_v1 = battle.get('rules_version') == RULES_VERSION
     if is_v1:
         battle['attacker_id'] = attacker_id
@@ -1326,6 +1327,15 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
         v1_actor = (battle.get('participants_v1') or {}).get(str(actor_id))
         if not v1_actor:
             return 'not_live', payload
+        if int(v1_actor.get('hp', 0)) <= 0 or bool(v1_actor.get('dead')):
+            return 'not_live', payload
+        v1_target = (battle.get('participants_v1') or {}).get(str(target_id))
+        if not recovered_ready and (
+            not v1_target
+            or int(v1_target.get('hp', 0)) <= 0
+            or bool(v1_target.get('dead'))
+        ):
+            return 'invalid_action', payload
         if selected_action_id and not _v1_action_ready(v1_actor, selected_action_id):
             return 'invalid_action', payload
     else:
@@ -1345,7 +1355,6 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
             if not selected_ready:
                 return 'invalid_action', payload
     encounter_id = _runtime_encounter_id(int(engagement_row['id']))
-    target_id = defender_id if actor_id == attacker_id else attacker_id
     if recovered_ready:
         pass
     elif selected_action_id:
