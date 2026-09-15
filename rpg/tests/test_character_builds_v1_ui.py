@@ -5,6 +5,9 @@ from game.build_contract import FAMILIES, SKILL_SPECS
 from game.build_progression import migrate_character_builds_v1
 from game.i18n import get_skill_desc, get_skill_name
 from handlers.build import (
+    _KIND_LABELS,
+    _SCHOOL_LABELS,
+    _TARGET_LABELS,
     build_attributes_view,
     build_family_view,
     build_main_view,
@@ -24,6 +27,28 @@ def test_all_frozen_skills_have_localized_name_and_description():
         for skill_id in SKILL_SPECS:
             assert get_skill_name(skill_id, lang) != skill_id
             assert get_skill_desc(skill_id, lang)
+
+
+def test_every_frozen_skill_preview_localizes_structured_contract_fields():
+    migrate_character_builds_v1()
+    assert set(_TARGET_LABELS["en"]) == {spec.target for spec in SKILL_SPECS.values()}
+    assert set(_SCHOOL_LABELS["en"]) == {spec.school or "support" for spec in SKILL_SPECS.values()}
+    assert set(_KIND_LABELS["en"]) == {spec.kind for spec in SKILL_SPECS.values()}
+
+    for lang in ("ru", "en", "es"):
+        for skill_id, spec in SKILL_SPECS.items():
+            text, markup = build_skill_view(1, skill_id, lang)
+            assert "[" not in text
+            assert f"<b>{spec.target}</b>" not in text
+            if lang != "en":
+                assert f"<b>{spec.school or 'support'}</b>" not in text
+                assert spec.description not in text
+            if spec.power:
+                assert f"{spec.power:.2f}".removeprefix("0") + "P" in text
+            assert all(
+                callback and len(callback.encode("utf-8")) <= 64
+                for callback in _callbacks(markup)
+            )
 
 
 def test_build_views_are_localized_authoritative_and_callback_safe():
@@ -56,6 +81,8 @@ def test_build_views_are_localized_authoritative_and_callback_safe():
             assert all(callback and len(callback.encode("utf-8")) <= 64 for callback in _callbacks(markup))
         assert "1.05P" in views[3][0]
         assert "PvP" in views[3][0]
+        if lang != "en":
+            assert all(f"· {family}" not in views[4][0] for family in FAMILIES)
 
 
 def test_each_family_tree_renders_both_frozen_branches():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from html import escape
+import re
 from typing import Any
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -49,7 +50,8 @@ _COPY = {
         "base_effective": "base → effective", "safe_only": "Free redistribution/reset is available in a safe hub.",
         "learn": "Learn / rank up", "locked": "Locked", "ready": "Available", "max": "MAX",
         "rank": "Rank", "mastery": "Mastery", "points": "points", "cost": "MP",
-        "cooldown": "cooldown", "target": "target", "exact": "Exact V1 effect",
+        "cooldown": "cooldown", "target": "target", "school": "school", "exact": "V1 combat profile",
+        "passive": "passive", "hits": "components", "utility": "utility", "parameters": "parameters",
         "unequip": "These requirement-invalid items will be unequipped", "none": "none",
         "changed": "Build updated.", "stale": "That build action is stale; the current view was reloaded.",
         "old": "This old button cannot mutate V1. The current build view was reloaded.",
@@ -65,6 +67,11 @@ _COPY = {
         "healing": "Healing reference", "migration": "Your prior skill points were refunded under V1.",
         "equipment": "Equipment & comparison", "effects": "Build effects", "tradeoff": "Tradeoff",
         "no_points": "No family points", "capstone_locked": "needs 8 other points in this branch",
+        "error_no_points": "No family skill points are available.",
+        "error_mastery": "More family mastery is required.",
+        "error_capstone": "The capstone needs 8 other points in this branch.",
+        "error_max_rank": "This skill is already at maximum rank.",
+        "error_safe_hub": "This build change is only available in a safe hub.",
     },
     "ru": {
         "title": "🧭 <b>Билд персонажа</b>", "attributes": "Характеристики", "masteries": "Владение",
@@ -73,7 +80,8 @@ _COPY = {
         "base_effective": "база → итог", "safe_only": "Бесплатное перераспределение и сброс доступны в безопасном городе.",
         "learn": "Изучить / повысить", "locked": "Закрыто", "ready": "Доступно", "max": "МАКС",
         "rank": "Ранг", "mastery": "Владение", "points": "очков", "cost": "МП",
-        "cooldown": "перезарядка", "target": "цель", "exact": "Точный эффект V1",
+        "cooldown": "перезарядка", "target": "цель", "school": "школа", "exact": "Боевой профиль V1",
+        "passive": "пассивно", "hits": "компонентов", "utility": "поддержка", "parameters": "параметры",
         "unequip": "Предметы с нарушенными требованиями будут сняты", "none": "нет",
         "changed": "Билд обновлён.", "stale": "Действие устарело; открыт актуальный билд.",
         "old": "Старая кнопка не меняет V1. Открыт актуальный билд.",
@@ -89,6 +97,11 @@ _COPY = {
         "healing": "База лечения", "migration": "Прежние очки навыков возвращены по правилам V1.",
         "equipment": "Экипировка и сравнение", "effects": "Эффекты билда", "tradeoff": "Компромисс",
         "no_points": "Нет очков семейства", "capstone_locked": "нужно 8 других очков в этой ветке",
+        "error_no_points": "Нет свободных очков навыков этого семейства.",
+        "error_mastery": "Нужно повысить владение этим семейством.",
+        "error_capstone": "Для капстоуна нужно 8 других очков в этой ветке.",
+        "error_max_rank": "Навык уже достиг максимального ранга.",
+        "error_safe_hub": "Этот билд можно изменить только в безопасном городе.",
     },
     "es": {
         "title": "🧭 <b>Configuración del personaje</b>", "attributes": "Atributos", "masteries": "Maestrías",
@@ -97,7 +110,8 @@ _COPY = {
         "base_effective": "base → efectivo", "safe_only": "La redistribución y el reinicio gratuitos están disponibles en una ciudad segura.",
         "learn": "Aprender / mejorar", "locked": "Bloqueado", "ready": "Disponible", "max": "MÁX",
         "rank": "Rango", "mastery": "Maestría", "points": "puntos", "cost": "PM",
-        "cooldown": "recarga", "target": "objetivo", "exact": "Efecto exacto V1",
+        "cooldown": "recarga", "target": "objetivo", "school": "escuela", "exact": "Perfil de combate V1",
+        "passive": "pasiva", "hits": "componentes", "utility": "utilidad", "parameters": "parámetros",
         "unequip": "Se desequiparán estos objetos cuyos requisitos ya no se cumplen", "none": "ninguno",
         "changed": "Configuración actualizada.", "stale": "La acción caducó; se recargó la configuración actual.",
         "old": "El botón antiguo no puede cambiar V1. Se recargó la vista actual.",
@@ -113,6 +127,11 @@ _COPY = {
         "healing": "Referencia de curación", "migration": "Tus puntos de habilidad anteriores se devolvieron con V1.",
         "equipment": "Equipo y comparación", "effects": "Efectos de la configuración", "tradeoff": "Desventaja",
         "no_points": "No hay puntos de familia", "capstone_locked": "necesita 8 puntos distintos en esta rama",
+        "error_no_points": "No quedan puntos de habilidad de esta familia.",
+        "error_mastery": "Se necesita más maestría con esta familia.",
+        "error_capstone": "La culminación necesita 8 puntos distintos en esta rama.",
+        "error_max_rank": "Esta habilidad ya tiene el rango máximo.",
+        "error_safe_hub": "Este cambio de configuración solo está disponible en una ciudad segura.",
     },
 }
 
@@ -173,9 +192,66 @@ _ATTRIBUTE_LABELS = {
     "es": {"strength": "Fuerza", "agility": "Agilidad", "intuition": "Intuición", "vitality": "Vitalidad", "wisdom": "Sabiduría", "luck": "Suerte"},
 }
 
+_TARGET_LABELS = {
+    "en": {"S": "one enemy", "F": "front line", "B": "priority back line", "A": "all enemies", "2x2": "up to two per line", "Ally": "one ally", "AllyOrEnemy": "one ally or enemy", "Attacker": "the attacker", "Self": "self", "Party": "party"},
+    "ru": {"S": "один враг", "F": "передняя линия", "B": "приоритетная задняя линия", "A": "все враги", "2x2": "до двух в каждой линии", "Ally": "один союзник", "AllyOrEnemy": "один союзник или враг", "Attacker": "атакующий", "Self": "на себя", "Party": "группа"},
+    "es": {"S": "un enemigo", "F": "línea delantera", "B": "retaguardia prioritaria", "A": "todos los enemigos", "2x2": "hasta dos por línea", "Ally": "un aliado", "AllyOrEnemy": "un aliado o enemigo", "Attacker": "el atacante", "Self": "propio", "Party": "grupo"},
+}
+
+_SCHOOL_LABELS = {
+    "en": {"physical": "physical", "magic": "magic", "holy": "holy", "mixed": "mixed", "poison": "poison", "support": "support"},
+    "ru": {"physical": "физическая", "magic": "магическая", "holy": "священная", "mixed": "смешанная", "poison": "яд", "support": "поддержка"},
+    "es": {"physical": "física", "magic": "mágica", "holy": "sagrada", "mixed": "mixta", "poison": "veneno", "support": "apoyo"},
+}
+
+_KIND_LABELS = {
+    "en": {"barrier": "Barrier", "buff": "enhancement", "cleanse": "cleanse", "covenant": "Covenant", "damage": "damage", "dispel": "dispel", "heal": "healing", "hostile_effect": "hostile effect", "hot": "healing over time", "mana": "mana recovery", "parry": "Parry", "passive": "passive", "rage": "Rage", "setup": "setup", "ward": "Ward"},
+    "ru": {"barrier": "Барьер", "buff": "усиление", "cleanse": "очищение", "covenant": "Завет", "damage": "урон", "dispel": "рассеивание", "heal": "лечение", "hostile_effect": "враждебный эффект", "hot": "периодическое лечение", "mana": "восстановление маны", "parry": "Парирование", "passive": "пассивный эффект", "rage": "Ярость", "setup": "подготовка", "ward": "Защита"},
+    "es": {"barrier": "Barrera", "buff": "mejora", "cleanse": "limpieza", "covenant": "Pacto", "damage": "daño", "dispel": "disipación", "heal": "curación", "hostile_effect": "efecto hostil", "hot": "curación periódica", "mana": "recuperación de maná", "parry": "Parada", "passive": "efecto pasivo", "rage": "Furia", "setup": "preparación", "ward": "Guardia"},
+}
+
+_REJECTION_COPY = {
+    "no_points": "error_no_points",
+    "mastery_required": "error_mastery",
+    "capstone_branch_points_required": "error_capstone",
+    "max_rank": "error_max_rank",
+    "safe_hub_required": "error_safe_hub",
+}
+
 
 def _c(lang: str, key: str) -> str:
     return _COPY.get(lang, _COPY["en"])[key]
+
+
+def _label(table: dict[str, dict[str, str]], lang: str, key: str) -> str:
+    localized = table.get(lang, table["en"])
+    return localized.get(key, table["en"].get(key, key.replace("_", " ").title()))
+
+
+def _skill_profile(spec: Any, lang: str) -> str:
+    parts = [_label(_KIND_LABELS, lang, spec.kind)]
+    displayed_numbers = set()
+    if spec.power:
+        power = f"{spec.power:.2f}".removeprefix("0")
+        parts.append(f"{power}P")
+        displayed_numbers.add(f"{power}P")
+    if spec.hits > 1:
+        parts.append(f"{spec.hits} {_c(lang, 'hits')}")
+        displayed_numbers.add(str(spec.hits))
+    if spec.utility:
+        parts.append(_c(lang, "utility"))
+    parameters = []
+    for value in re.findall(r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:pp|%|[PH])?", spec.description):
+        if value not in displayed_numbers and value not in parameters:
+            parameters.append(value)
+    if parameters:
+        parts.append(f"{_c(lang, 'parameters')}: {', '.join(parameters)}")
+    return " · ".join(parts)
+
+
+def _localized_rejection(lang: str, reason: Any) -> str:
+    key = _REJECTION_COPY.get(str(reason or ""))
+    return _c(lang, key) if key else _c(lang, "stale")
 
 
 def _consume_notice(player_id: int, lang: str) -> str:
@@ -420,9 +496,9 @@ def build_skill_view(player_id: int, skill_id: str, lang: str) -> tuple[str, Inl
         escape(get_skill_desc(skill_id, lang)),
         "",
         f"{_c(lang, 'rank')}: <b>{rank}/3</b>",
-        f"{_c(lang, 'cost')}: <b>{rank_mana_cost(spec, max(1, next_rank))}</b> · {_c(lang, 'cooldown')}: <b>{spec.cooldown if spec.cooldown is not None else 'passive'}</b>",
-        f"{_c(lang, 'target')}: <b>{escape(spec.target)}</b> · {escape(spec.school or 'support')}",
-        f"{_c(lang, 'exact')}: {escape(spec.description)}",
+        f"{_c(lang, 'cost')}: <b>{rank_mana_cost(spec, max(1, next_rank))}</b> · {_c(lang, 'cooldown')}: <b>{spec.cooldown if spec.cooldown is not None else _c(lang, 'passive')}</b>",
+        f"{_c(lang, 'target')}: <b>{escape(_label(_TARGET_LABELS, lang, spec.target))}</b> · {_c(lang, 'school')}: <b>{escape(_label(_SCHOOL_LABELS, lang, spec.school or 'support'))}</b>",
+        f"{_c(lang, 'exact')}: {escape(_skill_profile(spec, lang))}",
         f"PvP: {_c(lang, 'available_pvp') if skill_id in PVP_SKILL_ALLOWLIST else _c(lang, 'pve_only')}",
     ]
     keyboard = []
@@ -446,7 +522,7 @@ def build_pvp_view(player_id: int, lang: str) -> tuple[str, InlineKeyboardMarkup
     lines = [f"⚔️ <b>{_c(lang, 'pvp')}</b>", _c(lang, "pvp_copy"), "", _c(lang, "normal"), _c(lang, "guard"), _c(lang, "power")]
     for skill_id in sorted(PVP_SKILL_ALLOWLIST - {"power_strike"}):
         learned = skill_id in ranks and SKILL_SPECS[skill_id].family == family
-        lines.append(f"{'✅' if learned else '○'} {escape(get_skill_name(skill_id, lang))} · {SKILL_SPECS[skill_id].family}")
+        lines.append(f"{'✅' if learned else '○'} {escape(get_skill_name(skill_id, lang))} · {escape(_family_name(SKILL_SPECS[skill_id].family, lang))}")
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(f"↩️ {_c(lang, 'back')}", callback_data="bv_main")]])
     return "\n".join(lines), keyboard
 
@@ -569,7 +645,15 @@ async def handle_build_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         spec = SKILL_SPECS.get(skill_id)
         issued = issue_skill_purchase_intent(user.id, spec.family if spec else "", skill_id)
         if not issued.get("success") or not issued.get("legal"):
-            await query.answer(str(issued.get("reason") or _c(lang, "stale")), show_alert=True)
+            reason = issued.get("reason")
+            if issued.get("success") and not issued.get("legal"):
+                if int(issued.get("points", 0)) < 1:
+                    reason = "no_points"
+                elif int(issued.get("mastery_level", 0)) < int(issued.get("mastery_required", 0)):
+                    reason = "mastery_required"
+                else:
+                    reason = "capstone_branch_points_required"
+            await query.answer(_localized_rejection(lang, reason), show_alert=True)
             text, keyboard = build_skill_view(user.id, skill_id, lang)
         else:
             text, _ = build_skill_view(user.id, skill_id, lang)
@@ -592,7 +676,7 @@ async def handle_build_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         family = data.removeprefix("bv_reset_")
         issued = issue_family_reset_intent(user.id, family)
         if not issued.get("success"):
-            await query.answer(str(issued.get("reason") or _c(lang, "stale")), show_alert=True)
+            await query.answer(_localized_rejection(lang, issued.get("reason")), show_alert=True)
             text, keyboard = build_family_view(user.id, family, lang)
         else:
             text = f"♻️ <b>{_c(lang, 'reset')}</b>\n{_family_name(family, lang)} · {issued['refund']} {_c(lang, 'points')}"

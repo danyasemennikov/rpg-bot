@@ -322,25 +322,52 @@ _V1_EFFECT_COPY = {
     'es': {'guard': 'Guardia', 'ward': 'Ward', 'barrier': 'Barrera', 'challenge': 'Desafiado', 'opening': 'Apertura', 'poison': 'Veneno', 'burn': 'Quemadura', 'bleed': 'Sangrado', 'resolve': 'Resolve', 'weakness': 'Debilidad', 'slow': 'Lentitud', 'chilled': 'Enfriado', 'physical_break': 'Armadura rota'},
 }
 
+_V1_ACTION_COPY = {
+    'en': {
+        'normal': 'Normal attack', 'basic': 'Enemy attack', 'basic_attack': 'Normal attack',
+        'heavy': 'Heavy attack', 'shaman': 'Shaman attack', 'priest': 'Priest attack',
+        'witch': 'Witch attack', 'fire_elemental': 'Fire attack', 'unknown': 'Combat action',
+    },
+    'ru': {
+        'normal': 'Обычная атака', 'basic': 'Атака врага', 'basic_attack': 'Обычная атака',
+        'heavy': 'Тяжёлая атака', 'shaman': 'Атака шамана', 'priest': 'Атака жреца',
+        'witch': 'Атака ведьмы', 'fire_elemental': 'Огненная атака', 'unknown': 'Боевое действие',
+    },
+    'es': {
+        'normal': 'Ataque normal', 'basic': 'Ataque enemigo', 'basic_attack': 'Ataque normal',
+        'heavy': 'Ataque pesado', 'shaman': 'Ataque del chamán', 'priest': 'Ataque del sacerdote',
+        'witch': 'Ataque de la bruja', 'fire_elemental': 'Ataque de fuego', 'unknown': 'Acción de combate',
+    },
+}
 
-def _v1_name_map(battle_state: dict) -> dict[str, str]:
+
+def _v1_name_map(battle_state: dict, lang: str) -> dict[str, str]:
     result = {}
     for actor in (battle_state.get('participant_states_v1') or battle_state.get('participants_v1') or {}).values():
         result[str(actor.get('actor_id'))] = str(actor.get('name') or actor.get('actor_id'))
     for enemy in battle_state.get('enemy_states_v1') or []:
-        result[str(enemy.get('unit_id'))] = str(enemy.get('name') or enemy.get('mob_id') or enemy.get('unit_id'))
+        mob_id = str(enemy.get('mob_id') or '')
+        result[str(enemy.get('unit_id'))] = (
+            get_mob_name(mob_id, lang)
+            if mob_id else str(enemy.get('name') or enemy.get('unit_id'))
+        )
     return result
 
 
 def _render_v1_event(event: dict, battle_state: dict, lang: str) -> str | None:
     copy = _V1_EVENT_COPY.get(lang, _V1_EVENT_COPY['en'])
-    names = _v1_name_map(battle_state)
+    names = _v1_name_map(battle_state, lang)
     actor = escape(names.get(str(event.get('actor_id')), str(event.get('actor_id') or '?')))
     target = escape(names.get(str(event.get('target_id')), str(event.get('target_id') or '?')))
     kind = str(event.get('kind') or '')
     if kind in {'direct', 'enemy_direct', 'retaliation'}:
         skill_id = str(event.get('skill_id') or event.get('behavior') or kind)
-        skill = escape(get_skill_name(skill_id, lang) if skill_id in SKILL_SPECS or skill_id == 'power_strike' else skill_id.replace('_', ' ').title())
+        if skill_id in SKILL_SPECS or skill_id == 'power_strike':
+            skill_name = get_skill_name(skill_id, lang)
+        else:
+            action_copy = _V1_ACTION_COPY.get(lang, _V1_ACTION_COPY['en'])
+            skill_name = action_copy.get(skill_id, action_copy['unknown'])
+        skill = escape(skill_name)
         if not bool(event.get('hit', True)):
             return copy['miss'].format(actor=actor, target=target, skill=skill)
         details = copy['blocked'] if event.get('blocked') else ''
@@ -354,7 +381,10 @@ def _render_v1_event(event: dict, battle_state: dict, lang: str) -> str | None:
     if kind == 'mana':
         return copy['mana'].format(target=target, amount=int(event.get('amount', 0) or 0))
     if kind == 'dot':
-        effect = _V1_EFFECT_COPY.get(lang, _V1_EFFECT_COPY['en']).get(str(event.get('effect')), str(event.get('effect') or 'DoT'))
+        effect_copy = _V1_EFFECT_COPY.get(lang, _V1_EFFECT_COPY['en'])
+        effect = effect_copy.get(str(event.get('effect')), {
+            'ru': 'Периодический эффект', 'en': 'Periodic effect', 'es': 'Efecto periódico',
+        }.get(lang, 'Periodic effect'))
         return copy['dot'].format(effect=escape(effect), target=target, amount=int(event.get('amount', 0) or 0))
     if kind == 'guard':
         return copy['guard'].format(actor=actor)
