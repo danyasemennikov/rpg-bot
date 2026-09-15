@@ -101,7 +101,13 @@ class TargetingFoundationPR2C1Tests(unittest.TestCase):
         self.assertEqual(resolve_default_player_formation_line(formation_line=' SUPPORT '), 'support')
         self.assertEqual(resolve_default_player_formation_line(offhand_profile='shield'), 'front')
         self.assertEqual(resolve_default_player_formation_line(weapon_profile='holy_staff'), 'support')
-        self.assertEqual(resolve_default_player_formation_line(weapon_profile='holy_rod'), 'support')
+        self.assertEqual(resolve_default_player_formation_line(weapon_profile='holy_rod'), 'melee')
+        self.assertEqual(
+            resolve_default_player_formation_line(
+                weapon_profile='holy_rod', offhand_profile='shield',
+            ),
+            'front',
+        )
         self.assertEqual(resolve_default_player_formation_line(weapon_profile='tome'), 'support')
         self.assertEqual(resolve_default_player_formation_line(weapon_profile='bow'), 'ranged')
         self.assertEqual(resolve_default_player_formation_line(weapon_profile='wand'), 'ranged')

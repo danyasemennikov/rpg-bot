@@ -59,6 +59,23 @@ def _encounter_state(encounter_id: str) -> dict:
     return json.loads(row["battle_state_json"])
 
 
+def _set_encounter_combat_seed(encounter_id: str, seed: str) -> None:
+    """Pin production combat RNG for assertions that require a landed hit."""
+    state = _encounter_state(encounter_id)
+    state["combat_seed"] = seed
+    conn = get_connection()
+    try:
+        conn.execute(
+            """UPDATE pve_encounters
+               SET battle_state_json=?, combat_seed=?
+               WHERE encounter_id=?""",
+            (json.dumps(state), seed, encounter_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _shortest_route(origin: str, destination: str) -> list[str]:
     if origin == destination:
         return []
@@ -540,6 +557,7 @@ async def _exercise_dawn_enchanter_group(
     encounter_id, members, mastery_before = await _start_group(
         dawn, [enchanter], mob_id="goblin_shaman",
     )
+    _set_encounter_combat_seed(encounter_id, "dawn-enchanter-production-journey-v1")
     state = _encounter_state(encounter_id)
     enemy_id = str(state["enemy_states_v1"][0]["unit_id"])
     before = len(_events(state))
