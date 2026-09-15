@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from game.build_contract import (
     FAMILIES,
     MAX_MASTERY,
@@ -42,3 +44,21 @@ def test_utility_rank_discount_and_ordinary_costs_are_distinct():
     ordinary = SKILL_SPECS["fireball"]
     assert [rank_mana_cost(utility, rank) for rank in (1, 2, 3)] == [10, 8, 6]
     assert [rank_mana_cost(ordinary, rank) for rank in (1, 2, 3)] == [ordinary.mana] * 3
+
+
+def test_delivery_report_indexes_every_skill_and_frozen_g_through_i_area():
+    report = (
+        Path(__file__).parents[1]
+        / "docs"
+        / "CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md"
+    ).read_text(encoding="utf-8")
+    assert all(f"`{skill_id}`" in report for skill_id in SKILL_SPECS)
+    assert "Power Strike" in report
+    assert all(
+        f"| {section} " in report
+        for section in (
+            "G1", "G2", "G3", "G4", "G5", "G6", "G7",
+            "H1", "H2", "H3", "H4",
+            "I1", "I2", "I3", "I4",
+        )
+    )

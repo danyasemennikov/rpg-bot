@@ -1,5 +1,11 @@
 # PVP_RULESET_FOUNDATION.md
 
+> **Current adapter note:** Character Builds & Combat Identity V1 preserves this
+> document's outer engagement, crime, loss and loot policy. Its shared-combat adapter
+> intentionally supports only normal attack, Guard, Power Strike, Quick Shot, Fireball
+> and Smite; it does not claim full group PvP or all-branch PvP balance. See
+> `CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md` for the implemented boundary and evidence.
+
 ## 1. Назначение документа
 
 Этот файл фиксирует **базовый ruleset PvP** для RPG-бота как будущую основу PvP-документации и дальнейшей реализации.

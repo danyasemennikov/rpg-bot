@@ -1,5 +1,12 @@
 # COMBAT_CORE_V1_SPEC.md
 
+> **Current branch authority:** This document preserves the original combat-core
+> architecture intent. Character Builds & Combat Identity V1 now supplies the active
+> shared actor snapshot/evaluator, persistent participant/enemy state, durable orders
+> and restart behavior described in `CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md`. Statements
+> below that call group combat, targeting, effects, or unified actions “future” are
+> historical and do not override the implemented V1 contract.
+
 ## Статус документа
 
 Это рабочая спецификация новой основы боевой системы для RPG-бота.

@@ -4,6 +4,12 @@
 
 Этот файл — **живой status-layer проекта**.
 
+> **Current branch review note:** `CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md`
+> documents a complete 10-family / 20-branch / 100-skill implementation pending
+> Draft PR review. It is not confirmed merged state yet. The older roadmap and
+> “not merged” statements below describe the historical main baseline and must not
+> be used to override that branch's frozen implementation contract or runtime.
+
 Он нужен для того, чтобы:
 - быстро понять, что **точно смержено**;
 - не путать confirmed status со старыми roadmap-фразами в исторических документах;

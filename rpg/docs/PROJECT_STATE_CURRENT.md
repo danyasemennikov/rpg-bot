@@ -4,6 +4,31 @@ This file is the source of truth for the currently confirmed merged state of the
 
 Do not record planned, discussed, or unmerged work as confirmed state.
 
+## Character Builds & Combat Identity V1 — implemented in this PR, pending review
+
+This subsection describes the current branch for review. It does not change the
+confirmed merged baseline below until the Draft PR is accepted and merged.
+
+- One shared actor snapshot and action/effect evaluator now serve durable PvE,
+  the bounded PvP adapter, and production-aligned simulations.
+- The canonical catalogue contains 10 families, 20 distinct branches and 100
+  three-rank skills. Mastery is family-local, reaches M20, and preserves exact
+  points through learning, level-ups, resets and migration.
+- PvE persists each real participant and enemy unit, supports named ally/party
+  effects, explicit enemy AI and mixed source rosters, and recovers committed
+  orders/side results after runtime loss.
+- PvP keeps existing engagement/crime/loss policy and enables only normal attack,
+  Guard, Power Strike, Quick Shot, Fireball and Smite through the shared evaluator.
+- `/build`, skill previews, combat feedback, mutation errors and migration notices
+  have production route evidence in ru/en/es.
+- Migration is additive, archives old build state, cancels incompatible live old-rule
+  encounters explicitly, preserves PR229/PR230 state, and is idempotent.
+- The checked 200-seed evidence covers all 20 accessibility rows, 20 role gates and
+  240 encounter-matrix results. Ten direct-power changes are the only J5 tuning.
+
+See [the implementation, rollout, coverage, failure-injection, production-journey,
+balance and regression report](CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md).
+
 ## Itemization, Regional Loot & Reliable Gear Progression V1 — implemented in this PR, pending review
 
 This branch adds the exact 32-item field catalogue, three deterministic vendors, five regional pools, persisted dry-streak guarantees, instance-first equipment comparison and mutation flows, canonical weapon-family mastery, and a two-transaction versioned PvE reward settlement with bounded startup/player recovery. It also activates resolved armor/offhand base defense exactly once and adds ru/en/es catalogue, goal, source, guild, receipt, and recovery UX.

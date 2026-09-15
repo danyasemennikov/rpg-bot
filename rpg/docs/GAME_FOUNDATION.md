@@ -1,5 +1,11 @@
 # GAME_FOUNDATION.md
 
+> **Implementation note:** The current Character Builds & Combat Identity V1 branch
+> realizes this document's weapon-defined, classless build philosophy through the
+> frozen rules summarized in `CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md`. Where this
+> foundation's future-looking implementation order or provisional combat details
+> differ, the V1 report and runtime catalogue/evaluator describe the branch under review.
+
 ## 1. Назначение документа
 
 Этот файл — рабочая спецификация RPG-бота.
