@@ -496,18 +496,24 @@ def _migrate_player(
 def migrate_character_builds_v1(*, dry_run: bool = False) -> dict[str, Any]:
     """Idempotently activate the frozen rules after old settlements recover."""
     if not dry_run:
-        from game.pve_reward_settlement import recover_prepared_settlements, review_ambiguous_legacy_victories
+        probe = get_connection()
+        try:
+            has_pve_encounters = _table_exists(probe, "pve_encounters")
+        finally:
+            probe.close()
+        if has_pve_encounters:
+            from game.pve_reward_settlement import recover_prepared_settlements, review_ambiguous_legacy_victories
 
-        review_ambiguous_legacy_victories()
-        for _batch in range(1000):
-            recovered = recover_prepared_settlements(limit=100)
-            failures = [item for item in recovered if item.get("status") == "retryable"]
-            if failures:
-                raise BuildRejected("legacy_settlement_recovery_failed")
-            if len(recovered) < 100:
-                break
-        else:
-            raise BuildRejected("legacy_settlement_recovery_not_drained")
+            review_ambiguous_legacy_victories()
+            for _batch in range(1000):
+                recovered = recover_prepared_settlements(limit=100)
+                failures = [item for item in recovered if item.get("status") == "retryable"]
+                if failures:
+                    raise BuildRejected("legacy_settlement_recovery_failed")
+                if len(recovered) < 100:
+                    break
+            else:
+                raise BuildRejected("legacy_settlement_recovery_not_drained")
     conn = get_connection()
     try:
         conn.execute("BEGIN IMMEDIATE")
