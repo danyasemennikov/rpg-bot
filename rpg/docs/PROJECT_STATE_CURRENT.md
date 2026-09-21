@@ -21,26 +21,25 @@ confirmed merged baseline below until the Draft PR is accepted and merged.
   Guard, Power Strike, Quick Shot, Fireball and Smite through the shared evaluator.
 - `/build`, skill previews, combat feedback, mutation errors and migration notices
   have production route evidence in ru/en/es.
-- Migration is additive, archives old build state, cancels incompatible live old-rule
-  encounters explicitly, preserves PR229/PR230 state, and is idempotent.
+- Migration first drains recoverable legacy settlements, quarantines invalid player
+  ledgers independently, then cancels incompatible live old-rule encounters explicitly;
+  it preserves the merged PR229/PR230 state and is idempotent.
 - The checked 200-seed evidence covers all 20 accessibility rows, 20 role gates and
-  240 encounter-matrix results. Ten direct-power changes are the only J5 tuning.
+  240 encounter-matrix results, plus 100 full progression/loadout comparisons and
+  four legal cross-branch mixes. Ten direct-power changes are the only J5 tuning.
 
 See [the implementation, rollout, coverage, failure-injection, production-journey,
 balance and regression report](CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md).
 
-## Itemization, Regional Loot & Reliable Gear Progression V1 — implemented in this PR, pending review
+## Itemization, Regional Loot & Reliable Gear Progression V1 — merged as PR230
 
-This branch adds the exact 32-item field catalogue, three deterministic vendors, five regional pools, persisted dry-streak guarantees, instance-first equipment comparison and mutation flows, canonical weapon-family mastery, and a two-transaction versioned PvE reward settlement with bounded startup/player recovery. It also activates resolved armor/offhand base defense exactly once and adds ru/en/es catalogue, goal, source, guild, receipt, and recovery UX.
+PR230 added the exact 32-item field catalogue, three deterministic vendors, five regional pools, persisted dry-streak guarantees, instance-first equipment comparison and mutation flows, canonical weapon-family mastery, and a two-transaction versioned PvE reward settlement with bounded startup/player recovery. It also activated resolved armor/offhand base defense exactly once and added ru/en/es catalogue, goal, source, guild, receipt, and recovery UX.
 
-The implementation is additive and preserves existing gear and legacy active encounters. Ambiguous pre-V1 resolving victories are quarantined for owner review without automatic replay. See [the branch specification, acquisition evidence, migration behavior, settlement guarantees, and risks](FIELD_LOOT_AND_GEAR_PROGRESSION_V1.md).
+The merged implementation is additive and preserves existing gear and legacy active encounters. Ambiguous pre-V1 resolving victories are quarantined for owner review without automatic replay. See [the specification, acquisition evidence, migration behavior, settlement guarantees, and risks](FIELD_LOOT_AND_GEAR_PROGRESSION_V1.md).
 
-The confirmed merged baseline below is unchanged until this Epic PR is reviewed and merged.
+## Playable Alpha Vertical Slice V1 — merged as PR229
 
-## Playable Alpha Vertical Slice V1 — implemented in this PR, pending merge
-
-This subsection describes the branch implementation for review. The confirmed merged
-baseline below remains PR228 until Producer accepts and merges this PR.
+This subsection records the PR229 implementation now present in the confirmed merged baseline.
 
 - Production startup now runs schema initialization and inserts missing static items;
   legacy catalogs missing `wood_common` are reconciled without replacing player data.
@@ -64,6 +63,8 @@ baseline below remains PR228 until Producer accepts and merges this PR.
 ## Confirmed merged baseline
 
 Last updated after merge:
+- PR: PR230 / Itemization, Regional Loot & Reliable Gear Progression V1
+- PR: PR229 / Playable Alpha Vertical Slice V1
 - PR: PR228 / Gathering Profession Progression Baseline
 - PR: PR227 / Gathering Profession Persistence & Runtime Access Baseline
 - PR: PR226 / Alpha Core Loop Integration Baseline
@@ -75,8 +76,8 @@ Last updated after merge:
 - PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 - PR: Codex Workflow Restoration (Docs only)
 - PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
-- Prior confirmed Status: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
+- Status: PR230 / Itemization, Regional Loot & Reliable Gear Progression V1
+- Prior confirmed Status: PR229 / Playable Alpha Vertical Slice V1
 - Historical Status: Balance V2 PR9 Availability-aware Profile Policy Selection
 - Latest simulation-policy state: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
 - Latest gameplay/balance diagnostic state: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression

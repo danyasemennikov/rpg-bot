@@ -29,6 +29,46 @@ def test_all_frozen_skills_have_localized_name_and_description():
             assert get_skill_desc(skill_id, lang)
 
 
+def test_corrected_skill_descriptions_preserve_canonical_semantics_in_every_locale():
+    required_fragments = {
+        "en": {
+            "power_strike": ("1.25P", "equipped weapon"),
+            "counter": ("PvE", "0.40P", "Ward", "Parry"),
+            "envenom_blades": ("normal attack", "0.25P", "3 ticks"),
+            "shadow_chain": ("1.90P", "0.80P", "+40", "1 opportunity"),
+            "absolute_zero": ("selected active target", "Slow", "Chilled"),
+            "resurrection": ("exactly 0.80H", "once per encounter"),
+            "executioners_focus": ("+25%", "3 percentage points"),
+            "masters_sequence": ("2.05P", "0.55P", "25% Ward"),
+        },
+        "ru": {
+            "power_strike": ("1,25P", "экипированного оружия"),
+            "counter": ("PvE", "0,40P", "Защита", "Парирование"),
+            "envenom_blades": ("обычную атаку", "0,25P", "3 тика"),
+            "shadow_chain": ("1,90P", "0,80P", "+40", "1 возможность"),
+            "absolute_zero": ("выбранной активной цели", "Замедление", "Охлаждение"),
+            "resurrection": ("ровно в 0,80H", "один раз за бой"),
+            "executioners_focus": ("+25%", "+3 п.п."),
+            "masters_sequence": ("2,05P", "0,55P", "Защиту 25%"),
+        },
+        "es": {
+            "power_strike": ("1,25P", "arma equipada"),
+            "counter": ("PvE", "0,40P", "Guardia", "Parada"),
+            "envenom_blades": ("ataque normal", "0,25P", "3 pulsos"),
+            "shadow_chain": ("1,90P", "0,80P", "+40", "1 oportunidad"),
+            "absolute_zero": ("objetivo activo seleccionado", "Ralentización", "Enfriado"),
+            "resurrection": ("exactamente en 0,80H", "una vez por encuentro"),
+            "executioners_focus": ("+25%", "+3 puntos porcentuales"),
+            "masters_sequence": ("2,05P", "0,55P", "Guarda del 25%"),
+        },
+    }
+    for lang, skills in required_fragments.items():
+        for skill_id, fragments in skills.items():
+            description = get_skill_desc(skill_id, lang)
+            missing = [fragment for fragment in fragments if fragment not in description]
+            assert not missing, (lang, skill_id, missing, description)
+
+
 def test_every_frozen_skill_preview_localizes_structured_contract_fields():
     migrate_character_builds_v1()
     assert set(_TARGET_LABELS["en"]) == {spec.target for spec in SKILL_SPECS.values()}

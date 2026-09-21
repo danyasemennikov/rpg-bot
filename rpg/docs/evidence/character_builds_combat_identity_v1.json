@@ -2,7 +2,7 @@
   "schema_version": 1,
   "rules_version": "character_builds_combat_identity_v1",
   "base_sha": "c8768626e388babfed09adac83ddaf23f0daee71",
-  "head_sha": "60225c2a1e605ce604c09da7f28c24188d08cb62",
+  "head_sha": "4297bb9fe46487fda1e32f8945c32cdcd01f2d7c",
   "rng": {
     "paired_seeds": [
       0,
@@ -3299,13 +3299,15 @@
           "shield_bash": 3,
           "parry": 3,
           "counter": 3,
-          "driving_slash": 2,
+          "driving_slash": 3,
           "expose_guard": 1,
           "press_the_line": 1,
-          "punishing_cut": 1,
-          "vanguard_surge": 1
+          "punishing_cut": 1
         },
         "points_spent": 21,
+        "capstones": [
+          "counter"
+        ],
         "validation_errors": []
       },
       {
@@ -3316,13 +3318,15 @@
           "crippling_venom": 3,
           "widows_kiss": 3,
           "rupture_toxins": 3,
-          "smoke_bomb": 2,
+          "smoke_bomb": 3,
           "quick_slice": 1,
           "feint_step": 1,
-          "backstab": 1,
-          "shadow_chain": 1
+          "backstab": 1
         },
         "points_spent": 21,
+        "capstones": [
+          "rupture_toxins"
+        ],
         "validation_errors": []
       },
       {
@@ -3333,13 +3337,15 @@
           "flame_wave": 3,
           "arcane_lance": 3,
           "cataclysm": 3,
-          "frost_bolt": 2,
+          "frost_bolt": 3,
           "ice_shackles": 1,
           "mana_shield": 1,
-          "shatter": 1,
-          "absolute_zero": 1
+          "shatter": 1
         },
         "points_spent": 21,
+        "capstones": [
+          "cataclysm"
+        ],
         "validation_errors": []
       },
       {
@@ -3350,14 +3356,5939 @@
           "cleanse": 3,
           "blessing": 3,
           "resurrection": 3,
-          "smite": 2,
+          "smite": 3,
           "judgment_mark": 1,
           "radiant_ward": 1,
-          "sanctified_burst": 1,
-          "halo_of_dawn": 1
+          "sanctified_burst": 1
         },
         "points_spent": 21,
+        "capstones": [
+          "resurrection"
+        ],
         "validation_errors": []
+      }
+    ],
+    "progression_comparison_count": 100,
+    "progression_comparisons": [
+      {
+        "family": "sword_1h",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 154,
+            "max_mana": 62,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 6,
+            "magic_defense": 2,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 154,
+            "max_mana": 62,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 6,
+            "magic_defense": 2,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 194,
+            "max_mana": 62,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 30,
+            "magic_defense": 2,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 194,
+            "max_mana": 62,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 30,
+            "magic_defense": 2,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 1,
+              "defensive_stance": 1,
+              "shield_bash": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 208,
+            "max_mana": 74,
+            "power_range": [
+              32,
+              37
+            ],
+            "physical_defense": 13,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 1,
+              "expose_guard": 1,
+              "press_the_line": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 208,
+            "max_mana": 74,
+            "power_range": [
+              32,
+              37
+            ],
+            "physical_defense": 13,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 1,
+              "defensive_stance": 1,
+              "shield_bash": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 248,
+            "max_mana": 74,
+            "power_range": [
+              32,
+              37
+            ],
+            "physical_defense": 37,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 1,
+              "expose_guard": 1,
+              "press_the_line": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 248,
+            "max_mana": 74,
+            "power_range": [
+              32,
+              37
+            ],
+            "physical_defense": 37,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 2,
+              "defensive_stance": 2,
+              "shield_bash": 2,
+              "parry": 2,
+              "counter": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 262,
+            "max_mana": 98,
+            "power_range": [
+              44,
+              49
+            ],
+            "physical_defense": 19,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 2,
+              "expose_guard": 2,
+              "press_the_line": 2,
+              "punishing_cut": 2,
+              "vanguard_surge": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 262,
+            "max_mana": 98,
+            "power_range": [
+              44,
+              49
+            ],
+            "physical_defense": 19,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 2,
+              "defensive_stance": 2,
+              "shield_bash": 2,
+              "parry": 2,
+              "counter": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 302,
+            "max_mana": 98,
+            "power_range": [
+              44,
+              49
+            ],
+            "physical_defense": 43,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 2,
+              "expose_guard": 2,
+              "press_the_line": 2,
+              "punishing_cut": 2,
+              "vanguard_surge": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 302,
+            "max_mana": 98,
+            "power_range": [
+              44,
+              49
+            ],
+            "physical_defense": 43,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 3,
+              "defensive_stance": 3,
+              "shield_bash": 3,
+              "parry": 3,
+              "counter": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 370,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              63
+            ],
+            "physical_defense": 33,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 3,
+              "expose_guard": 3,
+              "press_the_line": 3,
+              "punishing_cut": 3,
+              "vanguard_surge": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 370,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              63
+            ],
+            "physical_defense": 33,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 3,
+              "defensive_stance": 3,
+              "shield_bash": 3,
+              "parry": 3,
+              "counter": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 410,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              63
+            ],
+            "physical_defense": 57,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 3,
+              "expose_guard": 3,
+              "press_the_line": 3,
+              "punishing_cut": 3,
+              "vanguard_surge": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 410,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              63
+            ],
+            "physical_defense": 57,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 3,
+              "defensive_stance": 3,
+              "shield_bash": 3,
+              "parry": 3,
+              "counter": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 496,
+            "max_mana": 146,
+            "power_range": [
+              78,
+              83
+            ],
+            "physical_defense": 48,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 3,
+              "expose_guard": 3,
+              "press_the_line": 3,
+              "punishing_cut": 3,
+              "vanguard_surge": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_1h"
+            ],
+            "max_hp": 496,
+            "max_mana": 146,
+            "power_range": [
+              78,
+              83
+            ],
+            "physical_defense": 48,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_1h",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "guardian",
+            "skill_ranks": {
+              "sword_rush": 3,
+              "defensive_stance": 3,
+              "shield_bash": 3,
+              "parry": 3,
+              "counter": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 536,
+            "max_mana": 146,
+            "power_range": [
+              78,
+              83
+            ],
+            "physical_defense": 72,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "vanguard",
+            "skill_ranks": {
+              "driving_slash": 3,
+              "expose_guard": 3,
+              "press_the_line": 3,
+              "punishing_cut": 3,
+              "vanguard_surge": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_1h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves",
+              "field_shield"
+            ],
+            "max_hp": 536,
+            "max_mana": 146,
+            "power_range": [
+              78,
+              83
+            ],
+            "physical_defense": 72,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              28,
+              35
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              28,
+              35
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 168,
+            "max_mana": 74,
+            "power_range": [
+              28,
+              35
+            ],
+            "physical_defense": 24,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 168,
+            "max_mana": 74,
+            "power_range": [
+              28,
+              35
+            ],
+            "physical_defense": 24,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 1,
+              "armor_split": 1,
+              "executioners_focus": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              38,
+              45
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 1,
+              "twin_cut": 1,
+              "riposte_step": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              38,
+              45
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 1,
+              "armor_split": 1,
+              "executioners_focus": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 204,
+            "max_mana": 74,
+            "power_range": [
+              38,
+              45
+            ],
+            "physical_defense": 28,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 1,
+              "twin_cut": 1,
+              "riposte_step": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 204,
+            "max_mana": 74,
+            "power_range": [
+              38,
+              45
+            ],
+            "physical_defense": 28,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 2,
+              "armor_split": 2,
+              "executioners_focus": 2,
+              "cleave_through": 2,
+              "executioners_stroke": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              51,
+              58
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 2,
+              "twin_cut": 2,
+              "riposte_step": 2,
+              "flowing_combo": 2,
+              "masters_sequence": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              51,
+              58
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 2,
+              "armor_split": 2,
+              "executioners_focus": 2,
+              "cleave_through": 2,
+              "executioners_stroke": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 240,
+            "max_mana": 98,
+            "power_range": [
+              51,
+              58
+            ],
+            "physical_defense": 33,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 2,
+              "twin_cut": 2,
+              "riposte_step": 2,
+              "flowing_combo": 2,
+              "masters_sequence": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 240,
+            "max_mana": 98,
+            "power_range": [
+              51,
+              58
+            ],
+            "physical_defense": 33,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 3,
+              "armor_split": 3,
+              "executioners_focus": 3,
+              "cleave_through": 3,
+              "executioners_stroke": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              69,
+              76
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 3,
+              "twin_cut": 3,
+              "riposte_step": 3,
+              "flowing_combo": 3,
+              "masters_sequence": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              69,
+              76
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 3,
+              "armor_split": 3,
+              "executioners_focus": 3,
+              "cleave_through": 3,
+              "executioners_stroke": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 294,
+            "max_mana": 122,
+            "power_range": [
+              69,
+              76
+            ],
+            "physical_defense": 39,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 3,
+              "twin_cut": 3,
+              "riposte_step": 3,
+              "flowing_combo": 3,
+              "masters_sequence": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 294,
+            "max_mana": 122,
+            "power_range": [
+              69,
+              76
+            ],
+            "physical_defense": 39,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 3,
+              "armor_split": 3,
+              "executioners_focus": 3,
+              "cleave_through": 3,
+              "executioners_stroke": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              95,
+              102
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 3,
+              "twin_cut": 3,
+              "riposte_step": 3,
+              "flowing_combo": 3,
+              "masters_sequence": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_2h"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              95,
+              102
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "sword_2h",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "executioner",
+            "skill_ranks": {
+              "heavy_swing": 3,
+              "armor_split": 3,
+              "executioners_focus": 3,
+              "cleave_through": 3,
+              "executioners_stroke": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 348,
+            "max_mana": 146,
+            "power_range": [
+              95,
+              102
+            ],
+            "physical_defense": 46,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "blademaster",
+            "skill_ranks": {
+              "battle_stance": 3,
+              "twin_cut": 3,
+              "riposte_step": 3,
+              "flowing_combo": 3,
+              "masters_sequence": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_sword_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 348,
+            "max_mana": 146,
+            "power_range": [
+              95,
+              102
+            ],
+            "physical_defense": 46,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              31,
+              39
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              31,
+              39
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 168,
+            "max_mana": 74,
+            "power_range": [
+              31,
+              39
+            ],
+            "physical_defense": 24,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 168,
+            "max_mana": 74,
+            "power_range": [
+              31,
+              39
+            ],
+            "physical_defense": 24,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 1,
+              "savage_chop": 1,
+              "blooded_resolve": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              44,
+              52
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 1,
+              "sunder_armor": 1,
+              "brutal_overhead": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              44,
+              52
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 1,
+              "savage_chop": 1,
+              "blooded_resolve": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 204,
+            "max_mana": 74,
+            "power_range": [
+              44,
+              52
+            ],
+            "physical_defense": 28,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 1,
+              "sunder_armor": 1,
+              "brutal_overhead": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 204,
+            "max_mana": 74,
+            "power_range": [
+              44,
+              52
+            ],
+            "physical_defense": 28,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 2,
+              "savage_chop": 2,
+              "blooded_resolve": 2,
+              "frenzy_chain": 2,
+              "last_roar": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              59,
+              67
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 2,
+              "sunder_armor": 2,
+              "brutal_overhead": 2,
+              "reopen_wounds": 2,
+              "ravage": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              59,
+              67
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 2,
+              "savage_chop": 2,
+              "blooded_resolve": 2,
+              "frenzy_chain": 2,
+              "last_roar": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 240,
+            "max_mana": 98,
+            "power_range": [
+              59,
+              67
+            ],
+            "physical_defense": 33,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 2,
+              "sunder_armor": 2,
+              "brutal_overhead": 2,
+              "reopen_wounds": 2,
+              "ravage": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 240,
+            "max_mana": 98,
+            "power_range": [
+              59,
+              67
+            ],
+            "physical_defense": 33,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 3,
+              "savage_chop": 3,
+              "blooded_resolve": 3,
+              "frenzy_chain": 3,
+              "last_roar": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              81,
+              89
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 3,
+              "sunder_armor": 3,
+              "brutal_overhead": 3,
+              "reopen_wounds": 3,
+              "ravage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              81,
+              89
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 3,
+              "savage_chop": 3,
+              "blooded_resolve": 3,
+              "frenzy_chain": 3,
+              "last_roar": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 294,
+            "max_mana": 122,
+            "power_range": [
+              81,
+              89
+            ],
+            "physical_defense": 39,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 3,
+              "sunder_armor": 3,
+              "brutal_overhead": 3,
+              "reopen_wounds": 3,
+              "ravage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 294,
+            "max_mana": 122,
+            "power_range": [
+              81,
+              89
+            ],
+            "physical_defense": 39,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 3,
+              "savage_chop": 3,
+              "blooded_resolve": 3,
+              "frenzy_chain": 3,
+              "last_roar": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              111,
+              119
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 3,
+              "sunder_armor": 3,
+              "brutal_overhead": 3,
+              "reopen_wounds": 3,
+              "ravage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_axe_2h"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              111,
+              119
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "axe_2h",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "berserker",
+            "skill_ranks": {
+              "rage_call": 3,
+              "savage_chop": 3,
+              "blooded_resolve": 3,
+              "frenzy_chain": 3,
+              "last_roar": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 348,
+            "max_mana": 146,
+            "power_range": [
+              111,
+              119
+            ],
+            "physical_defense": 46,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ravager",
+            "skill_ranks": {
+              "bleeding_cut": 3,
+              "sunder_armor": 3,
+              "brutal_overhead": 3,
+              "reopen_wounds": 3,
+              "ravage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_axe_2h",
+              "field_heavy_helmet",
+              "field_heavy_chest",
+              "field_heavy_legs",
+              "field_heavy_boots",
+              "field_heavy_gloves"
+            ],
+            "max_hp": 348,
+            "max_mana": 146,
+            "power_range": [
+              111,
+              119
+            ],
+            "physical_defense": 46,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              19,
+              24
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              19,
+              24
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              19,
+              24
+            ],
+            "physical_defense": 18,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              19,
+              24
+            ],
+            "physical_defense": 18,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 1,
+              "toxic_cut": 1,
+              "crippling_venom": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              27,
+              32
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 1,
+              "quick_slice": 1,
+              "feint_step": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              27,
+              32
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 1,
+              "toxic_cut": 1,
+              "crippling_venom": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              27,
+              32
+            ],
+            "physical_defense": 22,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 1,
+              "quick_slice": 1,
+              "feint_step": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              27,
+              32
+            ],
+            "physical_defense": 22,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 2,
+              "toxic_cut": 2,
+              "crippling_venom": 2,
+              "widows_kiss": 2,
+              "rupture_toxins": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              38,
+              43
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 2,
+              "quick_slice": 2,
+              "feint_step": 2,
+              "backstab": 2,
+              "shadow_chain": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              38,
+              43
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 2,
+              "toxic_cut": 2,
+              "crippling_venom": 2,
+              "widows_kiss": 2,
+              "rupture_toxins": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              38,
+              43
+            ],
+            "physical_defense": 27,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 2,
+              "quick_slice": 2,
+              "feint_step": 2,
+              "backstab": 2,
+              "shadow_chain": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              38,
+              43
+            ],
+            "physical_defense": 27,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 3,
+              "toxic_cut": 3,
+              "crippling_venom": 3,
+              "widows_kiss": 3,
+              "rupture_toxins": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              54,
+              59
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 3,
+              "quick_slice": 3,
+              "feint_step": 3,
+              "backstab": 3,
+              "shadow_chain": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              54,
+              59
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 3,
+              "toxic_cut": 3,
+              "crippling_venom": 3,
+              "widows_kiss": 3,
+              "rupture_toxins": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              54,
+              59
+            ],
+            "physical_defense": 33,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 3,
+              "quick_slice": 3,
+              "feint_step": 3,
+              "backstab": 3,
+              "shadow_chain": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              54,
+              59
+            ],
+            "physical_defense": 33,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 3,
+              "toxic_cut": 3,
+              "crippling_venom": 3,
+              "widows_kiss": 3,
+              "rupture_toxins": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              76,
+              81
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 3,
+              "quick_slice": 3,
+              "feint_step": 3,
+              "backstab": 3,
+              "shadow_chain": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_daggers"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              76,
+              81
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "daggers",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "venom",
+            "skill_ranks": {
+              "envenom_blades": 3,
+              "toxic_cut": 3,
+              "crippling_venom": 3,
+              "widows_kiss": 3,
+              "rupture_toxins": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              76,
+              81
+            ],
+            "physical_defense": 40,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "shadow",
+            "skill_ranks": {
+              "smoke_bomb": 3,
+              "quick_slice": 3,
+              "feint_step": 3,
+              "backstab": 3,
+              "shadow_chain": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_daggers",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              76,
+              81
+            ],
+            "physical_defense": 40,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              21,
+              27
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              21,
+              27
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              21,
+              27
+            ],
+            "physical_defense": 18,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              21,
+              27
+            ],
+            "physical_defense": 18,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 1,
+              "aimed_shot": 1,
+              "steady_aim": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              30,
+              36
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 1,
+              "hamstring_arrow": 1,
+              "reposition": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              30,
+              36
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 1,
+              "aimed_shot": 1,
+              "steady_aim": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              30,
+              36
+            ],
+            "physical_defense": 22,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 1,
+              "hamstring_arrow": 1,
+              "reposition": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              30,
+              36
+            ],
+            "physical_defense": 22,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 2,
+              "aimed_shot": 2,
+              "steady_aim": 2,
+              "piercing_arrow": 2,
+              "deadeye": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              42,
+              48
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 2,
+              "hamstring_arrow": 2,
+              "reposition": 2,
+              "volley_step": 2,
+              "rain_of_barbs": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              42,
+              48
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 2,
+              "aimed_shot": 2,
+              "steady_aim": 2,
+              "piercing_arrow": 2,
+              "deadeye": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              42,
+              48
+            ],
+            "physical_defense": 27,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 2,
+              "hamstring_arrow": 2,
+              "reposition": 2,
+              "volley_step": 2,
+              "rain_of_barbs": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              42,
+              48
+            ],
+            "physical_defense": 27,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 3,
+              "aimed_shot": 3,
+              "steady_aim": 3,
+              "piercing_arrow": 3,
+              "deadeye": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              64
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 3,
+              "hamstring_arrow": 3,
+              "reposition": 3,
+              "volley_step": 3,
+              "rain_of_barbs": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              64
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 3,
+              "aimed_shot": 3,
+              "steady_aim": 3,
+              "piercing_arrow": 3,
+              "deadeye": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              64
+            ],
+            "physical_defense": 33,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 3,
+              "hamstring_arrow": 3,
+              "reposition": 3,
+              "volley_step": 3,
+              "rain_of_barbs": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              58,
+              64
+            ],
+            "physical_defense": 33,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 3,
+              "aimed_shot": 3,
+              "steady_aim": 3,
+              "piercing_arrow": 3,
+              "deadeye": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              81,
+              87
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 3,
+              "hamstring_arrow": 3,
+              "reposition": 3,
+              "volley_step": 3,
+              "rain_of_barbs": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_bow"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              81,
+              87
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "bow",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "sniper",
+            "skill_ranks": {
+              "hunters_mark": 3,
+              "aimed_shot": 3,
+              "steady_aim": 3,
+              "piercing_arrow": 3,
+              "deadeye": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              81,
+              87
+            ],
+            "physical_defense": 40,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "ranger",
+            "skill_ranks": {
+              "quick_shot": 3,
+              "hamstring_arrow": 3,
+              "reposition": 3,
+              "volley_step": 3,
+              "rain_of_barbs": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_bow",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              81,
+              87
+            ],
+            "physical_defense": 40,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 136,
+            "max_mana": 114,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 13,
+            "magic_defense": 10,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 136,
+            "max_mana": 114,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 13,
+            "magic_defense": 10,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 1,
+              "arcane_surge": 1,
+              "flame_wave": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              35,
+              40
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 1,
+              "ice_shackles": 1,
+              "mana_shield": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              35,
+              40
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 1,
+              "arcane_surge": 1,
+              "flame_wave": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 172,
+            "max_mana": 114,
+            "power_range": [
+              35,
+              40
+            ],
+            "physical_defense": 17,
+            "magic_defense": 10,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 1,
+              "ice_shackles": 1,
+              "mana_shield": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 172,
+            "max_mana": 114,
+            "power_range": [
+              35,
+              40
+            ],
+            "physical_defense": 17,
+            "magic_defense": 10,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 2,
+              "arcane_surge": 2,
+              "flame_wave": 2,
+              "arcane_lance": 2,
+              "cataclysm": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              51,
+              56
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 2,
+              "ice_shackles": 2,
+              "mana_shield": 2,
+              "shatter": 2,
+              "absolute_zero": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              51,
+              56
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 2,
+              "arcane_surge": 2,
+              "flame_wave": 2,
+              "arcane_lance": 2,
+              "cataclysm": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 208,
+            "max_mana": 138,
+            "power_range": [
+              52,
+              57
+            ],
+            "physical_defense": 22,
+            "magic_defense": 14,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 2,
+              "ice_shackles": 2,
+              "mana_shield": 2,
+              "shatter": 2,
+              "absolute_zero": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 208,
+            "max_mana": 138,
+            "power_range": [
+              52,
+              57
+            ],
+            "physical_defense": 22,
+            "magic_defense": 14,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 3,
+              "arcane_surge": 3,
+              "flame_wave": 3,
+              "arcane_lance": 3,
+              "cataclysm": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              72,
+              77
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 3,
+              "ice_shackles": 3,
+              "mana_shield": 3,
+              "shatter": 3,
+              "absolute_zero": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              72,
+              77
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 3,
+              "arcane_surge": 3,
+              "flame_wave": 3,
+              "arcane_lance": 3,
+              "cataclysm": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 262,
+            "max_mana": 162,
+            "power_range": [
+              73,
+              78
+            ],
+            "physical_defense": 28,
+            "magic_defense": 19,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 3,
+              "ice_shackles": 3,
+              "mana_shield": 3,
+              "shatter": 3,
+              "absolute_zero": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 262,
+            "max_mana": 162,
+            "power_range": [
+              73,
+              78
+            ],
+            "physical_defense": 28,
+            "magic_defense": 19,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 3,
+              "arcane_surge": 3,
+              "flame_wave": 3,
+              "arcane_lance": 3,
+              "cataclysm": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              102,
+              107
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 3,
+              "ice_shackles": 3,
+              "mana_shield": 3,
+              "shatter": 3,
+              "absolute_zero": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_magic_staff"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              102,
+              107
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "magic_staff",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "destruction",
+            "skill_ranks": {
+              "fireball": 3,
+              "arcane_surge": 3,
+              "flame_wave": 3,
+              "arcane_lance": 3,
+              "cataclysm": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 316,
+            "max_mana": 186,
+            "power_range": [
+              104,
+              109
+            ],
+            "physical_defense": 35,
+            "magic_defense": 23,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "control",
+            "skill_ranks": {
+              "frost_bolt": 3,
+              "ice_shackles": 3,
+              "mana_shield": 3,
+              "shatter": 3,
+              "absolute_zero": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_magic_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 316,
+            "max_mana": 186,
+            "power_range": [
+              104,
+              109
+            ],
+            "physical_defense": 35,
+            "magic_defense": 23,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              19,
+              23
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 136,
+            "max_mana": 74,
+            "power_range": [
+              19,
+              23
+            ],
+            "physical_defense": 4,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 136,
+            "max_mana": 114,
+            "power_range": [
+              19,
+              23
+            ],
+            "physical_defense": 13,
+            "magic_defense": 10,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 136,
+            "max_mana": 114,
+            "power_range": [
+              19,
+              23
+            ],
+            "physical_defense": 13,
+            "magic_defense": 10,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 1,
+              "spell_echo": 1,
+              "quick_channel": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              29,
+              33
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 1,
+              "hex_bolt": 1,
+              "mana_feint": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 172,
+            "max_mana": 74,
+            "power_range": [
+              29,
+              33
+            ],
+            "physical_defense": 8,
+            "magic_defense": 4,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 1,
+              "spell_echo": 1,
+              "quick_channel": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 172,
+            "max_mana": 114,
+            "power_range": [
+              29,
+              33
+            ],
+            "physical_defense": 17,
+            "magic_defense": 10,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 1,
+              "hex_bolt": 1,
+              "mana_feint": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 172,
+            "max_mana": 114,
+            "power_range": [
+              29,
+              33
+            ],
+            "physical_defense": 17,
+            "magic_defense": 10,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 2,
+              "spell_echo": 2,
+              "quick_channel": 2,
+              "overload": 2,
+              "arcane_barrage": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              40,
+              44
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 2,
+              "hex_bolt": 2,
+              "mana_feint": 2,
+              "counterpulse": 2,
+              "duel_arc": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 208,
+            "max_mana": 98,
+            "power_range": [
+              40,
+              44
+            ],
+            "physical_defense": 13,
+            "magic_defense": 8,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 2,
+              "spell_echo": 2,
+              "quick_channel": 2,
+              "overload": 2,
+              "arcane_barrage": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 208,
+            "max_mana": 138,
+            "power_range": [
+              40,
+              44
+            ],
+            "physical_defense": 22,
+            "magic_defense": 14,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 2,
+              "hex_bolt": 2,
+              "mana_feint": 2,
+              "counterpulse": 2,
+              "duel_arc": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 208,
+            "max_mana": 138,
+            "power_range": [
+              40,
+              44
+            ],
+            "physical_defense": 22,
+            "magic_defense": 14,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 3,
+              "spell_echo": 3,
+              "quick_channel": 3,
+              "overload": 3,
+              "arcane_barrage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              57,
+              61
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 3,
+              "hex_bolt": 3,
+              "mana_feint": 3,
+              "counterpulse": 3,
+              "duel_arc": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 262,
+            "max_mana": 122,
+            "power_range": [
+              57,
+              61
+            ],
+            "physical_defense": 19,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 3,
+              "spell_echo": 3,
+              "quick_channel": 3,
+              "overload": 3,
+              "arcane_barrage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 262,
+            "max_mana": 162,
+            "power_range": [
+              58,
+              62
+            ],
+            "physical_defense": 28,
+            "magic_defense": 19,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 3,
+              "hex_bolt": 3,
+              "mana_feint": 3,
+              "counterpulse": 3,
+              "duel_arc": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 262,
+            "max_mana": 162,
+            "power_range": [
+              58,
+              62
+            ],
+            "physical_defense": 28,
+            "magic_defense": 19,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 3,
+              "spell_echo": 3,
+              "quick_channel": 3,
+              "overload": 3,
+              "arcane_barrage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              80,
+              84
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 3,
+              "hex_bolt": 3,
+              "mana_feint": 3,
+              "counterpulse": 3,
+              "duel_arc": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_wand"
+            ],
+            "max_hp": 316,
+            "max_mana": 146,
+            "power_range": [
+              80,
+              84
+            ],
+            "physical_defense": 26,
+            "magic_defense": 17,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "wand",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "arcanist",
+            "skill_ranks": {
+              "arcane_bolt": 3,
+              "spell_echo": 3,
+              "quick_channel": 3,
+              "overload": 3,
+              "arcane_barrage": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 316,
+            "max_mana": 186,
+            "power_range": [
+              81,
+              85
+            ],
+            "physical_defense": 35,
+            "magic_defense": 23,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "duelist",
+            "skill_ranks": {
+              "dueling_ward": 3,
+              "hex_bolt": 3,
+              "mana_feint": 3,
+              "counterpulse": 3,
+              "duel_arc": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_wand",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_focus"
+            ],
+            "max_hp": 316,
+            "max_mana": 186,
+            "power_range": [
+              81,
+              85
+            ],
+            "physical_defense": 35,
+            "magic_defense": 23,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 136,
+            "max_mana": 122,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 4,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 136,
+            "max_mana": 122,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 4,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 136,
+            "max_mana": 162,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 13,
+            "magic_defense": 19,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 136,
+            "max_mana": 162,
+            "power_range": [
+              24,
+              29
+            ],
+            "physical_defense": 13,
+            "magic_defense": 19,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 1,
+              "regeneration": 1,
+              "cleanse": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 172,
+            "max_mana": 170,
+            "power_range": [
+              34,
+              39
+            ],
+            "physical_defense": 8,
+            "magic_defense": 22,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 1,
+              "judgment_mark": 1,
+              "radiant_ward": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 172,
+            "max_mana": 170,
+            "power_range": [
+              34,
+              39
+            ],
+            "physical_defense": 8,
+            "magic_defense": 22,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 1,
+              "regeneration": 1,
+              "cleanse": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 172,
+            "max_mana": 210,
+            "power_range": [
+              34,
+              39
+            ],
+            "physical_defense": 17,
+            "magic_defense": 28,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 1,
+              "judgment_mark": 1,
+              "radiant_ward": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 172,
+            "max_mana": 210,
+            "power_range": [
+              34,
+              39
+            ],
+            "physical_defense": 17,
+            "magic_defense": 28,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 2,
+              "regeneration": 2,
+              "cleanse": 2,
+              "blessing": 2,
+              "resurrection": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 208,
+            "max_mana": 254,
+            "power_range": [
+              52,
+              57
+            ],
+            "physical_defense": 13,
+            "magic_defense": 37,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 2,
+              "judgment_mark": 2,
+              "radiant_ward": 2,
+              "sanctified_burst": 2,
+              "halo_of_dawn": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 208,
+            "max_mana": 254,
+            "power_range": [
+              52,
+              57
+            ],
+            "physical_defense": 13,
+            "magic_defense": 37,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 2,
+              "regeneration": 2,
+              "cleanse": 2,
+              "blessing": 2,
+              "resurrection": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 208,
+            "max_mana": 294,
+            "power_range": [
+              52,
+              57
+            ],
+            "physical_defense": 22,
+            "magic_defense": 43,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 2,
+              "judgment_mark": 2,
+              "radiant_ward": 2,
+              "sanctified_burst": 2,
+              "halo_of_dawn": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 208,
+            "max_mana": 294,
+            "power_range": [
+              52,
+              57
+            ],
+            "physical_defense": 22,
+            "magic_defense": 43,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 3,
+              "regeneration": 3,
+              "cleanse": 3,
+              "blessing": 3,
+              "resurrection": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 262,
+            "max_mana": 362,
+            "power_range": [
+              75,
+              80
+            ],
+            "physical_defense": 19,
+            "magic_defense": 57,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 3,
+              "judgment_mark": 3,
+              "radiant_ward": 3,
+              "sanctified_burst": 3,
+              "halo_of_dawn": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 262,
+            "max_mana": 362,
+            "power_range": [
+              75,
+              80
+            ],
+            "physical_defense": 19,
+            "magic_defense": 57,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 3,
+              "regeneration": 3,
+              "cleanse": 3,
+              "blessing": 3,
+              "resurrection": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 262,
+            "max_mana": 402,
+            "power_range": [
+              75,
+              80
+            ],
+            "physical_defense": 28,
+            "magic_defense": 63,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 3,
+              "judgment_mark": 3,
+              "radiant_ward": 3,
+              "sanctified_burst": 3,
+              "halo_of_dawn": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 262,
+            "max_mana": 402,
+            "power_range": [
+              75,
+              80
+            ],
+            "physical_defense": 28,
+            "magic_defense": 63,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 3,
+              "regeneration": 3,
+              "cleanse": 3,
+              "blessing": 3,
+              "resurrection": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 334,
+            "max_mana": 494,
+            "power_range": [
+              103,
+              108
+            ],
+            "physical_defense": 28,
+            "magic_defense": 81,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 3,
+              "judgment_mark": 3,
+              "radiant_ward": 3,
+              "sanctified_burst": 3,
+              "halo_of_dawn": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_staff"
+            ],
+            "max_hp": 334,
+            "max_mana": 494,
+            "power_range": [
+              103,
+              108
+            ],
+            "physical_defense": 28,
+            "magic_defense": 81,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_staff",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "healer",
+            "skill_ranks": {
+              "heal": 3,
+              "regeneration": 3,
+              "cleanse": 3,
+              "blessing": 3,
+              "resurrection": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 334,
+            "max_mana": 534,
+            "power_range": [
+              103,
+              108
+            ],
+            "physical_defense": 37,
+            "magic_defense": 87,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "dawn",
+            "skill_ranks": {
+              "smite": 3,
+              "judgment_mark": 3,
+              "radiant_ward": 3,
+              "sanctified_burst": 3,
+              "halo_of_dawn": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_staff",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 334,
+            "max_mana": 534,
+            "power_range": [
+              103,
+              108
+            ],
+            "physical_defense": 37,
+            "magic_defense": 87,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 136,
+            "max_mana": 122,
+            "power_range": [
+              22,
+              26
+            ],
+            "physical_defense": 4,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 136,
+            "max_mana": 122,
+            "power_range": [
+              22,
+              26
+            ],
+            "physical_defense": 4,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 144,
+            "max_mana": 122,
+            "power_range": [
+              22,
+              26
+            ],
+            "physical_defense": 22,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 144,
+            "max_mana": 122,
+            "power_range": [
+              22,
+              26
+            ],
+            "physical_defense": 22,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 1,
+              "mend_self": 1,
+              "aura_of_resolve": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 172,
+            "max_mana": 170,
+            "power_range": [
+              33,
+              37
+            ],
+            "physical_defense": 8,
+            "magic_defense": 22,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 1,
+              "radiant_strike": 1,
+              "rod_consecration": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 172,
+            "max_mana": 170,
+            "power_range": [
+              33,
+              37
+            ],
+            "physical_defense": 8,
+            "magic_defense": 22,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 1,
+              "mend_self": 1,
+              "aura_of_resolve": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 180,
+            "max_mana": 170,
+            "power_range": [
+              33,
+              37
+            ],
+            "physical_defense": 26,
+            "magic_defense": 22,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 1,
+              "radiant_strike": 1,
+              "rod_consecration": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 180,
+            "max_mana": 170,
+            "power_range": [
+              33,
+              37
+            ],
+            "physical_defense": 26,
+            "magic_defense": 22,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 2,
+              "mend_self": 2,
+              "aura_of_resolve": 2,
+              "aegis_strike": 2,
+              "guardian_light": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 208,
+            "max_mana": 254,
+            "power_range": [
+              50,
+              54
+            ],
+            "physical_defense": 13,
+            "magic_defense": 37,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 2,
+              "radiant_strike": 2,
+              "rod_consecration": 2,
+              "punish_the_wicked": 2,
+              "final_verdict": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 208,
+            "max_mana": 254,
+            "power_range": [
+              50,
+              54
+            ],
+            "physical_defense": 13,
+            "magic_defense": 37,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 2,
+              "mend_self": 2,
+              "aura_of_resolve": 2,
+              "aegis_strike": 2,
+              "guardian_light": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 216,
+            "max_mana": 254,
+            "power_range": [
+              50,
+              54
+            ],
+            "physical_defense": 31,
+            "magic_defense": 37,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 2,
+              "radiant_strike": 2,
+              "rod_consecration": 2,
+              "punish_the_wicked": 2,
+              "final_verdict": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 216,
+            "max_mana": 254,
+            "power_range": [
+              50,
+              54
+            ],
+            "physical_defense": 31,
+            "magic_defense": 37,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 3,
+              "mend_self": 3,
+              "aura_of_resolve": 3,
+              "aegis_strike": 3,
+              "guardian_light": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 262,
+            "max_mana": 362,
+            "power_range": [
+              73,
+              77
+            ],
+            "physical_defense": 19,
+            "magic_defense": 57,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 3,
+              "radiant_strike": 3,
+              "rod_consecration": 3,
+              "punish_the_wicked": 3,
+              "final_verdict": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 262,
+            "max_mana": 362,
+            "power_range": [
+              73,
+              77
+            ],
+            "physical_defense": 19,
+            "magic_defense": 57,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 3,
+              "mend_self": 3,
+              "aura_of_resolve": 3,
+              "aegis_strike": 3,
+              "guardian_light": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 270,
+            "max_mana": 362,
+            "power_range": [
+              73,
+              77
+            ],
+            "physical_defense": 37,
+            "magic_defense": 57,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 3,
+              "radiant_strike": 3,
+              "rod_consecration": 3,
+              "punish_the_wicked": 3,
+              "final_verdict": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 270,
+            "max_mana": 362,
+            "power_range": [
+              73,
+              77
+            ],
+            "physical_defense": 37,
+            "magic_defense": 57,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 3,
+              "mend_self": 3,
+              "aura_of_resolve": 3,
+              "aegis_strike": 3,
+              "guardian_light": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 334,
+            "max_mana": 494,
+            "power_range": [
+              101,
+              105
+            ],
+            "physical_defense": 28,
+            "magic_defense": 81,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 3,
+              "radiant_strike": 3,
+              "rod_consecration": 3,
+              "punish_the_wicked": 3,
+              "final_verdict": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_rod"
+            ],
+            "max_hp": 334,
+            "max_mana": 494,
+            "power_range": [
+              101,
+              105
+            ],
+            "physical_defense": 28,
+            "magic_defense": 81,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "holy_rod",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "protector",
+            "skill_ranks": {
+              "sacred_shield": 3,
+              "mend_self": 3,
+              "aura_of_resolve": 3,
+              "aegis_strike": 3,
+              "guardian_light": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 342,
+            "max_mana": 494,
+            "power_range": [
+              101,
+              105
+            ],
+            "physical_defense": 46,
+            "magic_defense": 81,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "judgment",
+            "skill_ranks": {
+              "judgment": 3,
+              "radiant_strike": 3,
+              "rod_consecration": 3,
+              "punish_the_wicked": 3,
+              "final_verdict": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_holy_rod",
+              "field_medium_helmet",
+              "field_medium_chest",
+              "field_medium_legs",
+              "field_medium_boots",
+              "field_medium_gloves",
+              "field_shield"
+            ],
+            "max_hp": 342,
+            "max_mana": 494,
+            "power_range": [
+              101,
+              105
+            ],
+            "physical_defense": 46,
+            "magic_defense": 81,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 136,
+            "max_mana": 122,
+            "power_range": [
+              20,
+              24
+            ],
+            "physical_defense": 4,
+            "magic_defense": 13,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 136,
+            "max_mana": 122,
+            "power_range": [
+              20,
+              24
+            ],
+            "physical_defense": 4,
+            "magic_defense": 13,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 1,
+        "mastery_level": 1,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 136,
+            "max_mana": 162,
+            "power_range": [
+              20,
+              24
+            ],
+            "physical_defense": 13,
+            "magic_defense": 19,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 1
+            },
+            "points_spent": 1,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 136,
+            "max_mana": 162,
+            "power_range": [
+              20,
+              24
+            ],
+            "physical_defense": 13,
+            "magic_defense": 19,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 1,
+              "weaken": 1,
+              "insight": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 172,
+            "max_mana": 170,
+            "power_range": [
+              28,
+              32
+            ],
+            "physical_defense": 8,
+            "magic_defense": 22,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 1,
+              "borrowed_flame": 1,
+              "borrowed_grace": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 172,
+            "max_mana": 170,
+            "power_range": [
+              28,
+              32
+            ],
+            "physical_defense": 8,
+            "magic_defense": 22,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 3,
+        "mastery_level": 3,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 1,
+              "weaken": 1,
+              "insight": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 172,
+            "max_mana": 210,
+            "power_range": [
+              28,
+              32
+            ],
+            "physical_defense": 17,
+            "magic_defense": 28,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 1,
+              "borrowed_flame": 1,
+              "borrowed_grace": 1
+            },
+            "points_spent": 3,
+            "unspent_skill_points": 1,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 172,
+            "max_mana": 210,
+            "power_range": [
+              28,
+              32
+            ],
+            "physical_defense": 17,
+            "magic_defense": 28,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 2,
+              "weaken": 2,
+              "insight": 2,
+              "dispel_script": 2,
+              "grand_enchantment": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 208,
+            "max_mana": 254,
+            "power_range": [
+              42,
+              46
+            ],
+            "physical_defense": 13,
+            "magic_defense": 37,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 2,
+              "borrowed_flame": 2,
+              "borrowed_grace": 2,
+              "synthesis": 2,
+              "forbidden_thesis": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 208,
+            "max_mana": 254,
+            "power_range": [
+              42,
+              46
+            ],
+            "physical_defense": 13,
+            "magic_defense": 37,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 6,
+        "mastery_level": 8,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 2,
+              "weaken": 2,
+              "insight": 2,
+              "dispel_script": 2,
+              "grand_enchantment": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 208,
+            "max_mana": 294,
+            "power_range": [
+              42,
+              46
+            ],
+            "physical_defense": 22,
+            "magic_defense": 43,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 2,
+              "borrowed_flame": 2,
+              "borrowed_grace": 2,
+              "synthesis": 2,
+              "forbidden_thesis": 1
+            },
+            "points_spent": 9,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 208,
+            "max_mana": 294,
+            "power_range": [
+              42,
+              46
+            ],
+            "physical_defense": 22,
+            "magic_defense": 43,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 3,
+              "weaken": 3,
+              "insight": 3,
+              "dispel_script": 3,
+              "grand_enchantment": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 262,
+            "max_mana": 362,
+            "power_range": [
+              61,
+              65
+            ],
+            "physical_defense": 19,
+            "magic_defense": 57,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 3,
+              "borrowed_flame": 3,
+              "borrowed_grace": 3,
+              "synthesis": 3,
+              "forbidden_thesis": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 262,
+            "max_mana": 362,
+            "power_range": [
+              61,
+              65
+            ],
+            "physical_defense": 19,
+            "magic_defense": 57,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 10,
+        "mastery_level": 14,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 3,
+              "weaken": 3,
+              "insight": 3,
+              "dispel_script": 3,
+              "grand_enchantment": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 262,
+            "max_mana": 402,
+            "power_range": [
+              61,
+              65
+            ],
+            "physical_defense": 28,
+            "magic_defense": 63,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 3,
+              "borrowed_flame": 3,
+              "borrowed_grace": 3,
+              "synthesis": 3,
+              "forbidden_thesis": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 0,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 262,
+            "max_mana": 402,
+            "power_range": [
+              61,
+              65
+            ],
+            "physical_defense": 28,
+            "magic_defense": 63,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "entry_weapon_only",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 3,
+              "weaken": 3,
+              "insight": 3,
+              "dispel_script": 3,
+              "grand_enchantment": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 334,
+            "max_mana": 494,
+            "power_range": [
+              83,
+              87
+            ],
+            "physical_defense": 28,
+            "magic_defense": 81,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 3,
+              "borrowed_flame": 3,
+              "borrowed_grace": 3,
+              "synthesis": 3,
+              "forbidden_thesis": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_tome"
+            ],
+            "max_hp": 334,
+            "max_mana": 494,
+            "power_range": [
+              83,
+              87
+            ],
+            "physical_defense": 28,
+            "magic_defense": 81,
+            "validation_errors": []
+          }
+        }
+      },
+      {
+        "family": "tome",
+        "level": 15,
+        "mastery_level": 20,
+        "gear_set": "common_t1_full",
+        "branches": {
+          "A": {
+            "identity": "enchanter",
+            "skill_ranks": {
+              "arcane_shield": 3,
+              "weaken": 3,
+              "insight": 3,
+              "dispel_script": 3,
+              "grand_enchantment": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 334,
+            "max_mana": 534,
+            "power_range": [
+              83,
+              87
+            ],
+            "physical_defense": 37,
+            "magic_defense": 87,
+            "validation_errors": []
+          },
+          "B": {
+            "identity": "synthesis",
+            "skill_ranks": {
+              "hybrid_missile": 3,
+              "borrowed_flame": 3,
+              "borrowed_grace": 3,
+              "synthesis": 3,
+              "forbidden_thesis": 3
+            },
+            "points_spent": 15,
+            "unspent_skill_points": 6,
+            "item_ids": [
+              "field_tome",
+              "field_light_helmet",
+              "field_light_chest",
+              "field_light_legs",
+              "field_light_boots",
+              "field_light_gloves",
+              "field_censer"
+            ],
+            "max_hp": 334,
+            "max_mana": 534,
+            "power_range": [
+              83,
+              87
+            ],
+            "physical_defense": 37,
+            "magic_defense": 87,
+            "validation_errors": []
+          }
+        }
       }
     ],
     "stat_swap_variants": [
@@ -4666,13 +10597,13 @@
             ],
             "stalls_as_failures": 0,
             "median_turns": 3.0,
-            "p90_turns": 3,
+            "p90_turns": 4,
             "mean_damage": 60.0,
-            "mean_damage_taken": 7.98,
+            "mean_damage_taken": 8.86,
             "mean_healing": 0.0,
             "mean_prevention": 0.0,
-            "mean_party_hp_remaining": 164.02,
-            "mean_mana_delta": -24.08,
+            "mean_party_hp_remaining": 163.14,
+            "mean_mana_delta": -25.9,
             "mean_normal_action_share": 0.0,
             "consumables": 0,
             "fallbacks": 0
@@ -4689,11 +10620,11 @@
             "median_turns": 2.0,
             "p90_turns": 2,
             "mean_damage": 45.0,
-            "mean_damage_taken": 6.4,
+            "mean_damage_taken": 12.04,
             "mean_healing": 0.0,
             "mean_prevention": 0.0,
-            "mean_party_hp_remaining": 165.6,
-            "mean_mana_delta": -15.02,
+            "mean_party_hp_remaining": 159.96,
+            "mean_mana_delta": -15.84,
             "mean_normal_action_share": 0.0,
             "consumables": 0,
             "fallbacks": 0
@@ -6702,18 +12633,18 @@
             "stalls_as_failures": 0,
             "median_turns": 5.0,
             "p90_turns": 8,
-            "mean_damage": 245.59,
-            "mean_damage_taken": 133.92,
+            "mean_damage": 245.69,
+            "mean_damage_taken": 133.77,
             "mean_healing": 0.0,
             "mean_prevention": 0.0,
-            "mean_party_hp_remaining": 106.08,
-            "mean_mana_delta": -81.07,
+            "mean_party_hp_remaining": 106.23,
+            "mean_mana_delta": -81.01,
             "mean_normal_action_share": 0.0286,
             "consumables": 0,
             "fallbacks": 0,
             "mean_intercepts": 0.0,
             "mean_controlled_skips": 0.0,
-            "mean_party_damage": 245.59,
+            "mean_party_damage": 245.69,
             "failing_seeds": [
               4,
               61,
@@ -6737,10 +12668,10 @@
             "median_turns": 4.0,
             "p90_turns": 7,
             "mean_damage": 247.62,
-            "mean_damage_taken": 94.97,
+            "mean_damage_taken": 94.33,
             "mean_healing": 0.0,
             "mean_prevention": 0.0,
-            "mean_party_hp_remaining": 145.03,
+            "mean_party_hp_remaining": 145.68,
             "mean_mana_delta": -70.19,
             "mean_normal_action_share": 0.0092,
             "consumables": 0,
@@ -6761,11 +12692,11 @@
             "axis": "exchange_hp_loss",
             "lower_is_better": true,
             "pairs": 200,
-            "advantage_mean": 38.945,
-            "advantage_percent": 29.08,
+            "advantage_mean": 39.445,
+            "advantage_percent": 29.49,
             "ci95": [
-              30.4036,
-              47.4864
+              30.9745,
+              47.9155
             ],
             "ci_excludes_zero": true,
             "passes": true
@@ -7726,7 +13657,7 @@
       {
         "scenario_id": "daggers_armored_sustain",
         "family": "daggers",
-        "declared_matchup": "Venom delayed effective damage on an armored target",
+        "declared_matchup": "Venom delayed effective damage in the opening three-opportunity cycle on an armored target",
         "enemy_source_ids": [
           "mountain_stone_golem"
         ],
@@ -7739,7 +13670,7 @@
           "last": 199,
           "count": 200
         },
-        "max_opportunities": 4,
+        "max_opportunities": 3,
         "companions": [],
         "branches": {
           "A": {
@@ -7751,20 +13682,20 @@
               0.0188
             ],
             "stalls_as_failures": 200,
-            "median_turns": 4.0,
-            "p90_turns": 4,
-            "mean_damage": 170.6,
-            "mean_damage_taken": 74.77,
+            "median_turns": 3.0,
+            "p90_turns": 3,
+            "mean_damage": 108.03,
+            "mean_damage_taken": 58.63,
             "mean_healing": 0.0,
             "mean_prevention": 0.0,
-            "mean_party_hp_remaining": 133.23,
-            "mean_mana_delta": -52.0,
+            "mean_party_hp_remaining": 149.37,
+            "mean_mana_delta": -30.0,
             "mean_normal_action_share": 0.0,
             "consumables": 0,
             "fallbacks": 0,
             "mean_intercepts": 0.0,
             "mean_controlled_skips": 0.0,
-            "mean_party_damage": 170.6,
+            "mean_party_damage": 108.03,
             "failing_seeds": [
               0,
               1,
@@ -7977,20 +13908,20 @@
               0.0188
             ],
             "stalls_as_failures": 200,
-            "median_turns": 4.0,
-            "p90_turns": 4,
-            "mean_damage": 151.18,
-            "mean_damage_taken": 69.81,
+            "median_turns": 3.0,
+            "p90_turns": 3,
+            "mean_damage": 84.41,
+            "mean_damage_taken": 54.48,
             "mean_healing": 0.0,
             "mean_prevention": 0.0,
-            "mean_party_hp_remaining": 138.19,
-            "mean_mana_delta": -56.0,
+            "mean_party_hp_remaining": 153.53,
+            "mean_mana_delta": -32.0,
             "mean_normal_action_share": 0.0,
             "consumables": 0,
             "fallbacks": 0,
             "mean_intercepts": 0.0,
             "mean_controlled_skips": 0.0,
-            "mean_party_damage": 151.18,
+            "mean_party_damage": 84.41,
             "failing_seeds": [
               0,
               1,
@@ -8201,11 +14132,11 @@
             "metric": "actor_damage_per_turn",
             "axis": "sustained_damage_per_opportunity",
             "pairs": 200,
-            "advantage_mean": 4.855,
-            "advantage_percent": 12.85,
+            "advantage_mean": 7.875,
+            "advantage_percent": 27.99,
             "ci95": [
-              3.8882,
-              5.8218
+              7.1651,
+              8.5849
             ],
             "ci_excludes_zero": true,
             "passes": true
@@ -8242,7 +14173,7 @@
             "stalls_as_failures": 200,
             "median_turns": 2.0,
             "p90_turns": 2,
-            "mean_damage": 102.89,
+            "mean_damage": 77.2,
             "mean_damage_taken": 45.41,
             "mean_healing": 0.0,
             "mean_prevention": 0.0,
@@ -8253,7 +14184,7 @@
             "fallbacks": 0,
             "mean_intercepts": 0.0,
             "mean_controlled_skips": 0.0,
-            "mean_party_damage": 102.89,
+            "mean_party_damage": 77.2,
             "failing_seeds": [
               0,
               1,
@@ -8690,11 +14621,11 @@
             "metric": "direct_damage",
             "axis": "opened_direct_burst",
             "pairs": 200,
-            "advantage_mean": 15.47,
-            "advantage_percent": 18.35,
+            "advantage_mean": 41.165,
+            "advantage_percent": 70.21,
             "ci95": [
-              14.8856,
-              16.0544
+              39.6134,
+              42.7166
             ],
             "ci_excludes_zero": true,
             "passes": true
@@ -9542,10 +15473,10 @@
             "median_turns": 3.0,
             "p90_turns": 3,
             "mean_damage": 75.86,
-            "mean_damage_taken": 51.79,
+            "mean_damage_taken": 49.53,
             "mean_healing": 0.0,
-            "mean_prevention": 37.55,
-            "mean_party_hp_remaining": 156.21,
+            "mean_prevention": 35.66,
+            "mean_party_hp_remaining": 158.47,
             "mean_mana_delta": -36.0,
             "mean_normal_action_share": 0.0,
             "consumables": 0,
@@ -9777,11 +15708,11 @@
             "metric": "prevention",
             "axis": "damage_prevented",
             "pairs": 200,
-            "advantage_mean": 37.55,
+            "advantage_mean": 35.66,
             "advantage_percent": 100.0,
             "ci95": [
-              36.4807,
-              38.6193
+              34.4897,
+              36.8303
             ],
             "ci_excludes_zero": true,
             "passes": true
@@ -12973,10 +18904,10 @@
         "median_turns": 2.0,
         "p90_turns": 2,
         "mean_damage": 60.0,
-        "mean_damage_taken": 3.17,
+        "mean_damage_taken": 6.28,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 204.83,
+        "mean_party_hp_remaining": 201.72,
         "mean_mana_delta": -15.04,
         "mean_normal_action_share": 0.0,
         "consumables": 0,
@@ -14160,13 +20091,13 @@
         "stalls_as_failures": 0,
         "median_turns": 8.0,
         "p90_turns": 11,
-        "mean_damage": 243.69,
-        "mean_damage_taken": 142.94,
+        "mean_damage": 243.76,
+        "mean_damage_taken": 140.56,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 97.06,
-        "mean_mana_delta": -88.99,
-        "mean_normal_action_share": 0.1349,
+        "mean_party_hp_remaining": 99.44,
+        "mean_mana_delta": -88.93,
+        "mean_normal_action_share": 0.1291,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
@@ -14204,10 +20135,10 @@
         "median_turns": 7.0,
         "p90_turns": 9,
         "mean_damage": 244.64,
-        "mean_damage_taken": 102.28,
+        "mean_damage_taken": 99.33,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 137.72,
+        "mean_party_hp_remaining": 140.66,
         "mean_mana_delta": -87.67,
         "mean_normal_action_share": 0.0495,
         "consumables": 0,
@@ -14295,26 +20226,30 @@
         "gear_set": "common_t1_full",
         "policy": "branch_aware",
         "runs": 200,
-        "wins": 200,
-        "win_rate": 1.0,
+        "wins": 197,
+        "win_rate": 0.985,
         "win_rate_ci95": [
-          0.9812,
-          1.0
+          0.9568,
+          0.9949
         ],
         "stalls_as_failures": 0,
-        "median_turns": 7.0,
-        "p90_turns": 8,
-        "mean_damage": 245.0,
-        "mean_damage_taken": 111.94,
+        "median_turns": 8.0,
+        "p90_turns": 9,
+        "mean_damage": 244.98,
+        "mean_damage_taken": 129.38,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 96.06,
-        "mean_mana_delta": -80.54,
-        "mean_normal_action_share": 0.0005,
+        "mean_party_hp_remaining": 78.61,
+        "mean_mana_delta": -91.29,
+        "mean_normal_action_share": 0.0064,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
-        "failing_seeds": []
+        "failing_seeds": [
+          140,
+          144,
+          161
+        ]
       },
       {
         "scenario_id": "armored_construct",
@@ -14338,10 +20273,10 @@
         "median_turns": 7.0,
         "p90_turns": 9,
         "mean_damage": 244.84,
-        "mean_damage_taken": 116.36,
+        "mean_damage_taken": 114.81,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 91.64,
+        "mean_party_hp_remaining": 93.19,
         "mean_mana_delta": -87.47,
         "mean_normal_action_share": 0.0279,
         "consumables": 0,
@@ -14492,14 +20427,14 @@
         ],
         "stalls_as_failures": 0,
         "median_turns": 7.0,
-        "p90_turns": 10,
+        "p90_turns": 9,
         "mean_damage": 245.0,
-        "mean_damage_taken": 50.25,
+        "mean_damage_taken": 46.97,
         "mean_healing": 0.0,
-        "mean_prevention": 49.78,
-        "mean_party_hp_remaining": 157.75,
-        "mean_mana_delta": -109.69,
-        "mean_normal_action_share": 0.0116,
+        "mean_prevention": 50.63,
+        "mean_party_hp_remaining": 161.03,
+        "mean_mana_delta": -109.58,
+        "mean_normal_action_share": 0.0095,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
@@ -16964,12 +22899,12 @@
         "stalls_as_failures": 0,
         "median_turns": 5.0,
         "p90_turns": 8,
-        "mean_damage": 245.59,
-        "mean_damage_taken": 133.92,
+        "mean_damage": 245.69,
+        "mean_damage_taken": 133.77,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 106.08,
-        "mean_mana_delta": -81.07,
+        "mean_party_hp_remaining": 106.23,
+        "mean_mana_delta": -81.01,
         "mean_normal_action_share": 0.0286,
         "consumables": 0,
         "fallbacks": 0,
@@ -17007,10 +22942,10 @@
         "median_turns": 4.0,
         "p90_turns": 7,
         "mean_damage": 247.62,
-        "mean_damage_taken": 94.97,
+        "mean_damage_taken": 94.33,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 145.03,
+        "mean_party_hp_remaining": 145.68,
         "mean_mana_delta": -70.19,
         "mean_normal_action_share": 0.0092,
         "consumables": 0,
@@ -17101,26 +23036,28 @@
         "gear_set": "common_t1_full",
         "policy": "branch_aware",
         "runs": 200,
-        "wins": 200,
-        "win_rate": 1.0,
+        "wins": 199,
+        "win_rate": 0.995,
         "win_rate_ci95": [
-          0.9812,
-          1.0
+          0.9722,
+          0.9991
         ],
         "stalls_as_failures": 0,
-        "median_turns": 4.0,
+        "median_turns": 5.0,
         "p90_turns": 7,
         "mean_damage": 248.0,
-        "mean_damage_taken": 95.94,
+        "mean_damage_taken": 113.75,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 112.06,
-        "mean_mana_delta": -57.0,
+        "mean_party_hp_remaining": 94.25,
+        "mean_mana_delta": -63.75,
         "mean_normal_action_share": 0.0,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
-        "failing_seeds": []
+        "failing_seeds": [
+          140
+        ]
       },
       {
         "scenario_id": "telegraphed_heavy",
@@ -17144,10 +23081,10 @@
         "median_turns": 5.0,
         "p90_turns": 7,
         "mean_damage": 247.0,
-        "mean_damage_taken": 106.49,
+        "mean_damage_taken": 104.61,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 101.51,
+        "mean_party_hp_remaining": 103.39,
         "mean_mana_delta": -66.22,
         "mean_normal_action_share": 0.0006,
         "consumables": 0,
@@ -17310,12 +23247,12 @@
         "median_turns": 6.0,
         "p90_turns": 9,
         "mean_damage": 248.0,
-        "mean_damage_taken": 75.27,
+        "mean_damage_taken": 70.92,
         "mean_healing": 0.0,
-        "mean_prevention": 46.82,
-        "mean_party_hp_remaining": 132.74,
-        "mean_mana_delta": -100.76,
-        "mean_normal_action_share": 0.0039,
+        "mean_prevention": 47.75,
+        "mean_party_hp_remaining": 137.08,
+        "mean_mana_delta": -100.51,
+        "mean_normal_action_share": 0.0034,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
@@ -17928,7 +23865,7 @@
         "stalls_as_failures": 0,
         "median_turns": 7.0,
         "p90_turns": 10,
-        "mean_damage": 246.59,
+        "mean_damage": 246.6,
         "mean_damage_taken": 138.72,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
@@ -17971,10 +23908,10 @@
         "median_turns": 5.0,
         "p90_turns": 9,
         "mean_damage": 248.47,
-        "mean_damage_taken": 91.38,
+        "mean_damage_taken": 87.94,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 148.62,
+        "mean_party_hp_remaining": 152.06,
         "mean_mana_delta": -79.16,
         "mean_normal_action_share": 0.0334,
         "consumables": 0,
@@ -18066,26 +24003,30 @@
         "gear_set": "common_t1_full",
         "policy": "branch_aware",
         "runs": 200,
-        "wins": 200,
-        "win_rate": 1.0,
+        "wins": 197,
+        "win_rate": 0.985,
         "win_rate_ci95": [
-          0.9812,
-          1.0
+          0.9568,
+          0.9949
         ],
         "stalls_as_failures": 0,
-        "median_turns": 7.0,
-        "p90_turns": 8,
-        "mean_damage": 249.0,
-        "mean_damage_taken": 106.91,
+        "median_turns": 8.0,
+        "p90_turns": 10,
+        "mean_damage": 248.42,
+        "mean_damage_taken": 137.75,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 101.09,
-        "mean_mana_delta": -77.7,
-        "mean_normal_action_share": 0.0025,
+        "mean_party_hp_remaining": 70.25,
+        "mean_mana_delta": -91.33,
+        "mean_normal_action_share": 0.0225,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
-        "failing_seeds": []
+        "failing_seeds": [
+          70,
+          118,
+          129
+        ]
       },
       {
         "scenario_id": "westwild_mixed",
@@ -18109,10 +24050,10 @@
         "median_turns": 7.0,
         "p90_turns": 8,
         "mean_damage": 248.53,
-        "mean_damage_taken": 97.58,
+        "mean_damage_taken": 95.93,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 110.42,
+        "mean_party_hp_remaining": 112.07,
         "mean_mana_delta": -86.84,
         "mean_normal_action_share": 0.0105,
         "consumables": 0,
@@ -18251,12 +24192,12 @@
         "median_turns": 9.0,
         "p90_turns": 11,
         "mean_damage": 249.0,
-        "mean_damage_taken": 105.15,
+        "mean_damage_taken": 99.23,
         "mean_healing": 0.0,
-        "mean_prevention": 59.89,
-        "mean_party_hp_remaining": 102.85,
-        "mean_mana_delta": -131.49,
-        "mean_normal_action_share": 0.0299,
+        "mean_prevention": 61.23,
+        "mean_party_hp_remaining": 108.77,
+        "mean_mana_delta": -131.23,
+        "mean_normal_action_share": 0.0327,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
@@ -18845,10 +24786,10 @@
         "median_turns": 5.0,
         "p90_turns": 8,
         "mean_damage": 172.0,
-        "mean_damage_taken": 69.56,
+        "mean_damage_taken": 67.22,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 170.44,
+        "mean_party_hp_remaining": 172.78,
         "mean_mana_delta": -79.28,
         "mean_normal_action_share": 0.0198,
         "consumables": 0,
@@ -18944,14 +24885,14 @@
         ],
         "stalls_as_failures": 0,
         "median_turns": 7.0,
-        "p90_turns": 8,
+        "p90_turns": 7,
         "mean_damage": 172.0,
-        "mean_damage_taken": 83.77,
+        "mean_damage_taken": 85.72,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 124.23,
-        "mean_mana_delta": -77.56,
-        "mean_normal_action_share": 0.002,
+        "mean_party_hp_remaining": 122.28,
+        "mean_mana_delta": -76.93,
+        "mean_normal_action_share": 0.0005,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
@@ -18979,10 +24920,10 @@
         "median_turns": 5.0,
         "p90_turns": 8,
         "mean_damage": 172.0,
-        "mean_damage_taken": 71.96,
+        "mean_damage_taken": 70.73,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 136.04,
+        "mean_party_hp_remaining": 137.26,
         "mean_mana_delta": -72.77,
         "mean_normal_action_share": 0.0092,
         "consumables": 0,
@@ -19101,26 +25042,28 @@
         "gear_set": "common_t1_full",
         "policy": "branch_aware",
         "runs": 200,
-        "wins": 200,
-        "win_rate": 1.0,
+        "wins": 199,
+        "win_rate": 0.995,
         "win_rate_ci95": [
-          0.9812,
-          1.0
+          0.9722,
+          0.9991
         ],
         "stalls_as_failures": 0,
         "median_turns": 6.0,
         "p90_turns": 9,
-        "mean_damage": 172.0,
-        "mean_damage_taken": 48.93,
+        "mean_damage": 171.96,
+        "mean_damage_taken": 49.51,
         "mean_healing": 0.0,
-        "mean_prevention": 32.16,
-        "mean_party_hp_remaining": 159.07,
-        "mean_mana_delta": -96.88,
-        "mean_normal_action_share": 0.0028,
+        "mean_prevention": 32.13,
+        "mean_party_hp_remaining": 158.49,
+        "mean_mana_delta": -96.89,
+        "mean_normal_action_share": 0.0031,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
-        "failing_seeds": []
+        "failing_seeds": [
+          15
+        ]
       },
       {
         "scenario_id": "ashen_mixed",
@@ -19525,10 +25468,10 @@
         "median_turns": 5.0,
         "p90_turns": 8,
         "mean_damage": 174.0,
-        "mean_damage_taken": 54.44,
+        "mean_damage_taken": 52.92,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 185.56,
+        "mean_party_hp_remaining": 187.08,
         "mean_mana_delta": -79.5,
         "mean_normal_action_share": 0.0196,
         "consumables": 0,
@@ -19630,10 +25573,10 @@
         "median_turns": 7.0,
         "p90_turns": 8,
         "mean_damage": 174.0,
-        "mean_damage_taken": 65.89,
+        "mean_damage_taken": 65.94,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 142.1,
+        "mean_party_hp_remaining": 142.06,
         "mean_mana_delta": -77.58,
         "mean_normal_action_share": 0.0035,
         "consumables": 0,
@@ -19665,10 +25608,10 @@
         "median_turns": 7.0,
         "p90_turns": 8,
         "mean_damage": 174.0,
-        "mean_damage_taken": 63.92,
+        "mean_damage_taken": 63.12,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 144.08,
+        "mean_party_hp_remaining": 144.88,
         "mean_mana_delta": -86.51,
         "mean_normal_action_share": 0.0103,
         "consumables": 0,
@@ -19805,10 +25748,10 @@
         "median_turns": 6.0,
         "p90_turns": 7,
         "mean_damage": 174.0,
-        "mean_damage_taken": 34.43,
+        "mean_damage_taken": 34.62,
         "mean_healing": 0.0,
         "mean_prevention": 25.75,
-        "mean_party_hp_remaining": 173.57,
+        "mean_party_hp_remaining": 173.38,
         "mean_mana_delta": -94.56,
         "mean_normal_action_share": 0.0023,
         "consumables": 0,
@@ -20229,10 +26172,10 @@
         "median_turns": 5.0,
         "p90_turns": 8,
         "mean_damage": 186.0,
-        "mean_damage_taken": 48.9,
+        "mean_damage_taken": 47.62,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 191.1,
+        "mean_party_hp_remaining": 192.38,
         "mean_mana_delta": -79.4,
         "mean_normal_action_share": 0.0219,
         "consumables": 0,
@@ -20332,14 +26275,14 @@
         ],
         "stalls_as_failures": 0,
         "median_turns": 7.0,
-        "p90_turns": 8,
+        "p90_turns": 7,
         "mean_damage": 186.0,
-        "mean_damage_taken": 59.57,
+        "mean_damage_taken": 61.95,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 148.43,
-        "mean_mana_delta": -77.71,
-        "mean_normal_action_share": 0.0035,
+        "mean_party_hp_remaining": 146.05,
+        "mean_mana_delta": -77.22,
+        "mean_normal_action_share": 0.0029,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,
@@ -20369,10 +26312,10 @@
         "median_turns": 7.0,
         "p90_turns": 8,
         "mean_damage": 186.0,
-        "mean_damage_taken": 57.63,
+        "mean_damage_taken": 56.92,
         "mean_healing": 0.0,
         "mean_prevention": 0.0,
-        "mean_party_hp_remaining": 150.37,
+        "mean_party_hp_remaining": 151.08,
         "mean_mana_delta": -86.51,
         "mean_normal_action_share": 0.0103,
         "consumables": 0,
@@ -20509,12 +26452,12 @@
         "median_turns": 6.0,
         "p90_turns": 9,
         "mean_damage": 186.0,
-        "mean_damage_taken": 37.87,
+        "mean_damage_taken": 38.39,
         "mean_healing": 0.0,
-        "mean_prevention": 24.43,
-        "mean_party_hp_remaining": 170.13,
-        "mean_mana_delta": -98.03,
-        "mean_normal_action_share": 0.0028,
+        "mean_prevention": 24.39,
+        "mean_party_hp_remaining": 169.61,
+        "mean_mana_delta": -98.08,
+        "mean_normal_action_share": 0.003,
         "consumables": 0,
         "fallbacks": 0,
         "mean_overheal": 0,

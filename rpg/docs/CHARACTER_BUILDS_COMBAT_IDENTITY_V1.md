@@ -7,7 +7,7 @@ This document describes the implementation in the current Epic branch for review
 The frozen Astra implementation contract is the product and architecture authority. Runtime constants in `game/build_contract.py`, the shared evaluator in `game/combat_identity.py`, and the checked evidence artifact in `docs/evidence/character_builds_combat_identity_v1.json` are the executable review surfaces.
 
 - Baseline: `c8768626e388babfed09adac83ddaf23f0daee71`
-- Integrated runtime/evidence checkpoint: `60225c2a1e605ce604c09da7f28c24188d08cb62`
+- Integrated runtime/evidence checkpoint: `4297bb9fe46487fda1e32f8945c32cdcd01f2d7c`
 - Rules version: `character_builds_combat_identity_v1`
 - Scope: 10 weapon families, 20 branches, 100 canonical branch skills, plus universal Power Strike
 
@@ -47,17 +47,17 @@ Production rollout is an offline migration boundary:
    ..\.venv\Scripts\python.exe -c "from game.build_progression import migrate_character_builds_v1; print(migrate_character_builds_v1(dry_run=True))"
    ```
 
-3. Resolve any `legacy_review` reward records through the existing owner-review process. Do not fabricate rewards or force those players through a partial build migration.
-4. Start the application normally. `bot.initialize_runtime()` initializes additive schema, reviews ambiguous legacy victories, recovers prepared settlements, and then calls the idempotent V1 migration before handlers accept traffic.
+3. Resolve any pre-existing `legacy_review` reward records through the owner-review process. Do not fabricate rewards or force those players through a partial build migration.
+4. Start the application normally. `bot.initialize_runtime()` initializes additive schema, classifies ambiguous legacy victories, drains prepared settlement recovery in batches of 100, and only then calls the idempotent V1 migration before handlers accept traffic. Any retryable recovery failure blocks the cutover.
 5. Inspect the post-start audit:
 
    ```powershell
    ..\.venv\Scripts\python.exe -c "from game.build_progression import build_migration_audit; print(build_migration_audit())"
    ```
 
-6. Verify that the migration is active, invariant-failure lists are empty, and only expected owner-review records remain blocked before reopening traffic.
+6. Verify that the migration is active, invariant-failure lists are empty, and only expected owner-review or per-player quarantine records remain blocked before reopening traffic.
 
-The migration archives original attributes, mastery, skills, and cooldowns; uses greatest alias/canonical mastery evidence rather than adding duplicates; converts the old mastery fraction to the V1 curve; refunds the legal `mastery + 1` family budget; retires old skills; grants universal rank-1 Power Strike; preserves inventory, gear instances, upgrades, currencies, professions, chapter and discovery state; and records a localized one-shot notice. Nonterminal old-rules PvE/PvP is cancelled with explicit `rules_updated` receipts and no invented outcome. Re-running migration cannot refund or cancel twice.
+The migration archives original attributes, mastery, skills, and cooldowns; resolves field-item rows through their canonical `weapon_profile`; uses greatest alias/canonical mastery evidence rather than adding duplicates; converts the old mastery fraction using the historical `50 × current mastery level` threshold; refunds the legal `mastery + 1` family budget; retires old skills; grants universal rank-1 Power Strike; preserves inventory, gear instances, upgrades, currencies, professions, chapter and discovery state; and records a localized one-shot notice. Unknown or ambiguous mastery identities quarantine only their owner with an auditable snapshot and block lazy migration for that player. After settlement recovery is drained, nonterminal old-rules PvE/PvP is cancelled with explicit `rules_updated` receipts and no invented outcome. Re-running migration cannot refund or cancel twice.
 
 An old executable must not be started against an activated V1 database. Roll back by restoring the complete pre-rollout backup, not by deleting additive rows selectively.
 
@@ -115,10 +115,11 @@ Universal Power Strike is covered separately for all equipped families and unarm
 - PvE UI intents are opaque, deadline-bound and single-use. Identical duplicate submissions are acknowledged; conflicting second orders fail closed.
 - Timeout and manual submissions share the same durable uniqueness rail. Locked side results persist complete actor/enemy state before reward settlement starts.
 - Runtime loss after a committed order reconstructs the pending side; an already applied side replays the stored result without rerolling or double-spending mana/cooldown/effects.
+- Every V1 state writer uses encounter and state revisions. Battle consumables update inventory, player resources and the canonical actor snapshot in one transaction; group flee removes only that participant and remains replayable.
 - Enemy-side periodic defeat persists terminal projection before T1 settlement.
 - T1 freezes each eligible survivor's snapshotted family and explicit mastery grant. T2 retry applies once and cannot re-derive from later gear.
 - Group owner and joiner use the same persisted snapshot/state authority. Late/reversed join order and roster reconstruction preserve monotonic turn revisions.
-- PvP recovery preserves the committed Fireball order, Burn, cost and cooldown; finalization writes exactly one ordinary PvP log while leaving the outer frontier crime policy unchanged.
+- PvP recovery preserves the committed Fireball order, Burn, cost and cooldown; terminal receipt, ordinary PvP log, infamy, vulnerable inventory transfer, respawn, winner resources and engagement closure commit atomically and replay exactly once.
 - Build learn/reset/redistribution receipts are idempotent. Stale level, gear, travel, old-message and battle-start races cannot overwrite current authority.
 - Migration dry run rolls back fully; canonical/alias duplication uses greatest evidence; rerun is idempotent; invalid historic records remain owner-auditable.
 
@@ -131,11 +132,11 @@ Universal Power Strike is covered separately for all equipped families and unarm
 - The PvP journey uses four ordinarily registered/equipped/learned actors and the real frontier attack handler to prove normal attack, Guard, Power Strike, Quick Shot, Fireball/Burn and Smite/heal, plus illegal skill/target/stale/restart rejection.
 - The language journey runs build discovery, branch learning, a canonical Heal preview, actual named-recipient selection, combat feedback, reset, stale/error, retired callback and migration notice routes independently in ru/en/es. It checks a 20-character HTML-sensitive name, escaping, missing keys, internal IDs, Cyrillic leaks into en/es, 4,096-character message limits and 64-byte callback limits.
 
-These are exercised ordinary paths. The level/mastery matrix at levels `1/1`, `3/3`, `6/8`, `10/14`, and `15/20`, cross-branch M20 builds, stat swaps, and level 50/100 safety probes are explicitly synthetic laboratory evidence.
+These are exercised ordinary paths. The level/mastery matrix at levels `1/1`, `3/3`, `6/8`, `10/14`, and `15/20`, 100 complete sibling-branch comparisons across entry-weapon and common-T1-full loadouts, four legal M20 cross-branch mixes with exactly one capstone, stat swaps, and level 50/100 safety probes are explicitly synthetic laboratory evidence.
 
 ## Balance evidence and J5 changes
 
-The checked JSON uses 200 paired seeds (`0..199`), production field item definitions, real enemy source IDs/profiles, the shared actor/effect evaluators, and the shared affected-side scheduler. It contains 20 passing accessibility rows, 20 passing role gates, 240 encounter-matrix results, explicit stalls/failing seeds, and no legacy simulator authority. `dark_treant` is excluded because its 500,000 HP is not ordinary-content evidence.
+The checked JSON uses 200 paired seeds (`0..199`), production field item definitions, real enemy source IDs/profiles, the shared actor/effect evaluators, and the shared affected-side scheduler. It contains 20 passing accessibility rows, 20 passing role gates, 240 encounter-matrix results, 100 legal progression/loadout comparisons, four legal cross-branch allocations, explicit stalls/failing seeds, and no legacy simulator authority. `dark_treant` is excluded because its 500,000 HP is not ordinary-content evidence.
 
 The only numerical tuning under J5 is recorded below and in the JSON. No other live formula, item, mob, reward, economy, or route number was tuned in this Epic.
 
@@ -152,9 +153,9 @@ The only numerical tuning under J5 is recorded below and in the JSON. No other l
 | `rupture_toxins` | direct power | 1.20 | 1.38 | +15.00% |
 | `backstab` | direct power | 1.30 | 1.49 | +14.62% |
 
-## PR229 / PR230 regression safety
+## Merged PR229 / PR230 regression safety
 
-The implementation keeps PR229's chapter, travel, contract, gathering, crafting and ordinary production loop on the existing authorities. It keeps PR230's 32 field templates, vendors, regional sources, rarity/dry-streak policy, ten slots, instance ownership/rolls, enhancement/advancement, settlement RNG, reward provenance, and legacy-review behavior. Combat RNG is separate from frozen reward RNG. The earned chapter, content, group and gear journeys plus the existing PR229/PR230 suites are the regression evidence; no compatibility waiver is intended.
+The confirmed base `c8768626e388babfed09adac83ddaf23f0daee71` already contains merged PR229 and PR230. This implementation keeps PR229's chapter, travel, contract, gathering, crafting and ordinary production loop on the existing authorities. It keeps PR230's 32 field templates, vendors, regional sources, rarity/dry-streak policy, ten slots, instance ownership/rolls, enhancement/advancement, settlement RNG, reward provenance, and legacy-review behavior. Combat RNG is separate from frozen reward RNG. The earned chapter, content, group and gear journeys plus the existing PR229/PR230 suites are the regression evidence; no compatibility waiver is intended.
 
 ## Deliberate V1 limits
 

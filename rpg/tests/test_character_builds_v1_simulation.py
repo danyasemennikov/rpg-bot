@@ -128,5 +128,11 @@ def test_checked_evidence_has_exact_seed_budget_and_passes_frozen_gates():
     assert evidence['roles']['all_gates_pass'] is True
     assert evidence['roles']['gate_count'] == 20
     assert evidence['encounter_matrix']['result_count'] == 240
+    assert evidence['snapshot_matrix']['progression_comparison_count'] == 100
+    assert len(evidence['snapshot_matrix']['cross_branch_m20_15_plus_6']) == 4
+    assert all(
+        len(row['capstones']) == 1
+        for row in evidence['snapshot_matrix']['cross_branch_m20_15_plus_6']
+    )
     assert evidence['authority']['legacy_simulator_used'] is False
     assert all(abs(row['relative_percent']) <= 15 for row in evidence['bounded_numerical_tuning'])
