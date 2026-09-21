@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
+
+import pytest
 
 from database import get_connection
 from game.balance import exp_to_next_level
@@ -13,6 +16,8 @@ from game.build_progression import (
     get_pending_build_notice,
     issue_skill_purchase_intent,
     migrate_character_builds_v1,
+    ensure_player_build_v1,
+    BuildRejected,
 )
 from game.pve_reward_settlement import _apply_progression
 from handlers.battle import apply_rewards
@@ -109,6 +114,61 @@ def test_migration_dry_run_is_fully_rollback_safe():
     assert player["build_migration_version"] == 0
     assert state is None
     conn.close()
+
+
+def test_cutover_drains_more_than_one_recovery_batch_before_conversion():
+    full_batch = [{"status": "applied", "encounter_id": str(index)} for index in range(100)]
+    with patch('game.pve_reward_settlement.review_ambiguous_legacy_victories', return_value=0), \
+         patch('game.pve_reward_settlement.recover_prepared_settlements', side_effect=[full_batch, []]) as recover:
+        result = migrate_character_builds_v1()
+    assert result['status'] == 'active'
+    assert recover.call_count == 2
+
+
+def test_field_item_mastery_normalizes_by_item_profile_and_keeps_best_evidence():
+    conn = get_connection()
+    conn.execute("INSERT INTO weapon_mastery (telegram_id, weapon_id, level, exp) VALUES (1, 'field_sword_1h', 4, 30)")
+    conn.execute("INSERT INTO weapon_mastery (telegram_id, weapon_id, level, exp) VALUES (1, 'wooden_sword', 3, 10)")
+    conn.commit()
+    conn.close()
+    migrate_character_builds_v1()
+    conn = get_connection()
+    rows = conn.execute("SELECT weapon_id, level FROM weapon_mastery WHERE telegram_id=1").fetchall()
+    conn.close()
+    assert [(row['weapon_id'], row['level']) for row in rows] == [('sword_1h', 4)]
+
+
+def test_invalid_player_is_quarantined_without_aborting_other_players_or_lazy_migrating():
+    conn = get_connection()
+    conn.execute('''INSERT INTO players
+        (telegram_id, username, name, level, hp, max_hp, mana, max_mana,
+         strength, agility, intuition, vitality, wisdom, luck, stat_points, location_id)
+        VALUES (2, 'bad', 'Bad', 1, 100, 100, 50, 50, 1, 1, 1, 1, 1, 1, -1, 'capital_city')''')
+    conn.execute("INSERT INTO equipment (telegram_id) VALUES (2)")
+    conn.commit()
+    conn.close()
+    result = migrate_character_builds_v1()
+    assert result['migrated'] == 2  # fixture players 1 and 777 still migrate
+    assert result['blocked'] == [2]
+    conn = get_connection()
+    assert conn.execute("SELECT reason FROM build_migration_quarantine WHERE player_id=2").fetchone()['reason'] == 'invalid_attribute_ledger'
+    with pytest.raises(BuildRejected, match='migration_quarantined'):
+        ensure_player_build_v1(2, conn=conn)
+    conn.close()
+
+
+def test_migration_clamps_current_resources_to_retained_effective_gear_cap():
+    conn = get_connection()
+    conn.execute("UPDATE players SET hp=300, max_hp=316 WHERE telegram_id=1")
+    cursor = conn.execute("INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (1, 'oak_guard_shield', 1)")
+    conn.execute("UPDATE equipment SET offhand=? WHERE telegram_id=1", (cursor.lastrowid,))
+    conn.commit()
+    conn.close()
+    migrate_character_builds_v1()
+    conn = get_connection()
+    player = dict(conn.execute("SELECT hp, max_hp FROM players WHERE telegram_id=1").fetchone())
+    conn.close()
+    assert player == {'hp': 300, 'max_hp': 280}
 
 
 def test_atomic_skill_purchase_is_idempotent_and_preserves_family_budget():

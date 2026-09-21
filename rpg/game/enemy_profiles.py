@@ -125,6 +125,7 @@ def resolve_enemy_snapshot(
         "cooldowns": {},
         "skill_ranks": {},
         "opportunity_index": 0,
+        "ai_action_index": 0,
         "successful_attacks": 0,
         "heavy_intent": False,
         "dead": False,
@@ -133,7 +134,7 @@ def resolve_enemy_snapshot(
 
 def choose_enemy_action(enemy: dict[str, Any], allies: list[dict[str, Any]]) -> dict[str, Any]:
     """Choose a deterministic profile action for this enemy opportunity."""
-    opportunity = int(enemy.get("opportunity_index", 0)) + 1
+    opportunity = int(enemy.get("ai_action_index", 0)) + 1
     behavior = str(enemy.get("behavior") or "basic")
     if behavior == "heavy" and opportunity % 3 == 0:
         return {"kind": "enemy_attack", "coefficient": 1.6, "behavior": "heavy"}
@@ -151,7 +152,7 @@ def choose_enemy_action(enemy: dict[str, Any], allies: list[dict[str, Any]]) -> 
 
 
 def next_enemy_intent(enemy: dict[str, Any]) -> dict[str, Any] | None:
-    next_opportunity = int(enemy.get("opportunity_index", 0)) + 1
+    next_opportunity = int(enemy.get("ai_action_index", 0)) + 1
     if str(enemy.get("behavior")) == "heavy" and next_opportunity % 3 == 0:
         return {"kind": "heavy", "coefficient": 1.6}
     return None

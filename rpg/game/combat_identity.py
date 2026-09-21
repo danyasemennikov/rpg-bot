@@ -35,6 +35,7 @@ ATTACK_UP_CAP = .30
 BLOCK_CAP = .40
 BLOCK_REDUCTION = .35
 BARRIER_CAP = .35
+SETUP_BONUS_CAP = .50
 CRIT_CAP_PERCENT = 35.0
 CRIT_MULTIPLIER = 1.5
 
@@ -248,12 +249,13 @@ def select_targets(
     if target_code == "S":
         return [exact_enemy or ordered[0]]
     if target_code == "B":
+        back_rank = max(_formation_rank(target.get("formation", "melee")) for target in living_opponents)
         if exact_enemy:
-            return [exact_enemy]
-        return [max(enumerate(living_opponents), key=lambda pair: (_formation_rank(pair[1].get("formation", "melee")), -pair[0]))[1]]
+            return [exact_enemy] if _formation_rank(exact_enemy.get("formation", "melee")) == back_rank else []
+        return [next(target for target in ordered if _formation_rank(target.get("formation", "melee")) == back_rank)]
     if target_code == "F":
         front_rank = min(_formation_rank(target.get("formation", "melee")) for target in living_opponents)
-        return [target for target in living_opponents if _formation_rank(target.get("formation", "melee")) == front_rank]
+        return [target for target in ordered if _formation_rank(target.get("formation", "melee")) == front_rank][:4]
     if target_code == "A":
         return living_opponents
     if target_code == "2x2":
@@ -265,10 +267,26 @@ def select_targets(
 
 
 def _heal(target: dict[str, Any], amount: float) -> int:
+    if not _alive(target):
+        return 0
     missing = max(0, int(target.get("max_hp", 1)) - int(target.get("hp", 0)))
     actual = min(missing, max(0, int(amount)))
     target["hp"] = int(target.get("hp", 0)) + actual
     return actual
+
+
+def _prevent_death_with_covenant(target: dict[str, Any]) -> bool:
+    if int(target.get("hp", 0)) > 0 or bool(target.get("death_prevention_used")):
+        return False
+    covenants = _find_effect(target, "life_covenant")
+    if not covenants:
+        return False
+    covenant = max(covenants, key=lambda item: float(item.get("value", 0)))
+    target["death_prevention_used"] = True
+    target["hp"] = min(int(target.get("max_hp", 1)), max(1, int(covenant.get("value", 1))))
+    target["dead"] = False
+    _remove_effects(target, {"life_covenant"})
+    return True
 
 
 def _restore_mana(target: dict[str, Any], amount: float) -> int:
@@ -346,16 +364,7 @@ def _finish_direct_packet(
     before = int(target.get("hp", 0))
     actual = min(before, max(0, mitigated))
     target["hp"] = before - actual
-    death_prevented = False
-    if target["hp"] <= 0 and not bool(target.get("death_prevention_used")):
-        covenants = _find_effect(target, "life_covenant")
-        if covenants:
-            covenant = max(covenants, key=lambda item: float(item.get("value", 0)))
-            target["death_prevention_used"] = True
-            target["hp"] = 1
-            _heal(target, int(covenant.get("value", 1)))
-            _remove_effects(target, {"life_covenant"})
-            death_prevented = True
+    death_prevented = _prevent_death_with_covenant(target)
     target["dead"] = int(target.get("hp", 0)) <= 0
     return {
         "blocked": blocked, "parried": parried,
@@ -382,16 +391,7 @@ def _apply_periodic_damage(
     before = int(target.get("hp", 0))
     actual = min(before, damage)
     target["hp"] = before - actual
-    death_prevented = False
-    if target["hp"] <= 0 and not bool(target.get("death_prevention_used")):
-        covenants = _find_effect(target, "life_covenant")
-        if covenants:
-            covenant = max(covenants, key=lambda item: float(item.get("value", 0)))
-            target["death_prevention_used"] = True
-            target["hp"] = 1
-            _heal(target, int(covenant.get("value", 1)))
-            _remove_effects(target, {"life_covenant"})
-            death_prevented = True
+    death_prevented = _prevent_death_with_covenant(target)
     target["dead"] = int(target.get("hp", 0)) <= 0
     return {
         "raw": int(raw), "ordinary_reduction": combined,
@@ -438,6 +438,7 @@ def _resolve_defensive_triggers(
     side_index: int,
     rng: random.Random,
     events: list[dict[str, Any]],
+    deferred: list[tuple[dict[str, Any], dict[str, Any], list[tuple[str, float]]]] | None = None,
 ) -> None:
     """Resolve explicit landed-hit tokens/retaliation without recursion."""
     if duel_window_before and not _has(defender, "reprisal", source_id=_id(defender)):
@@ -450,11 +451,23 @@ def _resolve_defensive_triggers(
     counter_rank = int(defender.get("skill_ranks", {}).get("counter", 0))
     if (
         counter_rank > 0 and defensive_active_before
+        and bool(defender.get("pve_passives_enabled", True))
         and int(defender.get("counter_used_side_index", -1)) != int(side_index)
     ):
         retaliation_coefficients.append(("counter", _ranked(.40, counter_rank)))
         defender["counter_used_side_index"] = int(side_index)
-    if not _alive(attacker):
+    if deferred is not None:
+        deferred.append((defender, attacker, retaliation_coefficients))
+        return
+    _apply_retaliations(defender, attacker, retaliation_coefficients, rng=rng, events=events)
+
+
+def _apply_retaliations(
+    defender: dict[str, Any], attacker: dict[str, Any],
+    retaliation_coefficients: list[tuple[str, float]], *,
+    rng: random.Random, events: list[dict[str, Any]],
+) -> None:
+    if not _alive(attacker) or not _alive(defender):
         return
     for trigger, coefficient in retaliation_coefficients:
         low, high = raw_power_range(defender)
@@ -502,7 +515,7 @@ def _setup_bonus(actor: dict[str, Any], skill_id: str, action_kind: str) -> tupl
             stored = _effect_value(actor, kind, source_id=source)
             bonus += stored if stored > 0 else value
             consumed.append(kind)
-    return bonus, consumed
+    return min(SETUP_BONUS_CAP, bonus), consumed
 
 
 def _ranked_percent(base: float, rank: int) -> float:
@@ -532,7 +545,7 @@ def _apply_skill_support(
     elif skill_id == "parry":
         _add_effect(actor, _effect("parry", actor, 1, value=_ranked(.45, rank), skill_id=skill_id, side_index=side_index))
     elif skill_id == "executioners_focus":
-        _add_effect(actor, _effect("focus", actor, 2, value=.25, skill_id=skill_id, side_index=side_index))
+        _add_effect(actor, _effect("focus", actor, 2, value=_ranked_percent(.25, rank), skill_id=skill_id, side_index=side_index))
     elif skill_id == "battle_stance":
         _add_effect(actor, _effect("attack_up", actor, 2, value=_ranked_percent(.15, rank), skill_id=skill_id, side_index=side_index))
         _add_effect(actor, _effect("ward", actor, 2, value=_ranked_percent(.15, rank), skill_id=skill_id, side_index=side_index))
@@ -614,6 +627,8 @@ def _skill_context(
     coefficient = spec.power * rank_multiplier(rank)
     penetration = 0.0
     school = spec.school or str(actor.get("damage_school") or "physical")
+    if school == "weapon":
+        school = str(actor.get("damage_school") or "physical")
     source = _id(actor)
     flags: dict[str, Any] = {}
     if _has(target, "hunters_mark", source_id=source):
@@ -628,6 +643,7 @@ def _skill_context(
         coefficient += _ranked(1.0, rank)
     elif skill_id in {"flowing_combo", "masters_sequence"} and _has(actor, "flow", source_id=source):
         coefficient += _ranked(.65 if skill_id == "flowing_combo" else .55, rank); flags["consume_flow"] = True
+        if skill_id == "masters_sequence": flags["masters_ward"] = True
     elif skill_id == "savage_chop" and _has(actor, "rage", source_id=source):
         coefficient += _ranked(.35, rank)
     elif skill_id == "frenzy_chain" and _has(actor, "rage", source_id=source):
@@ -647,6 +663,7 @@ def _skill_context(
         flags["rupture_poison"] = True
     elif skill_id in {"quick_slice", "backstab", "shadow_chain"} and _has(actor, "opening", source_id=source):
         coefficient += _ranked({"quick_slice": .35, "backstab": .80, "shadow_chain": .80}[skill_id], rank); flags["consume_opening"] = True
+        if skill_id == "shadow_chain": flags["shadow_evasion"] = True
     elif skill_id in {"hunters_mark"}:
         pass
     elif skill_id == "piercing_arrow":
@@ -767,6 +784,11 @@ def _on_hit(
         add("poison", 3, school="physical", raw_tick=int(base_power * .25 * _effect_value(actor, "envenom", source_id=source)))
         _remove_effects(actor, {"envenom"}, source_id=source)
 
+    if flags.get("masters_ward"):
+        _add_effect(actor, _effect("ward", actor, 1, value=_ranked_percent(.25, rank), skill_id=skill_id, side_index=side_index))
+    if flags.get("shadow_evasion"):
+        _add_effect(actor, _effect("evasion_up", actor, 1, value=int(40 * rank_multiplier(rank)), skill_id=skill_id, side_index=side_index))
+
     for kind in ("flow", "rage", "opening", "echo", "reprisal", "grace"):
         if flags.get(f"consume_{kind}"):
             _remove_effects(actor, {kind}, source_id=source)
@@ -880,6 +902,9 @@ def evaluate_action(
     timeout = action_kind == "timeout_guard"
     cast_index = int(actor.get("opportunity_index", 0))
 
+    if not _alive(actor):
+        return {"accepted": False, "reason": "actor_dead", "actor": actor, "allies": allies, "opponents": opponents, "events": events}
+
     freezes = _find_effect(actor, "freeze")
     if freezes:
         _effects(actor).remove(freezes[0])
@@ -958,6 +983,8 @@ def evaluate_action(
         setup_bonus, setup_consumptions = _setup_bonus(actor, skill_id, action_kind)
         context_actor = copy.deepcopy(actor)
         hit_any = False
+        landed_target_ids: set[str] = set()
+        deferred_retaliations: list[tuple[dict[str, Any], dict[str, Any], list[tuple[str, float]]]] = []
         damaged_targets = []
         opponent_ids = {_id(item) for item in opponents}
         for target in targets:
@@ -984,6 +1011,7 @@ def evaluate_action(
             event = {"kind": "direct", "actor_id": actor_id, "target_id": _id(target), "skill_id": skill_id or "normal", "hit_chance": chance, "hit_roll": roll, "hit": landed}
             if landed:
                 hit_any = True
+                landed_target_ids.add(_id(target))
                 defensive_active_before = bool(_find_effect(target, "parry") or _find_effect(target, "ward") or _find_effect(target, "guard"))
                 duel_window_before = any(bool(item.get("metadata", {}).get("duel")) for item in _find_effect(target, "ward"))
                 if support_kind == "hostile_effect":
@@ -1014,7 +1042,7 @@ def evaluate_action(
                         target, actor, result,
                         defensive_active_before=defensive_active_before,
                         duel_window_before=duel_window_before,
-                        side_index=side_index, rng=rng, events=events,
+                        side_index=side_index, rng=rng, events=events, deferred=deferred_retaliations,
                     )
                     _on_hit(actor, allies, target, skill_id=skill_id, rank=rank, base_power=base_low, actual_damage=result["hp_removed"], flags=flags, side_index=side_index, events=events)
                 else:
@@ -1026,10 +1054,10 @@ def evaluate_action(
                         target, actor, result,
                         defensive_active_before=defensive_active_before,
                         duel_window_before=duel_window_before,
-                        side_index=side_index, rng=rng, events=events,
+                        side_index=side_index, rng=rng, events=events, deferred=deferred_retaliations,
                     )
-                    if action_kind == "skill":
-                        _on_hit(actor, allies, target, skill_id=skill_id, rank=rank, base_power=base_low, actual_damage=result["hp_removed"], flags=flags, side_index=side_index, events=events)
+                    if action_kind in {"skill", "normal"}:
+                        _on_hit(actor, allies, target, skill_id=skill_id or "normal", rank=rank, base_power=base_low, actual_damage=result["hp_removed"], flags=flags, side_index=side_index, events=events)
                     elif flags.get("judgment_normal"):
                         _heal(actor, min(int(result["hp_removed"] * .10), int(actor.get("max_hp", 1) * .05)))
             events.append(event)
@@ -1037,8 +1065,10 @@ def evaluate_action(
             for token in setup_consumptions:
                 _remove_effects(actor, {token}, source_id=actor_id)
         if skill_id == "absolute_zero" and hit_any:
-            active_target = targets[0]
-            _apply_hard_control(active_target, actor, skill_id, side_index, events)
+            selected_id = str(action.get("target_id")) if action.get("target_id") is not None else _id(targets[0])
+            active_target = next((target for target in targets if _id(target) == selected_id), None)
+            if active_target is not None and selected_id in landed_target_ids:
+                _apply_hard_control(active_target, actor, skill_id, side_index, events)
         if skill_id == "sanctified_burst" and hit_any:
             living = [ally for ally in allies if _alive(ally)]
             if living:
@@ -1048,6 +1078,8 @@ def evaluate_action(
             for ally in allies:
                 if _alive(ally):
                     events.append({"kind": "heal", "target_id": _id(ally), "amount": _heal(ally, healing_power(actor) * _ranked(.25, rank))})
+        for defender, retaliation_target, coefficients in deferred_retaliations:
+            _apply_retaliations(defender, retaliation_target, coefficients, rng=rng, events=events)
     if action_kind == "normal":
         restored = _restore_mana(actor, 6)
         events.append({"kind": "mana", "target_id": actor_id, "amount": restored, "source": "normal"})
@@ -1099,6 +1131,7 @@ def evaluate_enemy_action(
     rng = random.Random(rng_seed)
     events: list[dict[str, Any]] = []
     opportunity = int(enemy.get("opportunity_index", 0))
+    ai_action_index = int(enemy.get("ai_action_index", 0))
     freezes = _find_effect(enemy, "freeze")
     if freezes:
         _effects(enemy).remove(freezes[0])
@@ -1159,6 +1192,7 @@ def evaluate_enemy_action(
                         events.append({"kind": "enemy_burn", "target_id": _id(target), "raw_tick": max(1, int(raw * .15))})
             events.append(direct_event)
     enemy["opportunity_index"] = opportunity + 1
+    enemy["ai_action_index"] = ai_action_index + 1
     from game.enemy_profiles import next_enemy_intent
     intent = next_enemy_intent(enemy)
     enemy["heavy_intent"] = bool(intent)
@@ -1203,6 +1237,8 @@ def advance_affected_side(
             effect["duration"] = int(effect.get("duration", 1)) - 1
             if effect["duration"] <= 0 and effect in _effects(target):
                 _effects(target).remove(effect)
+            if not _alive(target):
+                break
     return {"entities": state, "events": events}
 
 

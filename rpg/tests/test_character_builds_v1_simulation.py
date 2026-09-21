@@ -45,6 +45,17 @@ def test_legal_snapshot_matrix_covers_all_branches_stages_mixes_and_extremes():
         'sword_1h', 'daggers', 'magic_staff', 'holy_staff',
     }
     assert all(row['points_spent'] == 21 for row in matrix['cross_branch_m20_15_plus_6'])
+    assert all(len(row['capstones']) == 1 for row in matrix['cross_branch_m20_15_plus_6'])
+    assert matrix['progression_comparison_count'] == 100
+    assert {
+        row['gear_set'] for row in matrix['progression_comparisons']
+    } == {'entry_weapon_only', 'common_t1_full'}
+    assert all(
+        set(row['branches']) == {'A', 'B'}
+        and not row['branches']['A']['validation_errors']
+        and not row['branches']['B']['validation_errors']
+        for row in matrix['progression_comparisons']
+    )
     assert len(matrix['stat_swap_variants']) == 10
     assert len(matrix['extreme_formula_probes_not_balance_claims']) == 40
 

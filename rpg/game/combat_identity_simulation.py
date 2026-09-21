@@ -25,7 +25,7 @@ from game.balance import (
 from game.build_contract import (
     BRANCH_IDENTITIES,
     FAMILIES,
-    RULES_VERSION,
+    RULES_VERSION, MAX_SKILL_RANK,
     SKILL_SPECS,
     SKILL_TREES,
     legal_family_budget,
@@ -201,10 +201,8 @@ def build_legal_lab_actor(
         if mastery_level < 20:
             raise ValueError('cross_branch_mix_requires_m20')
         sibling = 'B' if branch == 'A' else 'A'
-        ranks.update({
-            skill_id: (2 if index == 0 else 1)
-            for index, skill_id in enumerate(SKILL_TREES[family][sibling])
-        })
+        sibling_skills = SKILL_TREES[family][sibling]
+        ranks.update({sibling_skills[0]: 3, sibling_skills[1]: 1, sibling_skills[2]: 1, sibling_skills[3]: 1})
     if sum(ranks.values()) > legal_family_budget(mastery_level):
         raise ValueError('skill_budget_exceeded')
     return finalize_actor_snapshot({
@@ -600,6 +598,23 @@ def validate_lab_actor(actor: dict[str, Any]) -> list[str]:
         errors.append('skill_budget')
     if any(SKILL_SPECS[skill_id].family != actor['family'] for skill_id in actor['skill_ranks']):
         errors.append('family_ownership')
+    ranks = {str(skill_id): int(rank) for skill_id, rank in actor['skill_ranks'].items()}
+    mastery_level = int(actor['mastery_level'])
+    if any(SKILL_SPECS[skill_id].unlock_mastery > mastery_level for skill_id in ranks):
+        errors.append('mastery_gate')
+    if any(rank < 1 or rank > MAX_SKILL_RANK for rank in ranks.values()):
+        errors.append('rank_limit')
+    capstones = [skill_id for skill_id, rank in ranks.items() if rank > 0 and SKILL_SPECS[skill_id].position == 4]
+    if len(capstones) > 1:
+        errors.append('dual_capstone')
+    for capstone in capstones:
+        branch = SKILL_SPECS[capstone].branch
+        other_points = sum(
+            rank for skill_id, rank in ranks.items()
+            if SKILL_SPECS[skill_id].branch == branch and skill_id != capstone
+        )
+        if other_points < 8:
+            errors.append('capstone_prerequisite')
     if actor.get('weapon_item_id') != f"field_{actor['family']}":
         errors.append('field_weapon')
     if provenance.get('gear_tier') != 1 or provenance.get('rarity') != 'common':
@@ -730,8 +745,8 @@ ROLE_SCENARIOS = (
     },
     {
         'scenario_id': 'daggers_armored_sustain', 'family': 'daggers',
-        'declared_matchup': 'Venom delayed effective damage on an armored target',
-        'enemies': ('mountain_stone_golem',), 'max_opportunities': 4,
+        'declared_matchup': 'Venom delayed effective damage in the opening three-opportunity cycle on an armored target',
+        'enemies': ('mountain_stone_golem',), 'max_opportunities': 3,
         'gates': ({'winner': 'A', 'metric': 'actor_damage_per_turn', 'axis': 'sustained_damage_per_opportunity'},),
     },
     {
@@ -904,8 +919,40 @@ def snapshot_matrix() -> dict[str, Any]:
         cross_branch.append({
             'family': family, 'allocation': actor['skill_ranks'],
             'points_spent': sum(actor['skill_ranks'].values()),
+            'capstones': [
+                skill_id for skill_id, rank in actor['skill_ranks'].items()
+                if rank > 0 and SKILL_SPECS[skill_id].position == 4
+            ],
             'validation_errors': validate_lab_actor(actor),
         })
+    progression_comparisons = []
+    for family in FAMILIES:
+        for level, mastery_level in stages:
+            for gear_set in ('entry_weapon_only', 'common_t1_full'):
+                branches = {}
+                for branch in ('A', 'B'):
+                    actor = build_legal_lab_actor(
+                        family, branch, level=level, mastery_level=mastery_level,
+                        gear_set=gear_set,
+                    )
+                    low, high = raw_power_range(actor)
+                    branches[branch] = {
+                        'identity': BRANCH_IDENTITIES[family][branch],
+                        'skill_ranks': actor['skill_ranks'],
+                        'points_spent': sum(actor['skill_ranks'].values()),
+                        'unspent_skill_points': actor['skill_points'],
+                        'item_ids': actor['provenance']['gear_item_ids'],
+                        'max_hp': actor['max_hp'], 'max_mana': actor['max_mana'],
+                        'power_range': [low, high],
+                        'physical_defense': actor['physical_defense'],
+                        'magic_defense': actor['magic_defense'],
+                        'validation_errors': validate_lab_actor(actor),
+                    }
+                progression_comparisons.append({
+                    'family': family, 'level': level,
+                    'mastery_level': mastery_level, 'gear_set': gear_set,
+                    'branches': branches,
+                })
     stat_variants = []
     for family in FAMILIES:
         if family == 'daggers':
@@ -942,6 +989,8 @@ def snapshot_matrix() -> dict[str, Any]:
         'stages': [{'level': level, 'mastery_level': mastery} for level, mastery in stages],
         'snapshot_count': len(snapshots), 'snapshots': snapshots,
         'cross_branch_m20_15_plus_6': cross_branch,
+        'progression_comparison_count': len(progression_comparisons),
+        'progression_comparisons': progression_comparisons,
         'stat_swap_variants': stat_variants,
         'extreme_formula_probes_not_balance_claims': extremes,
     }

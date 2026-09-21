@@ -1692,6 +1692,7 @@ def create_pve_encounter(
     combat_seed = str(battle_state.get('combat_seed') or uuid.uuid4().hex)
     battle_state['combat_seed'] = combat_seed
     battle_state.setdefault('turn_revision', 0)
+    battle_state.setdefault('state_revision', 0)
     source_units = _build_source_units_snapshot(
         battle_state=battle_state,
         mob=mob or {},
@@ -2268,25 +2269,49 @@ def load_active_solo_pve_encounter(*, player_id: int) -> tuple[dict, dict] | Non
     return load_active_pve_encounter(player_id=player_id)
 
 
-def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, mob: dict | None = None) -> None:
+def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, mob: dict | None = None) -> bool:
     if not encounter_id:
-        return
+        return False
     conn = get_connection()
     try:
-        conn.execute(
-            '''
-            UPDATE pve_encounters
-            SET battle_state_json=?, mob_json=?, mob_id=?, updated_at=CURRENT_TIMESTAMP
-            WHERE encounter_id=? AND status='active'
-            ''',
-            (
-                _serialize_payload(battle_state),
-                _serialize_payload(mob or {}),
-                str(battle_state.get('mob_id') or (mob or {}).get('id') or ''),
-                encounter_id,
-            ),
-        )
+        ensure_build_schema(conn)
+        if battle_state.get('rules_version') == RULES_VERSION:
+            expected_turn = int(battle_state.get('turn_revision', 0) or 0)
+            expected_state = int(battle_state.get('state_revision', 0) or 0)
+            authority = conn.execute('''SELECT turn_revision, state_revision FROM pve_encounters
+                WHERE encounter_id=? AND status='active' AND rules_version=?''', (
+                    encounter_id, RULES_VERSION,
+                )).fetchone()
+            if (
+                not authority
+                or int(authority['state_revision'] or 0) != expected_state
+                or int(authority['turn_revision'] or 0) not in {expected_turn, expected_turn - 1}
+            ):
+                conn.rollback()
+                return False
+            current_turn = int(authority['turn_revision'] or 0)
+            battle_state['state_revision'] = expected_state + 1
+            updated = conn.execute('''UPDATE pve_encounters SET battle_state_json=?, mob_json=?, mob_id=?,
+                turn_revision=?, state_revision=state_revision+1, updated_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=? AND status='active' AND rules_version=?
+                AND turn_revision=? AND state_revision=?''', (
+                    _serialize_payload(battle_state), _serialize_payload(mob or {}),
+                    str(battle_state.get('mob_id') or (mob or {}).get('id') or ''),
+                    expected_turn, encounter_id, RULES_VERSION, current_turn, expected_state,
+                ))
+            if updated.rowcount != 1:
+                battle_state['state_revision'] = expected_state
+                conn.rollback()
+                return False
+        else:
+            updated = conn.execute('''UPDATE pve_encounters
+                SET battle_state_json=?, mob_json=?, mob_id=?, updated_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=? AND status='active' ''', (
+                    _serialize_payload(battle_state), _serialize_payload(mob or {}),
+                    str(battle_state.get('mob_id') or (mob or {}).get('id') or ''), encounter_id,
+                ))
         conn.commit()
+        return updated.rowcount == 1
     finally:
         conn.close()
 
@@ -2490,6 +2515,121 @@ def mark_group_participant_defeated(
     for side in runtime_state.sides.values():
         if int(participant_id) in side.participant_order:
             side.participant_order = [pid for pid in side.participant_order if pid != int(participant_id)]
+
+
+def resolve_pve_flee_intent(
+    *, player_id: int, encounter_id: str, action_token: str, success: bool,
+) -> dict:
+    """Consume a flee intent and durably depart only that participant."""
+    from game.action_receipts import ActionRejected, consume_action
+
+    conn = get_connection()
+    departed = False
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        ensure_build_schema(conn)
+        duplicate = conn.execute('''SELECT result_json FROM pve_participant_departures_v1
+            WHERE action_token=? AND encounter_id=? AND player_id=?''', (
+                action_token, encounter_id, int(player_id),
+            )).fetchone()
+        if duplicate:
+            conn.rollback()
+            return {**json.loads(str(duplicate['result_json'])), 'already_applied': True}
+        raw = consume_action(conn, int(player_id), 'combat_v1', action_token)
+        try:
+            intent = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ActionRejected('stale_action') from exc
+        action = intent.get('action') if isinstance(intent, dict) else None
+        if (
+            not isinstance(action, dict) or action.get('kind') != 'flee'
+            or intent.get('rules_version') != RULES_VERSION
+            or intent.get('encounter_kind') != 'pve'
+            or str(intent.get('encounter_id')) != str(encounter_id)
+            or int(intent.get('actor_id', 0)) != int(player_id)
+        ):
+            raise ActionRejected('stale_action')
+        row = conn.execute('''SELECT e.* FROM pve_encounters e
+            JOIN pve_encounter_participants p ON p.encounter_id=e.encounter_id
+            WHERE e.encounter_id=? AND e.status='active' AND e.rules_version=?
+            AND p.player_id=? AND p.status='active' ''', (
+                encounter_id, RULES_VERSION, int(player_id),
+            )).fetchone()
+        revision = int(intent.get('turn_revision', -1))
+        if not row or int(row['turn_revision']) not in {revision, revision - 1}:
+            raise ActionRejected('stale_action')
+        state = json.loads(str(row['battle_state_json']))
+        result = {
+            'accepted': True, 'success': bool(success), 'fled': bool(success),
+            'encounter_id': encounter_id, 'player_id': int(player_id),
+        }
+        if success:
+            v1_actor = (state.get('participant_states_v1') or {}).get(str(player_id)) or {}
+            legacy_actor = (state.get('participant_states') or {}).get(str(player_id)) or {}
+            hp = int(v1_actor.get('hp', legacy_actor.get('hp', legacy_actor.get('player_hp', 0))) or 0)
+            mana = int(v1_actor.get('mana', legacy_actor.get('mana', legacy_actor.get('player_mana', 0))) or 0)
+            if isinstance(v1_actor, dict):
+                v1_actor['departed'] = True
+            if isinstance(legacy_actor, dict):
+                legacy_actor['departed'] = True
+                legacy_actor['fled'] = True
+            state['side_a_player_ids'] = [
+                int(pid) for pid in state.get('side_a_player_ids', []) if int(pid) != int(player_id)
+            ]
+            state.get('ally_commit_status', {}).pop(str(player_id), None)
+            conn.execute('''UPDATE pve_encounter_participants SET status='fled',
+                updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND player_id=? AND status='active' ''', (
+                    encounter_id, int(player_id),
+                ))
+            conn.execute('UPDATE players SET hp=MAX(0, ?), mana=MAX(0, ?), in_battle=0 WHERE telegram_id=?', (
+                hp, mana, int(player_id),
+            ))
+            remaining = conn.execute('''SELECT COUNT(*) AS total FROM pve_encounter_participants
+                WHERE encounter_id=? AND side_id=? AND status='active' ''', (
+                    encounter_id, SIDE_PLAYER,
+                )).fetchone()
+            encounter_status = 'active' if int(remaining['total'] or 0) > 0 else 'fled'
+            state['state_revision'] = int(row['state_revision']) + 1
+            updated = conn.execute('''UPDATE pve_encounters SET battle_state_json=?, status=?,
+                state_revision=state_revision+1, updated_at=CURRENT_TIMESTAMP,
+                finished_at=CASE WHEN ?='fled' THEN CURRENT_TIMESTAMP ELSE finished_at END
+                WHERE encounter_id=? AND status='active' AND state_revision=?''', (
+                    _serialize_payload(state), encounter_status, encounter_status,
+                    encounter_id, int(row['state_revision']),
+                ))
+            if updated.rowcount != 1:
+                raise ActionRejected('stale_action')
+            if encounter_status == 'fled':
+                _transition_anchored_spawns_for_encounters(
+                    conn, encounter_ids=[encounter_id], state=SPAWN_STATE_RESPAWNING,
+                    clear_link=True, respawn_seconds=DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS,
+                )
+            result.update({'battle': state, 'encounter_status': encounter_status})
+            departed = True
+        conn.execute('''INSERT INTO pve_participant_departures_v1
+            (action_token, encounter_id, player_id, result_json) VALUES (?, ?, ?, ?)''', (
+                action_token, encounter_id, int(player_id), _serialize_payload(result),
+            ))
+        conn.commit()
+    except ActionRejected as exc:
+        conn.rollback()
+        return {'accepted': False, 'reason': str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    if departed:
+        runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
+        if runtime_state is not None:
+            participant = runtime_state.participants.get(int(player_id))
+            if participant is not None:
+                participant.phase_state = 'fled'
+            for side in runtime_state.sides.values():
+                if int(player_id) in side.participant_order:
+                    side.participant_order = [pid for pid in side.participant_order if pid != int(player_id)]
+    return result
 
 
 def _utc_now() -> datetime:
@@ -2884,33 +3024,32 @@ def submit_player_commit(
     runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
     if runtime_state is None:
         return False, 'encounter_not_found'
+    if runtime_state.side_turn_state != 'collecting_orders':
+        return False, 'turn_not_collecting'
+    participant = runtime_state.participants.get(int(player_id))
+    if not participant or participant.side_id != runtime_state.active_side_id:
+        return False, 'wrong_side'
+    if participant.phase_state != 'eligible':
+        return False, 'participant_not_eligible'
 
-    commit_result = _SOLO_PVE_RUNTIME.commit_action(
-        encounter_id=encounter_id,
-        participant_id=int(player_id),
-        action_type=action_type,
-        target_info=target_info,
-        skill_id=skill_id,
-        item_id=item_id,
-        committed_at=_utc_now(),
-        turn_revision=runtime_state.turn_revision,
+    durable = submit_combat_order(
+        encounter_kind='pve', encounter_id=encounter_id,
+        turn_revision=runtime_state.turn_revision, actor_id=int(player_id),
+        action={
+            'kind': action_type, 'skill_id': skill_id,
+            'item_id': item_id, 'target_info': target_info,
+        },
+        target_id=(target_info or {}).get('id'),
+        deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(_utc_now()),
+        order_kind='manual',
     )
-    if commit_result.accepted:
-        durable = submit_combat_order(
-            encounter_kind='pve', encounter_id=encounter_id,
-            turn_revision=runtime_state.turn_revision, actor_id=int(player_id),
-            action={
-                'kind': action_type,
-                'skill_id': skill_id,
-                'item_id': item_id,
-                'target_info': target_info,
-            },
-            target_id=(target_info or {}).get('id'),
-            deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(_utc_now()),
-            order_kind='manual',
-        )
-        if not durable.get('accepted'):
-            return False, str(durable.get('reason') or 'combat_order_conflict')
+    if not durable.get('accepted'):
+        return False, str(durable.get('reason') or 'combat_order_conflict')
+    commit_result = _SOLO_PVE_RUNTIME.commit_action(
+        encounter_id=encounter_id, participant_id=int(player_id), action_type=action_type,
+        target_info=target_info, skill_id=skill_id, item_id=item_id,
+        committed_at=_utc_now(), turn_revision=runtime_state.turn_revision,
+    )
     _sync_projection_targets(encounter_id=encounter_id, battle_state=battle_state)
     return commit_result.accepted, commit_result.reason
 
@@ -3002,7 +3141,7 @@ def resolve_current_side_if_ready(
     _SOLO_PVE_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)
     _sync_projection_targets(encounter_id=encounter_id, battle_state=battle_state, projection_states=projection_states)
     if battle_state is not None and battle_state.get('rules_version') == RULES_VERSION:
-        persist_turn_result(
+        durable_result = persist_turn_result(
             encounter_kind='pve', encounter_id=encounter_id,
             turn_revision=turn_revision,
             result={
@@ -3019,6 +3158,12 @@ def resolve_current_side_if_ready(
             },
             complete_state=battle_state,
         )
+        if not durable_result.get('applied'):
+            _SOLO_PVE_RUNTIME_STORE.remove(encounter_id)
+            return False
+        if durable_result.get('duplicate'):
+            battle_state.clear()
+            battle_state.update(durable_result['state'])
     return True
 
 
@@ -3042,19 +3187,40 @@ def resolve_due_player_timeout_if_any(
     if runtime_state is None:
         return False
 
-    assigned = _SOLO_PVE_RUNTIME.apply_timeout_fallbacks(encounter_id=encounter_id, now=now or _utc_now())
-    if assigned <= 0:
+    check_now = now or _utc_now()
+    if runtime_state.side_deadline_at and check_now < runtime_state.side_deadline_at:
         return False
-    for fallback in _SOLO_PVE_RUNTIME.build_resolution_batch(encounter_id=encounter_id):
-        if fallback.source != 'fallback':
+    existing = {
+        int(item['actor_id']): item for item in load_combat_orders(
+            encounter_kind='pve', encounter_id=encounter_id, turn_revision=runtime_state.turn_revision,
+        )
+    }
+    for participant_id in _SOLO_PVE_RUNTIME.get_active_side_eligible_participants(encounter_id=encounter_id):
+        order = existing.get(int(participant_id))
+        if order:
+            action = order.get('action') or {}
+            kind = str(action.get('kind') or '')
+            _SOLO_PVE_RUNTIME.commit_action(
+                encounter_id=encounter_id, participant_id=int(participant_id),
+                action_type='fallback_guard' if kind == 'timeout_guard' else kind,
+                target_info=action.get('target_info'), skill_id=action.get('skill_id'),
+                item_id=action.get('item_id'), committed_at=check_now,
+                turn_revision=runtime_state.turn_revision,
+            )
             continue
-        submit_combat_order(
+        durable = submit_combat_order(
             encounter_kind='pve', encounter_id=encounter_id,
-            turn_revision=runtime_state.turn_revision, actor_id=fallback.participant_id,
+            turn_revision=runtime_state.turn_revision, actor_id=int(participant_id),
             action={'kind': 'timeout_guard'}, target_id=None,
-            deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(now or _utc_now()),
+            deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(check_now),
             order_kind='timeout',
         )
+        if not durable.get('accepted'):
+            return False
+    assigned = _SOLO_PVE_RUNTIME.apply_timeout_fallbacks(encounter_id=encounter_id, now=check_now)
+    runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
+    if assigned <= 0 and (not runtime_state or runtime_state.side_turn_state != 'ready_to_lock'):
+        return False
 
     return resolve_current_side_if_ready(
         player_id=player_id,
@@ -3228,28 +3394,28 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
         battle_state['_pack_enemy_side_total'] = len(enemy_participants)
         battle_state['_pack_enemy_side_processed'] = 0
     for enemy_pid in enemy_participants:
-        commit = _SOLO_PVE_RUNTIME.commit_action(
-            encounter_id=encounter_id,
-            participant_id=enemy_pid,
-            action_type='enemy_basic_attack',
-            target_info=None,
-            skill_id=None,
-            item_id=None,
-            committed_at=_utc_now(),
-            turn_revision=runtime_state.turn_revision,
-        )
-        if not commit.accepted:
-            sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
-            battle_state.pop('_pack_enemy_side_total', None)
-            battle_state.pop('_pack_enemy_side_processed', None)
-            return
-        submit_combat_order(
+        durable = submit_combat_order(
             encounter_kind='pve', encounter_id=encounter_id,
             turn_revision=runtime_state.turn_revision, actor_id=enemy_pid,
             action={'kind': 'enemy_basic_attack'}, target_id=None,
             deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(now),
             order_kind='ai',
         )
+        if not durable.get('accepted'):
+            sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
+            battle_state.pop('_pack_enemy_side_total', None)
+            battle_state.pop('_pack_enemy_side_processed', None)
+            return
+        commit = _SOLO_PVE_RUNTIME.commit_action(
+            encounter_id=encounter_id, participant_id=enemy_pid,
+            action_type='enemy_basic_attack', target_info=None, skill_id=None, item_id=None,
+            committed_at=_utc_now(), turn_revision=runtime_state.turn_revision,
+        )
+        if not commit.accepted:
+            sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
+            battle_state.pop('_pack_enemy_side_total', None)
+            battle_state.pop('_pack_enemy_side_processed', None)
+            return
 
     resolved = resolve_current_side_if_ready(
         player_id=player_id,

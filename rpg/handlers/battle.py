@@ -1959,18 +1959,19 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         if not valid:
             await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
             return
-        consumed = consume_combat_intent(user.id, token)
-        if not consumed.get('accepted'):
-            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
-            return
         if action_type == 'flee':
-            if random.randint(1, 100) <= 20:
+            from game.pve_live import resolve_pve_flee_intent
+            flee_result = resolve_pve_flee_intent(
+                player_id=user.id,
+                encounter_id=str(battle_state.get('pve_encounter_id', '')),
+                action_token=token,
+                success=random.randint(1, 100) <= 20,
+            )
+            if not flee_result.get('accepted'):
+                await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+                return
+            if flee_result.get('fled'):
                 end_battle(user.id)
-                finish_solo_pve_encounter(
-                    player_id=user.id,
-                    encounter_id=battle_state.get('pve_encounter_id'),
-                    status='fled',
-                )
                 context.user_data.pop('battle', None)
                 context.user_data.pop('battle_mob', None)
                 await safe_edit(
@@ -1981,6 +1982,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 await query.answer()
                 return
             action_type = 'flee_failed'
+        else:
+            consumed = consume_combat_intent(user.id, token)
+            if not consumed.get('accepted'):
+                await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+                return
         accepted, _ = submit_player_commit(
             player_id=user.id,
             action_type=action_type,
@@ -2055,10 +2061,20 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             potions = conn.execute("""SELECT inv.id, inv.item_id, inv.quantity FROM inventory inv
                 JOIN items i ON inv.item_id=i.item_id
                 WHERE inv.telegram_id=? AND i.item_type='potion' AND inv.quantity>0""", (user.id,)).fetchall()
+            encounter_row = conn.execute('''SELECT turn_revision, state_revision FROM pve_encounters
+                WHERE encounter_id=? AND status='active' ''', (
+                    str(battle_state.get('pve_encounter_id', '')),
+                )).fetchone()
         finally:
             conn.close()
         encounter_id = str(battle_state.get('pve_encounter_id', ''))
-        payloads = [f"{encounter_id}:{pot['id']}:{pot['quantity']}" for pot in potions]
+        if not encounter_row:
+            await query.answer(t('battle.already_over', lang), show_alert=True)
+            return
+        payloads = [
+            f"{encounter_id}:{pot['id']}:{pot['quantity']}:{int(encounter_row['turn_revision'])}:{int(encounter_row['state_revision'])}"
+            for pot in potions
+        ]
         tokens = issue_actions(user.id, 'battle_use', payloads)
 
         if not potions:

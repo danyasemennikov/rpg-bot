@@ -30,6 +30,8 @@ from game.build_contract import (
     mastery_exp_needed,
     normalize_family,
 )
+from game.equipment_stats import get_player_effective_stats
+from game.items_data import get_item
 
 
 ATTRIBUTE_KEYS = ("strength", "agility", "intuition", "vitality", "wisdom", "luck")
@@ -70,10 +72,12 @@ def ensure_build_schema(conn: sqlite3.Connection) -> None:
         _add_column(conn, "pve_encounters", "rules_version", "TEXT NOT NULL DEFAULT 'legacy_v0'")
         _add_column(conn, "pve_encounters", "combat_seed", "TEXT")
         _add_column(conn, "pve_encounters", "turn_revision", "INTEGER NOT NULL DEFAULT 0")
+        _add_column(conn, "pve_encounters", "state_revision", "INTEGER NOT NULL DEFAULT 0")
     if _table_exists(conn, "pvp_engagements"):
         _add_column(conn, "pvp_engagements", "rules_version", "TEXT NOT NULL DEFAULT 'legacy_v0'")
         _add_column(conn, "pvp_engagements", "combat_seed", "TEXT")
         _add_column(conn, "pvp_engagements", "turn_revision", "INTEGER NOT NULL DEFAULT 0")
+        _add_column(conn, "pvp_engagements", "state_revision", "INTEGER NOT NULL DEFAULT 0")
 
     conn.execute('''CREATE TABLE IF NOT EXISTS build_rules_state (
         migration_key TEXT PRIMARY KEY,
@@ -129,6 +133,39 @@ def ensure_build_schema(conn: sqlite3.Connection) -> None:
         consumed_at TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (player_id, notice_key)
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS build_migration_quarantine (
+        player_id INTEGER PRIMARY KEY REFERENCES players(telegram_id),
+        migration_version INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        snapshot_json TEXT NOT NULL,
+        details_json TEXT NOT NULL DEFAULT '{}',
+        resolved_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS pvp_terminal_settlements_v1 (
+        engagement_id INTEGER PRIMARY KEY,
+        winner_id INTEGER NOT NULL,
+        loser_id INTEGER NOT NULL,
+        result_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'applied',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS battle_consumable_receipts_v1 (
+        action_token TEXT PRIMARY KEY,
+        encounter_id TEXT NOT NULL,
+        player_id INTEGER NOT NULL,
+        result_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS pve_participant_departures_v1 (
+        action_token TEXT PRIMARY KEY,
+        encounter_id TEXT NOT NULL,
+        player_id INTEGER NOT NULL,
+        result_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )''')
 
 
@@ -192,10 +229,13 @@ def _archive_player(conn: sqlite3.Connection, player: dict[str, Any]) -> tuple[d
         "cooldowns": _rows(conn, "SELECT * FROM skill_cooldowns WHERE telegram_id=? ORDER BY skill_id", (player_id,)),
     }
     flags: list[str] = []
-    observed = observed_attribute_budget(player)
-    expected = normal_attribute_budget(int(player.get("level", 1)))
-    if observed > expected:
-        flags.append(f"historic_attribute_excess:{observed - expected}")
+    try:
+        observed = observed_attribute_budget(player)
+        expected = normal_attribute_budget(int(player.get("level", 1)))
+        if observed > expected:
+            flags.append(f"historic_attribute_excess:{observed - expected}")
+    except (BuildRejected, TypeError, ValueError):
+        flags.append("invalid_attribute_ledger")
     unknown = sorted(
         row["skill_id"] for row in snapshot["skills"]
         if row["skill_id"] not in SKILL_SPECS
@@ -210,11 +250,22 @@ def _archive_player(conn: sqlite3.Connection, player: dict[str, Any]) -> tuple[d
     return snapshot, flags
 
 
-def _normalize_masteries(snapshot: dict[str, Any]) -> list[dict[str, int | str]]:
+def _normalize_masteries(snapshot: dict[str, Any]) -> tuple[list[dict[str, int | str]], list[dict[str, Any]]]:
     grouped: dict[str, list[dict]] = {}
+    rejected: list[dict[str, Any]] = []
     for row in snapshot["masteries"]:
-        family = normalize_family(row.get("weapon_id"))
+        weapon_id = str(row.get("weapon_id") or "")
+        item = get_item(weapon_id) or {}
+        item_family = normalize_family(item.get("weapon_profile"))
+        alias_family = normalize_family(weapon_id)
+        candidates = {family for family in (item_family, alias_family) if family in FAMILIES}
+        if len(candidates) > 1:
+            rejected.append({"row": row, "reason": "ambiguous_weapon_profile", "candidates": sorted(candidates)})
+            continue
+        family = next(iter(candidates), "")
         if family not in FAMILIES:
+            if weapon_id not in {"", "base", "bare_hands", "fists", "unarmed"}:
+                rejected.append({"row": row, "reason": "unknown_weapon_profile"})
             continue
         grouped.setdefault(family, []).append(row)
     normalized = []
@@ -228,7 +279,32 @@ def _normalize_masteries(snapshot: dict[str, Any]) -> list[dict[str, int | str]]
             "exp": exp,
             "skill_points": legal_family_budget(level),
         })
-    return sorted(normalized, key=lambda item: FAMILIES.index(str(item["family"])))
+    return sorted(normalized, key=lambda item: FAMILIES.index(str(item["family"]))), rejected
+
+
+def _quarantine_player(
+    conn: sqlite3.Connection, player_id: int, *, reason: str,
+    snapshot: dict[str, Any] | None = None, details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if snapshot is None:
+        row = conn.execute("SELECT * FROM players WHERE telegram_id=?", (player_id,)).fetchone()
+        if not row:
+            raise BuildRejected("no_player")
+        snapshot, _flags = _archive_player(conn, dict(row))
+    conn.execute('''INSERT INTO build_migration_quarantine
+        (player_id, migration_version, reason, snapshot_json, details_json, resolved_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, NULL, CURRENT_TIMESTAMP)
+        ON CONFLICT(player_id) DO UPDATE SET migration_version=excluded.migration_version,
+        reason=excluded.reason, snapshot_json=excluded.snapshot_json,
+        details_json=excluded.details_json, resolved_at=NULL, updated_at=CURRENT_TIMESTAMP''', (
+            player_id, MASTERY_MODEL_VERSION, reason, _json(snapshot), _json(details or {}),
+        ))
+    return {"status": "quarantined", "player_id": player_id, "reason": reason}
+
+
+def _unresolved_quarantine(conn: sqlite3.Connection, player_id: int) -> sqlite3.Row | None:
+    return conn.execute('''SELECT reason FROM build_migration_quarantine
+        WHERE player_id=? AND resolved_at IS NULL''', (player_id,)).fetchone()
 
 
 def _player_has_staff(conn: sqlite3.Connection, player_id: int) -> bool:
@@ -268,9 +344,13 @@ def _cancel_old_pve(conn: sqlite3.Connection) -> list[str]:
                 mana = int(state.get("mana", state.get("player_mana")))
             except (TypeError, ValueError):
                 continue
+            player_row = conn.execute("SELECT * FROM players WHERE telegram_id=?", (participant_id,)).fetchone()
+            if not player_row:
+                continue
+            effective = get_player_effective_stats(participant_id, dict(player_row), conn=conn)
             conn.execute(
-                "UPDATE players SET hp=MAX(0, ?), mana=MAX(0, ?) WHERE telegram_id=?",
-                (hp, mana, participant_id),
+                "UPDATE players SET hp=MIN(MAX(0, ?), ?), mana=MIN(MAX(0, ?), ?) WHERE telegram_id=?",
+                (hp, int(effective["max_hp"]), mana, int(effective["max_mana"]), participant_id),
             )
     placeholders = ",".join("?" for _ in encounter_ids)
     conn.execute(f'''UPDATE pve_encounters SET status='rules_updated', finished_at=CURRENT_TIMESTAMP,
@@ -359,11 +439,16 @@ def _migrate_player(
     player = dict(row)
     if int(player.get("build_migration_version", 0)) >= MASTERY_MODEL_VERSION:
         return {"status": "already_migrated", "player_id": player_id}
+    quarantine = _unresolved_quarantine(conn, player_id)
+    if quarantine:
+        return {"status": "quarantined", "player_id": player_id, "reason": str(quarantine["reason"])}
     if _has_reward_review(conn, player_id):
         return {"status": "legacy_review", "player_id": player_id}
     snapshot, flags = _archive_player(conn, player)
     budget = observed_attribute_budget(player)
-    masteries = _normalize_masteries(snapshot)
+    masteries, rejected_masteries = _normalize_masteries(snapshot)
+    if rejected_masteries:
+        raise BuildRejected("invalid_mastery_profile")
     conn.execute("DELETE FROM weapon_mastery WHERE telegram_id=?", (player_id,))
     conn.executemany('''INSERT INTO weapon_mastery
         (telegram_id, weapon_id, level, exp, skill_points, model_version)
@@ -378,10 +463,15 @@ def _migrate_player(
     max_hp = 100 + (18 * int(player["vitality"]))
     max_mana = 50 + (12 * int(player["wisdom"]))
     conn.execute('''UPDATE players SET attribute_budget=?, max_hp=?, max_mana=?,
-        hp=MIN(hp, ?), mana=MIN(mana, ?), build_revision=build_revision+1,
+        build_revision=build_revision+1,
         build_migration_version=?, build_notice_pending=1 WHERE telegram_id=?''', (
-            budget, max_hp, max_mana, max_hp, max_mana, MASTERY_MODEL_VERSION, player_id,
+            budget, max_hp, max_mana, MASTERY_MODEL_VERSION, player_id,
         ))
+    updated_player = dict(conn.execute("SELECT * FROM players WHERE telegram_id=?", (player_id,)).fetchone())
+    effective = get_player_effective_stats(player_id, updated_player, conn=conn)
+    conn.execute("UPDATE players SET hp=MIN(hp, ?), mana=MIN(mana, ?) WHERE telegram_id=?", (
+        int(effective["max_hp"]), int(effective["max_mana"]), player_id,
+    ))
     notice = {
         "skills_refunded": True,
         "free_hub_resets": True,
@@ -405,6 +495,19 @@ def _migrate_player(
 
 def migrate_character_builds_v1(*, dry_run: bool = False) -> dict[str, Any]:
     """Idempotently activate the frozen rules after old settlements recover."""
+    if not dry_run:
+        from game.pve_reward_settlement import recover_prepared_settlements, review_ambiguous_legacy_victories
+
+        review_ambiguous_legacy_victories()
+        for _batch in range(1000):
+            recovered = recover_prepared_settlements(limit=100)
+            failures = [item for item in recovered if item.get("status") == "retryable"]
+            if failures:
+                raise BuildRejected("legacy_settlement_recovery_failed")
+            if len(recovered) < 100:
+                break
+        else:
+            raise BuildRejected("legacy_settlement_recovery_not_drained")
     conn = get_connection()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -438,11 +541,18 @@ def migrate_character_builds_v1(*, dry_run: bool = False) -> dict[str, Any]:
             ):
                 affected_players.update((int(row["attacker_id"]), int(row["defender_id"])))
         players = [int(row["telegram_id"]) for row in conn.execute("SELECT telegram_id FROM players ORDER BY telegram_id")]
-        results = [
-            _migrate_player(conn, player_id, old_fight_ended=player_id in affected_players)
-            for player_id in players
-        ]
-        blocked = [item["player_id"] for item in results if item["status"] == "legacy_review"]
+        results = []
+        for player_id in players:
+            conn.execute("SAVEPOINT migrate_player")
+            try:
+                result = _migrate_player(conn, player_id, old_fight_ended=player_id in affected_players)
+                conn.execute("RELEASE SAVEPOINT migrate_player")
+            except (BuildRejected, TypeError, ValueError) as exc:
+                conn.execute("ROLLBACK TO SAVEPOINT migrate_player")
+                conn.execute("RELEASE SAVEPOINT migrate_player")
+                result = _quarantine_player(conn, player_id, reason=str(exc))
+            results.append(result)
+        blocked = [item["player_id"] for item in results if item["status"] in {"legacy_review", "quarantined"}]
         details = {
             "migrated": sum(item["status"] == "migrated" for item in results),
             "blocked": blocked,
@@ -469,7 +579,14 @@ def ensure_player_build_v1(player_id: int, *, conn: sqlite3.Connection) -> dict[
     if not row:
         raise BuildRejected("no_player")
     if int(row["build_migration_version"] or 0) < MASTERY_MODEL_VERSION:
-        return _migrate_player(conn, player_id)
+        quarantine = _unresolved_quarantine(conn, player_id)
+        if quarantine:
+            raise BuildRejected(f"migration_quarantined:{quarantine['reason']}")
+        try:
+            return _migrate_player(conn, player_id)
+        except (BuildRejected, TypeError, ValueError) as exc:
+            _quarantine_player(conn, player_id, reason=str(exc))
+            raise BuildRejected(f"migration_quarantined:{exc}") from exc
     return {"status": "ready", "player_id": player_id}
 
 
@@ -617,7 +734,8 @@ def _required_unequips(conn: sqlite3.Connection, player_id: int, attributes: dic
     from game.gear_instances import get_equipped_gear_instances, resolve_gear_instance_item_data
 
     result = []
-    for slot, instance in get_equipped_gear_instances(player_id, conn=conn).items():
+    equipped_instances = get_equipped_gear_instances(player_id, conn=conn)
+    for slot, instance in equipped_instances.items():
         item = resolve_gear_instance_item_data(instance)
         requirements = {
             "level": int(item.get("req_level", 1) or 1),
@@ -631,12 +749,67 @@ def _required_unequips(conn: sqlite3.Connection, player_id: int, attributes: dic
         )
         if not valid:
             result.append({
+                "source": "instance",
                 "slot": slot,
                 "instance_id": int(instance["id"]),
                 "item_id": str(instance["base_item_id"]),
                 "name": str(item.get("name") or instance["base_item_id"]),
             })
-    return sorted(result, key=lambda item: (item["slot"], item["instance_id"]))
+    equipment = conn.execute("SELECT * FROM equipment WHERE telegram_id=?", (player_id,)).fetchone()
+    if equipment:
+        for slot in (
+            "weapon", "offhand", "helmet", "chest", "legs", "boots", "gloves", "ring1", "ring2", "amulet",
+        ):
+            if slot in equipped_instances or equipment[slot] is None:
+                continue
+            inventory_id = int(equipment[slot])
+            inventory = conn.execute(
+                "SELECT item_id FROM inventory WHERE telegram_id=? AND id=?", (player_id, inventory_id),
+            ).fetchone()
+            if not inventory:
+                continue
+            item = get_item(str(inventory["item_id"])) or {}
+            requirements = {
+                "level": int(item.get("req_level", 1) or 1),
+                "strength": int(item.get("req_strength", 0) or 0),
+                "agility": int(item.get("req_agility", 0) or 0),
+                "intuition": int(item.get("req_intuition", 0) or 0),
+                "wisdom": int(item.get("req_wisdom", 0) or 0),
+            }
+            valid = level >= requirements["level"] and all(
+                attributes[key] >= requirements[key] for key in ("strength", "agility", "intuition", "wisdom")
+            )
+            if not valid:
+                result.append({
+                    "source": "legacy", "slot": slot, "inventory_id": inventory_id,
+                    "item_id": str(inventory["item_id"]), "name": str(item.get("name") or inventory["item_id"]),
+                })
+    return sorted(result, key=lambda item: (item["slot"], item["source"], int(item.get("instance_id", item.get("inventory_id", 0)))))
+
+
+def _prospective_effective_caps(
+    conn: sqlite3.Connection, player_id: int, player: dict[str, Any],
+    attributes: dict[str, int], unequips: list[dict[str, Any]],
+) -> tuple[int, int]:
+    conn.execute("SAVEPOINT preview_effective_caps")
+    try:
+        for item in unequips:
+            if item["source"] == "instance":
+                conn.execute("UPDATE gear_instances SET equipped_slot=NULL WHERE telegram_id=? AND id=?", (
+                    player_id, int(item["instance_id"]),
+                ))
+            else:
+                conn.execute(f"UPDATE equipment SET {item['slot']}=NULL WHERE telegram_id=?", (player_id,))
+        prospective = {
+            **player, **attributes,
+            "max_hp": 100 + (18 * attributes["vitality"]),
+            "max_mana": 50 + (12 * attributes["wisdom"]),
+        }
+        effective = get_player_effective_stats(player_id, prospective, conn=conn)
+        return int(effective["max_hp"]), int(effective["max_mana"])
+    finally:
+        conn.execute("ROLLBACK TO SAVEPOINT preview_effective_caps")
+        conn.execute("RELEASE SAVEPOINT preview_effective_caps")
 
 
 def apply_attribute_redistribution(player_id: int, token: str) -> dict[str, Any]:
@@ -669,11 +842,22 @@ def apply_attribute_redistribution(player_id: int, token: str) -> dict[str, Any]
         if intent.get("unequips") != _required_unequips(conn, player_id, attributes, int(player["level"])):
             raise BuildRejected("stale_gear_preview")
         unequips = _required_unequips(conn, player_id, attributes, int(player["level"]))
+        effective_max_hp, effective_max_mana = _prospective_effective_caps(
+            conn, player_id, player, attributes, unequips,
+        )
         for item in unequips:
-            conn.execute('''UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1
-                WHERE telegram_id=? AND id=? AND equipped_slot=?''', (
-                    player_id, item["instance_id"], item["slot"],
-                ))
+            if item["source"] == "instance":
+                updated = conn.execute('''UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1
+                    WHERE telegram_id=? AND id=? AND equipped_slot=?''', (
+                        player_id, item["instance_id"], item["slot"],
+                    ))
+            else:
+                updated = conn.execute(
+                    f"UPDATE equipment SET {item['slot']}=NULL WHERE telegram_id=? AND {item['slot']}=?",
+                    (player_id, item["inventory_id"]),
+                )
+            if updated.rowcount != 1:
+                raise BuildRejected("stale_gear_preview")
         max_hp = 100 + (18 * attributes["vitality"])
         max_mana = 50 + (12 * attributes["wisdom"])
         values = [attributes[key] for key in ATTRIBUTE_KEYS]
@@ -682,7 +866,7 @@ def apply_attribute_redistribution(player_id: int, token: str) -> dict[str, Any]
             stat_points=?, max_hp=?, max_mana=?, hp=MIN(hp, ?), mana=MIN(mana, ?),
             carry_weight=?, build_revision=build_revision+1,
             gear_revision=gear_revision+? WHERE telegram_id=?''', (
-                *values, budget - spent, max_hp, max_mana, max_hp, max_mana,
+                *values, budget - spent, max_hp, max_mana, effective_max_hp, effective_max_mana,
                 20 + 5 * attributes["strength"], int(gear_changed), player_id,
             ))
         result = {"success": True, "op": "attributes", "attributes": attributes, "unspent": budget - spent, "unequipped": unequips}
@@ -823,6 +1007,9 @@ def attribute_redistribution_preview(player_id: int, attributes: dict[str, int])
         if spent > budget:
             return {"success": False, "reason": "attribute_budget"}
         unequips = _required_unequips(conn, player_id, normalized, int(player["level"]))
+        effective_max_hp, effective_max_mana = _prospective_effective_caps(
+            conn, player_id, player, normalized, unequips,
+        )
         payload = build_intent_payload(player, "attributes", attributes=normalized, unequips=unequips)
     except (ActionRejected, BuildRejected, ValueError, TypeError) as exc:
         return {"success": False, "reason": str(exc)}
@@ -832,8 +1019,8 @@ def attribute_redistribution_preview(player_id: int, attributes: dict[str, int])
     return {
         "success": True, "token": tokens[payload], "attributes": normalized,
         "unspent": budget - spent, "unequips": unequips,
-        "max_hp": 100 + 18 * normalized["vitality"],
-        "max_mana": 50 + 12 * normalized["wisdom"],
+        "max_hp": effective_max_hp,
+        "max_mana": effective_max_mana,
         "carry_weight": 20 + 5 * normalized["strength"],
     }
 

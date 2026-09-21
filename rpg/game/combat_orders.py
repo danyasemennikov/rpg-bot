@@ -236,17 +236,24 @@ def persist_turn_result(
         table = "pve_encounters" if encounter_kind == "pve" else "pvp_engagements"
         id_column = "encounter_id" if encounter_kind == "pve" else "id"
         revision_row = conn.execute(
-            f"SELECT turn_revision, rules_version FROM {table} WHERE {id_column}=?", (encounter_id,)
+            f"SELECT turn_revision, state_revision, rules_version FROM {table} WHERE {id_column}=?", (encounter_id,)
         ).fetchone()
         if not revision_row or str(revision_row["rules_version"]) != RULES_VERSION:
             if owns:
                 conn.rollback()
             return {"applied": False, "reason": "encounter_rules_mismatch"}
-        expected = int(turn_revision if expected_previous_revision is None else expected_previous_revision)
-        if int(revision_row["turn_revision"]) not in {expected, int(turn_revision) - 1}:
+        current_revision = int(revision_row["turn_revision"])
+        current_state_revision = int(revision_row["state_revision"] or 0)
+        expected_state_revision = int(complete_state.get("state_revision", current_state_revision) or 0)
+        expected = current_revision if expected_previous_revision is None else int(expected_previous_revision)
+        if (
+            current_revision != expected or int(turn_revision) < current_revision
+            or expected_state_revision != current_state_revision
+        ):
             if owns:
                 conn.rollback()
             return {"applied": False, "reason": "stale_revision"}
+        complete_state["state_revision"] = current_state_revision + 1
         conn.execute('''INSERT INTO combat_turn_results_v1
             (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
             VALUES (?, ?, ?, ?, ?, ?)''', (
@@ -254,16 +261,22 @@ def persist_turn_result(
                 _stable_json(complete_state), RULES_VERSION,
             ))
         if encounter_kind == "pve":
-            conn.execute('''UPDATE pve_encounters SET battle_state_json=?, turn_revision=?,
-                updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND rules_version=?''', (
+            updated = conn.execute('''UPDATE pve_encounters SET battle_state_json=?, turn_revision=?,
+                state_revision=state_revision+1, updated_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=? AND rules_version=? AND turn_revision=? AND state_revision=?''', (
                     _stable_json(complete_state), int(turn_revision), encounter_id, RULES_VERSION,
+                    current_revision, current_state_revision,
                 ))
         else:
             # PvP keeps its battle payload inside the established reason_context.
-            conn.execute('''UPDATE pvp_engagements SET reason_context=?, turn_revision=?
-                WHERE id=? AND rules_version=?''', (
+            updated = conn.execute('''UPDATE pvp_engagements SET reason_context=?, turn_revision=?,
+                state_revision=state_revision+1, updated_at=CURRENT_TIMESTAMP
+                WHERE id=? AND rules_version=? AND turn_revision=? AND state_revision=?''', (
                     _stable_json(complete_state), int(turn_revision), int(encounter_id), RULES_VERSION,
+                    current_revision, current_state_revision,
                 ))
+        if updated.rowcount != 1:
+            raise RuntimeError("combat_result_cas_conflict")
         if owns:
             conn.commit()
         return {"applied": True, "duplicate": False, "result": result, "state": complete_state}

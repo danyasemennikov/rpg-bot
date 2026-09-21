@@ -544,6 +544,7 @@ def _init_live_battle_payload(*, attacker_id: int, defender_id: int, now: dateti
         })
         for role, player_id in (('attacker', attacker_id), ('defender', defender_id)):
             actor = v1_snapshots[str(player_id)]
+            actor['pve_passives_enabled'] = False
             battle[f'{role}_hp'] = int(actor['hp'])
             battle[f'{role}_max_hp'] = int(actor['max_hp'])
             battle[f'{role}_mana'] = int(actor['mana'])
@@ -1274,6 +1275,8 @@ def _resolve_v1_pvp_submission(
     target = actors.get(str(target_id))
     if not actor or not target:
         return False
+    actor['pve_passives_enabled'] = False
+    target['pve_passives_enabled'] = False
     result = evaluate_action(
         actor, [actor], [target],
         _v1_action_payload(selected_action_id, actor_id=actor_id, target_id=target_id, manual=manual),
@@ -1388,20 +1391,47 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
                 return 'resolved', payload
             return 'invalid_action', payload
     else:
-        fallback_assigned = _LIVE_PVP_RUNTIME.apply_timeout_fallbacks(
-            encounter_id=encounter_id,
-            now=_utc_now(),
-        )
-        if fallback_assigned <= 0:
-            return 'waiting', payload
         if is_v1:
-            submit_combat_order(
+            timeout_action = {'kind': 'timeout_guard', 'target_id': actor_id, 'manual': False}
+            durable = submit_combat_order(
                 encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
                 turn_revision=runtime_state.turn_revision, actor_id=actor_id,
-                action={'kind': 'timeout_guard', 'target_id': actor_id, 'manual': False},
+                action=timeout_action,
                 target_id=actor_id, deadline_at=_to_iso(runtime_state.side_deadline_at or _utc_now()),
                 order_kind='timeout',
             )
+            if durable.get('accepted'):
+                fallback_assigned = _LIVE_PVP_RUNTIME.apply_timeout_fallbacks(
+                    encounter_id=encounter_id, now=_utc_now(),
+                )
+            else:
+                orders = load_combat_orders(
+                    encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
+                    turn_revision=runtime_state.turn_revision,
+                )
+                order = next((item for item in orders if int(item['actor_id']) == actor_id), None)
+                if not order:
+                    return 'waiting', payload
+                durable_action = order['action']
+                kind = str(durable_action.get('kind') or '')
+                action_id = (
+                    f"skill:{durable_action.get('skill_id')}" if kind == 'skill'
+                    else 'normal_attack' if kind == 'normal'
+                    else 'guard'
+                )
+                committed = _LIVE_PVP_RUNTIME.commit_action(
+                    encounter_id=encounter_id, participant_id=actor_id,
+                    action_type=action_id, target_info={'id': durable_action.get('target_id', target_id)},
+                    skill_id=durable_action.get('skill_id'), item_id=None,
+                    committed_at=_utc_now(), turn_revision=runtime_state.turn_revision,
+                )
+                fallback_assigned = int(committed.accepted)
+        else:
+            fallback_assigned = _LIVE_PVP_RUNTIME.apply_timeout_fallbacks(
+                encounter_id=encounter_id, now=_utc_now(),
+            )
+        if fallback_assigned <= 0:
+            return 'waiting', payload
 
     runtime_state = _LIVE_PVP_RUNTIME_STORE.get(encounter_id)
     if not runtime_state or runtime_state.side_turn_state != 'ready_to_lock':
@@ -1492,12 +1522,16 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
             _LIVE_PVP_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)
             _sync_battle_projection_from_runtime(battle=battle, engagement_row=engagement_row, runtime_state=runtime_state)
             payload['battle'] = battle
-            persist_turn_result(
+            durable_result = persist_turn_result(
                 encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
                 turn_revision=turn_revision,
                 result={'actor_id': actor_id, 'action': resolved_action_id, 'winner_id': winner_id},
                 complete_state=payload,
             )
+            if not durable_result.get('applied'):
+                _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
+                return 'stale_result', payload
+            payload = durable_result['state']
         _finalize_pvp_battle(
             engagement_row=engagement_row,
             payload=payload,
@@ -1511,17 +1545,22 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
     _sync_battle_projection_from_runtime(battle=battle, engagement_row=engagement_row, runtime_state=runtime_state)
     payload['battle'] = battle
     if is_v1:
-        persist_turn_result(
+        durable_result = persist_turn_result(
             encounter_kind='pvp', encounter_id=str(int(engagement_row['id'])),
             turn_revision=turn_revision,
             result={'actor_id': actor_id, 'action': resolved_action_id},
             complete_state=payload,
         )
-    _write_engagement_state(
-        engagement_id=int(engagement_row['id']),
-        state=ENGAGEMENT_STATE_CONVERTED_TO_BATTLE,
-        payload=payload,
-    )
+        if not durable_result.get('applied'):
+            _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
+            return 'stale_result', payload
+        payload = durable_result['state']
+    else:
+        _write_engagement_state(
+            engagement_id=int(engagement_row['id']),
+            state=ENGAGEMENT_STATE_CONVERTED_TO_BATTLE,
+            payload=payload,
+        )
     return 'resolved', payload
 
 
@@ -1628,66 +1667,183 @@ def _persist_winner_remaining_state(*, winner_id: int, payload: dict, engagement
     conn.close()
 
 
-def _finalize_pvp_battle(*, engagement_row, payload: dict, winner_id: int, loser_id: int) -> None:
-    _LIVE_PVP_RUNTIME_STORE.remove(_runtime_encounter_id(int(engagement_row['id'])))
+def _finalize_pvp_battle(
+    *, engagement_row, payload: dict, winner_id: int, loser_id: int,
+    failure_hook=None,
+) -> dict:
+    """Apply every terminal PvP consequence and its receipt in one transaction."""
+    engagement_id = int(engagement_row['id'])
+    payload = json.loads(json.dumps(payload))
     payload.setdefault('battle', {})['state'] = PVP_BATTLE_STATE_FINISHED
-    repeat_kill_count, transfer_scale = _resolve_repeat_kill_dampening(winner_id=winner_id, loser_id=loser_id)
     conn = get_connection()
-    winner_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (winner_id,)).fetchone()
-    loser_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (loser_id,)).fetchone()
-    initiator_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (int(engagement_row['attacker_id']),)).fetchone()
-    initial_target_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (int(engagement_row['defender_id']),)).fetchone()
-    winner = dict(winner_row) if winner_row else {'telegram_id': winner_id}
-    loser = dict(loser_row) if loser_row else {'telegram_id': loser_id}
-    initiator = dict(initiator_row) if initiator_row else {'telegram_id': int(engagement_row['attacker_id'])}
-    initial_target = dict(initial_target_row) if initial_target_row else {'telegram_id': int(engagement_row['defender_id'])}
-    infamy_delta = resolve_kill_infamy_delta(
-        winner=winner,
-        loser=loser,
-        initiator=initiator,
-        initial_target=initial_target,
-        location_id=str(engagement_row['location_id']),
-        repeat_kill_count=repeat_kill_count,
-    )
-    conn.execute(
-        '''
-        INSERT INTO pvp_log (attacker_id, defender_id, winner_id, exp_gained, gold_gained)
-        VALUES (?, ?, ?, 0, 0)
-        ''',
-        (engagement_row['attacker_id'], engagement_row['defender_id'], winner_id),
-    )
-    conn.execute(
-        'UPDATE players SET in_battle=0 WHERE telegram_id IN (?, ?)',
-        (engagement_row['attacker_id'], engagement_row['defender_id']),
-    )
-    if infamy_delta > 0:
-        conn.execute(
-            'UPDATE players SET infamy=infamy+?, red_flag=1 WHERE telegram_id=?',
-            (infamy_delta, winner_id),
-        )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        ensure_build_schema(conn)
+        existing = conn.execute(
+            'SELECT result_json FROM pvp_terminal_settlements_v1 WHERE engagement_id=?',
+            (engagement_id,),
+        ).fetchone()
+        if existing:
+            conn.rollback()
+            _LIVE_PVP_RUNTIME_STORE.remove(_runtime_encounter_id(engagement_id))
+            return {**json.loads(str(existing['result_json'])), 'already_applied': True}
 
-    _transfer_vulnerable_inventory(
-        winner_id=winner_id,
-        loser_id=loser_id,
-        location_id=str(engagement_row['location_id']),
-        transfer_scale=transfer_scale,
-    )
-    _apply_pvp_defeat(
-        loser_id=loser_id,
-        location_id=str(engagement_row['location_id']),
-    )
-    _persist_winner_remaining_state(
-        winner_id=winner_id,
-        payload=payload,
-        engagement_row=engagement_row,
-    )
-    _write_engagement_state(
-        engagement_id=int(engagement_row['id']),
-        state=ENGAGEMENT_STATE_CANCELLED,
-        payload=payload,
-    )
+        current = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        if not current:
+            raise RuntimeError('pvp_engagement_missing')
+        attacker_id = int(current['attacker_id'])
+        defender_id = int(current['defender_id'])
+        if {int(winner_id), int(loser_id)} != {attacker_id, defender_id}:
+            raise RuntimeError('pvp_terminal_participants_mismatch')
+
+        repeat_row = conn.execute('''SELECT COUNT(1) AS total FROM pvp_log
+            WHERE winner_id=? AND ((attacker_id=? AND defender_id=?) OR
+            (attacker_id=? AND defender_id=?))
+            AND fought_at >= datetime('now', ?)''', (
+                winner_id, winner_id, loser_id, loser_id, winner_id,
+                f'-{REPEAT_KILL_WINDOW_MINUTES} minutes',
+            )).fetchone()
+        repeat_kill_count = int(repeat_row['total'] or 0) if repeat_row else 0
+        transfer_scale = 1.0 if repeat_kill_count <= 0 else (.50 if repeat_kill_count == 1 else .25)
+        winner_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (winner_id,)).fetchone()
+        loser_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (loser_id,)).fetchone()
+        initiator_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (attacker_id,)).fetchone()
+        initial_target_row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (defender_id,)).fetchone()
+        winner = dict(winner_row) if winner_row else {'telegram_id': winner_id}
+        loser = dict(loser_row) if loser_row else {'telegram_id': loser_id}
+        initiator = dict(initiator_row) if initiator_row else {'telegram_id': attacker_id}
+        initial_target = dict(initial_target_row) if initial_target_row else {'telegram_id': defender_id}
+        infamy_delta = resolve_kill_infamy_delta(
+            winner=winner, loser=loser, initiator=initiator, initial_target=initial_target,
+            location_id=str(current['location_id']), repeat_kill_count=repeat_kill_count,
+        )
+        result = {
+            'status': 'applied', 'engagement_id': engagement_id,
+            'winner_id': int(winner_id), 'loser_id': int(loser_id),
+            'repeat_kill_count': repeat_kill_count, 'transfer_scale': transfer_scale,
+            'infamy_delta': int(infamy_delta), 'payload': payload,
+        }
+        conn.execute('''INSERT INTO pvp_terminal_settlements_v1
+            (engagement_id, winner_id, loser_id, result_json, status)
+            VALUES (?, ?, ?, ?, 'applied')''', (
+                engagement_id, winner_id, loser_id, _serialize_reason_context(result),
+            ))
+        if failure_hook:
+            failure_hook('after_receipt')
+
+        conn.execute('''INSERT INTO pvp_log
+            (attacker_id, defender_id, winner_id, exp_gained, gold_gained)
+            VALUES (?, ?, ?, 0, 0)''', (attacker_id, defender_id, winner_id))
+        if infamy_delta > 0:
+            conn.execute('UPDATE players SET infamy=infamy+?, red_flag=1 WHERE telegram_id=?', (
+                infamy_delta, winner_id,
+            ))
+        if failure_hook:
+            failure_hook('after_log')
+
+        loss_percent = resolve_pvp_death_loss_percent(location_id=str(current['location_id']))
+        scaled_loss_percent = max(0.0, min(1.0, loss_percent * transfer_scale))
+        transferred: dict[str, int] = {}
+        if scaled_loss_percent > 0:
+            rows = conn.execute('''SELECT item_id, SUM(quantity) AS quantity FROM inventory
+                WHERE telegram_id=? AND quantity>0 GROUP BY item_id''', (loser_id,)).fetchall()
+            for row in rows:
+                item_id = str(row['item_id'])
+                if not resolve_item_death_vulnerability(item_id).vulnerable_on_pvp_death:
+                    continue
+                lost_quantity = int(int(row['quantity']) * scaled_loss_percent)
+                if lost_quantity <= 0:
+                    continue
+                remaining = lost_quantity
+                stacks = conn.execute('''SELECT id, quantity FROM inventory
+                    WHERE telegram_id=? AND item_id=? AND quantity>0 ORDER BY id''', (loser_id, item_id)).fetchall()
+                for stack in stacks:
+                    taken = min(remaining, int(stack['quantity']))
+                    conn.execute('UPDATE inventory SET quantity=quantity-? WHERE id=?', (taken, int(stack['id'])))
+                    remaining -= taken
+                    if remaining <= 0:
+                        break
+                existing_stack = conn.execute(
+                    'SELECT id FROM inventory WHERE telegram_id=? AND item_id=? ORDER BY id LIMIT 1',
+                    (winner_id, item_id),
+                ).fetchone()
+                if existing_stack:
+                    conn.execute('UPDATE inventory SET quantity=quantity+? WHERE id=?', (
+                        lost_quantity, int(existing_stack['id']),
+                    ))
+                else:
+                    conn.execute('INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?, ?, ?)', (
+                        winner_id, item_id, lost_quantity,
+                    ))
+                transferred[item_id] = lost_quantity
+            conn.execute('DELETE FROM inventory WHERE telegram_id=? AND quantity<=0', (loser_id,))
+        result['transferred'] = transferred
+        conn.execute('UPDATE pvp_terminal_settlements_v1 SET result_json=? WHERE engagement_id=?', (
+            _serialize_reason_context(result), engagement_id,
+        ))
+        if failure_hook:
+            failure_hook('after_inventory')
+
+        battle = payload.get('battle') or {}
+        winner_role = 'attacker' if winner_id == attacker_id else 'defender'
+        winner_hp = max(1, int(battle.get(f'{winner_role}_hp', 1)))
+        winner_mana = max(0, int(battle.get(f'{winner_role}_mana', 0)))
+        loser_max_hp = int(loser['max_hp']) if loser_row else 100
+        conn.execute('UPDATE players SET hp=?, mana=?, in_battle=0 WHERE telegram_id=?', (
+            winner_hp, winner_mana, winner_id,
+        ))
+        conn.execute('''UPDATE players SET hp=?, location_id=?, in_battle=0,
+            pvp_respawn_protection_until=? WHERE telegram_id=?''', (
+                max(1, int(loser_max_hp * .30)),
+                resolve_death_respawn_hub(location_id=str(current['location_id'])),
+                int(_utc_now().timestamp()) + RESPAWN_PROTECTION_WINDOW_SECONDS, loser_id,
+            ))
+        updated = conn.execute('''UPDATE pvp_engagements SET engagement_state=?, reason_context=?,
+            state_revision=state_revision+1, updated_at=CURRENT_TIMESTAMP WHERE id=?
+            AND engagement_state=?''', (
+                ENGAGEMENT_STATE_CANCELLED, _serialize_reason_context(payload), engagement_id,
+                ENGAGEMENT_STATE_CONVERTED_TO_BATTLE,
+            ))
+        if updated.rowcount != 1:
+            raise RuntimeError('pvp_terminal_state_conflict')
+        if failure_hook:
+            failure_hook('before_commit')
+        conn.commit()
+        _LIVE_PVP_RUNTIME_STORE.remove(_runtime_encounter_id(engagement_id))
+        return result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def recover_terminal_pvp_settlements(*, limit: int = 100) -> list[dict]:
+    """Finish durable terminal turns left between result persistence and settlement."""
+    conn = get_connection()
+    try:
+        ensure_build_schema(conn)
+        rows = conn.execute('''SELECT r.encounter_id, r.result_json, r.state_json, e.*
+            FROM combat_turn_results_v1 r JOIN pvp_engagements e ON CAST(e.id AS TEXT)=r.encounter_id
+            WHERE r.encounter_kind='pvp' AND e.engagement_state=?
+            AND NOT EXISTS (SELECT 1 FROM pvp_terminal_settlements_v1 s WHERE s.engagement_id=e.id)
+            ORDER BY r.created_at LIMIT ?''', (ENGAGEMENT_STATE_CONVERTED_TO_BATTLE, max(1, min(1000, int(limit))))).fetchall()
+    finally:
+        conn.close()
+    recovered = []
+    for row in rows:
+        result = json.loads(str(row['result_json']))
+        winner_id = result.get('winner_id')
+        if winner_id is None:
+            continue
+        attacker_id = int(row['attacker_id'])
+        defender_id = int(row['defender_id'])
+        loser_id = defender_id if int(winner_id) == attacker_id else attacker_id
+        recovered.append(_finalize_pvp_battle(
+            engagement_row=row, payload=json.loads(str(row['state_json'])),
+            winner_id=int(winner_id), loser_id=loser_id,
+        ))
+    return recovered
 
 
 def apply_illegal_aggression_penalties(*, attacker_id: int) -> None:
@@ -1730,6 +1886,7 @@ def apply_illegal_aggression_penalties(*, attacker_id: int) -> None:
 
 def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
     events: list[dict] = []
+    recover_terminal_pvp_settlements()
     check_now = now or _utc_now()
     conn = get_connection()
     rows = conn.execute(

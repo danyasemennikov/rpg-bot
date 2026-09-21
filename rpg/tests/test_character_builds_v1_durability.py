@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -13,6 +14,8 @@ from game.combat_orders import consume_combat_intent, issue_combat_intents, load
 from game.pve_reward_settlement import _v1_mastery_awards
 from game.pve_live import (
     ensure_runtime_for_battle,
+    get_pve_encounter_player_ids,
+    resolve_pve_flee_intent,
     reset_solo_pve_runtime_store,
     run_enemy_instant_side,
 )
@@ -25,6 +28,7 @@ from game.pvp_live import (
     create_live_engagement,
     issue_manual_pvp_action_labels,
     resolve_live_battle_turn,
+    _finalize_pvp_battle,
 )
 from handlers import battle as battle_handler
 
@@ -240,3 +244,100 @@ def test_enemy_side_dot_kill_refreshes_terminal_projection_for_settlement():
     assert battle['enemy_units'][0]['dead'] is True
     assert battle['mob_hp'] == 0
     assert battle['mob_dead'] is True
+
+
+def test_group_flee_is_participant_scoped_and_replays_durable_result():
+    migrate_character_builds_v1()
+    state = {
+        'rules_version': RULES_VERSION, 'turn_revision': 0, 'state_revision': 0,
+        'side_a_player_ids': [1, 777], 'participant_states_v1': {
+            '1': {'actor_id': 1, 'hp': 73, 'mana': 21},
+            '777': {'actor_id': 777, 'hp': 88, 'mana': 32},
+        },
+        'participant_states': {
+            '1': {'hp': 73, 'mana': 21, 'player_hp': 73, 'player_mana': 21},
+            '777': {'hp': 88, 'mana': 32, 'player_hp': 88, 'player_mana': 32},
+        },
+    }
+    conn = get_connection()
+    ensure_build_schema(conn)
+    conn.execute('''INSERT INTO pve_encounters
+        (encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json,
+         source_units_json, rules_version, turn_revision, state_revision)
+        VALUES ('group-flee', 1, 'active', 'westwild_rabbit', ?, '{}', '[]', ?, 0, 0)''',
+        (json.dumps(state), RULES_VERSION))
+    conn.executemany('''INSERT INTO pve_encounter_participants
+        (encounter_id, player_id, side_id, status) VALUES ('group-flee', ?, 'side_a', 'active')''',
+        [(1,), (777,)])
+    conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id IN (1, 777)')
+    conn.commit()
+    conn.close()
+    action = {'kind': 'flee', 'skill_id': None, 'item_id': None, 'target_info': None}
+    deadline = (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()
+    token = issue_combat_intents(
+        1, encounter_id='group-flee', turn_revision=0, deadline_at=deadline, actions=[action],
+    )[json.dumps(action, ensure_ascii=False, sort_keys=True, separators=(',', ':'))]
+    first = resolve_pve_flee_intent(
+        player_id=1, encounter_id='group-flee', action_token=token, success=True,
+    )
+    replay = resolve_pve_flee_intent(
+        player_id=1, encounter_id='group-flee', action_token=token, success=False,
+    )
+    assert first['fled'] is True
+    assert replay['fled'] is True and replay['already_applied'] is True
+    assert get_pve_encounter_player_ids(encounter_id='group-flee') == [777]
+    conn = get_connection()
+    encounter = conn.execute("""SELECT status, state_revision, battle_state_json
+        FROM pve_encounters WHERE encounter_id='group-flee'""").fetchone()
+    players = {row['telegram_id']: row['in_battle'] for row in conn.execute(
+        'SELECT telegram_id, in_battle FROM players WHERE telegram_id IN (1, 777)')}
+    conn.close()
+    assert encounter['status'] == 'active'
+    assert int(encounter['state_revision']) == 1
+    assert json.loads(str(encounter['battle_state_json']))['state_revision'] == 1
+    assert players == {1: 0, 777: 1}
+
+
+def test_terminal_pvp_settlement_rolls_back_failure_and_applies_exactly_once():
+    migrate_character_builds_v1()
+    conn = get_connection()
+    attacker = dict(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=777').fetchone())
+    conn.execute("UPDATE players SET location_id='westwild_n1' WHERE telegram_id IN (1, 777)")
+    conn.execute("INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (777, 'wolf_pelt', 10)")
+    conn.commit()
+    attacker['location_id'] = defender['location_id'] = 'westwild_n1'
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker, defender=defender, location_id='westwild_n1', illegal_aggression=False,
+    )
+    conn = get_connection()
+    conn.execute("UPDATE pvp_engagements SET engagement_state='converted_to_battle', rules_version=? WHERE id=?", (
+        RULES_VERSION, engagement_id,
+    ))
+    row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    conn.commit()
+    conn.close()
+    payload = {'flow': 'open_world_1v1', 'battle': {
+        'state': 'live', 'attacker_hp': 70, 'attacker_mana': 25,
+        'defender_hp': 0, 'defender_mana': 10,
+    }}
+    try:
+        _finalize_pvp_battle(
+            engagement_row=row, payload=payload, winner_id=1, loser_id=777,
+            failure_hook=lambda point: (_ for _ in ()).throw(RuntimeError(point)) if point == 'after_inventory' else None,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == 'after_inventory'
+    conn = get_connection()
+    assert conn.execute('SELECT 1 FROM pvp_terminal_settlements_v1 WHERE engagement_id=?', (engagement_id,)).fetchone() is None
+    assert conn.execute('SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777').fetchone()['total'] == 0
+    assert conn.execute("SELECT quantity FROM inventory WHERE telegram_id=777 AND item_id='wolf_pelt'").fetchone()['quantity'] == 10
+    conn.close()
+    first = _finalize_pvp_battle(engagement_row=row, payload=payload, winner_id=1, loser_id=777)
+    replay = _finalize_pvp_battle(engagement_row=row, payload=payload, winner_id=1, loser_id=777)
+    assert first['status'] == 'applied'
+    assert replay['already_applied'] is True
+    conn = get_connection()
+    assert conn.execute('SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777').fetchone()['total'] == 1
+    conn.close()

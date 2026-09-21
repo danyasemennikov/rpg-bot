@@ -157,7 +157,7 @@ _SPECS = [
     # Sword 2H — Executioner / Blademaster
     _s("heavy_swing", "sword_2h", "A", 0, 12, 2, "F", "physical", "damage", .85, description=".85P to each selected front-line target."),
     _s("armor_split", "sword_2h", "A", 1, 12, 3, "S", "physical", "damage", 1.0, description="Open Guard: 1.00P and Exposure 15% for 2 opportunities."),
-    _s("executioners_focus", "sword_2h", "A", 2, 8, 3, "Self", None, "setup", description="Next successful direct damage action gains +25% damage."),
+    _s("executioners_focus", "sword_2h", "A", 2, 8, 3, "Self", None, "setup", description="Next landed direct damage action gains +25% damage, +3pp/rank."),
     _s("cleave_through", "sword_2h", "A", 3, 20, 4, "F", "physical", "damage", 1.15, description="1.15P each; +.30P for targets starting at or below 50% HP."),
     _s("executioners_stroke", "sword_2h", "A", 4, 24, 5, "S", "physical", "damage", 1.80, description="1.80P; +1.00P if target starts at or below 35% HP."),
     _s("battle_stance", "sword_2h", "B", 0, 10, 4, "Self", None, "buff", description="Attack Up 15%, Ward 15% for 2 opportunities, and Flow."),
@@ -225,7 +225,7 @@ _SPECS = [
     _s("regeneration", "holy_staff", "A", 1, 14, 4, "Ally", None, "hot", description="Heal .35H for 3 recipient-side ticks; same source refreshes."),
     _s("cleanse", "holy_staff", "A", 2, 10, 3, "Ally", None, "cleanse", description="Remove Poison, Bleed, Burn and Weakness from the selected ally.", utility=True),
     _s("blessing", "holy_staff", "A", 3, 16, 4, "Party", None, "buff", description="Party Attack Up 12% for 2 recipient opportunities."),
-    _s("resurrection", "holy_staff", "A", 4, 28, 8, "Ally", None, "covenant", description="Life Covenant: first lethal loss within 3 opportunities leaves 1 HP and heals .80H once/encounter."),
+    _s("resurrection", "holy_staff", "A", 4, 28, 8, "Ally", None, "covenant", description="Life Covenant: first lethal loss within 3 opportunities sets HP to .80H once/encounter."),
     _s("smite", "holy_staff", "B", 0, 8, 2, "S", "holy", "damage", 1.0, description="1.00P; heal self 15% actual damage, capped at 8% max HP."),
     _s("judgment_mark", "holy_staff", "B", 1, 10, 3, "S", "holy", "damage", .70, description=".70P; Dawn Mark grants party +12% direct damage for 3 opportunities."),
     _s("radiant_ward", "holy_staff", "B", 2, 12, 4, "Ally", None, "ward", description="Ward 20% for 2 opportunities."),

@@ -39,7 +39,7 @@ from game.build_progression import (
     issue_skill_purchase_intent,
 )
 from game.combat_identity import crit_chance
-from game.i18n import get_player_lang, get_skill_desc, get_skill_name, t
+from game.i18n import get_player_lang, get_skill_name, t
 
 
 _COPY = {
@@ -493,8 +493,6 @@ def build_skill_view(player_id: int, skill_id: str, lang: str) -> tuple[str, Inl
     required = spec.unlock_mastery if rank == 0 else RANK_REQUIREMENTS.get(next_rank, MAX_MASTERY + 1)
     lines = [
         f"{escape(get_skill_name(skill_id, lang))}",
-        escape(get_skill_desc(skill_id, lang)),
-        "",
         f"{_c(lang, 'rank')}: <b>{rank}/3</b>",
         f"{_c(lang, 'cost')}: <b>{rank_mana_cost(spec, max(1, next_rank))}</b> · {_c(lang, 'cooldown')}: <b>{spec.cooldown if spec.cooldown is not None else _c(lang, 'passive')}</b>",
         f"{_c(lang, 'target')}: <b>{escape(_label(_TARGET_LABELS, lang, spec.target))}</b> · {_c(lang, 'school')}: <b>{escape(_label(_SCHOOL_LABELS, lang, spec.school or 'support'))}</b>",

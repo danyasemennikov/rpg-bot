@@ -5,10 +5,14 @@ import copy
 from game.combat_identity import (
     advance_affected_side,
     evaluate_action,
+    evaluate_enemy_action,
     hit_chance,
     legal_actions,
     mitigation_fraction,
+    select_targets,
 )
+from game.enemy_profiles import choose_enemy_action, resolve_enemy_snapshot
+from game.mobs import get_mob
 
 
 def actor(**overrides):
@@ -213,3 +217,99 @@ def test_legal_actions_filters_family_and_pvp_allowlist():
     assert "quick_shot" in legal_actions(hero, pvp=True)
     assert "deadeye" not in legal_actions(hero, pvp=True)
     assert "fireball" not in legal_actions(hero, pvp=False)
+
+
+def test_backline_target_rejects_front_override_and_front_is_capped_at_four():
+    hero = actor()
+    opponents = [enemy(actor_id=f"front-{index}", formation="front") for index in range(5)]
+    opponents.append(enemy(actor_id="back", formation="support"))
+    assert select_targets("B", hero, [hero], opponents, "front-0") == []
+    assert [item["actor_id"] for item in select_targets("B", hero, [hero], opponents, None)] == ["back"]
+    assert len(select_targets("F", hero, [hero], opponents, None)) == 4
+
+
+def test_life_covenant_sets_exact_heal_and_lethal_dot_cannot_be_followed_by_hot():
+    covenant = {
+        "kind": "life_covenant", "source_id": "healer", "skill_id": "resurrection",
+        "duration": 2, "value": 37, "created_side_index": 0,
+        "school": None, "raw_tick": None, "metadata": {},
+    }
+    lethal = {
+        "kind": "burn", "source_id": "enemy", "skill_id": "fireball",
+        "duration": 1, "value": 0, "created_side_index": 0,
+        "school": "magic", "raw_tick": 1000, "metadata": {"source_level": 10},
+    }
+    hot = {
+        "kind": "regeneration", "source_id": "healer", "skill_id": "regeneration",
+        "duration": 2, "value": 50, "created_side_index": 0,
+        "school": None, "raw_tick": None, "metadata": {},
+    }
+    revived = advance_affected_side([actor(hp=10, effects=[covenant, lethal])], side_index=1)
+    assert revived["entities"][0]["hp"] == 37
+
+    dead = advance_affected_side([actor(hp=10, effects=[lethal, hot])], side_index=1)
+    assert dead["entities"][0]["hp"] == 0
+    assert dead["entities"][0]["dead"] is True
+    assert not any(event["kind"] == "hot" for event in dead["events"])
+
+
+def test_dead_actor_cannot_cast_and_envenom_applies_on_normal_hit():
+    dead_result = evaluate_action(actor(hp=0, dead=True), [actor(hp=0, dead=True)], [enemy()], {"kind": "normal"}, rng_seed=1)
+    assert dead_result == {**dead_result, "accepted": False, "reason": "actor_dead"}
+
+    venom = actor(
+        family="daggers", effects=[{
+            "kind": "envenom", "source_id": "1", "skill_id": "envenom_blades",
+            "duration": 2, "value": 1.0, "created_side_index": 0,
+            "school": None, "raw_tick": None, "metadata": {},
+        }],
+    )
+    result = evaluate_action(venom, [venom], [enemy()], {"kind": "normal"}, rng_seed=3)
+    assert any(effect["kind"] == "poison" for effect in result["opponents"][0]["effects"])
+
+
+def test_power_strike_uses_weapon_school_and_combined_setups_cap_at_fifty_percent():
+    magic = actor(family="tome", damage_school="magic", magic_defense=0)
+    target = enemy(physical_defense=10000, magic_defense=0)
+    strike = evaluate_action(magic, [magic], [target], {"kind": "skill", "skill_id": "power_strike"}, rng_seed=3)
+    assert direct_event(strike)["ordinary_reduction"] == 0
+
+    setup_effects = [
+        {"kind": kind, "source_id": "1", "skill_id": kind, "duration": 2,
+         "value": value, "created_side_index": 0, "school": None, "raw_tick": None, "metadata": {}}
+        for kind, value in (("focus", .35), ("opening", .35), ("reprisal", .35))
+    ]
+    stacked = evaluate_action(actor(family="sword_2h", effects=setup_effects), [actor()], [enemy()], {"kind": "normal"}, rng_seed=3)
+    baseline = evaluate_action(actor(family="sword_2h"), [actor()], [enemy()], {"kind": "normal"}, rng_seed=3)
+    assert direct_event(stacked)["hp_removed"] <= int(direct_event(baseline)["hp_removed"] * 1.5) + 1
+
+
+def test_absolute_zero_freezes_only_selected_landed_target():
+    hero = actor(family="magic_staff", skill_ranks={"absolute_zero": 1}, accuracy=10000)
+    foes = [enemy(actor_id="front"), enemy(actor_id="selected", formation="support")]
+    result = evaluate_action(
+        hero, [hero], foes,
+        {"kind": "skill", "skill_id": "absolute_zero", "target_id": "selected"}, rng_seed=3,
+    )
+    frozen = [item["actor_id"] for item in result["opponents"] if any(effect["kind"] == "freeze" for effect in item["effects"])]
+    assert frozen == ["selected"]
+
+
+def test_counter_is_pve_only_and_heavy_cadence_counts_executed_actions():
+    defender = actor(
+        actor_id=2, family="sword_1h", skill_ranks={"counter": 1},
+        pve_passives_enabled=False,
+        effects=[{"kind": "ward", "source_id": "2", "skill_id": "defensive_stance",
+                  "duration": 2, "value": .2, "created_side_index": 0,
+                  "school": None, "raw_tick": None, "metadata": {}}],
+    )
+    result = evaluate_action(actor(), [actor()], [defender], {"kind": "normal"}, rng_seed=3)
+    assert not any(event["kind"] == "retaliation" and event["trigger"] == "counter" for event in result["events"])
+
+    heavy = resolve_enemy_snapshot(get_mob("westwild_rabbit"), unit_id="heavy")
+    heavy["behavior"] = "heavy"
+    heavy["effects"] = [{"kind": "freeze", "source_id": "1", "skill_id": "freeze", "duration": 1,
+                         "value": 0, "created_side_index": 0, "school": None, "raw_tick": None, "metadata": {}}]
+    skipped = evaluate_enemy_action(heavy, [heavy], [actor()], choose_enemy_action(heavy, [heavy]), rng_seed=1)
+    assert skipped["enemy"]["ai_action_index"] == 0
+    assert choose_enemy_action(skipped["enemy"], [skipped["enemy"]])["coefficient"] == 1.0

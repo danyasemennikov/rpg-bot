@@ -113,6 +113,7 @@ def test_redistribution_names_unequip_clamps_resources_and_preserves_item_ledger
     preview = attribute_redistribution_preview(1, proposed)
     assert preview['success'] is True
     assert preview['unequips'] == [{
+        'source': 'instance',
         'slot': 'weapon', 'instance_id': instance_id,
         'item_id': 'field_bow', 'name': 'field_bow',
     }]

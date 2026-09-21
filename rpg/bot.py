@@ -116,10 +116,12 @@ def initialize_runtime():
     seed_items()
     from game.pve_live import _ensure_pve_encounter_table, _ensure_world_spawn_table
     from game.pve_reward_settlement import recover_prepared_settlements, review_ambiguous_legacy_victories
+    from game.pvp_live import recover_terminal_pvp_settlements
     _ensure_pve_encounter_table()
     _ensure_world_spawn_table()
     review_ambiguous_legacy_victories()
     recover_prepared_settlements(limit=20)
+    recover_terminal_pvp_settlements(limit=100)
     from game.build_progression import migrate_character_builds_v1
     migrate_character_builds_v1()
 

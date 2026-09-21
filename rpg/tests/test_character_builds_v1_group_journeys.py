@@ -406,6 +406,10 @@ async def _exercise_protector_healer_group(
     encounter_id, members, mastery_before = await _start_group(
         guardian, joiners, mob_id=mob_id,
     )
+    _set_encounter_combat_seed(
+        encounter_id,
+        f"protector-healer-{mob_id}-production-journey-v1",
+    )
     state = _encounter_state(encounter_id)
     enemy_id = str(state["enemy_states_v1"][0]["unit_id"])
     start_event_count = len(_events(state))
