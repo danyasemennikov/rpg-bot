@@ -171,6 +171,15 @@ def test_checked_evidence_has_exact_seed_budget_and_passes_frozen_gates():
     assert evidence['roles']['gate_count'] == 20
     assert evidence['encounter_matrix']['result_count'] == 240
     assert evidence['snapshot_matrix']['progression_comparison_count'] == 100
+    assert all(
+        row['combat_authority'] == 'simulate_v1_encounter'
+        and row['seeds']['count'] == 20
+        and row['branches']['A']['outcomes']['runs'] == 20
+        and row['branches']['B']['outcomes']['runs'] == 20
+        and not row['branches']['A']['validation_errors']
+        and not row['branches']['B']['validation_errors']
+        for row in evidence['snapshot_matrix']['progression_comparisons']
+    )
     assert len(evidence['snapshot_matrix']['cross_branch_m20_15_plus_6']) == 4
     assert all(
         len(row['capstones']) == 1
@@ -178,3 +187,9 @@ def test_checked_evidence_has_exact_seed_budget_and_passes_frozen_gates():
     )
     assert evidence['authority']['legacy_simulator_used'] is False
     assert all(abs(row['relative_percent']) <= 15 for row in evidence['bounded_numerical_tuning'])
+    dagger_sustain = next(
+        row for row in evidence['roles']['scenarios']
+        if row['scenario_id'] == 'daggers_armored_sustain'
+    )
+    assert dagger_sustain['max_opportunities'] == 4
+    assert dagger_sustain['gates'][0]['passes'] is True

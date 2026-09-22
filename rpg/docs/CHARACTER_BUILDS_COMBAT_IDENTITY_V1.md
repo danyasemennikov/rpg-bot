@@ -7,7 +7,7 @@ This document describes the implementation in the current Epic branch for review
 The frozen Astra implementation contract is the product and architecture authority. Runtime constants in `game/build_contract.py`, the shared evaluator in `game/combat_identity.py`, and the checked evidence artifact in `docs/evidence/character_builds_combat_identity_v1.json` are the executable review surfaces.
 
 - Baseline: `c8768626e388babfed09adac83ddaf23f0daee71`
-- Integrated runtime/evidence checkpoint: `e9d97547bf8fc69176cafc8a03ad44d40265d7a7`
+- Integrated runtime checkpoint and evidence authority: `c547cf87e1a2ffa526a3e732cbb3658eca5953ec`
 - Rules version: `character_builds_combat_identity_v1`
 - Scope: 10 weapon families, 20 branches, 100 canonical branch skills, plus universal Power Strike
 
@@ -132,11 +132,11 @@ Universal Power Strike is covered separately for all equipped families and unarm
 - The PvP journey uses four ordinarily registered/equipped/learned actors and the real frontier attack handler to prove normal attack, Guard, Power Strike, Quick Shot, Fireball/Burn and Smite/heal, plus illegal skill/target/stale/restart rejection.
 - The language journey runs build discovery, branch learning, a canonical Heal preview, actual named-recipient selection, combat feedback, reset, stale/error, retired callback and migration notice routes independently in ru/en/es. It checks a 20-character HTML-sensitive name, escaping, missing keys, internal IDs, Cyrillic leaks into en/es, 4,096-character message limits and 64-byte callback limits.
 
-These are exercised ordinary paths. The level/mastery matrix at levels `1/1`, `3/3`, `6/8`, `10/14`, and `15/20`, 100 complete sibling-branch comparisons across entry-weapon and common-T1-full loadouts, four legal M20 cross-branch mixes with exactly one capstone, stat swaps, and level 50/100 safety probes are explicitly synthetic laboratory evidence.
+These are exercised ordinary paths. The level/mastery matrix at levels `1/1`, `3/3`, `6/8`, `10/14`, and `15/20`, four legal M20 cross-branch mixes with exactly one capstone, stat swaps, and level 50/100 safety probes are explicitly synthetic laboratory evidence. The 100 complete sibling-branch comparisons across entry-weapon and common-T1-full loadouts use legal laboratory actors but compare outcomes from the real `simulate_v1_encounter` combat path over 20 paired seeds per row; they are not stats-only snapshots.
 
 ## Balance evidence and J5 changes
 
-The checked JSON uses 200 paired seeds (`0..199`), production field item definitions, real enemy source IDs/profiles, the shared actor/effect evaluators, and the shared affected-side scheduler. It contains 20 passing accessibility rows, 20 passing role gates, 240 encounter-matrix results, 100 legal progression/loadout comparisons, four legal cross-branch allocations, explicit stalls/failing seeds, and no legacy simulator authority. `dark_treant` is excluded because its 500,000 HP is not ordinary-content evidence.
+The checked JSON uses 200 paired seeds (`0..199`), production field item definitions, real enemy source IDs/profiles, the shared actor/effect evaluators, and the shared affected-side scheduler. It contains 20 passing accessibility rows, 20 passing role gates, 240 encounter-matrix results, 100 legal progression/loadout comparisons backed by 20 real combat runs per branch, four legal cross-branch allocations, explicit stalls/failing seeds, and no legacy simulator authority. The Venom sustained-role gate uses the full four-opportunity window and records a 13.98% mean damage advantage with a positive 95% paired confidence interval. `dark_treant` is excluded because its 500,000 HP is not ordinary-content evidence.
 
 The only numerical tuning under J5 is recorded below and in the JSON. No other live formula, item, mob, reward, economy, or route number was tuned in this Epic.
 
@@ -150,8 +150,15 @@ The only numerical tuning under J5 is recorded below and in the JSON. No other l
 | `sunder_armor` | direct power | 0.90 | 0.77 | -14.44% |
 | `reopen_wounds` | direct power | 1.20 | 1.38 | +15.00% |
 | `ravage` | direct power | 1.80 | 2.07 | +15.00% |
+| `envenom_blades` | poison tick power | 0.25 | 0.2875 | +15.00% |
+| `toxic_cut` | direct power | 0.90 | 1.035 | +15.00% |
+| `toxic_cut` | poison tick power | 0.20 | 0.23 | +15.00% |
+| `widows_kiss` | direct power | 1.15 | 1.3225 | +15.00% |
+| `widows_kiss` | power per poison | 0.20 | 0.23 | +15.00% |
 | `rupture_toxins` | direct power | 1.20 | 1.38 | +15.00% |
-| `backstab` | direct power | 1.30 | 1.49 | +14.62% |
+| `rupture_toxins` | remaining tick conversion | 0.80 | 0.92 | +15.00% |
+| `feint_step` | direct power | 0.65 | 0.5525 | -15.00% |
+| `shadow_chain` | direct power | 1.90 | 1.615 | -15.00% |
 
 ## Merged PR229 / PR230 regression safety
 
