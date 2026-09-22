@@ -36,6 +36,7 @@ from game.pvp_live import (
     _write_engagement_state,
     create_live_engagement,
     issue_manual_pvp_action_labels,
+    recover_terminal_pvp_settlements,
     resolve_live_battle_turn,
     _finalize_pvp_battle,
 )
@@ -425,4 +426,127 @@ def test_terminal_pvp_settlement_rolls_back_failure_and_applies_exactly_once():
     assert replay['already_applied'] is True
     conn = get_connection()
     assert conn.execute('SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777').fetchone()['total'] == 1
+    conn.close()
+
+
+def test_terminal_pvp_recovery_filters_before_limit_and_finalizes_once():
+    migrate_character_builds_v1()
+    conn = get_connection()
+    attacker = dict(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=777').fetchone())
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker, defender=defender,
+        location_id='capital_city', illegal_aggression=False,
+    )
+    terminal_state = {'flow': 'open_world_1v1', 'battle': {
+        'state': 'live', 'attacker_hp': 70, 'attacker_mana': 20,
+        'defender_hp': 0, 'defender_mana': 10,
+    }}
+    conn = get_connection()
+    ensure_build_schema(conn)
+    conn.execute(
+        "UPDATE pvp_engagements SET engagement_state='converted_to_battle', rules_version=? WHERE id=?",
+        (RULES_VERSION, engagement_id),
+    )
+    for revision in range(101):
+        conn.execute('''INSERT INTO combat_turn_results_v1
+            (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
+            VALUES ('pvp', ?, ?, ?, ?, ?)''', (
+                str(engagement_id), revision,
+                json.dumps({'actor_id': 1, 'action': 'guard'}),
+                json.dumps({'flow': 'open_world_1v1', 'battle': {
+                    'state': 'live', 'attacker_hp': 70, 'defender_hp': 70,
+                }}),
+                RULES_VERSION,
+            ))
+    conn.execute('''INSERT INTO combat_turn_results_v1
+        (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
+        VALUES ('pvp', ?, 101, ?, ?, ?)''', (
+            str(engagement_id),
+            json.dumps({'actor_id': 1, 'action': 'normal_attack', 'winner_id': 1}),
+            json.dumps(terminal_state), RULES_VERSION,
+        ))
+    conn.commit()
+    conn.close()
+
+    recovered = recover_terminal_pvp_settlements(limit=100)
+    assert len(recovered) == 1
+    assert recovered[0]['engagement_id'] == engagement_id
+    assert recovered[0]['winner_id'] == 1
+    assert recover_terminal_pvp_settlements(limit=100) == []
+    conn = get_connection()
+    assert conn.execute(
+        'SELECT COUNT(*) AS total FROM pvp_terminal_settlements_v1 WHERE engagement_id=?',
+        (engagement_id,),
+    ).fetchone()['total'] == 1
+    assert conn.execute(
+        'SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777'
+    ).fetchone()['total'] == 1
+    conn.close()
+
+
+def test_pvp_local_lethal_result_cannot_override_durable_nonterminal_result():
+    migrate_character_builds_v1()
+    conn = get_connection()
+    attacker = dict(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=777').fetchone())
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker, defender=defender,
+        location_id='capital_city', illegal_aggression=False,
+    )
+    battle = _init_live_battle_payload(
+        attacker_id=1, defender_id=777, now=datetime.now(timezone.utc),
+    )
+    row = None
+    conn = get_connection()
+    row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    conn.close()
+    _ensure_live_runtime_for_battle(engagement_row=row, battle=battle)
+    payload = {'flow': 'open_world_1v1', 'battle': battle}
+    _write_engagement_state(
+        engagement_id=engagement_id, state='converted_to_battle', payload=payload,
+    )
+    authoritative = json.loads(json.dumps(payload))
+    authoritative['battle']['attacker_hp'] = max(1, int(authoritative['battle']['attacker_hp']))
+    authoritative['battle']['defender_hp'] = max(1, int(authoritative['battle']['defender_hp']))
+    revision = int(battle['turn_revision'])
+    conn = get_connection()
+    conn.execute('''INSERT INTO combat_turn_results_v1
+        (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
+        VALUES ('pvp', ?, ?, ?, ?, ?)''', (
+            str(engagement_id), revision,
+            json.dumps({'actor_id': 1, 'action': 'normal_attack'}),
+            json.dumps(authoritative), RULES_VERSION,
+        ))
+    conn.commit()
+    row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    conn.close()
+
+    def local_lethal(**kwargs):
+        local_battle = kwargs['battle']
+        local_battle['defender_hp'] = 0
+        local_battle['participants_v1']['777']['hp'] = 0
+        local_battle['participants_v1']['777']['dead'] = True
+        return True
+
+    with patch('game.pvp_live._resolve_v1_pvp_submission', side_effect=local_lethal):
+        status, returned = resolve_live_battle_turn(
+            row, actor_id=1, selected_action_id='normal_attack',
+        )
+
+    assert status == 'resolved'
+    assert returned == authoritative
+    conn = get_connection()
+    assert conn.execute(
+        'SELECT 1 FROM pvp_terminal_settlements_v1 WHERE engagement_id=?',
+        (engagement_id,),
+    ).fetchone() is None
+    assert conn.execute(
+        'SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777'
+    ).fetchone()['total'] == 0
+    assert conn.execute(
+        'SELECT engagement_state FROM pvp_engagements WHERE id=?', (engagement_id,),
+    ).fetchone()['engagement_state'] == 'converted_to_battle'
     conn.close()

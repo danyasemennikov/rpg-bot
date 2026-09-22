@@ -1532,6 +1532,17 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
                 _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
                 return 'stale_result', payload
             payload = durable_result['state']
+            authoritative_winner = durable_result['result'].get('winner_id')
+            if authoritative_winner is None:
+                # Another resolver won the CAS with a nonterminal result.  The
+                # local lethal projection has no authority to settle or close.
+                _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
+                return 'resolved', payload
+            winner_id = int(authoritative_winner)
+            if winner_id not in {attacker_id, defender_id}:
+                _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
+                return 'stale_result', payload
+            loser_id = defender_id if winner_id == attacker_id else attacker_id
         _finalize_pvp_battle(
             engagement_row=engagement_row,
             payload=payload,
@@ -1555,6 +1566,24 @@ def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_i
             _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
             return 'stale_result', payload
         payload = durable_result['state']
+        authoritative_winner = durable_result['result'].get('winner_id')
+        if authoritative_winner is not None:
+            winner_id = int(authoritative_winner)
+            if winner_id not in {attacker_id, defender_id}:
+                _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
+                return 'stale_result', payload
+            loser_id = defender_id if winner_id == attacker_id else attacker_id
+            _finalize_pvp_battle(
+                engagement_row=engagement_row,
+                payload=payload,
+                winner_id=winner_id,
+                loser_id=loser_id,
+            )
+            return 'finished', payload
+        if durable_result.get('duplicate'):
+            # Rebuild the process-local runtime from the winning durable state
+            # before accepting another action.
+            _LIVE_PVP_RUNTIME_STORE.remove(encounter_id)
     else:
         _write_engagement_state(
             engagement_id=int(engagement_row['id']),
@@ -1826,6 +1855,7 @@ def recover_terminal_pvp_settlements(*, limit: int = 100) -> list[dict]:
         rows = conn.execute('''SELECT r.encounter_id, r.result_json, r.state_json, e.*
             FROM combat_turn_results_v1 r JOIN pvp_engagements e ON CAST(e.id AS TEXT)=r.encounter_id
             WHERE r.encounter_kind='pvp' AND e.engagement_state=?
+            AND json_extract(r.result_json, '$.winner_id') IS NOT NULL
             AND NOT EXISTS (SELECT 1 FROM pvp_terminal_settlements_v1 s WHERE s.engagement_id=e.id)
             ORDER BY r.created_at LIMIT ?''', (ENGAGEMENT_STATE_CONVERTED_TO_BATTLE, max(1, min(1000, int(limit))))).fetchall()
     finally:
