@@ -34,8 +34,8 @@ def test_corrected_skill_descriptions_preserve_canonical_semantics_in_every_loca
         "en": {
             "power_strike": ("1.25P", "equipped weapon"),
             "counter": ("PvE", "0.40P", "Ward", "Parry"),
-            "envenom_blades": ("normal attack", "0.25P", "3 ticks"),
-            "shadow_chain": ("1.90P", "0.80P", "+40", "1 opportunity"),
+            "envenom_blades": ("normal attack", "0.2875P", "3 ticks"),
+            "shadow_chain": ("1.615P", "0.80P", "+40", "1 opportunity"),
             "absolute_zero": ("selected active target", "Slow", "Chilled"),
             "resurrection": ("exactly 0.80H", "once per encounter"),
             "executioners_focus": ("+25%", "3 percentage points"),
@@ -44,8 +44,8 @@ def test_corrected_skill_descriptions_preserve_canonical_semantics_in_every_loca
         "ru": {
             "power_strike": ("1,25P", "экипированного оружия"),
             "counter": ("PvE", "0,40P", "Защита", "Парирование"),
-            "envenom_blades": ("обычную атаку", "0,25P", "3 тика"),
-            "shadow_chain": ("1,90P", "0,80P", "+40", "1 возможность"),
+            "envenom_blades": ("обычную атаку", "0,2875P", "3 тика"),
+            "shadow_chain": ("1,615P", "0,80P", "+40", "1 возможность"),
             "absolute_zero": ("выбранной активной цели", "Замедление", "Охлаждение"),
             "resurrection": ("ровно в 0,80H", "один раз за бой"),
             "executioners_focus": ("+25%", "+3 п.п."),
@@ -54,8 +54,8 @@ def test_corrected_skill_descriptions_preserve_canonical_semantics_in_every_loca
         "es": {
             "power_strike": ("1,25P", "arma equipada"),
             "counter": ("PvE", "0,40P", "Guardia", "Parada"),
-            "envenom_blades": ("ataque normal", "0,25P", "3 pulsos"),
-            "shadow_chain": ("1,90P", "0,80P", "+40", "1 oportunidad"),
+            "envenom_blades": ("ataque normal", "0,2875P", "3 pulsos"),
+            "shadow_chain": ("1,615P", "0,80P", "+40", "1 oportunidad"),
             "absolute_zero": ("objetivo activo seleccionado", "Ralentización", "Enfriado"),
             "resurrection": ("exactamente en 0,80H", "una vez por encuentro"),
             "executioners_focus": ("+25%", "+3 puntos porcentuales"),
@@ -79,12 +79,16 @@ def test_every_frozen_skill_preview_localizes_structured_contract_fields():
         for skill_id, spec in SKILL_SPECS.items():
             text, markup = build_skill_view(1, skill_id, lang)
             assert "[" not in text
+            assert get_skill_desc(skill_id, lang) in text
+            assert "parameters:" not in text and "параметры:" not in text and "parámetros:" not in text
             assert f"<b>{spec.target}</b>" not in text
             if lang != "en":
                 assert f"<b>{spec.school or 'support'}</b>" not in text
                 assert spec.description not in text
             if spec.power:
-                assert f"{spec.power:.2f}".removeprefix("0") + "P" in text
+                ranked = spec.power
+                formatted = f"{ranked:.4f}".rstrip("0").rstrip(".").removeprefix("0") + "P"
+                assert formatted in text
             assert all(
                 callback and len(callback.encode("utf-8")) <= 64
                 for callback in _callbacks(markup)
@@ -119,7 +123,7 @@ def test_build_views_are_localized_authoritative_and_callback_safe():
         for text, markup in views:
             assert "[" not in text
             assert all(callback and len(callback.encode("utf-8")) <= 64 for callback in _callbacks(markup))
-        assert "1.05P" in views[3][0]
+        assert "1.365P" in views[3][0]
         assert "PvP" in views[3][0]
         if lang != "en":
             assert all(f"· {family}" not in views[4][0] for family in FAMILIES)

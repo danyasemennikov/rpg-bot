@@ -7,11 +7,13 @@ from pathlib import Path
 from game.build_contract import FAMILIES, RULES_VERSION
 from game.combat_identity_simulation import (
     ROLE_SCENARIOS,
+    _paired_scenario,
     build_enemy_roster,
     build_legal_lab_actor,
     build_mixed_enemy_roster,
     choose_visible_action,
     paired_difference,
+    progression_combat_comparisons,
     simulate_v1_encounter,
     snapshot_matrix,
     validate_lab_actor,
@@ -52,6 +54,10 @@ def test_legal_snapshot_matrix_covers_all_branches_stages_mixes_and_extremes():
     } == {'entry_weapon_only', 'common_t1_full'}
     assert all(
         set(row['branches']) == {'A', 'B'}
+        and row['combat_authority'] == 'simulate_v1_encounter'
+        and row['seeds']['count'] == 20
+        and row['branches']['A']['outcomes']['runs'] == 20
+        and row['branches']['B']['outcomes']['runs'] == 20
         and not row['branches']['A']['validation_errors']
         and not row['branches']['B']['validation_errors']
         for row in matrix['progression_comparisons']
@@ -78,6 +84,31 @@ def test_all_twenty_m3_entry_builds_are_legal_and_complete_a_real_single_smoke()
             assert result['consumables'] == 0
             assert result['fallbacks'] == 0
     assert winners == ['players'] * 20
+
+
+def test_lab_validation_enforces_production_rank_gates_and_dual_capstone_rule():
+    forged_rank = build_legal_lab_actor('bow', 'A', level=3, mastery_level=3)
+    forged_rank['skill_ranks']['aimed_shot'] = 3
+    assert 'mastery_gate' in validate_lab_actor(forged_rank)
+
+    dual_capstone = build_legal_lab_actor(
+        'bow', 'A', level=15, mastery_level=20, cross_branch_mix=True,
+    )
+    dual_capstone['skill_ranks']['rain_of_barbs'] = 1
+    assert 'dual_capstone' in validate_lab_actor(dual_capstone)
+
+
+def test_progression_comparisons_are_real_combat_outcomes():
+    comparisons = progression_combat_comparisons(seeds=(0, 1))
+    assert len(comparisons) == 100
+    assert all(row['combat_authority'] == 'simulate_v1_encounter' for row in comparisons)
+    assert all(
+        branch['outcomes']['runs'] == 2
+        and 'win_rate' in branch['outcomes']
+        and 'mean_damage' in branch['outcomes']
+        for row in comparisons
+        for branch in row['branches'].values()
+    )
 
 
 def test_mixed_roster_keeps_exact_real_unit_ids_and_formations():
@@ -117,6 +148,17 @@ def test_role_plan_declares_two_axes_for_every_sibling_pair():
     assert len(ROLE_SCENARIOS) == 17
     assert sum(len(scenario['gates']) for scenario in ROLE_SCENARIOS) == 20
     assert {scenario['family'] for scenario in ROLE_SCENARIOS} == set(FAMILIES)
+
+
+def test_dagger_sustained_gate_uses_full_four_opportunity_window():
+    scenario = next(
+        item for item in ROLE_SCENARIOS
+        if item['scenario_id'] == 'daggers_armored_sustain'
+    )
+    assert scenario['max_opportunities'] == 4
+    evidence = _paired_scenario(scenario, range(200))
+    assert evidence['gates'][0]['passes'] is True
+    assert evidence['gates'][0]['ci_excludes_zero'] is True
 
 
 def test_checked_evidence_has_exact_seed_budget_and_passes_frozen_gates():

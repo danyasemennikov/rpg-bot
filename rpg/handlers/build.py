@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from html import escape
-import re
 from typing import Any
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -25,6 +24,7 @@ from game.build_contract import (
     mastery_exp_needed,
     normalize_family,
     rank_mana_cost,
+    rank_multiplier,
 )
 from game.build_progression import (
     ATTRIBUTE_KEYS,
@@ -39,7 +39,7 @@ from game.build_progression import (
     issue_skill_purchase_intent,
 )
 from game.combat_identity import crit_chance
-from game.i18n import get_player_lang, get_skill_name, t
+from game.i18n import get_player_lang, get_skill_desc, get_skill_name, t
 
 
 _COPY = {
@@ -51,7 +51,8 @@ _COPY = {
         "learn": "Learn / rank up", "locked": "Locked", "ready": "Available", "max": "MAX",
         "rank": "Rank", "mastery": "Mastery", "points": "points", "cost": "MP",
         "cooldown": "cooldown", "target": "target", "school": "school", "exact": "V1 combat profile",
-        "passive": "passive", "hits": "components", "utility": "utility", "parameters": "parameters",
+        "passive": "passive", "hits": "components", "utility": "utility",
+        "coefficient": "power", "description": "Description", "rank_effect": "Rank effect",
         "unequip": "These requirement-invalid items will be unequipped", "none": "none",
         "changed": "Build updated.", "stale": "That build action is stale; the current view was reloaded.",
         "old": "This old button cannot mutate V1. The current build view was reloaded.",
@@ -81,7 +82,8 @@ _COPY = {
         "learn": "Изучить / повысить", "locked": "Закрыто", "ready": "Доступно", "max": "МАКС",
         "rank": "Ранг", "mastery": "Владение", "points": "очков", "cost": "МП",
         "cooldown": "перезарядка", "target": "цель", "school": "школа", "exact": "Боевой профиль V1",
-        "passive": "пассивно", "hits": "компонентов", "utility": "поддержка", "parameters": "параметры",
+        "passive": "пассивно", "hits": "компоненты", "utility": "поддержка",
+        "coefficient": "сила", "description": "Описание", "rank_effect": "Эффект ранга",
         "unequip": "Предметы с нарушенными требованиями будут сняты", "none": "нет",
         "changed": "Билд обновлён.", "stale": "Действие устарело; открыт актуальный билд.",
         "old": "Старая кнопка не меняет V1. Открыт актуальный билд.",
@@ -111,7 +113,8 @@ _COPY = {
         "learn": "Aprender / mejorar", "locked": "Bloqueado", "ready": "Disponible", "max": "MÁX",
         "rank": "Rango", "mastery": "Maestría", "points": "puntos", "cost": "PM",
         "cooldown": "recarga", "target": "objetivo", "school": "escuela", "exact": "Perfil de combate V1",
-        "passive": "pasiva", "hits": "componentes", "utility": "utilidad", "parameters": "parámetros",
+        "passive": "pasiva", "hits": "componentes", "utility": "utilidad",
+        "coefficient": "potencia", "description": "Descripción", "rank_effect": "Efecto del rango",
         "unequip": "Se desequiparán estos objetos cuyos requisitos ya no se cumplen", "none": "ninguno",
         "changed": "Configuración actualizada.", "stale": "La acción caducó; se recargó la configuración actual.",
         "old": "El botón antiguo no puede cambiar V1. Se recargó la vista actual.",
@@ -228,24 +231,16 @@ def _label(table: dict[str, dict[str, str]], lang: str, key: str) -> str:
     return localized.get(key, table["en"].get(key, key.replace("_", " ").title()))
 
 
-def _skill_profile(spec: Any, lang: str) -> str:
+def _skill_profile(spec: Any, lang: str, rank: int) -> str:
     parts = [_label(_KIND_LABELS, lang, spec.kind)]
-    displayed_numbers = set()
     if spec.power:
-        power = f"{spec.power:.2f}".removeprefix("0")
-        parts.append(f"{power}P")
-        displayed_numbers.add(f"{power}P")
+        ranked_power = float(spec.power) * rank_multiplier(max(1, int(rank)))
+        power = f"{ranked_power:.4f}".rstrip("0").rstrip(".").removeprefix("0")
+        parts.append(f"{_c(lang, 'coefficient')}: {power}P")
     if spec.hits > 1:
-        parts.append(f"{spec.hits} {_c(lang, 'hits')}")
-        displayed_numbers.add(str(spec.hits))
+        parts.append(f"{_c(lang, 'hits')}: {spec.hits}")
     if spec.utility:
         parts.append(_c(lang, "utility"))
-    parameters = []
-    for value in re.findall(r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:pp|%|[PH])?", spec.description):
-        if value not in displayed_numbers and value not in parameters:
-            parameters.append(value)
-    if parameters:
-        parts.append(f"{_c(lang, 'parameters')}: {', '.join(parameters)}")
     return " · ".join(parts)
 
 
@@ -496,7 +491,8 @@ def build_skill_view(player_id: int, skill_id: str, lang: str) -> tuple[str, Inl
         f"{_c(lang, 'rank')}: <b>{rank}/3</b>",
         f"{_c(lang, 'cost')}: <b>{rank_mana_cost(spec, max(1, next_rank))}</b> · {_c(lang, 'cooldown')}: <b>{spec.cooldown if spec.cooldown is not None else _c(lang, 'passive')}</b>",
         f"{_c(lang, 'target')}: <b>{escape(_label(_TARGET_LABELS, lang, spec.target))}</b> · {_c(lang, 'school')}: <b>{escape(_label(_SCHOOL_LABELS, lang, spec.school or 'support'))}</b>",
-        f"{_c(lang, 'exact')}: {escape(_skill_profile(spec, lang))}",
+        f"{_c(lang, 'description')}: {escape(get_skill_desc(skill_id, lang))}",
+        f"{_c(lang, 'rank_effect')} {max(1, next_rank)} · {_c(lang, 'exact')}: {escape(_skill_profile(spec, lang, max(1, next_rank)))}",
         f"PvP: {_c(lang, 'available_pvp') if skill_id in PVP_SKILL_ALLOWLIST else _c(lang, 'pve_only')}",
     ]
     keyboard = []

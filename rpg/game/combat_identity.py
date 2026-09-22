@@ -662,7 +662,7 @@ def _skill_context(
         if _has(target, "bleed", source_id=source): coefficient += _ranked(.40, rank)
         if _has(target, "physical_break"): coefficient += _ranked(.40, rank)
     elif skill_id == "widows_kiss":
-        coefficient += _ranked(.20, rank) * min(3, len(_find_effect(target, "poison", source_id=source)))
+        coefficient += _ranked(.23, rank) * min(3, len(_find_effect(target, "poison", source_id=source)))
     elif skill_id == "rupture_toxins":
         flags["rupture_poison"] = True
     elif skill_id in {"quick_slice", "backstab", "shadow_chain"} and _has(actor, "opening", source_id=source):
@@ -752,7 +752,7 @@ def _on_hit(
     elif skill_id == "sunder_armor": add("physical_break", 3, .30)
     elif skill_id == "reopen_wounds" and flags.get("refresh_bleed"):
         for bleed in _find_effect(target, "bleed", source_id=source): bleed["duration"] = 3
-    elif skill_id == "toxic_cut": add("poison", 3, school="physical", raw_tick=int(base_power * _ranked(.20, rank)))
+    elif skill_id == "toxic_cut": add("poison", 3, school="physical", raw_tick=int(base_power * _ranked(.23, rank)))
     elif skill_id == "crippling_venom":
         add("slow", 2); add("weakness", 2, _ranked_percent(.15, rank))
     elif skill_id == "feint_step":
@@ -785,7 +785,7 @@ def _on_hit(
         })
         _add_effect(actor, _effect("grace", actor, 2, value=.20, skill_id=skill_id, side_index=side_index))
     if _has(actor, "envenom", source_id=source) and normalize_family(actor.get("family")) == "daggers":
-        add("poison", 3, school="physical", raw_tick=int(base_power * .25 * _effect_value(actor, "envenom", source_id=source)))
+        add("poison", 3, school="physical", raw_tick=int(base_power * .2875 * _effect_value(actor, "envenom", source_id=source)))
         _remove_effects(actor, {"envenom"}, source_id=source)
 
     if flags.get("masters_ward"):
@@ -819,7 +819,7 @@ def _on_hit(
             weighted_weakness = sum(raw * weakness for raw, _, weakness in packets) / budget
             source_level = max((level for _, level, _ in packets), default=int(actor.get("level", 1)))
             result = _apply_periodic_damage(
-                target, raw=int(budget * .80), school="poison",
+                target, raw=int(budget * .92), school="poison",
                 source_level=source_level, weakness=weighted_weakness,
             )
             events.append({"kind": "poison_rupture", "actor_id": source, "source_id": source, "target_id": _id(target), **result})

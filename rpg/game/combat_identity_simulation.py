@@ -26,6 +26,7 @@ from game.build_contract import (
     BRANCH_IDENTITIES,
     FAMILIES,
     RULES_VERSION, MAX_SKILL_RANK,
+    RANK_REQUIREMENTS,
     SKILL_SPECS,
     SKILL_TREES,
     legal_family_budget,
@@ -51,6 +52,7 @@ LAB_GEAR_TIER = 1
 LAB_RARITY = 'common'
 MAX_OPPORTUNITIES = 100
 PAIR_SEEDS = tuple(range(200))
+PROGRESSION_SEEDS = tuple(range(20))
 
 FAMILY_ARMOR = {
     'sword_1h': 'heavy', 'sword_2h': 'heavy', 'axe_2h': 'heavy',
@@ -600,7 +602,13 @@ def validate_lab_actor(actor: dict[str, Any]) -> list[str]:
         errors.append('family_ownership')
     ranks = {str(skill_id): int(rank) for skill_id, rank in actor['skill_ranks'].items()}
     mastery_level = int(actor['mastery_level'])
-    if any(SKILL_SPECS[skill_id].unlock_mastery > mastery_level for skill_id in ranks):
+    if any(
+        max(
+            SKILL_SPECS[skill_id].unlock_mastery,
+            RANK_REQUIREMENTS.get(rank, SKILL_SPECS[skill_id].unlock_mastery),
+        ) > mastery_level
+        for skill_id, rank in ranks.items()
+    ):
         errors.append('mastery_gate')
     if any(rank < 1 or rank > MAX_SKILL_RANK for rank in ranks.values()):
         errors.append('rank_limit')
@@ -745,8 +753,8 @@ ROLE_SCENARIOS = (
     },
     {
         'scenario_id': 'daggers_armored_sustain', 'family': 'daggers',
-        'declared_matchup': 'Venom delayed effective damage in the opening three-opportunity cycle on an armored target',
-        'enemies': ('mountain_stone_golem',), 'max_opportunities': 3,
+        'declared_matchup': 'Venom delayed effective damage across a sustained four-opportunity cycle on an armored target',
+        'enemies': ('mountain_stone_golem',), 'max_opportunities': 4,
         'gates': ({'winner': 'A', 'metric': 'actor_damage_per_turn', 'axis': 'sustained_damage_per_opportunity'},),
     },
     {
@@ -896,6 +904,57 @@ def run_accessibility_evidence(seeds: Iterable[int] = PAIR_SEEDS) -> dict[str, A
     }
 
 
+def progression_combat_comparisons(
+    seeds: Iterable[int] = PROGRESSION_SEEDS,
+) -> list[dict[str, Any]]:
+    """Compare sibling loadouts through real G2 combat at every J-stage."""
+    seed_values = tuple(int(seed) for seed in seeds)
+    if not seed_values:
+        raise ValueError('progression_seeds_required')
+    stages = (
+        (1, 1, 'westwild_rabbit'),
+        (3, 3, 'forest_boar'),
+        (6, 8, 'forest_wolf'),
+        (10, 14, 'mountain_stone_golem'),
+        (15, 20, 'troll_chief'),
+    )
+    comparisons = []
+    for family in FAMILIES:
+        for level, mastery_level, enemy_id in stages:
+            for gear_set in ('entry_weapon_only', 'common_t1_full'):
+                branches = {}
+                for branch in ('A', 'B'):
+                    actor = build_legal_lab_actor(
+                        family, branch, level=level, mastery_level=mastery_level,
+                        gear_set=gear_set,
+                    )
+                    runs = [
+                        simulate_v1_encounter(
+                            actor, build_enemy_roster((enemy_id,)), seed=seed,
+                            max_opportunities=12,
+                        )
+                        for seed in seed_values
+                    ]
+                    branches[branch] = {
+                        'identity': BRANCH_IDENTITIES[family][branch],
+                        'skill_ranks': actor['skill_ranks'],
+                        'validation_errors': validate_lab_actor(actor),
+                        'outcomes': summarize_runs(runs),
+                    }
+                comparisons.append({
+                    'family': family, 'level': level,
+                    'mastery_level': mastery_level, 'gear_set': gear_set,
+                    'enemy_source_ids': [enemy_id],
+                    'seeds': {
+                        'first': min(seed_values), 'last': max(seed_values),
+                        'count': len(seed_values),
+                    },
+                    'combat_authority': 'simulate_v1_encounter',
+                    'branches': branches,
+                })
+    return comparisons
+
+
 def snapshot_matrix() -> dict[str, Any]:
     stages = ((1, 1), (3, 3), (6, 8), (10, 14), (15, 20))
     snapshots = []
@@ -925,34 +984,7 @@ def snapshot_matrix() -> dict[str, Any]:
             ],
             'validation_errors': validate_lab_actor(actor),
         })
-    progression_comparisons = []
-    for family in FAMILIES:
-        for level, mastery_level in stages:
-            for gear_set in ('entry_weapon_only', 'common_t1_full'):
-                branches = {}
-                for branch in ('A', 'B'):
-                    actor = build_legal_lab_actor(
-                        family, branch, level=level, mastery_level=mastery_level,
-                        gear_set=gear_set,
-                    )
-                    low, high = raw_power_range(actor)
-                    branches[branch] = {
-                        'identity': BRANCH_IDENTITIES[family][branch],
-                        'skill_ranks': actor['skill_ranks'],
-                        'points_spent': sum(actor['skill_ranks'].values()),
-                        'unspent_skill_points': actor['skill_points'],
-                        'item_ids': actor['provenance']['gear_item_ids'],
-                        'max_hp': actor['max_hp'], 'max_mana': actor['max_mana'],
-                        'power_range': [low, high],
-                        'physical_defense': actor['physical_defense'],
-                        'magic_defense': actor['magic_defense'],
-                        'validation_errors': validate_lab_actor(actor),
-                    }
-                progression_comparisons.append({
-                    'family': family, 'level': level,
-                    'mastery_level': mastery_level, 'gear_set': gear_set,
-                    'branches': branches,
-                })
+    progression_comparisons = progression_combat_comparisons()
     stat_variants = []
     for family in FAMILIES:
         if family == 'daggers':
@@ -1080,8 +1112,15 @@ def run_full_evidence(*, base_sha: str, head_sha: str, seeds: Iterable[int] = PA
             {'skill_id': 'sunder_armor', 'field': 'direct_power', 'old': .90, 'new': .77, 'relative_percent': -14.44},
             {'skill_id': 'reopen_wounds', 'field': 'direct_power', 'old': 1.20, 'new': 1.38, 'relative_percent': 15.0},
             {'skill_id': 'ravage', 'field': 'direct_power', 'old': 1.80, 'new': 2.07, 'relative_percent': 15.0},
+            {'skill_id': 'envenom_blades', 'field': 'poison_tick_power', 'old': .25, 'new': .2875, 'relative_percent': 15.0},
+            {'skill_id': 'toxic_cut', 'field': 'direct_power', 'old': .90, 'new': 1.035, 'relative_percent': 15.0},
+            {'skill_id': 'toxic_cut', 'field': 'poison_tick_power', 'old': .20, 'new': .23, 'relative_percent': 15.0},
+            {'skill_id': 'widows_kiss', 'field': 'direct_power', 'old': 1.15, 'new': 1.3225, 'relative_percent': 15.0},
+            {'skill_id': 'widows_kiss', 'field': 'power_per_poison', 'old': .20, 'new': .23, 'relative_percent': 15.0},
             {'skill_id': 'rupture_toxins', 'field': 'direct_power', 'old': 1.20, 'new': 1.38, 'relative_percent': 15.0},
-            {'skill_id': 'backstab', 'field': 'direct_power', 'old': 1.30, 'new': 1.49, 'relative_percent': 14.62},
+            {'skill_id': 'rupture_toxins', 'field': 'remaining_tick_conversion', 'old': .80, 'new': .92, 'relative_percent': 15.0},
+            {'skill_id': 'feint_step', 'field': 'direct_power', 'old': .65, 'new': .5525, 'relative_percent': -15.0},
+            {'skill_id': 'shadow_chain', 'field': 'direct_power', 'old': 1.90, 'new': 1.615, 'relative_percent': -15.0},
         ],
     }
 

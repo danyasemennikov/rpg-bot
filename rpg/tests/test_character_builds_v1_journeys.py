@@ -8,6 +8,7 @@ resolution, rewards, and mastery all use their production authorities.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -58,6 +59,38 @@ def _callbacks(markup) -> list[str]:
         for button in row
         if button.callback_data
     ]
+
+
+def _assert_defining_skill_effect(action: dict, skill_id: str, player_id: int) -> None:
+    spec = SKILL_SPECS[skill_id]
+    events = list(action['events'])
+    actor_effects = list(action['actor_after'].get('effects') or [])
+    enemy_effects = [
+        effect for enemy in action['enemies_after']
+        for effect in (enemy.get('effects') or [])
+    ]
+    if spec.kind in {'damage', 'poison', 'hostile_effect', 'dispel'}:
+        direct = next(
+            event for event in events
+            if event.get('kind') == 'direct' and event.get('skill_id') == skill_id
+        )
+        assert direct.get('hit') is True, (skill_id, events)
+        if spec.kind in {'damage', 'poison'}:
+            assert int(direct.get('hp_removed', 0)) > 0, (skill_id, direct)
+        if spec.kind == 'hostile_effect':
+            assert any(effect.get('skill_id') == skill_id for effect in enemy_effects)
+        return
+    matching_effect = any(
+        effect.get('skill_id') == skill_id
+        for effect in [*actor_effects, *enemy_effects]
+    )
+    semantic_events = {
+        'heal': {'heal'}, 'hot': {'heal', 'hot'}, 'mana': {'mana'},
+        'rage': {'hp_cost'}, 'cleanse': {'cleanse'}, 'dispel': {'direct'},
+    }.get(spec.kind, set())
+    assert matching_effect or any(event.get('kind') in semantic_events for event in events), (
+        skill_id, actor_effects, enemy_effects, events,
+    )
 
 
 class ProductionJourney:
@@ -308,10 +341,15 @@ class ProductionJourney:
             payload = self._intent_for_callback(callback)["action"]
             before_events = len(battle_state.get("combat_events_v1", []))
             await self.callback(callback, handle_battle_buttons)
+            current_battle = self.context.user_data.get("battle", battle_state)
             selected_actions.append({
                 "kind": payload["kind"],
                 "skill_id": payload.get("skill_id"),
                 "events": battle_state.get("combat_events_v1", [])[before_events:],
+                "actor_after": copy.deepcopy(
+                    (current_battle.get("participant_states_v1") or {}).get(str(self.player_id), {})
+                ),
+                "enemies_after": copy.deepcopy(current_battle.get("enemy_states_v1") or []),
             })
         else:
             raise AssertionError((mob_id, battle_state))
@@ -364,6 +402,7 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
         opening=(("skill", entry), ("basic_attack", None)),
     )
     assert start["actions"][0]["skill_id"] == entry
+    _assert_defining_skill_effect(start["actions"][0], entry, player_id)
     assert start["actions"][1]["kind"] == "basic_attack"
 
     earned = [start, *(await journey.earn_mastery(family, 8))]
@@ -409,6 +448,7 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
             "forest_boar", opening=(("skill", capstone),),
         )
         assert capstone_fight["actions"][0]["skill_id"] == capstone
+        _assert_defining_skill_effect(capstone_fight["actions"][0], capstone, player_id)
     earned.append(capstone_fight)
 
     deep_receipts = []

@@ -271,7 +271,7 @@ def test_dead_actor_cannot_cast_and_envenom_applies_on_normal_hit():
         effect for effect in result["opponents"][0]["effects"]
         if effect["kind"] == "poison"
     )
-    assert poison["raw_tick"] == 23
+    assert poison["raw_tick"] == 27
     assert poison["duration"] == 3
     assert not any(effect["kind"] == "envenom" for effect in result["actor"]["effects"])
 
