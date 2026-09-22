@@ -513,7 +513,11 @@ def _setup_bonus(actor: dict[str, Any], skill_id: str, action_kind: str) -> tupl
     for kind, value in mappings.items():
         if eligible[kind] and _has(actor, kind, source_id=source):
             stored = _effect_value(actor, kind, source_id=source)
-            bonus += stored if stored > 0 else value
+            # Some setup tokens carry effect-specific payload rather than a
+            # direct-damage multiplier. Envenom's stored value scales only the
+            # poison attached by _on_hit.
+            if value > 0:
+                bonus += stored if stored > 0 else value
             consumed.append(kind)
     return min(SETUP_BONUS_CAP, bonus), consumed
 
@@ -1058,8 +1062,19 @@ def evaluate_action(
                     )
                     if action_kind in {"skill", "normal"}:
                         _on_hit(actor, allies, target, skill_id=skill_id or "normal", rank=rank, base_power=base_low, actual_damage=result["hp_removed"], flags=flags, side_index=side_index, events=events)
-                    elif flags.get("judgment_normal"):
-                        _heal(actor, min(int(result["hp_removed"] * .10), int(actor.get("max_hp", 1) * .05)))
+                    if flags.get("judgment_normal"):
+                        events.append({
+                            "kind": "heal", "actor_id": actor_id,
+                            "target_id": actor_id,
+                            "amount": _heal(
+                                actor,
+                                min(
+                                    int(result["hp_removed"] * .10),
+                                    int(actor.get("max_hp", 1) * .05),
+                                ),
+                            ),
+                            "skill_id": "judgment",
+                        })
             events.append(event)
         if hit_any:
             for token in setup_consumptions:

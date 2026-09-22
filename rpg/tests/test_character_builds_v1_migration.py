@@ -19,7 +19,8 @@ from game.build_progression import (
     ensure_player_build_v1,
     BuildRejected,
 )
-from game.pve_reward_settlement import _apply_progression
+from game.gear_progression import ensure_gear_progression_schema
+from game.pve_reward_settlement import _apply_progression, recover_prepared_settlements
 from handlers.battle import apply_rewards
 
 
@@ -123,6 +124,71 @@ def test_cutover_drains_more_than_one_recovery_batch_before_conversion():
         result = migrate_character_builds_v1()
     assert result['status'] == 'active'
     assert recover.call_count == 2
+
+
+def test_legacy_settlement_uses_old_threshold_before_alias_conversion():
+    conn = get_connection()
+    ensure_gear_progression_schema(conn)
+    conn.execute(
+        "INSERT INTO weapon_mastery (telegram_id, weapon_id, level, exp, skill_points) "
+        "VALUES (1, 'field_sword_1h', 1, 40, 0)"
+    )
+    conn.execute(
+        """INSERT INTO pve_encounters
+        (encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json,
+         source_units_json, rules_version)
+        VALUES ('legacy-threshold', 1, 'resolving_victory', 'rat', '{}', '{}', '[]', 'legacy_v0')"""
+    )
+    conn.execute(
+        "INSERT INTO pve_encounter_participants (encounter_id, player_id) "
+        "VALUES ('legacy-threshold', 1)"
+    )
+    plan = {
+        'schema_version': 1,
+        'policy_version': 'legacy_v0',
+        'encounter_id': 'legacy-threshold',
+        'owner_player_id': 1,
+        'location_id': 'capital_city',
+        'route_id': None,
+        'eligible_recipient_ids': [1],
+        'defeated_participant_ids': [],
+        'recipients': [],
+        'owner_mastery': {
+            'player_id': 1,
+            'weapon_id': 'field_sword_1h',
+            'exp': 10,
+        },
+    }
+    conn.execute(
+        """INSERT INTO pve_reward_settlements
+        (encounter_id, schema_version, policy_version, status, plan_json)
+        VALUES ('legacy-threshold', 1, 'legacy_v0', 'prepared', ?)""",
+        (json.dumps(plan),),
+    )
+    conn.commit()
+    conn.close()
+
+    recovered = recover_prepared_settlements()
+    assert [item['status'] for item in recovered] == ['applied']
+    conn = get_connection()
+    before_migration = dict(conn.execute(
+        "SELECT weapon_id, level, exp FROM weapon_mastery WHERE telegram_id=1"
+    ).fetchone())
+    conn.close()
+    assert before_migration == {'weapon_id': 'field_sword_1h', 'level': 2, 'exp': 0}
+    assert recover_prepared_settlements() == []
+
+    assert migrate_character_builds_v1()['status'] == 'active'
+    conn = get_connection()
+    after_migration = dict(conn.execute(
+        "SELECT weapon_id, level, exp, model_version FROM weapon_mastery WHERE telegram_id=1"
+    ).fetchone())
+    conn.close()
+    assert after_migration == {
+        'weapon_id': 'sword_1h', 'level': 2, 'exp': 0,
+        'model_version': MASTERY_MODEL_VERSION,
+    }
+    assert migrate_character_builds_v1()['status'] == 'already_active'
 
 
 def test_field_item_mastery_normalizes_by_item_profile_and_keeps_best_evidence():

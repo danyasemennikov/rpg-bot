@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from database import get_connection
 from game.balance import exp_to_next_level
-from game.build_contract import FAMILIES, RULES_VERSION
+from game.build_contract import FAMILIES, MAX_MASTERY, RULES_VERSION, normalize_family
 from game.field_catalog import (
     DRY_STREAK_INCREMENT_BY_SPAWN_PROFILE,
     FIELD_DRY_STREAK_THRESHOLD,
@@ -617,6 +617,72 @@ def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
             'gold_after': gold, 'leveled_up': level > old_level}
 
 
+def _add_legacy_mastery_exp(conn, player_id: int, weapon_id: str, exp: int) -> dict:
+    """Apply a pre-V1 award with the historical ``50 * level`` thresholds.
+
+    Old settlements are drained before the V1 migration.  Alias rows are
+    alternative evidence, so the award is applied to the strongest matching
+    legacy row; the migration can then normalize and convert that result once.
+    """
+    item = get_item(str(weapon_id or '')) or {}
+    family = normalize_family(item.get('weapon_profile')) or normalize_family(weapon_id)
+    if family not in FAMILIES:
+        family = 'unarmed'
+
+    rows = [
+        dict(row) for row in conn.execute(
+            'SELECT rowid AS mastery_rowid, * FROM weapon_mastery WHERE telegram_id=?',
+            (int(player_id),),
+        ).fetchall()
+        if (
+            normalize_family((get_item(str(row['weapon_id'])) or {}).get('weapon_profile'))
+            or normalize_family(row['weapon_id'])
+        ) == family
+    ]
+    if rows:
+        selected = max(
+            rows,
+            key=lambda row: max(0, int(row.get('exp', 0)))
+            + 25 * (max(1, int(row.get('level', 1))) - 1) * max(1, int(row.get('level', 1))),
+        )
+    else:
+        conn.execute(
+            '''INSERT INTO weapon_mastery
+               (telegram_id, weapon_id, level, exp, skill_points)
+               VALUES (?, ?, 1, 0, 0)''',
+            (int(player_id), family),
+        )
+        selected = {
+            'mastery_rowid': int(conn.execute('SELECT last_insert_rowid()').fetchone()[0]),
+            'level': 1,
+            'exp': 0,
+            'skill_points': 0,
+        }
+
+    old_level = max(1, min(MAX_MASTERY, int(selected.get('level', 1))))
+    new_level = old_level
+    new_exp = max(0, int(selected.get('exp', 0))) + max(0, int(exp))
+    new_points = max(0, int(selected.get('skill_points', 0)))
+    while new_level < MAX_MASTERY and new_exp >= 50 * new_level:
+        new_exp -= 50 * new_level
+        new_level += 1
+        new_points += 1
+    if new_level >= MAX_MASTERY:
+        new_exp = 0
+    conn.execute(
+        'UPDATE weapon_mastery SET level=?, exp=?, skill_points=? WHERE rowid=?',
+        (new_level, new_exp, new_points, int(selected['mastery_rowid'])),
+    )
+    return {
+        'leveled_up': new_level > old_level,
+        'new_level': new_level,
+        'new_exp': new_exp,
+        'new_points': new_points,
+        'new_skills': [],
+        'exp_needed': 0 if new_level >= MAX_MASTERY else 50 * new_level,
+    }
+
+
 def _stack_quantity(conn, player_id: int, item_id: str) -> int:
     row = conn.execute('SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory '
                        'WHERE telegram_id=? AND item_id=?', (player_id, item_id)).fetchone()
@@ -806,11 +872,11 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
         legacy_mastery_exp = int(legacy_mastery.get('exp', 0))
         legacy_mastery_result = None
         if legacy_mastery_exp > 0:
-            legacy_mastery_result = add_mastery_exp(
+            legacy_mastery_result = _add_legacy_mastery_exp(
+                conn,
                 int(legacy_mastery.get('player_id', plan.get('owner_player_id', 0))),
                 str(legacy_mastery.get('weapon_id') or 'unarmed'),
                 legacy_mastery_exp,
-                conn=conn,
             )
         if failure_hook:
             failure_hook('after_mastery_award')

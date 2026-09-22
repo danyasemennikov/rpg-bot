@@ -265,7 +265,35 @@ def test_dead_actor_cannot_cast_and_envenom_applies_on_normal_hit():
         }],
     )
     result = evaluate_action(venom, [venom], [enemy()], {"kind": "normal"}, rng_seed=3)
-    assert any(effect["kind"] == "poison" for effect in result["opponents"][0]["effects"])
+    assert direct_event(result)["raw"] == 94
+    assert direct_event(result)["hp_removed"] == 94
+    poison = next(
+        effect for effect in result["opponents"][0]["effects"]
+        if effect["kind"] == "poison"
+    )
+    assert poison["raw_tick"] == 23
+    assert poison["duration"] == 3
+    assert not any(effect["kind"] == "envenom" for effect in result["actor"]["effects"])
+
+
+def test_judgment_normal_hit_heals_a_wounded_caster():
+    hero = actor(family="holy_rod", hp=400, skill_ranks={"judgment": 1})
+    judged = enemy(effects=[{
+        "kind": "judgment", "source_id": "1", "skill_id": "judgment",
+        "duration": 3, "value": 0, "created_side_index": 0,
+        "school": None, "raw_tick": None, "metadata": {},
+    }])
+
+    result = evaluate_action(hero, [hero], [judged], {"kind": "normal"}, rng_seed=3)
+
+    assert direct_event(result)["hp_removed"] == 93
+    assert result["actor"]["hp"] == 409
+    assert any(
+        event.get("kind") == "heal"
+        and event.get("skill_id") == "judgment"
+        and event.get("amount") == 9
+        for event in result["events"]
+    )
 
 
 def test_power_strike_uses_weapon_school_and_combined_setups_cap_at_fifty_percent():
