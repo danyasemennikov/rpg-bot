@@ -7,7 +7,7 @@ This document describes the implementation in the current Epic branch for review
 The frozen Astra implementation contract is the product and architecture authority. Runtime constants in `game/build_contract.py`, the shared evaluator in `game/combat_identity.py`, and the checked evidence artifact in `docs/evidence/character_builds_combat_identity_v1.json` are the executable review surfaces.
 
 - Baseline: `c8768626e388babfed09adac83ddaf23f0daee71`
-- Integrated runtime/evidence checkpoint: `4297bb9fe46487fda1e32f8945c32cdcd01f2d7c`
+- Integrated runtime/evidence checkpoint: `e9d97547bf8fc69176cafc8a03ad44d40265d7a7`
 - Rules version: `character_builds_combat_identity_v1`
 - Scope: 10 weapon families, 20 branches, 100 canonical branch skills, plus universal Power Strike
 

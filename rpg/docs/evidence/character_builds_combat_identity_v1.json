@@ -2,7 +2,7 @@
   "schema_version": 1,
   "rules_version": "character_builds_combat_identity_v1",
   "base_sha": "c8768626e388babfed09adac83ddaf23f0daee71",
-  "head_sha": "4297bb9fe46487fda1e32f8945c32cdcd01f2d7c",
+  "head_sha": "e9d97547bf8fc69176cafc8a03ad44d40265d7a7",
   "rng": {
     "paired_seeds": [
       0,
