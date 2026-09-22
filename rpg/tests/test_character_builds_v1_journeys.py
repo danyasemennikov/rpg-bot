@@ -61,6 +61,23 @@ def _callbacks(markup) -> list[str]:
     ]
 
 
+def _has_effect(state: dict, kind: str, *, skill_id: str | None = None) -> bool:
+    return any(
+        effect.get('kind') == kind
+        and (skill_id is None or effect.get('skill_id') == skill_id)
+        for effect in (state.get('effects') or [])
+    )
+
+
+def _enemy_has_effect(action: dict, kind: str, *, source_id: int | str | None = None) -> bool:
+    return any(
+        effect.get('kind') == kind
+        and (source_id is None or str(effect.get('source_id')) == str(source_id))
+        for enemy in action['enemies_after']
+        for effect in (enemy.get('effects') or [])
+    )
+
+
 def _demonstrates_defining_skill_effect(action: dict, skill_id: str) -> bool:
     spec = SKILL_SPECS[skill_id]
     events = list(action['events'])
@@ -80,6 +97,29 @@ def _demonstrates_defining_skill_effect(action: dict, skill_id: str) -> bool:
             assert int(direct.get('hp_removed', 0)) > 0, (skill_id, direct)
         if spec.kind == 'hostile_effect':
             assert any(effect.get('skill_id') == skill_id for effect in enemy_effects)
+        if skill_id == 'masters_sequence':
+            return (
+                _has_effect(action['actor_before'], 'flow')
+                and not _has_effect(action['actor_after'], 'flow')
+                and _has_effect(action['actor_after'], 'ward', skill_id=skill_id)
+            )
+        if skill_id == 'shadow_chain':
+            return (
+                _has_effect(action['actor_before'], 'opening')
+                and not _has_effect(action['actor_after'], 'opening')
+                and _has_effect(action['actor_after'], 'evasion_up', skill_id=skill_id)
+            )
+        if skill_id == 'rupture_toxins':
+            actor_id = action['actor_before'].get('actor_id')
+            poison_before = any(
+                effect.get('kind') == 'poison'
+                and str(effect.get('source_id')) == str(actor_id)
+                for enemy in action['enemies_before']
+                for effect in (enemy.get('effects') or [])
+            )
+            return poison_before and not _enemy_has_effect(
+                action, 'poison', source_id=actor_id,
+            )
         return True
     matching_effect = any(
         effect.get('skill_id') == skill_id
@@ -95,6 +135,16 @@ def _demonstrates_defining_skill_effect(action: dict, skill_id: str) -> bool:
 def _assert_defining_skill_effect(action: dict, skill_id: str, player_id: int) -> None:
     assert _demonstrates_defining_skill_effect(action, skill_id), (
         skill_id, player_id, action['actor_after'], action['enemies_after'], action['events'],
+    )
+
+
+def _demonstrates_envenom_flow(setup_action: dict, payoff_action: dict) -> bool:
+    actor_id = payoff_action['actor_before'].get('actor_id')
+    return (
+        _has_effect(setup_action['actor_after'], 'envenom', skill_id='envenom_blades')
+        and _has_effect(payoff_action['actor_before'], 'envenom', skill_id='envenom_blades')
+        and not _has_effect(payoff_action['actor_after'], 'envenom')
+        and _enemy_has_effect(payoff_action, 'poison', source_id=actor_id)
     )
 
 
@@ -345,12 +395,18 @@ class ProductionJourney:
             callback = self._find_combat_action(kind=kind, skill_id=skill_id)
             payload = self._intent_for_callback(callback)["action"]
             before_events = len(battle_state.get("combat_events_v1", []))
+            actor_before = copy.deepcopy(
+                (battle_state.get("participant_states_v1") or {}).get(str(self.player_id), {})
+            )
+            enemies_before = copy.deepcopy(battle_state.get("enemy_states_v1") or [])
             await self.callback(callback, handle_battle_buttons)
             current_battle = self.context.user_data.get("battle", battle_state)
             selected_actions.append({
                 "kind": payload["kind"],
                 "skill_id": payload.get("skill_id"),
                 "events": battle_state.get("combat_events_v1", [])[before_events:],
+                "actor_before": actor_before,
+                "enemies_before": enemies_before,
                 "actor_after": copy.deepcopy(
                     (current_battle.get("participant_states_v1") or {}).get(str(self.player_id), {})
                 ),
@@ -412,13 +468,30 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
     earned = [start]
     entry_action = start["actions"][0]
     entry_attempts = 1
-    while not _demonstrates_defining_skill_effect(entry_action, entry):
+    entry_proven = _demonstrates_defining_skill_effect(entry_action, entry)
+    if entry == 'envenom_blades':
+        entry_proven = entry_proven and _demonstrates_envenom_flow(
+            start["actions"][0], start["actions"][1],
+        )
+    while not entry_proven:
         assert entry_attempts < 8, (entry, entry_action)
-        proof_fight = await journey.fight("forest_boar", opening=(("skill", entry),))
+        proof_opening = (
+            (("skill", entry), ("basic_attack", None))
+            if entry == 'envenom_blades'
+            else (("skill", entry),)
+        )
+        proof_fight = await journey.fight("forest_boar", opening=proof_opening)
         earned.append(proof_fight)
         entry_action = proof_fight["actions"][0]
         entry_attempts += 1
+        entry_proven = _demonstrates_defining_skill_effect(entry_action, entry)
+        if entry == 'envenom_blades':
+            entry_proven = entry_proven and _demonstrates_envenom_flow(
+                proof_fight["actions"][0], proof_fight["actions"][1],
+            )
     _assert_defining_skill_effect(entry_action, entry, player_id)
+    if entry == 'envenom_blades':
+        assert entry_proven, (entry, proof_fight if entry_attempts > 1 else start)
     earned.extend(await journey.earn_mastery(family, 8))
     assert len(earned) == 28
     await journey.travel("westwild_n1", "capital_city")
@@ -458,15 +531,26 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
             for event in action["events"]
         )
     else:
-        capstone_fight = await journey.fight("forest_boar", opening=(("skill", capstone),))
+        capstone_opening = {
+            'masters_sequence': (("skill", "battle_stance"), ("skill", capstone)),
+            'shadow_chain': (("skill", "smoke_bomb"), ("skill", capstone)),
+            'rupture_toxins': (("skill", "toxic_cut"), ("skill", capstone)),
+        }.get(capstone, (("skill", capstone),))
+        capstone_fight = await journey.fight("forest_boar", opening=capstone_opening)
         earned.append(capstone_fight)
-        capstone_action = capstone_fight["actions"][0]
+        capstone_action = next(
+            action for action in capstone_fight["actions"]
+            if action["skill_id"] == capstone
+        )
         capstone_attempts = 1
         while not _demonstrates_defining_skill_effect(capstone_action, capstone):
             assert capstone_attempts < 8, (capstone, capstone_action)
-            capstone_fight = await journey.fight("forest_boar", opening=(("skill", capstone),))
+            capstone_fight = await journey.fight("forest_boar", opening=capstone_opening)
             earned.append(capstone_fight)
-            capstone_action = capstone_fight["actions"][0]
+            capstone_action = next(
+                action for action in capstone_fight["actions"]
+                if action["skill_id"] == capstone
+            )
             capstone_attempts += 1
         assert capstone_action["skill_id"] == capstone
         _assert_defining_skill_effect(capstone_action, capstone, player_id)
