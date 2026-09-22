@@ -2564,15 +2564,32 @@ def resolve_pve_flee_intent(
             'encounter_id': encounter_id, 'player_id': int(player_id),
         }
         if success:
-            v1_actor = (state.get('participant_states_v1') or {}).get(str(player_id)) or {}
-            legacy_actor = (state.get('participant_states') or {}).get(str(player_id)) or {}
+            v1_states = state.get('participant_states_v1') or {}
+            legacy_states = state.get('participant_states') or {}
+            v1_actor = v1_states.get(str(player_id)) or {}
+            legacy_actor = legacy_states.get(str(player_id)) or {}
             hp = int(v1_actor.get('hp', legacy_actor.get('hp', legacy_actor.get('player_hp', 0))) or 0)
             mana = int(v1_actor.get('mana', legacy_actor.get('mana', legacy_actor.get('player_mana', 0))) or 0)
-            if isinstance(v1_actor, dict):
-                v1_actor['departed'] = True
-            if isinstance(legacy_actor, dict):
-                legacy_actor['departed'] = True
-                legacy_actor['fled'] = True
+            # Departure removes the actor from every active combat projection.
+            # Resource values have already been captured above for the player
+            # row, while the durable participant status retains settlement
+            # provenance without keeping a targetable/healable entity alive.
+            if isinstance(v1_states, dict):
+                v1_states.pop(str(player_id), None)
+                v1_states.pop(player_id, None)
+                for remaining_actor in v1_states.values():
+                    if not isinstance(remaining_actor, dict):
+                        continue
+                    remaining_actor['effects'] = [
+                        effect for effect in list(remaining_actor.get('effects') or [])
+                        if not (
+                            effect.get('kind') == 'intercept'
+                            and str((effect.get('metadata') or {}).get('protector_id')) == str(player_id)
+                        )
+                    ]
+            if isinstance(legacy_states, dict):
+                legacy_states.pop(str(player_id), None)
+                legacy_states.pop(player_id, None)
             state['side_a_player_ids'] = [
                 int(pid) for pid in state.get('side_a_player_ids', []) if int(pid) != int(player_id)
             ]
@@ -2623,9 +2640,8 @@ def resolve_pve_flee_intent(
     if departed:
         runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
         if runtime_state is not None:
-            participant = runtime_state.participants.get(int(player_id))
-            if participant is not None:
-                participant.phase_state = 'fled'
+            runtime_state.participants.pop(int(player_id), None)
+            runtime_state.submitted_actions.pop(int(player_id), None)
             for side in runtime_state.sides.values():
                 if int(player_id) in side.participant_order:
                     side.participant_order = [pid for pid in side.participant_order if pid != int(player_id)]

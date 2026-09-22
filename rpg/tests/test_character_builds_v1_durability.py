@@ -11,13 +11,22 @@ from game.build_contract import RULES_VERSION
 from game.build_progression import ensure_build_schema
 from game.build_progression import migrate_character_builds_v1
 from game.combat_orders import consume_combat_intent, issue_combat_intents, load_combat_orders
+from game.mobs import get_mob
+from game.pve_reward_settlement import apply_prepared_settlement, prepare_victory_settlement
 from game.pve_reward_settlement import _v1_mastery_awards
 from game.pve_live import (
+    _SOLO_PVE_RUNTIME_STORE,
+    create_pve_encounter,
     ensure_runtime_for_battle,
     get_pve_encounter_player_ids,
+    load_active_pve_encounter,
+    open_next_player_side_turn,
+    persist_solo_pve_encounter_state,
+    resolve_current_side_if_ready,
     resolve_pve_flee_intent,
     reset_solo_pve_runtime_store,
     run_enemy_instant_side,
+    submit_player_commit,
 )
 from game.pvp_live import (
     _LIVE_PVP_RUNTIME_STORE,
@@ -250,32 +259,40 @@ def test_group_flee_is_participant_scoped_and_replays_durable_result():
     migrate_character_builds_v1()
     state = {
         'rules_version': RULES_VERSION, 'turn_revision': 0, 'state_revision': 0,
-        'side_a_player_ids': [1, 777], 'participant_states_v1': {
-            '1': {'actor_id': 1, 'hp': 73, 'mana': 21},
-            '777': {'actor_id': 777, 'hp': 88, 'mana': 32},
-        },
-        'participant_states': {
-            '1': {'hp': 73, 'mana': 21, 'player_hp': 73, 'player_mana': 21},
-            '777': {'hp': 88, 'mana': 32, 'player_hp': 88, 'player_mana': 32},
-        },
+        'pve_encounter_id': 'group-flee', 'mob_id': 'westwild_rabbit',
+        'location_id': 'westwild_n1', 'mob_hp': 22, 'mob_dead': False,
+        'side_a_player_ids': [1, 777],
     }
+    mob = get_mob('westwild_rabbit')
+    create_pve_encounter(
+        owner_player_id=1, side_a_player_ids=[1, 777], battle_state=state,
+        mob=mob, encounter_id='group-flee', location_id='westwild_n1',
+    )
+    state['participant_states_v1']['1'].update(hp=73, mana=21, effects=[{
+        'kind': 'poison', 'source_id': 'enemy', 'skill_id': 'enemy_venom',
+        'duration': 3, 'value': 0, 'school': 'physical', 'raw_tick': 7,
+        'created_side_index': 0, 'metadata': {'source_level': 1},
+    }])
+    state['participant_states_v1']['777'].setdefault('effects', []).append({
+        'kind': 'intercept', 'source_id': '1', 'skill_id': 'aura_of_resolve',
+        'duration': 1, 'value': 0, 'school': None, 'raw_tick': None,
+        'created_side_index': 0, 'metadata': {'protector_id': '1'},
+    })
+    state['participant_states'] = {
+        '1': {'hp': 73, 'mana': 21, 'player_hp': 73, 'player_mana': 21},
+        '777': {'hp': 88, 'mana': 32, 'player_hp': 88, 'player_mana': 32},
+    }
+    persist_solo_pve_encounter_state(encounter_id='group-flee', battle_state=state, mob=mob)
+    ensure_runtime_for_battle(player_id=1, battle_state=state, mob=mob)
     conn = get_connection()
-    ensure_build_schema(conn)
-    conn.execute('''INSERT INTO pve_encounters
-        (encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json,
-         source_units_json, rules_version, turn_revision, state_revision)
-        VALUES ('group-flee', 1, 'active', 'westwild_rabbit', ?, '{}', '[]', ?, 0, 0)''',
-        (json.dumps(state), RULES_VERSION))
-    conn.executemany('''INSERT INTO pve_encounter_participants
-        (encounter_id, player_id, side_id, status) VALUES ('group-flee', ?, 'side_a', 'active')''',
-        [(1,), (777,)])
     conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id IN (1, 777)')
     conn.commit()
     conn.close()
     action = {'kind': 'flee', 'skill_id': None, 'item_id': None, 'target_info': None}
     deadline = (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()
     token = issue_combat_intents(
-        1, encounter_id='group-flee', turn_revision=0, deadline_at=deadline, actions=[action],
+        1, encounter_id='group-flee', turn_revision=int(state['turn_revision']),
+        deadline_at=deadline, actions=[action],
     )[json.dumps(action, ensure_ascii=False, sort_keys=True, separators=(',', ':'))]
     first = resolve_pve_flee_intent(
         player_id=1, encounter_id='group-flee', action_token=token, success=True,
@@ -286,16 +303,84 @@ def test_group_flee_is_participant_scoped_and_replays_durable_result():
     assert first['fled'] is True
     assert replay['fled'] is True and replay['already_applied'] is True
     assert get_pve_encounter_player_ids(encounter_id='group-flee') == [777]
+    active = first['battle']
+    assert '1' not in active['participant_states_v1']
+    assert '1' not in active['participant_states']
+    assert active['side_a_player_ids'] == [777]
+    assert not any(
+        effect.get('kind') == 'intercept'
+        for effect in active['participant_states_v1']['777']['effects']
+    )
+    runtime = _SOLO_PVE_RUNTIME_STORE.get('group-flee')
+    assert 1 not in runtime.participants
+    assert runtime.sides['side_a'].participant_order == [777]
+
+    accepted, reason = submit_player_commit(
+        player_id=777, action_type='guard', battle_state=active,
+    )
+    assert (accepted, reason) == (True, 'committed')
+    assert resolve_current_side_if_ready(
+        encounter_id='group-flee', battle_state=active,
+        on_player_action=lambda action: battle_handler._dispatch_v1_player_action(
+            action, battle_state=active,
+        ),
+        on_enemy_action=lambda _action: None,
+    ) is True
+    run_enemy_instant_side(
+        player_id=777, battle_state=active,
+        on_enemy_action=lambda action: battle_handler._dispatch_v1_enemy_action(
+            action, battle_state=active,
+        ),
+    )
+    enemy_targets = [
+        event.get('target_id') for event in active.get('combat_events_v1', [])
+        if event.get('kind') == 'enemy_direct'
+    ]
+    assert enemy_targets and set(enemy_targets) == {'777'}
+    next_side = open_next_player_side_turn(player_id=777, battle_state=active)
+    assert next_side.sides['side_a'].participant_order == [777]
+
+    reset_solo_pve_runtime_store()
+    restored, restored_mob = load_active_pve_encounter(encounter_id='group-flee')
+    restarted = ensure_runtime_for_battle(player_id=777, battle_state=restored, mob=restored_mob)
+    assert '1' not in restored['participant_states_v1']
+    assert '1' not in restored['participant_states']
+    assert 1 not in restarted.participants
+
+    restored['enemy_states_v1'][0].update(hp=0, dead=True)
+    restored['mob_hp'] = 0
+    restored['mob_dead'] = True
+    persist_solo_pve_encounter_state(
+        encounter_id='group-flee', battle_state=restored, mob=restored_mob,
+    )
+    prepared = prepare_victory_settlement(
+        encounter_id='group-flee', battle_state=restored, mob=restored_mob,
+    )
+    assert prepared['status'] == 'prepared', prepared
+    assert prepared['plan']['eligible_recipient_ids'] == [777]
+    applied = apply_prepared_settlement('group-flee')
+    assert applied['status'] == 'applied'
+    assert [row['player_id'] for row in applied['result']['recipients']] == [777]
     conn = get_connection()
     encounter = conn.execute("""SELECT status, state_revision, battle_state_json
         FROM pve_encounters WHERE encounter_id='group-flee'""").fetchone()
     players = {row['telegram_id']: row['in_battle'] for row in conn.execute(
         'SELECT telegram_id, in_battle FROM players WHERE telegram_id IN (1, 777)')}
+    participant_statuses = {
+        row['player_id']: row['status'] for row in conn.execute(
+            "SELECT player_id, status FROM pve_encounter_participants WHERE encounter_id='group-flee'"
+        )
+    }
+    departed_rewards = conn.execute(
+        'SELECT 1 FROM player_gear_progress WHERE player_id=1'
+    ).fetchone()
     conn.close()
-    assert encounter['status'] == 'active'
-    assert int(encounter['state_revision']) == 1
-    assert json.loads(str(encounter['battle_state_json']))['state_revision'] == 1
-    assert players == {1: 0, 777: 1}
+    assert encounter['status'] == 'victory'
+    assert int(encounter['state_revision']) >= 4
+    assert '1' not in json.loads(str(encounter['battle_state_json']))['participant_states_v1']
+    assert players == {1: 0, 777: 0}
+    assert participant_statuses == {1: 'fled', 777: 'victory'}
+    assert departed_rewards is None
 
 
 def test_terminal_pvp_settlement_rolls_back_failure_and_applies_exactly_once():

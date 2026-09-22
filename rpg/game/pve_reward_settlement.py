@@ -183,25 +183,34 @@ def _locked_roster(conn, encounter: dict) -> tuple[list[int], dict[int, str]]:
     status_by_player = {int(row['player_id']): str(row['status']) for row in participant_rows}
     persisted = _load_json(encounter.get('locked_roster_json'))
     raw_locked = persisted.get('player_ids') if persisted else None
-    if isinstance(raw_locked, list):
-        locked = [int(player_id) for player_id in raw_locked]
+    has_persisted_lock = isinstance(raw_locked, list)
+    if has_persisted_lock:
+        original_locked = [int(player_id) for player_id in raw_locked]
     else:
         # Reviewed-head encounters predate locked_roster_json.  Leaving is only
         # legal while forming, so active/defeated rows are the recoverable lock.
-        locked = [
+        original_locked = [
             int(row['player_id']) for row in participant_rows
             if str(row['status']) in {'active', 'defeated'}
         ]
-    if not locked or len(locked) != len(set(locked)):
+    if not original_locked or len(original_locked) != len(set(original_locked)):
         raise ValueError('invalid_locked_roster')
-    if int(encounter['owner_player_id']) not in locked:
+    if int(encounter['owner_player_id']) not in original_locked:
         raise ValueError('owner_not_in_locked_roster')
-    if set(locked) != {
+    provenance_statuses = {'active', 'defeated', 'fled'} if has_persisted_lock else {'active', 'defeated'}
+    if set(original_locked) != {
         player_id for player_id, status in status_by_player.items()
-        if status in {'active', 'defeated'}
+        if status in provenance_statuses
     }:
         raise ValueError('locked_roster_status_mismatch')
-    return locked, status_by_player
+    # A participant who fled remains part of immutable encounter provenance,
+    # but is no longer an active or defeated combat snapshot and cannot receive
+    # victory rewards.  Keep the two concepts separate for terminal validation.
+    combat_roster = [
+        player_id for player_id in original_locked
+        if status_by_player.get(player_id) in {'active', 'defeated'}
+    ]
+    return combat_roster, status_by_player
 
 
 def _validate_terminal_snapshot(*, conn, encounter: dict, supplied_state: dict, supplied_mob: dict) -> tuple[dict, dict]:
