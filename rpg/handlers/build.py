@@ -52,7 +52,8 @@ _COPY = {
         "rank": "Rank", "mastery": "Mastery", "points": "points", "cost": "MP",
         "cooldown": "cooldown", "target": "target", "school": "school", "exact": "V1 combat profile",
         "passive": "passive", "hits": "components", "utility": "utility",
-        "coefficient": "power", "description": "Description", "rank_effect": "Rank effect",
+        "coefficient": "power", "healing_coefficient": "healing", "barrier_coefficient": "barrier",
+        "description": "Description", "rank_effect": "Rank effect",
         "unequip": "These requirement-invalid items will be unequipped", "none": "none",
         "changed": "Build updated.", "stale": "That build action is stale; the current view was reloaded.",
         "old": "This old button cannot mutate V1. The current build view was reloaded.",
@@ -83,7 +84,8 @@ _COPY = {
         "rank": "Ранг", "mastery": "Владение", "points": "очков", "cost": "МП",
         "cooldown": "перезарядка", "target": "цель", "school": "школа", "exact": "Боевой профиль V1",
         "passive": "пассивно", "hits": "компоненты", "utility": "поддержка",
-        "coefficient": "сила", "description": "Описание", "rank_effect": "Эффект ранга",
+        "coefficient": "сила", "healing_coefficient": "лечение", "barrier_coefficient": "барьер",
+        "description": "Описание", "rank_effect": "Эффект ранга",
         "unequip": "Предметы с нарушенными требованиями будут сняты", "none": "нет",
         "changed": "Билд обновлён.", "stale": "Действие устарело; открыт актуальный билд.",
         "old": "Старая кнопка не меняет V1. Открыт актуальный билд.",
@@ -114,7 +116,8 @@ _COPY = {
         "rank": "Rango", "mastery": "Maestría", "points": "puntos", "cost": "PM",
         "cooldown": "recarga", "target": "objetivo", "school": "escuela", "exact": "Perfil de combate V1",
         "passive": "pasiva", "hits": "componentes", "utility": "utilidad",
-        "coefficient": "potencia", "description": "Descripción", "rank_effect": "Efecto del rango",
+        "coefficient": "potencia", "healing_coefficient": "curación", "barrier_coefficient": "barrera",
+        "description": "Descripción", "rank_effect": "Efecto del rango",
         "unequip": "Se desequiparán estos objetos cuyos requisitos ya no se cumplen", "none": "ninguno",
         "changed": "Configuración actualizada.", "stale": "La acción caducó; se recargó la configuración actual.",
         "old": "El botón antiguo no puede cambiar V1. Se recargó la vista actual.",
@@ -221,6 +224,23 @@ _REJECTION_COPY = {
     "safe_hub_required": "error_safe_hub",
 }
 
+_HEALING_COEFFICIENTS = {
+    "heal": 1.0,
+    "regeneration": .35,
+    "resurrection": .80,
+    "mend_self": .65,
+    "sanctified_burst": .25,
+    "halo_of_dawn": .25,
+}
+
+_BARRIER_COEFFICIENTS = {
+    "mana_shield": .80,
+    "duel_arc": .45,
+    "sacred_shield": .75,
+    "guardian_light": .55,
+    "arcane_shield": .60,
+}
+
 
 def _c(lang: str, key: str) -> str:
     return _COPY.get(lang, _COPY["en"])[key]
@@ -233,10 +253,17 @@ def _label(table: dict[str, dict[str, str]], lang: str, key: str) -> str:
 
 def _skill_profile(spec: Any, lang: str, rank: int) -> str:
     parts = [_label(_KIND_LABELS, lang, spec.kind)]
+    multiplier = rank_multiplier(max(1, int(rank)))
     if spec.power:
-        ranked_power = float(spec.power) * rank_multiplier(max(1, int(rank)))
+        ranked_power = float(spec.power) * multiplier
         power = f"{ranked_power:.4f}".rstrip("0").rstrip(".").removeprefix("0")
         parts.append(f"{_c(lang, 'coefficient')}: {power}P")
+    if spec.skill_id in _HEALING_COEFFICIENTS:
+        healing = _HEALING_COEFFICIENTS[spec.skill_id] * multiplier
+        parts.append(f"{_c(lang, 'healing_coefficient')}: {healing:.2f}H")
+    if spec.skill_id in _BARRIER_COEFFICIENTS:
+        barrier = _BARRIER_COEFFICIENTS[spec.skill_id] * multiplier
+        parts.append(f"{_c(lang, 'barrier_coefficient')}: {barrier:.2f}H")
     if spec.hits > 1:
         parts.append(f"{_c(lang, 'hits')}: {spec.hits}")
     if spec.utility:

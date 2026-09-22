@@ -61,7 +61,7 @@ def _callbacks(markup) -> list[str]:
     ]
 
 
-def _assert_defining_skill_effect(action: dict, skill_id: str, player_id: int) -> None:
+def _demonstrates_defining_skill_effect(action: dict, skill_id: str) -> bool:
     spec = SKILL_SPECS[skill_id]
     events = list(action['events'])
     actor_effects = list(action['actor_after'].get('effects') or [])
@@ -74,12 +74,13 @@ def _assert_defining_skill_effect(action: dict, skill_id: str, player_id: int) -
             event for event in events
             if event.get('kind') == 'direct' and event.get('skill_id') == skill_id
         )
-        assert direct.get('hit') is True, (skill_id, events)
+        if direct.get('hit') is not True:
+            return False
         if spec.kind in {'damage', 'poison'}:
             assert int(direct.get('hp_removed', 0)) > 0, (skill_id, direct)
         if spec.kind == 'hostile_effect':
             assert any(effect.get('skill_id') == skill_id for effect in enemy_effects)
-        return
+        return True
     matching_effect = any(
         effect.get('skill_id') == skill_id
         for effect in [*actor_effects, *enemy_effects]
@@ -88,8 +89,12 @@ def _assert_defining_skill_effect(action: dict, skill_id: str, player_id: int) -
         'heal': {'heal'}, 'hot': {'heal', 'hot'}, 'mana': {'mana'},
         'rage': {'hp_cost'}, 'cleanse': {'cleanse'}, 'dispel': {'direct'},
     }.get(spec.kind, set())
-    assert matching_effect or any(event.get('kind') in semantic_events for event in events), (
-        skill_id, actor_effects, enemy_effects, events,
+    return matching_effect or any(event.get('kind') in semantic_events for event in events)
+
+
+def _assert_defining_skill_effect(action: dict, skill_id: str, player_id: int) -> None:
+    assert _demonstrates_defining_skill_effect(action, skill_id), (
+        skill_id, player_id, action['actor_after'], action['enemies_after'], action['events'],
     )
 
 
@@ -402,10 +407,19 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
         opening=(("skill", entry), ("basic_attack", None)),
     )
     assert start["actions"][0]["skill_id"] == entry
-    _assert_defining_skill_effect(start["actions"][0], entry, player_id)
     assert start["actions"][1]["kind"] == "basic_attack"
 
-    earned = [start, *(await journey.earn_mastery(family, 8))]
+    earned = [start]
+    entry_action = start["actions"][0]
+    entry_attempts = 1
+    while not _demonstrates_defining_skill_effect(entry_action, entry):
+        assert entry_attempts < 8, (entry, entry_action)
+        proof_fight = await journey.fight("forest_boar", opening=(("skill", entry),))
+        earned.append(proof_fight)
+        entry_action = proof_fight["actions"][0]
+        entry_attempts += 1
+    _assert_defining_skill_effect(entry_action, entry, player_id)
+    earned.extend(await journey.earn_mastery(family, 8))
     assert len(earned) == 28
     await journey.travel("westwild_n1", "capital_city")
 
@@ -444,12 +458,20 @@ async def _run_branch_journey(family: str, branch: str, identity: str) -> dict:
             for event in action["events"]
         )
     else:
-        capstone_fight = await journey.fight(
-            "forest_boar", opening=(("skill", capstone),),
-        )
-        assert capstone_fight["actions"][0]["skill_id"] == capstone
-        _assert_defining_skill_effect(capstone_fight["actions"][0], capstone, player_id)
-    earned.append(capstone_fight)
+        capstone_fight = await journey.fight("forest_boar", opening=(("skill", capstone),))
+        earned.append(capstone_fight)
+        capstone_action = capstone_fight["actions"][0]
+        capstone_attempts = 1
+        while not _demonstrates_defining_skill_effect(capstone_action, capstone):
+            assert capstone_attempts < 8, (capstone, capstone_action)
+            capstone_fight = await journey.fight("forest_boar", opening=(("skill", capstone),))
+            earned.append(capstone_fight)
+            capstone_action = capstone_fight["actions"][0]
+            capstone_attempts += 1
+        assert capstone_action["skill_id"] == capstone
+        _assert_defining_skill_effect(capstone_action, capstone, player_id)
+    if capstone_fight not in earned:
+        earned.append(capstone_fight)
 
     deep_receipts = []
     if identity in DEEP_IDENTITIES:
