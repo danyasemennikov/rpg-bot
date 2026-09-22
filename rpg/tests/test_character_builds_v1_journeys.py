@@ -20,6 +20,8 @@ from game.build_contract import (
     BRANCH_IDENTITIES,
     SKILL_SPECS,
     SKILL_TREES,
+    rank_multiplier,
+    rank_percent,
 )
 from game.build_progression import build_migration_audit, migrate_character_builds_v1
 from game.field_catalog import FIELD_ITEMS
@@ -78,6 +80,21 @@ def _enemy_has_effect(action: dict, kind: str, *, source_id: int | str | None = 
     )
 
 
+def _matching_effect(
+    state: dict,
+    kind: str,
+    *,
+    source_id: int | str,
+    skill_id: str,
+) -> dict | None:
+    return next((
+        effect for effect in (state.get('effects') or [])
+        if effect.get('kind') == kind
+        and str(effect.get('source_id')) == str(source_id)
+        and effect.get('skill_id') == skill_id
+    ), None)
+
+
 def _demonstrates_defining_skill_effect(action: dict, skill_id: str) -> bool:
     spec = SKILL_SPECS[skill_id]
     events = list(action['events'])
@@ -98,27 +115,84 @@ def _demonstrates_defining_skill_effect(action: dict, skill_id: str) -> bool:
         if spec.kind == 'hostile_effect':
             assert any(effect.get('skill_id') == skill_id for effect in enemy_effects)
         if skill_id == 'masters_sequence':
+            actor_id = action['actor_before'].get('actor_id')
+            rank = max(1, int(action['actor_before'].get('skill_ranks', {}).get(skill_id, 1)))
+            ward = _matching_effect(
+                action['actor_after'], 'ward', source_id=actor_id, skill_id=skill_id,
+            )
             return (
-                _has_effect(action['actor_before'], 'flow')
+                _matching_effect(
+                    action['actor_before'], 'flow', source_id=actor_id,
+                    skill_id='battle_stance',
+                ) is not None
                 and not _has_effect(action['actor_after'], 'flow')
-                and _has_effect(action['actor_after'], 'ward', skill_id=skill_id)
+                and ward is not None
+                and float(ward.get('value', 0)) == pytest.approx(rank_percent(.25, rank))
+                and int(ward.get('duration', 0)) == 1
             )
         if skill_id == 'shadow_chain':
+            actor_id = action['actor_before'].get('actor_id')
+            rank = max(1, int(action['actor_before'].get('skill_ranks', {}).get(skill_id, 1)))
+            evasion = _matching_effect(
+                action['actor_after'], 'evasion_up', source_id=actor_id, skill_id=skill_id,
+            )
             return (
-                _has_effect(action['actor_before'], 'opening')
+                _matching_effect(
+                    action['actor_before'], 'opening', source_id=actor_id,
+                    skill_id='smoke_bomb',
+                ) is not None
                 and not _has_effect(action['actor_after'], 'opening')
-                and _has_effect(action['actor_after'], 'evasion_up', skill_id=skill_id)
+                and evasion is not None
+                and int(evasion.get('value', 0)) == int(40 * rank_multiplier(rank))
+                and int(evasion.get('duration', 0)) == 1
             )
         if skill_id == 'rupture_toxins':
             actor_id = action['actor_before'].get('actor_id')
-            poison_before = any(
+            target_id = str(direct.get('target_id'))
+            target_before = next((
+                enemy for enemy in action['enemies_before']
+                if str(enemy.get('unit_id')) == target_id
+            ), None)
+            target_after = next((
+                enemy for enemy in action['enemies_after']
+                if str(enemy.get('unit_id')) == target_id
+            ), None)
+            poison_before = [
+                effect
+                for effect in ((target_before or {}).get('effects') or [])
+                if effect.get('kind') == 'poison'
+                and str(effect.get('source_id')) == str(actor_id)
+                and int(effect.get('raw_tick', 0)) > 0
+                and int(effect.get('duration', 0)) > 0
+            ]
+            poison_budget = sum(
+                int(effect.get('raw_tick', 0)) * int(effect.get('duration', 0))
+                for effect in ((target_before or {}).get('effects') or [])
+                if effect.get('kind') == 'poison'
+                and str(effect.get('source_id')) == str(actor_id)
+            )
+            rupture = next((
+                event for event in events
+                if event.get('kind') == 'poison_rupture'
+                and str(event.get('source_id')) == str(actor_id)
+                and str(event.get('target_id')) == target_id
+            ), None)
+            survived_direct = bool(
+                target_before
+                and int(target_before.get('hp', 0)) - int(direct.get('hp_removed', 0)) > 0
+            )
+            poison_remaining = any(
                 effect.get('kind') == 'poison'
                 and str(effect.get('source_id')) == str(actor_id)
-                for enemy in action['enemies_before']
-                for effect in (enemy.get('effects') or [])
+                for effect in ((target_after or {}).get('effects') or [])
             )
-            return poison_before and not _enemy_has_effect(
-                action, 'poison', source_id=actor_id,
+            return bool(
+                poison_before
+                and survived_direct
+                and rupture
+                and int(rupture.get('raw', 0)) == int(poison_budget * .92)
+                and int(rupture.get('hp_removed', 0)) > 0
+                and not poison_remaining
             )
         return True
     matching_effect = any(
@@ -146,6 +220,72 @@ def _demonstrates_envenom_flow(setup_action: dict, payoff_action: dict) -> bool:
         and not _has_effect(payoff_action['actor_after'], 'envenom')
         and _enemy_has_effect(payoff_action, 'poison', source_id=actor_id)
     )
+
+
+def test_defining_effect_helpers_reject_zero_wrong_lifetime_and_missing_conversion():
+    masters = {
+        'events': [{'kind': 'direct', 'skill_id': 'masters_sequence', 'target_id': 'e1', 'hit': True, 'hp_removed': 5}],
+        'actor_before': {
+            'actor_id': 1,
+            'skill_ranks': {'masters_sequence': 2},
+            'effects': [{'kind': 'flow', 'source_id': 1, 'skill_id': 'battle_stance'}],
+        },
+        'actor_after': {
+            'actor_id': 1,
+            'effects': [{'kind': 'ward', 'source_id': 1, 'skill_id': 'masters_sequence', 'value': .28, 'duration': 1}],
+        },
+        'enemies_before': [{'unit_id': 'e1', 'hp': 100, 'effects': []}],
+        'enemies_after': [{'unit_id': 'e1', 'hp': 95, 'effects': []}],
+    }
+    assert _demonstrates_defining_skill_effect(masters, 'masters_sequence')
+    zero_ward = copy.deepcopy(masters)
+    zero_ward['actor_after']['effects'][0]['value'] = 0
+    assert not _demonstrates_defining_skill_effect(zero_ward, 'masters_sequence')
+    wrong_ward_lifetime = copy.deepcopy(masters)
+    wrong_ward_lifetime['actor_after']['effects'][0]['duration'] = 2
+    assert not _demonstrates_defining_skill_effect(wrong_ward_lifetime, 'masters_sequence')
+
+    shadow = copy.deepcopy(masters)
+    shadow['events'][0]['skill_id'] = 'shadow_chain'
+    shadow['actor_before']['skill_ranks'] = {'shadow_chain': 2}
+    shadow['actor_before']['effects'] = [{'kind': 'opening', 'source_id': 1, 'skill_id': 'smoke_bomb'}]
+    shadow['actor_after']['effects'] = [
+        {'kind': 'evasion_up', 'source_id': 1, 'skill_id': 'shadow_chain', 'value': 46, 'duration': 1},
+    ]
+    assert _demonstrates_defining_skill_effect(shadow, 'shadow_chain')
+    wrong_evasion = copy.deepcopy(shadow)
+    wrong_evasion['actor_after']['effects'][0]['value'] = 0
+    assert not _demonstrates_defining_skill_effect(wrong_evasion, 'shadow_chain')
+    wrong_evasion_lifetime = copy.deepcopy(shadow)
+    wrong_evasion_lifetime['actor_after']['effects'][0]['duration'] = 2
+    assert not _demonstrates_defining_skill_effect(wrong_evasion_lifetime, 'shadow_chain')
+
+    rupture = {
+        'events': [
+            {'kind': 'direct', 'skill_id': 'rupture_toxins', 'target_id': 'e1', 'hit': True, 'hp_removed': 10},
+            {'kind': 'poison_rupture', 'source_id': 1, 'target_id': 'e1', 'raw': 9, 'hp_removed': 9},
+        ],
+        'actor_before': {'actor_id': 1, 'skill_ranks': {'rupture_toxins': 1}, 'effects': []},
+        'actor_after': {'actor_id': 1, 'effects': []},
+        'enemies_before': [{
+            'unit_id': 'e1', 'hp': 100,
+            'effects': [
+                {'kind': 'poison', 'source_id': 1, 'raw_tick': 5, 'duration': 2},
+                {'kind': 'slow', 'source_id': 1, 'duration': 1},
+            ],
+        }],
+        'enemies_after': [{
+            'unit_id': 'e1', 'hp': 81,
+            'effects': [{'kind': 'slow', 'source_id': 1, 'duration': 1}],
+        }],
+    }
+    assert _demonstrates_defining_skill_effect(rupture, 'rupture_toxins')
+    disappeared_only = copy.deepcopy(rupture)
+    disappeared_only['events'] = disappeared_only['events'][:1]
+    assert not _demonstrates_defining_skill_effect(disappeared_only, 'rupture_toxins')
+    zero_conversion = copy.deepcopy(rupture)
+    zero_conversion['events'][1]['hp_removed'] = 0
+    assert not _demonstrates_defining_skill_effect(zero_conversion, 'rupture_toxins')
 
 
 class ProductionJourney:

@@ -3157,25 +3157,41 @@ def resolve_current_side_if_ready(
     _SOLO_PVE_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)
     _sync_projection_targets(encounter_id=encounter_id, battle_state=battle_state, projection_states=projection_states)
     if battle_state is not None and battle_state.get('rules_version') == RULES_VERSION:
-        durable_result = persist_turn_result(
-            encounter_kind='pve', encounter_id=encounter_id,
-            turn_revision=turn_revision,
-            result={
-                'active_side': runtime_state.active_side_id,
-                'actions': [
-                    {
-                        'actor_id': action.participant_id,
-                        'action_type': action.action_type,
-                        'skill_id': action.skill_id,
-                        'source': action.source,
-                    }
-                    for action in batch
-                ],
-            },
-            complete_state=battle_state,
-        )
+        try:
+            durable_result = persist_turn_result(
+                encounter_kind='pve', encounter_id=encounter_id,
+                turn_revision=turn_revision,
+                result={
+                    'active_side': runtime_state.active_side_id,
+                    'actions': [
+                        {
+                            'actor_id': action.participant_id,
+                            'action_type': action.action_type,
+                            'skill_id': action.skill_id,
+                            'source': action.source,
+                        }
+                        for action in batch
+                    ],
+                },
+                complete_state=battle_state,
+            )
+        except RuntimeError as exc:
+            if str(exc) != 'combat_result_cas_conflict':
+                raise
+            durable_result = {'applied': False, 'reason': 'stale_revision'}
         if not durable_result.get('applied'):
             _SOLO_PVE_RUNTIME_STORE.remove(encounter_id)
+            if battle_state is not None:
+                restored = load_active_pve_encounter(encounter_id=encounter_id)
+                if restored:
+                    authoritative_state, _authoritative_mob = restored
+                    battle_state.clear()
+                    battle_state.update(authoritative_state)
+                else:
+                    # The rejected local result is never allowed to remain
+                    # terminal authority when the durable encounter vanished.
+                    battle_state['mob_dead'] = False
+                    battle_state['player_dead'] = False
             return False
         if durable_result.get('duplicate'):
             battle_state.clear()
@@ -3271,11 +3287,13 @@ def process_due_timeout_for_battle(
         if not _encounter_continues_after_timeout_resolution(battle_state):
             return True
         if recovered_side == SIDE_PLAYER:
-            run_enemy_instant_side(
+            enemy_result_applied = run_enemy_instant_side(
                 player_id=player_id,
                 battle_state=battle_state,
                 on_enemy_action=on_enemy_action or (lambda _action: None),
             )
+            if not enemy_result_applied:
+                return False
         else:
             open_next_player_side_turn(player_id=player_id, battle_state=battle_state)
         return True
@@ -3290,12 +3308,12 @@ def process_due_timeout_for_battle(
     if not _encounter_continues_after_timeout_resolution(battle_state):
         return True
 
-    run_enemy_instant_side(
+    enemy_result_applied = run_enemy_instant_side(
         player_id=player_id,
         battle_state=battle_state,
         on_enemy_action=on_enemy_action or (lambda _action: None),
     )
-    return True
+    return enemy_result_applied
 
 
 def _encounter_continues_after_timeout_resolution(battle_state: dict) -> bool:
@@ -3384,10 +3402,10 @@ def _sync_runtime_enemy_roster_for_pack(
     return _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=now, timeout_seconds=0)
 
 
-def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_action) -> None:
+def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_action) -> bool:
     encounter_id = _resolve_encounter_id(player_id=player_id, battle_state=battle_state)
     if not encounter_id:
-        return
+        return False
     now = _utc_now()
     runtime_state = None
     if battle_state.get('enemy_units'):
@@ -3421,7 +3439,7 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
             sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
             battle_state.pop('_pack_enemy_side_total', None)
             battle_state.pop('_pack_enemy_side_processed', None)
-            return
+            return False
         commit = _SOLO_PVE_RUNTIME.commit_action(
             encounter_id=encounter_id, participant_id=enemy_pid,
             action_type='enemy_basic_attack', target_info=None, skill_id=None, item_id=None,
@@ -3431,7 +3449,7 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
             sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
             battle_state.pop('_pack_enemy_side_total', None)
             battle_state.pop('_pack_enemy_side_processed', None)
-            return
+            return False
 
     resolved = resolve_current_side_if_ready(
         player_id=player_id,
@@ -3440,14 +3458,16 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
         on_enemy_action=on_enemy_action,
     )
     if not resolved:
-        sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
         battle_state.pop('_pack_enemy_side_total', None)
         battle_state.pop('_pack_enemy_side_processed', None)
-        return
+        return False
 
     runtime_state = open_next_player_side_turn(player_id=player_id, battle_state=battle_state)
     sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
     battle_state.pop('_pack_enemy_side_total', None)
     battle_state.pop('_pack_enemy_side_processed', None)
+    return True
+
+
 def is_pack_enabled_mob(mob_id: str) -> bool:
     return is_open_world_pack_enabled_mob(mob_id)

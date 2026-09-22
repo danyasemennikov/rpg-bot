@@ -807,7 +807,7 @@ async def start_battle(
             context.user_data.pop('battle_mob', None)
             await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
             return
-        run_enemy_instant_side(
+        enemy_result_applied = run_enemy_instant_side(
             player_id=user.id,
             battle_state=battle_state,
             on_enemy_action=lambda action: _run_group_enemy_side_action(
@@ -817,6 +817,12 @@ async def start_battle(
         )
         sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
         update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
+        if enemy_result_applied is False:
+            await _render_authoritative_after_rejected_result(
+                query=query, context=context, player=p, mob=mob,
+                battle_state=battle_state, answer=False,
+            )
+            return
         if battle_state.get('player_dead'):
             penalty = apply_death(user.id, p)
             finish_solo_pve_encounter(
@@ -1318,6 +1324,27 @@ async def _resolve_post_attack_combat_resolution(
         battle_state=battle_state,
     )
     return False
+
+
+async def _render_authoritative_after_rejected_result(
+    *,
+    query,
+    context,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    answer: bool,
+) -> None:
+    """Render reloaded durable PvE state without applying local consequences."""
+    context.user_data['battle'] = battle_state
+    context.user_data['battle_mob'] = mob
+    text, keyboard = build_battle_message(
+        player, mob, battle_state, battle_state.get('log', []),
+    )
+    await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+    if answer:
+        await query.answer(t('battle.turn_not_ready', player.get('lang', 'ru')), show_alert=True)
+
 
 async def _handle_battle_continues_update(
     query,
@@ -2033,7 +2060,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         )
         sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
         if not battle_state.get('mob_dead') and not battle_state.get('player_dead'):
-            run_enemy_instant_side(
+            enemy_result_applied = run_enemy_instant_side(
                 player_id=user.id,
                 battle_state=battle_state,
                 on_enemy_action=lambda committed: _run_group_enemy_side_action(
@@ -2042,6 +2069,12 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 ),
             )
             sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+            if enemy_result_applied is False:
+                await _render_authoritative_after_rejected_result(
+                    query=query, context=context, player=p, mob=mob,
+                    battle_state=battle_state, answer=True,
+                )
+                return
         context.user_data['battle'] = battle_state
         update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
         # The player side and instant enemy side have both advanced the shared
@@ -2222,7 +2255,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             not battle_state.get('mob_dead')
             and not battle_state.get('player_dead')
         ):
-            run_enemy_instant_side(
+            enemy_result_applied = run_enemy_instant_side(
                 player_id=user.id,
                 battle_state=battle_state,
                 on_enemy_action=lambda _action: _run_group_enemy_side_action(
@@ -2235,6 +2268,12 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 ),
             )
             sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+            if enemy_result_applied is False:
+                await _render_authoritative_after_rejected_result(
+                    query=query, context=context, player=p, mob=mob,
+                    battle_state=battle_state, answer=True,
+                )
+                return
 
         if battle_state.get('mob_dead'):
             await _handle_victory_cleanup(
@@ -2315,7 +2354,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             not battle_state.get('mob_dead')
             and not battle_state.get('player_dead')
         ):
-            run_enemy_instant_side(
+            enemy_result_applied = run_enemy_instant_side(
                 player_id=user.id,
                 battle_state=battle_state,
                 on_enemy_action=lambda _action: _run_group_enemy_side_action(
@@ -2327,6 +2366,12 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 ),
             )
             sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+            if enemy_result_applied is False:
+                await _render_authoritative_after_rejected_result(
+                    query=query, context=context, player=p, mob=mob,
+                    battle_state=battle_state, answer=True,
+                )
+                return
         context.user_data['battle'] = battle_state
         update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
 

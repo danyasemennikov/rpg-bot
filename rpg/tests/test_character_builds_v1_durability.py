@@ -325,6 +325,88 @@ def test_enemy_side_dot_kill_refreshes_terminal_projection_for_settlement():
     assert battle['mob_dead'] is True
 
 
+def test_rejected_enemy_result_restores_authority_before_terminal_consequences():
+    reset_solo_pve_runtime_store()
+    migrate_character_builds_v1()
+    battle = {
+        'rules_version': RULES_VERSION,
+        'mob_id': 'westwild_rabbit',
+        'mob_hp': 20,
+        'mob_max_hp': 20,
+        'mob_dead': False,
+        'player_hp': 100,
+        'player_max_hp': 100,
+        'player_mana': 50,
+        'player_max_mana': 50,
+        'player_dead': False,
+        'active_side': 'side_b',
+        'side_a_player_ids': [1],
+        'log': ['durable'],
+        'participant_states': {
+            '1': {
+                'player_hp': 100, 'player_max_hp': 100,
+                'player_mana': 50, 'player_max_mana': 50,
+                'player_dead': False,
+            },
+        },
+        'participant_states_v1': {
+            '1': {
+                'actor_id': 1, 'hp': 100, 'max_hp': 100,
+                'mana': 50, 'max_mana': 50, 'effects': [], 'cooldowns': {},
+            },
+        },
+        'enemy_states_v1': [{
+            'unit_id': 'enemy-authority', 'mob_id': 'westwild_rabbit',
+            'hp': 20, 'max_hp': 20, 'effects': [],
+        }],
+    }
+    mob = {'id': 'westwild_rabbit', 'hp': 20}
+    ensure_runtime_for_battle(player_id=1, battle_state=battle, mob=mob)
+
+    def stale_lethal_enemy_action(_action):
+        battle['participant_states_v1']['1']['hp'] = 0
+        battle['participant_states']['1']['player_hp'] = 0
+        battle['participant_states']['1']['player_dead'] = True
+        battle['player_hp'] = 0
+        battle['player_dead'] = True
+        battle['log'] = ['stale lethal']
+
+    with patch('game.pve_live.persist_turn_result', return_value={
+        'applied': False, 'reason': 'stale_revision',
+    }):
+        applied = run_enemy_instant_side(
+            player_id=1,
+            battle_state=battle,
+            on_enemy_action=stale_lethal_enemy_action,
+        )
+
+    assert applied is False
+    assert battle['player_hp'] == 100
+    assert battle['player_dead'] is False
+    assert battle['participant_states_v1']['1']['hp'] == 100
+    assert battle['log'] == ['durable']
+
+    query = SimpleNamespace(edit_message_text=AsyncMock())
+    context = SimpleNamespace(user_data={'battle': battle, 'battle_mob': mob})
+    with patch.object(battle_handler, '_handle_victory_cleanup', new=AsyncMock()) as victory, \
+         patch.object(battle_handler, '_handle_death_or_resurrection', new=AsyncMock()) as death, \
+         patch.object(battle_handler, '_handle_battle_continues_update', new=AsyncMock()) as continuing:
+        handled = asyncio.run(battle_handler._resolve_post_attack_combat_resolution(
+            query=query,
+            context=context,
+            user_id=1,
+            player={'telegram_id': 1, 'lang': 'en'},
+            mob=mob,
+            battle_state=battle,
+            lang='en',
+        ))
+
+    assert handled is False
+    victory.assert_not_awaited()
+    death.assert_not_awaited()
+    continuing.assert_awaited_once()
+
+
 def test_group_flee_is_participant_scoped_and_replays_durable_result():
     migrate_character_builds_v1()
     state = {

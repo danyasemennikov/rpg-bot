@@ -170,7 +170,7 @@ _SPECS = [
     _s("savage_chop", "axe_2h", "A", 1, 8, 2, "S", "physical", "damage", 1.02, description="1.02P; while own Rage is active add .35P."),
     _s("blooded_resolve", "axe_2h", "A", 2, 12, 5, "Self", None, "heal", description="Heal 25+2.5×VIT, capped at 25% max HP."),
     _s("frenzy_chain", "axe_2h", "A", 3, 18, 4, "S", "physical", "damage", 1.84, 3, "Total 1.84P; during Rage add .70P and consume Rage on hit."),
-    _s("last_roar", "axe_2h", "A", 4, 24, 6, "S", "physical", "damage", 1.62, description="1.62P; at ≤40% HP add .85P; heal 15% actual damage, capped at 12% max HP."),
+    _s("last_roar", "axe_2h", "A", 4, 24, 6, "S", "physical", "damage", 1.62, description="1.62P; at ≤40% HP add .85P. Always heal 15% actual damage with healing-power scaling, capped at 12% max HP."),
     _s("bleeding_cut", "axe_2h", "B", 0, 8, 2, "S", "physical", "damage", .73, description=".73P and Bleed .20P for 3 ticks."),
     _s("sunder_armor", "axe_2h", "B", 1, 12, 3, "S", "physical", "damage", .77, description=".77P and fixed 30% physical-defense break for 3 opportunities."),
     _s("brutal_overhead", "axe_2h", "B", 2, 14, 3, "S", "physical", "damage", 1.45, description="1.45P with fixed 25% physical-rating penetration."),
@@ -234,7 +234,7 @@ _SPECS = [
     # Holy rod — Protector / Judgment
     _s("sacred_shield", "holy_rod", "A", 0, 10, 3, "Ally", None, "barrier", description="Barrier .75H for 2 opportunities, capped at 35% recipient max HP."),
     _s("mend_self", "holy_rod", "A", 1, 12, 4, "Self", None, "heal", description="Heal self .65H."),
-    _s("aura_of_resolve", "holy_rod", "A", 2, 14, 4, "Ally", None, "ward", description="Ward 20% for 2 opportunities; another ally also gets one Interception."),
+    _s("aura_of_resolve", "holy_rod", "A", 2, 14, 4, "Ally", None, "ward", description="Ward 20% for 2 opportunities; if the selected recipient is not the caster, that recipient also gets one Interception."),
     _s("aegis_strike", "holy_rod", "A", 3, 14, 3, "S", "holy", "damage", 1.10, description="1.10P; if caster has Barrier, add .45P."),
     _s("guardian_light", "holy_rod", "A", 4, 26, 6, "Party", None, "barrier", description="Party Barrier .55H for 2 opportunities; caster Ward 25% for 2."),
     _s("judgment", "holy_rod", "B", 0, 6, 3, "S", "holy", "damage", .75, description=".75P and own Judgment 3; normal attacks add .15P and heal 10% damage."),
@@ -245,7 +245,7 @@ _SPECS = [
     # Tome — Enchanter / Synthesis
     _s("arcane_shield", "tome", "A", 0, 8, 3, "Ally", None, "barrier", description="Barrier .60H for 2 opportunities, capped at 35% recipient max HP."),
     _s("weaken", "tome", "A", 1, 8, 3, "S", "magic", "hostile_effect", description="Hit-check then Weakness 20% for 2 opportunities; no damage."),
-    _s("insight", "tome", "A", 2, 8, 4, "Ally", None, "mana", description="Restore 22 MP after paying the caster cost."),
+    _s("insight", "tome", "A", 2, 8, 4, "Ally", None, "mana", description="Restore 22 MP to one selected ally after paying the caster cost."),
     _s("dispel_script", "tome", "A", 3, 10, 3, "AllyOrEnemy", "magic", "dispel", description="Ally: remove Weakness/Slow/Exposure. Enemy: hit-check and remove Ward/Barrier/Attack Up.", utility=True),
     _s("grand_enchantment", "tome", "A", 4, 24, 6, "Party", None, "buff", description="Party Ward 20% for 2 opportunities and restore 14 MP each."),
     _s("hybrid_missile", "tome", "B", 0, 6, 1, "S", "magic", "damage", 1.0, description="1.00P magic."),
