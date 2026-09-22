@@ -129,6 +129,48 @@ def test_build_views_are_localized_authoritative_and_callback_safe():
             assert all(f"· {family}" not in views[4][0] for family in FAMILIES)
 
 
+def test_cleanse_and_aura_render_truthful_ranked_semantics_in_every_locale():
+    migrate_character_builds_v1()
+    conn = get_connection()
+    conn.execute(
+        """INSERT OR REPLACE INTO weapon_mastery
+        (telegram_id, weapon_id, level, exp, skill_points, model_version)
+        VALUES (1, 'holy_rod', 4, 0, 3, 1)"""
+    )
+    conn.execute(
+        """INSERT OR REPLACE INTO player_skills (telegram_id, skill_id, level)
+        VALUES (1, 'aura_of_resolve', 1)"""
+    )
+    conn.commit()
+    conn.close()
+
+    expected = {
+        'en': {
+            'target': 'one ally', 'cleanse': ('Poison', 'Bleed', 'Burn', 'Weakness', 'does not heal'),
+            'aura': ('20%', '2 opportunities', 'Interception'), 'rank': 'Rank effect 2', 'ward': 'Ward',
+        },
+        'ru': {
+            'target': 'один союзник', 'cleanse': ('Яд', 'Кровотечение', 'Ожог', 'Слабость', 'Не лечит'),
+            'aura': ('20%', '2 возможности', 'Перехват'), 'rank': 'Эффект ранга 2', 'ward': 'Защита',
+        },
+        'es': {
+            'target': 'un aliado', 'cleanse': ('Veneno', 'Sangrado', 'Quemadura', 'Debilidad', 'No cura'),
+            'aura': ('20%', '2 oportunidades', 'Intercepción'), 'rank': 'Efecto del rango 2', 'ward': 'Guardia',
+        },
+    }
+    for lang, copy in expected.items():
+        cleanse, _ = build_skill_view(1, 'cleanse', lang)
+        aura, _ = build_skill_view(1, 'aura_of_resolve', lang)
+        assert f"<b>{copy['target']}</b>" in cleanse
+        assert '<b>10</b>' in cleanse and '<b>3</b>' in cleanse
+        assert all(fragment in cleanse for fragment in copy['cleanse'])
+        assert f"<b>{copy['target']}</b>" in aura
+        assert '<b>14</b>' in aura and '<b>4</b>' in aura
+        assert all(fragment in aura for fragment in copy['aura'])
+        assert copy['rank'] in aura
+        assert f"{copy['ward']}: 23%" in aura
+
+
 def test_each_family_tree_renders_both_frozen_branches():
     migrate_character_builds_v1()
     conn = get_connection()

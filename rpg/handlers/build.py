@@ -25,6 +25,7 @@ from game.build_contract import (
     normalize_family,
     rank_mana_cost,
     rank_multiplier,
+    rank_percent,
 )
 from game.build_progression import (
     ATTRIBUTE_KEYS,
@@ -53,7 +54,8 @@ _COPY = {
         "cooldown": "cooldown", "target": "target", "school": "school", "exact": "V1 combat profile",
         "passive": "passive", "hits": "components", "utility": "utility",
         "coefficient": "power", "healing_coefficient": "healing", "barrier_coefficient": "barrier",
-        "description": "Description", "rank_effect": "Rank effect",
+        "description": "Description", "rank_effect": "Rank effect", "duration": "duration",
+        "opportunities": "opportunities", "interception": "Interception", "ward_strength": "Ward",
         "unequip": "These requirement-invalid items will be unequipped", "none": "none",
         "changed": "Build updated.", "stale": "That build action is stale; the current view was reloaded.",
         "old": "This old button cannot mutate V1. The current build view was reloaded.",
@@ -85,7 +87,8 @@ _COPY = {
         "cooldown": "перезарядка", "target": "цель", "school": "школа", "exact": "Боевой профиль V1",
         "passive": "пассивно", "hits": "компоненты", "utility": "поддержка",
         "coefficient": "сила", "healing_coefficient": "лечение", "barrier_coefficient": "барьер",
-        "description": "Описание", "rank_effect": "Эффект ранга",
+        "description": "Описание", "rank_effect": "Эффект ранга", "duration": "длительность",
+        "opportunities": "возможности", "interception": "Перехват", "ward_strength": "Защита",
         "unequip": "Предметы с нарушенными требованиями будут сняты", "none": "нет",
         "changed": "Билд обновлён.", "stale": "Действие устарело; открыт актуальный билд.",
         "old": "Старая кнопка не меняет V1. Открыт актуальный билд.",
@@ -117,7 +120,8 @@ _COPY = {
         "cooldown": "recarga", "target": "objetivo", "school": "escuela", "exact": "Perfil de combate V1",
         "passive": "pasiva", "hits": "componentes", "utility": "utilidad",
         "coefficient": "potencia", "healing_coefficient": "curación", "barrier_coefficient": "barrera",
-        "description": "Descripción", "rank_effect": "Efecto del rango",
+        "description": "Descripción", "rank_effect": "Efecto del rango", "duration": "duración",
+        "opportunities": "oportunidades", "interception": "Intercepción", "ward_strength": "Guardia",
         "unequip": "Se desequiparán estos objetos cuyos requisitos ya no se cumplen", "none": "ninguno",
         "changed": "Configuración actualizada.", "stale": "La acción caducó; se recargó la configuración actual.",
         "old": "El botón antiguo no puede cambiar V1. Se recargó la vista actual.",
@@ -264,6 +268,12 @@ def _skill_profile(spec: Any, lang: str, rank: int) -> str:
     if spec.skill_id in _BARRIER_COEFFICIENTS:
         barrier = _BARRIER_COEFFICIENTS[spec.skill_id] * multiplier
         parts.append(f"{_c(lang, 'barrier_coefficient')}: {barrier:.2f}H")
+    if spec.skill_id == "aura_of_resolve":
+        parts.extend([
+            f"{_c(lang, 'ward_strength')}: {rank_percent(.20, rank):.0%}",
+            f"{_c(lang, 'duration')}: 2 {_c(lang, 'opportunities')}",
+            f"{_c(lang, 'interception')}: 1",
+        ])
     if spec.hits > 1:
         parts.append(f"{_c(lang, 'hits')}: {spec.hits}")
     if spec.utility:
