@@ -20,7 +20,11 @@ from game.build_progression import (
     BuildRejected,
 )
 from game.gear_progression import ensure_gear_progression_schema
-from game.pve_reward_settlement import _apply_progression, recover_prepared_settlements
+from game.pve_reward_settlement import (
+    _add_legacy_mastery_exp,
+    _apply_progression,
+    recover_prepared_settlements,
+)
 from handlers.battle import apply_rewards
 
 
@@ -202,6 +206,28 @@ def test_field_item_mastery_normalizes_by_item_profile_and_keeps_best_evidence()
     rows = conn.execute("SELECT weapon_id, level FROM weapon_mastery WHERE telegram_id=1").fetchall()
     conn.close()
     assert [(row['weapon_id'], row['level']) for row in rows] == [('sword_1h', 4)]
+
+
+def test_legacy_reward_reuses_existing_canonical_family_row():
+    conn = get_connection()
+    conn.execute("DELETE FROM weapon_mastery WHERE telegram_id=1")
+    conn.execute(
+        """INSERT INTO weapon_mastery
+           (telegram_id, weapon_id, level, exp, skill_points)
+           VALUES (1, 'sword_1h', 1, 40, 0)"""
+    )
+    result = _add_legacy_mastery_exp(conn, 1, 'field_sword_1h', 10)
+    rows = [dict(row) for row in conn.execute(
+        "SELECT weapon_id, level, exp, skill_points FROM weapon_mastery WHERE telegram_id=1"
+    )]
+    conn.rollback()
+    conn.close()
+
+    assert result['new_level'] == 2
+    assert result['new_exp'] == 0
+    assert rows == [{
+        'weapon_id': 'sword_1h', 'level': 2, 'exp': 0, 'skill_points': 1,
+    }]
 
 
 def test_invalid_player_is_quarantined_without_aborting_other_players_or_lazy_migrating():

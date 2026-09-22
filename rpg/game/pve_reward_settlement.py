@@ -634,7 +634,7 @@ def _add_legacy_mastery_exp(conn, player_id: int, weapon_id: str, exp: int) -> d
     legacy row; the migration can then normalize and convert that result once.
     """
     item = get_item(str(weapon_id or '')) or {}
-    family = normalize_family(item.get('weapon_profile')) or normalize_family(weapon_id)
+    family = normalize_family(item.get('weapon_profile') or weapon_id)
     if family not in FAMILIES:
         family = 'unarmed'
 
@@ -644,8 +644,10 @@ def _add_legacy_mastery_exp(conn, player_id: int, weapon_id: str, exp: int) -> d
             (int(player_id),),
         ).fetchall()
         if (
-            normalize_family((get_item(str(row['weapon_id'])) or {}).get('weapon_profile'))
-            or normalize_family(row['weapon_id'])
+            normalize_family(
+                (get_item(str(row['weapon_id'])) or {}).get('weapon_profile')
+                or row['weapon_id']
+            )
         ) == family
     ]
     if rows:
