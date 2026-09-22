@@ -1328,21 +1328,34 @@ async def _handle_battle_continues_update(
 ) -> None:
     """Общий путь для продолжающегося боя: persist hp/mana + рендер."""
     update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user_id)
-    if _is_group_encounter(battle_state):
-        _persist_group_participant_hp_mana(battle_state)
-    else:
-        conn = get_connection()
-        conn.execute(
-            'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
-            (battle_state['player_hp'], battle_state['player_mana'], user_id)
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    persisted = True
+    if encounter_id:
+        persisted = persist_solo_pve_encounter_state(
+            encounter_id=encounter_id,
+            battle_state=battle_state,
+            mob=mob,
         )
-        conn.commit()
-        conn.close()
-    persist_solo_pve_encounter_state(
-        encounter_id=str(battle_state.get('pve_encounter_id', '')),
-        battle_state=battle_state,
-        mob=mob,
-    )
+        if not persisted:
+            restored = load_active_pve_encounter(encounter_id=encounter_id)
+            if restored:
+                authoritative_state, authoritative_mob = restored
+                battle_state.clear()
+                battle_state.update(authoritative_state)
+                mob.clear()
+                mob.update(authoritative_mob)
+
+    if persisted:
+        if _is_group_encounter(battle_state):
+            _persist_group_participant_hp_mana(battle_state)
+        else:
+            conn = get_connection()
+            conn.execute(
+                'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
+                (battle_state['player_hp'], battle_state['player_mana'], user_id)
+            )
+            conn.commit()
+            conn.close()
 
     # Бой продолжается
     text, keyboard = build_battle_message(player, mob, battle_state, battle_state['log'])

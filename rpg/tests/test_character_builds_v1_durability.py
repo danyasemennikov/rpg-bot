@@ -208,6 +208,75 @@ def test_v1_mob_first_uses_shared_enemy_side_not_legacy_strike():
     assert battle['active_side'] == 'side_b'
 
 
+def test_continuing_battle_cas_rejection_cannot_write_stale_player_resources():
+    authoritative = {
+        'rules_version': RULES_VERSION,
+        'pve_encounter_id': 'pve-cas-authority',
+        'mob_id': 'westwild_rabbit',
+        'turn_revision': 0,
+        'state_revision': 1,
+        'player_hp': 80,
+        'player_mana': 40,
+        'player_dead': False,
+        'mob_dead': False,
+        'log': ['authoritative'],
+        'participant_states_v1': {
+            '1': {'actor_id': 1, 'hp': 80, 'max_hp': 118, 'mana': 40, 'max_mana': 62},
+        },
+        'enemy_states_v1': [{'unit_id': 'enemy-1', 'hp': 20, 'max_hp': 20}],
+    }
+    mob = {'id': 'westwild_rabbit', 'hp': 20}
+    conn = get_connection()
+    ensure_build_schema(conn)
+    conn.execute('UPDATE players SET hp=80, mana=40 WHERE telegram_id=1')
+    conn.execute(
+        """INSERT INTO pve_encounters
+           (encounter_id, owner_player_id, status, mob_id, battle_state_json,
+            mob_json, source_units_json, rules_version, turn_revision, state_revision)
+           VALUES ('pve-cas-authority', 1, 'active', 'westwild_rabbit', ?, ?, '[]', ?, 0, 1)""",
+        (json.dumps(authoritative), json.dumps(mob), RULES_VERSION),
+    )
+    conn.execute(
+        """INSERT INTO pve_encounter_participants (encounter_id, player_id, status)
+           VALUES ('pve-cas-authority', 1, 'active')"""
+    )
+    conn.commit()
+    conn.close()
+
+    stale = json.loads(json.dumps(authoritative))
+    stale['state_revision'] = 0
+    stale['player_hp'] = 5
+    stale['player_mana'] = 3
+    stale['log'] = ['stale']
+    stale['participant_states_v1']['1']['hp'] = 5
+    stale['participant_states_v1']['1']['mana'] = 3
+    query = SimpleNamespace(edit_message_text=AsyncMock())
+
+    with patch('handlers.battle.build_battle_message', return_value=('authority', None)) as render:
+        asyncio.run(battle_handler._handle_battle_continues_update(
+            query=query,
+            user_id=1,
+            player={'telegram_id': 1},
+            mob={'id': 'westwild_rabbit', 'hp': 5},
+            battle_state=stale,
+        ))
+
+    conn = get_connection()
+    player = dict(conn.execute('SELECT hp, mana FROM players WHERE telegram_id=1').fetchone())
+    encounter = dict(conn.execute(
+        "SELECT battle_state_json, state_revision FROM pve_encounters WHERE encounter_id='pve-cas-authority'"
+    ).fetchone())
+    conn.close()
+
+    assert player == {'hp': 80, 'mana': 40}
+    assert json.loads(encounter['battle_state_json'])['player_hp'] == 80
+    assert encounter['state_revision'] == 1
+    assert stale['player_hp'] == 80
+    assert stale['participant_states_v1']['1']['hp'] == 80
+    render.assert_called_once()
+    assert render.call_args.args[2]['player_hp'] == 80
+
+
 def test_enemy_side_dot_kill_refreshes_terminal_projection_for_settlement():
     reset_solo_pve_runtime_store()
     migrate_character_builds_v1()
