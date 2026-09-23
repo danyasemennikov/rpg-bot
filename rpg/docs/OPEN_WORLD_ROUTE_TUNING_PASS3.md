@@ -1,5 +1,8 @@
 # Open-world Route Tuning Pass 3 (PR 3H)
 
+> **Historical delivery record at a compatibility-retained path.** Its Sunscar gap is
+> pass-era evidence, not an unqualified current-state claim.
+
 This pass follows the readiness/reporting layers introduced in PR 3E and used in PR 3F/3G.
 
 Scope is limited to:

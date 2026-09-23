@@ -1,5 +1,8 @@
 # Open World Route Objectives — Pass 1 (PR 3N)
 
+> **Historical delivery record at a compatibility-retained path.** Preserved with its
+> original route-objective scope; later chapter and route state may supersede limits.
+
 This pass follows PR 3K/3L/3M and adds a route-objective metadata layer wired to existing hunt contract workflows.
 
 ## Goal

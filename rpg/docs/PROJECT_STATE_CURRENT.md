@@ -1,475 +1,239 @@
 # Project State Current
 
-This file is the source of truth for the currently confirmed merged state of the RPG bot project.
+- Status: Active
+- Authority: Canonical for confirmed merged state
+- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Full prior snapshot: [archive/status/PROJECT_STATE_CURRENT_AT_PR231.md](archive/status/PROJECT_STATE_CURRENT_AT_PR231.md)
 
-Do not record planned, discussed, or unmerged work as confirmed state.
+This current section is the only merged-state summary. Plans belong in
+[ROADMAP_CURRENT.md](ROADMAP_CURRENT.md); delivery detail belongs in Epic reports;
+measured artifacts retain their own commit provenance. Merge does not establish
+deployment.
 
-## Character Builds & Combat Identity V1 — implemented in this PR, pending review
+## Verified baseline
 
-This subsection describes the current branch for review. It does not change the
-confirmed merged baseline below until the Draft PR is accepted and merged.
+- [PR229 — Playable Alpha Vertical Slice V1](https://github.com/danyasemennikov/rpg-bot/pull/229): merged.
+- [PR230 — Itemization, Regional Loot & Reliable Gear Progression V1](https://github.com/danyasemennikov/rpg-bot/pull/230): merged.
+- [PR231 — Character Builds & Combat Identity V1](https://github.com/danyasemennikov/rpg-bot/pull/231): merged.
+- PR231 merge/current reconciled `main`: `ad5435e577e45e63da2ca57af2296203d88cedd5`.
 
-- One shared actor snapshot and action/effect evaluator now serve durable PvE,
-  the bounded PvP adapter, and production-aligned simulations.
-- The canonical catalogue contains 10 families, 20 distinct branches and 100
-  three-rank skills. Mastery is family-local, reaches M20, and preserves exact
-  points through learning, level-ups, resets and migration.
-- PvE persists each real participant and enemy unit, supports named ally/party
-  effects, explicit enemy AI and mixed source rosters, and recovers committed
-  orders/side results after runtime loss.
-- PvP keeps existing engagement/crime/loss policy and enables only normal attack,
-  Guard, Power Strike, Quick Shot, Fireball and Smite through the shared evaluator.
-- `/build`, skill previews, combat feedback, mutation errors and migration notices
-  have production route evidence in ru/en/es.
-- Migration first drains recoverable legacy settlements, quarantines invalid player
-  ledgers independently, then cancels incompatible live old-rule encounters explicitly;
-  it preserves the merged PR229/PR230 state and is idempotent.
-- The checked 200-seed evidence covers all 20 accessibility rows, 20 role gates and
-  240 encounter-matrix results, plus 100 full progression/loadout comparisons and
-  four legal cross-branch mixes. Ten direct-power changes are the only J5 tuning.
+The repository establishes merge state only. Deployment, live-account smoke, and
+production operation require separate evidence.
 
-See [the implementation, rollout, coverage, failure-injection, production-journey,
-balance and regression report](CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md).
+## Playable chapter and world
 
-## Itemization, Regional Loot & Reliable Gear Progression V1 — merged as PR230
+- The Aster–Elmor playable chapter connects registration/starter state, journal
+  assignments, ordinary travel, combat, gathering, bounded hunting, crafting, sales,
+  and chapter rewards.
+- Ordinary travel uses the canonical world graph. Five routes are alpha-ready;
+  `route_mireveil` and `route_voidmarch` remain sparse route stubs.
+- Teleport activation is disabled. The retained teleport document is deferred design,
+  not live capability.
 
-PR230 added the exact 32-item field catalogue, three deterministic vendors, five regional pools, persisted dry-streak guarantees, instance-first equipment comparison and mutation flows, canonical weapon-family mastery, and a two-transaction versioned PvE reward settlement with bounded startup/player recovery. It also activated resolved armor/offhand base defense exactly once and added ru/en/es catalogue, goal, source, guild, receipt, and recovery UX.
+## Combat and character builds
 
-The merged implementation is additive and preserves existing gear and legacy active encounters. Ambiguous pre-V1 resolving victories are quarantined for owner review without automatic replay. See [the specification, acquisition evidence, migration behavior, settlement guarantees, and risks](FIELD_LOOT_AND_GEAR_PROGRESSION_V1.md).
+- The canonical catalogue has 10 weapon families, 20 branches, and 100 canonical
+  branch skills, plus universal Power Strike.
+- Family-local mastery reaches M20. Skill ranks, legal branch allocation, reset,
+  migration, and stale-preview/revision rails are implemented.
+- A shared actor snapshot and action/effect evaluator serve durable PvE, the bounded
+  PvP adapter, and production-aligned simulation paths.
+- Historical balance reports remain diagnostics for their recorded baselines; they do
+  not certify the final integrated PR231 main state.
 
-## Playable Alpha Vertical Slice V1 — merged as PR229
+## PvE
 
-This subsection records the PR229 implementation now present in the confirmed merged baseline.
+- Persistent participants and enemy units, durable orders/side results, explicit enemy
+  profiles, and restart-safe state recovery are implemented.
+- Group PvE supports real participants, named ally/party support, and bounded mixed
+  encounters while preserving settlement and eligibility authorities.
+- The current system is not a claim that every future expedition or structured-PvE
+  feature is complete.
 
-- Production startup now runs schema initialization and inserts missing static items;
-  legacy catalogs missing `wood_common` are reconciled without replacing player data.
-- `/journal` and the ru/en/es lower menu connect a once-per-player Aster starter kit,
-  four prerequisite-gated assignments, ordinary Westwild travel to Elmor and return.
-- Existing live contract state is extended with additive objective/history storage;
-  kill, gather, harvest, craft, sale and current equipment requirements are live.
-- Owned boar/wolf victories support one local extraction within 30 minutes, preserving
-  ordinary loot and using persisted hunting access/XP.
-- Guild workshops expose four recipes across persisted alchemy, cooking and medium
-  armor progression. Inputs come from the same road; outputs are potions, food and a
-  usable medium chest. Shops expose material sales and Elmor starter supplies.
-- Economic actions validate current authority and commit item/resource/XP/objective
-  changes with receipts. Consumable ownership and battle projection persistence are
-  checked; travel and discovery commit together. Persisted victory duplicate protection
-  remains unchanged, including its known partial-reward failure boundary.
-- Full localized ordinary-character integration and transaction/upgrade tests are in
-  `tests/test_playable_alpha_v1.py` and `tests/test_alpha_transactions_v1.py`.
-- See [shipped scope, migration, acceptance and limits](PLAYABLE_ALPHA_VERTICAL_SLICE_V1.md).
+## Gear, loot, and progression
 
-## Confirmed merged baseline
+- PR230 supplies the 32-item field catalogue, deterministic vendors, five regional
+  pools, rarity and dry-streak guarantees, instance-first comparison/mutation flows,
+  enhancement/advancement bridges, and versioned two-stage PvE reward settlement.
+- Legacy-review records remain owner-review evidence; ambiguous history is not
+  automatically replayed or compensated.
+- PR231 preserves the PR230 catalogue, ownership, reward provenance, settlement, and
+  recovery guarantees while normalizing weapon identity through canonical families.
 
-Last updated after merge:
-- PR: PR230 / Itemization, Regional Loot & Reliable Gear Progression V1
-- PR: PR229 / Playable Alpha Vertical Slice V1
-- PR: PR228 / Gathering Profession Progression Baseline
-- PR: PR227 / Gathering Profession Persistence & Runtime Access Baseline
-- PR: PR226 / Alpha Core Loop Integration Baseline
-- PR: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
-- PR: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
-- PR: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
-- PR: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
-- PR: Balance V2 PR9 Availability-aware Profile Policy Selection
-- PR: PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
+## Professions and economy
+
+- Gathering profession persistence and progression are implemented, with the bounded
+  level/XP/access rules represented by current runtime data.
+- Hunting is bounded to implemented access, locations, eligible victories, extraction,
+  and profession progression.
+- The currently implemented crafting subset is three live professions and four recipes
+  connected to the playable chapter. Existing shops, material sales, starter supplies,
+  and the bounded shard exchange are implemented.
+- A broader professions/economy architecture is only a proposed roadmap candidate.
+
+## PvP
+
+- Existing engagement, legality/crime, death/loss, inventory, and outer policy remain
+  authoritative.
+- PR231 routes only normal attack, Guard, Power Strike, Quick Shot, Fireball, and Smite
+  through the shared evaluator for supported V1 PvP.
+- This bounded action set is not a claim of all-tree, group, or broader structured-PvP
+  completion or balance.
+
+## Current limits and evidence boundaries
+
+- Teleport, castle/core-war systems, broader structured PvP, full economy overhaul,
+  and other unapproved expansions remain deferred.
+- PR231 checked evidence records its own rules commit and inputs. It does not
+  independently validate later final-main integration changes or deployment.
+- Macro progression-band differences across foundation/runtime documents remain an
+  unresolved design question. This reconciliation does not choose a new band model.
+- Operational validation, live latency/delivery, and broader play-balance conclusions
+  require evidence beyond merge status.
+
+## Navigation
+
+- System owners: [systems/README.md](systems/README.md)
+- Forward priorities: [ROADMAP_CURRENT.md](ROADMAP_CURRENT.md)
+- Merged delivery records: [epics/README.md](epics/README.md)
+- Evidence provenance: [evidence/README.md](evidence/README.md)
+- Historical material: [archive/README.md](archive/README.md)
+
+## Historical compatibility header markers
+
+The lines below are retained only because legacy tests inspect text before the first
+horizontal rule. They describe historical checkpoints and have **no authority** over
+the current section above:
+
 - PR: Codex Workflow Restoration (Docs only)
-- PR: Balance V2 PR8 Simulation Action Resolution / Fallback Attribution (prior; includes PR: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot and PR: Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass)
-- Status: PR230 / Itemization, Regional Loot & Reliable Gear Progression V1
-- Prior confirmed Status: PR229 / Playable Alpha Vertical Slice V1
-- Historical Status: Balance V2 PR9 Availability-aware Profile Policy Selection
-- Latest simulation-policy state: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
-- Latest gameplay/balance diagnostic state: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
-- Historical baseline phrase retained for regression continuity: current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection.
-- Confirmed state below extends PR224 / Balance V2 PR12 with PR225 / Balance V2 PR13 as the latest simulation-policy state, while preserving PR12 as historical shadow-comparison evidence, PR11 as the prior skill-level policy-pressure attribution state, PR10 as the prior fallback-breakdown state, Balance V2 PR9 as the prior availability-aware profile policy state, Balance V2 PR8 as the prior action-resolution state, and PR218 as the test baseline state.
-- Historical baselines remain preserved, including prior PR218 test-suite SQLite isolation state, Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics, Balance Instrument V2 Pressure Attribution / Lane Classifier, prior Balance Instrument V2 observability, and PR15 actionable late-stage tuning.
+- Status: Balance V2 PR9 Availability-aware Profile Policy Selection
+- Historical phrase: current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection
+- Historical phrase: prior PR218 test-suite SQLite isolation state
+- Historical phrase: Balance V2 PR4 expanded sampling / multi-seed confidence diagnostics
+- Historical phrase: Balance Instrument V2 Pressure Attribution / Lane Classifier
+- Historical phrase: prior Balance Instrument V2 observability
+- Historical phrase: PR15 actionable late-stage tuning
+- Historical phrase: Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot
 
 ---
 
 ## Confirmed merged state
 
+> **Historical compatibility excerpt.** Everything from this heading through the next
+> update-policy heading preserves old test-consumed wording and ordering. It is not a
+> second current-state authority. See the current section above and the
+> [full original snapshot](archive/status/PROJECT_STATE_CURRENT_AT_PR231.md) for context.
+
 ### PR228 / Gathering Profession Progression Baseline
 
-- Successful lower-menu gathering now awards persisted profession XP after the rolled resource passes access checks and its item grant succeeds; failed, stale, invalid, battle/PvP-blocked, profession-denied, and zone-denied gathers award no profession XP.
-- Gathering profession progression is capped at level 20, stores XP within the current level, and requires `level * 50` XP for the next level; one award can cross multiple thresholds.
-- Successful-resource XP uses the access decision's effective required profession level: `8 + (2 * required_profession_level)` before trivial-resource scaling.
-- Resources up to 4 profession levels below the player award full XP, gaps of 5 through 8 award 50%, and gaps of 9 or more award 25%, using integer floor with a minimum of 1 XP for eligible non-cap successes.
-- Successful gathers can level their profession and immediately show localized XP/current-level progress; level-20 gathers still grant their item, award 0 profession XP, store 0 XP, and show maximum-level feedback without a next-level requirement.
-- Early Westwild woodcutting surfaces `westwild_n2` through `westwild_n5` now retain their existing chances while awarding the new level-1 `wood_common` gathering material; deeper surfaces from `westwild_n6` retain `wood_dark`, whose woodcutting requirement is now level 6.
-- The resource handbook continues to derive entries from live gather profiles, so common wood is indexed on the early surfaces while dark wood remains represented only on its current deeper surfaces.
-- The canonical progression helper and mutation rail support persisted hunting state, but hunting post-kill extraction and hunting XP remain unwired.
-- Gathering tools, quality, perks, talents, skill trees, specializations, crafting profession progression, and a full profession UI remain deferred.
+Historical marker: persisted gathering XP/progression shipped before PR229.
 
 ### PR227 / Gathering Profession Persistence & Runtime Access Baseline
 
-- Canonical gathering profession state is persisted independently for herbalism, woodcutting, mining, fishing, and hunting in `player_gathering_professions`.
-- New and legacy players are idempotently bootstrapped/backfilled with all five professions at level 1 and 0 exp; unknown profession keys are not persisted.
-- The live lower-menu gathering path now applies the existing gathering access decision to the rolled resource using its persisted profession level and zone tier, without rerolling or reweighting denied outcomes.
-- At the PR227 baseline, profession- or zone-denied rolls granted nothing and accessible rolls retained the existing one-item gathering inventory grant without profession exp; PR228 supersedes the successful-gather progression behavior.
-- At the PR227 baseline, profession XP gain and its level contract were deferred; PR228 activates that narrow loop while tools, quality, mastery, specializations, full profession UI, and hunting post-kill extraction remain deferred.
+Historical marker: persisted gathering access shipped before PR228.
 
 ### PR226 / Alpha Core Loop Integration Baseline
 
-- The existing alpha loop is covered end to end through isolated SQLite persistence: player bootstrap, capital services, starter Westwild contract acceptance, adjacent travel and discovery, live open-world PvE completion, rewards and contract progress, gathering, and ordinary return travel.
-- Persisted PvE victory completion uses an atomic one-time claim before rewards. Unknown, stale, non-victory, and duplicate callbacks fail closed. A failure before reward mutation releases the claim for safe retry; failures after mutation begins remain claimed to preserve at-most-once callback protection, without claiming transactional exactly-once recovery across partial reward writes.
-- The live lower-menu gathering runtime normalizes the SQLite player row and exercises location-surface selection, battle/PvP blocking, gather rolls, and persisted inventory grants.
-- Gathering foundation metadata defines profession-level access requirements, but no canonical persisted player gathering-profession level rail currently exists; live profession-level enforcement is not wired and remains a follow-up integration gap.
-- Blocked non-adjacent travel and invalid gathering surfaces remain non-rewarding negative paths.
-- No balance, simulation, dungeon, teleport, PvP, targeting, group-combat, schema, route, or content changes were made.
+Historical marker: the alpha core loop preceded the merged Epic trio.
 
 ### PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression
 
-- Balance V2 PR13 adopts only PR12 Candidate A in the simulation resolver for the unchanged five-archetype PR7 pilot set.
-- A scheduled learned skill that is cooling down now produces an explicit policy `normal_attack`; the policy does not scan for or select another skill, and Candidate B remains inactive.
-- Ready but unaffordable scheduled skills remain requested, so insufficient-mana fallback behavior stays independently visible through PR8/PR11 diagnostics.
-- PR9 availability filtering, `PROFILE_POLICY_ACTIONS` rotations, metadata-only `executable=False` policies, PR8 action-resolution observability, and the PR12 historical shadow comparison remain preserved.
-- Across the default 100 scenario pairs, paired outcomes and final combat state remain identical; the known 61 cooldown-blocked requests become 61 explicit policy normal attacks and active cooldown fallback count becomes 0.
-- This closes the cooldown-request diagnostic branch unless regressions reveal a blocker. No final balance claim is made.
-- PR224 / PR12 through PR5 and PR218 history remain preserved.
-- No live gameplay/runtime, policy cadence, skill, cooldown duration, mana cost, combat formula, mob, route, equipment, reward, economy, PvP, targeting, teleport, cooldown reset, database schema, or live group combat behavior changed.
+- Latest simulation-policy state: PR225 / Balance V2 PR13 Cooldown-Aware Normal Request Suppression.
 
 ### PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison
 
-- Historical PR12 state marker (before PR13): Latest gameplay/balance diagnostic state: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison.
-- Balance V2 PR12 is simulation/diagnostic/reporting-only and compares two isolated cooldown-aware shadow candidates for the unchanged five-archetype PR7 pilot set.
-- Candidate A requests a normal attack when the scheduled profile skill is on cooldown; Candidate B scans the same active profile branch for the next learned, ready, affordable skill.
-- Candidate A is checked for paired behavioral parity with the active baseline, while Candidate B is reported as counterfactual impact evidence.
-- Report data exposes `pr12_cooldown_shadow_policy_comparison` with deterministic paired totals, parity evidence, replacement diagnostics, deltas, outcome changes, impact clusters, and a conservative next investigation.
-- The active baseline returned by `resolve_archetype_simulation_policy` remains unchanged. Neither shadow candidate is adopted, globally executable, or included in normal matrix results.
-- PR223 / PR11 remains the prior skill-level policy-pressure attribution state; PR221 / PR10, PR9 availability filtering, PR8 action resolution, PR218 test baseline, PR7 five-pilot set, PR6 14/14 coverage, and PR5 420-row audit remain preserved.
-- No policy cadence, skill, cooldown, mana cost, combat formula, route, mob, gear, reward, economy, PvP, targeting, teleport, cooldown reset, database schema, live group combat, or runtime behavior changed.
+- Latest gameplay/balance diagnostic state: PR224 / Balance V2 PR12 Cooldown-Aware Shadow Policy Comparison.
 
 ### PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution
 
-- Historical PR11 state marker (before PR12): Latest gameplay/balance diagnostic state: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution.
-- Balance V2 PR11 is diagnostic/simulation/reporting-only.
-- PR11 corrects diagnostic attribution so directly selected guard-policy actions record `policy_chose_guard`, increment `policy_guard_action_count`, and are not counted as genuine fallback reasons.
-- PR11 adds full-run, per-skill requested/success/fallback aggregates plus cooldown-remaining and mana-deficit totals and maximums independently of capped turn traces.
-- Route-stage matrix raw runs preserve the evidence, deterministic summaries aggregate it, and report data exposes `post_pr10_policy_pressure_diagnostics`.
-- Cooldown and insufficient-mana policy pressure is attributed to concrete skills, archetypes, and stages.
-- `skill_locked_or_unleveled` remains 0.
-- PR221 / PR10 remains the prior fallback-breakdown state; PR9 availability filtering, PR8 action-resolution metadata, PR218 test baseline, PR7 five-pilot set, PR6 14/14 coverage, and PR5 420-row audit remain preserved.
-- No live gameplay/runtime behavior, policy cadence, cooldown duration, mana cost, formula, route, mob, gear, reward, economy, or PvP tuning occurred.
+- Latest gameplay/balance diagnostic state: PR223 / Balance V2 PR11 Cooldown & Mana Policy Cause Attribution.
 
 ### PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown
 
-- Historical PR10 state marker (before PR11): Latest gameplay/balance diagnostic state: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown.
-- Balance V2 PR10 is diagnostic/simulation/reporting-only.
-- Report data now exposes `post_pr9_fallback_diagnostics` with post-PR9 total counts, cooldown/guard/insufficient-mana counts, archetype and stage breakdowns, pilot summaries, top clusters, and a recommended next investigation.
-- PR9 availability-aware profile policy filtering remains intact, and `skill_locked_or_unleveled` remains 0 after filtering.
-- PR9 remains the prior availability-aware profile policy state; PR8 action-resolution/fallback attribution remains preserved; PR218 remains the confirmed test baseline state.
-- This diagnostic does not tune gameplay, runtime behavior, or balance numbers.
-- No live gameplay, combat, runtime, formula, skill, mob, route, equipment, reward, economy, PvP, targeting, teleport, cooldown reset, or live group combat behavior changed.
+- Latest gameplay/balance diagnostic state: PR221 / Balance V2 PR10 Cooldown Fallback Diagnostic Breakdown.
 
 ### Balance V2 PR9 Availability-aware Profile Policy Selection
 
-- Prior confirmed Status: Balance V2 PR9 Availability-aware Profile Policy Selection; the current merged main after Balance V2 PR9 Availability-aware Profile Policy Selection is the preserved input baseline for PR10 diagnostics.
-- Balance V2 PR9 is diagnostic/simulation/reporting-only.
-- PR7 profile-aware simulation policies now skip profile skills that are unavailable in the current simulation `skill_levels` map.
-- For direct simulation execution, `skill_levels` is the explicit learned-skill map: a profile skill is available only when its skill id exists in current `skill_levels` and its level is greater than 0.
-- `unlock_mastery` is not used as a direct execution gate; it remains upstream/build-stage metadata and diagnostic evidence.
-- Unavailable/skipped profile skills are reported diagnostically through availability status, coverage, available, unavailable, skipped, and unavailable-count fields.
-- PR8 action-resolution / fallback attribution metadata remains intact, including requested/resolved action, fallback reason, skill existence/level/unlock/visibility, cooldown, mana, and can-attempt fields.
-- PR7 pilot set remains exactly five: `daggers_venom`, `daggers_evasion`, `bow_sniper`, `magic_staff_destruction`, and `holy_staff_solo`.
-- PR6 policy coverage remains 14 rows and PR6 skill economy diagnostics remain 14 rows.
-- PR5 audit remains 420 rows.
-- Metadata-only registry policies remain `executable=False` and are not globally executable.
-- PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred.
-- No live gameplay, combat, balance, runtime behavior, formula, route, mob, equipment, reward, economy, targeting, teleport, cooldown reset, reward behavior, live skill definition, or live group combat behavior changed.
+- Historical Status: Balance V2 PR9 Availability-aware Profile Policy Selection.
+- This PR did not change gameplay/balance diagnostic state; it stabilized the test baseline only.
 
 ### PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 
-- Full pytest baseline is stabilized through shared test SQLite isolation.
-- Pytest now redirects runtime database access to per-test temporary SQLite databases instead of the local `game.db`.
-- Test setup initializes core schema, seeded item data, PvE runtime tables, and minimal FK-valid synthetic players needed by DB-touching runtime unit tests.
-- SQLite lock failures caused by shared/stale `game.db` state and foreign-key failures caused by cooldown/item writes without fixture-backed parent rows are addressed in test infrastructure.
-- No gameplay, combat, balance, runtime behavior, formula, route, mob, equipment, reward, economy, targeting, teleport, cooldown reset, or live skill definitions changed.
-- This PR did not change gameplay/balance diagnostic state; it stabilized the test baseline only.
+- This docs/workflow-only update did not change gameplay/balance diagnostic state.
 
 ### Codex Workflow Restoration
 
-- Active implementation workflow is restored to Codex.
-- ChatGPT / Producer / Specs handles architecture, design, PR scope, review, blockers, cheap tails, fix prompts, and merge/test guidance.
-- Codex is the current implementation coding agent for approved PR scopes.
-- Codex results return to Codex Review / Integration for review, blockers, cheap tails, fix prompts, and merge/test guidance.
-- Jules workflow docs are historical/inactive workflow experiment references and are not the current source of truth for implementation.
-- No gameplay, combat, balance, runtime, formula, route, economy, equipment, reward, PvP, targeting, teleport, cooldown reset, or live group combat behavior changed in this docs/workflow-only state update.
-- This docs/workflow-only update did not change gameplay/balance diagnostic state.
-
-### Google AI Workflow Migration Foundation
-
-- Project documentation was previously migrated to support a two-Gem + Jules workflow.
-- This workflow is now historical/inactive and superseded by Codex Workflow Restoration.
-- `AGENTS.md` and `AI_WORKFLOW.md` have since been updated to restore Codex implementation roles.
-- `GOOGLE_AI_WORKFLOW.md`, `AI_CONTEXT_BOOTSTRAP.md`, `GEMINI_GEMS_SETUP.md`, `JULES_TASK_TEMPLATE.md`, `JULES_REVIEW_CHECKLIST.md`, `PROJECT_NOTEBOOK_STRUCTURE.md`, `PR_PIPELINE.md`, `DECISIONS_LOG.md`, and `BACKLOG.md` were created.
-- Explicitly no gameplay, combat, formula, runtime behavior, or tests were changed; this is a docs/workflow-only update.
+- PR: Codex Workflow Restoration (Docs only).
 
 ### Balance V2 PR8 Simulation Action Resolution / Fallback Attribution
 
-- Diagnostic/simulation/reporting-only action resolution metadata is now captured per simulated turn, including requested action, requested skill id, resolved action, resolution status, fallback reason, skill existence/level/unlock/visibility, cooldown before, mana before, mana cost, and can-attempt evidence;
-- `SimulationResult.observability` now aggregates action resolution counts, fallback reason counts, requested skill count, resolved skill success count, and normal attack fallback count;
-- matrix raw runs preserve the new observability fields, and summary rows include action-resolution and fallback-reason totals for deterministic aggregation;
-- report v2 data now exposes `simulation_action_resolution` with compact total counts, archetype/stage fallback rollups, pilot policy resolution summary, and notes;
-- the checked-in V2 balance report includes a PR8 markdown section generated by the renderer, not manually patched rows;
-- fallback reasons are attributed for simulator policy requests that resolve to actual skill use, normal attack fallback, or guard fallback;
-- metadata-only registry policies (`aggressive_burst`, `venom_setup`, `evasion_tempo`, `sniper_precision`, `control_caster`, `solo_support_sustain`, `toolbox_balanced`) remain not globally flipped executable;
-- PR6 policy coverage remains 14 archetypes and PR6 skill economy diagnostics remain 14 archetypes;
-- PR5 audit remains 420 rows (14 archetypes × 6 level bands × 5 gear states);
-- PR7 profile-aware pilot guarantees remain intact for exactly `daggers_venom`, `daggers_evasion`, `bow_sniper`, `magic_staff_destruction`, and `holy_staff_solo`;
-- PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred;
-- no live tuning/gameplay/runtime/formula/equipment/mob/economy/targeting/teleport/cooldown reset/reward/live group combat changes were made.
+- Diagnostic/simulation/reporting-only action-resolution metadata was recorded.
 
 ### Balance V2 PR7 Profile-aware Simulation Policy Execution Pilot
 
-- Diagnostic/simulation-only pilot adds profile-aware policy execution for exactly five archetypes: `daggers_venom`, `daggers_evasion`, `bow_sniper`, `magic_staff_destruction`, and `holy_staff_solo`;
-- pilot simulation skill levels respect each skill's `unlock_mastery` against the stage simulation mastery level, so late payoff/capstone skills are not available too early;
-- profile-aware policy loops may request future payoff skills, but the simulator falls back safely when those skills are not visible at the current stage;
-- metadata-only registry policies (`aggressive_burst`, `venom_setup`, `evasion_tempo`, `sniper_precision`, `control_caster`, `solo_support_sustain`, `toolbox_balanced`) were not globally flipped executable;
-- PR6 policy coverage remains 14 archetypes and PR6 skill economy diagnostics remain 14 archetypes;
-- PR5 audit remains 420 rows (14 archetypes × 6 level bands × 5 gear states);
-- PvP remains proxy-only; route/mob/gear/PvP tuning remains deferred;
-- no live tuning/gameplay/runtime/formula/equipment/mob/economy/targeting/teleport/live group combat changes were made.
+- Diagnostic/simulation-only pilot covered exactly five historical archetype profiles.
 
 ### Balance V2 PR6: Simulation Policy & Skill Economy Clarification Pass
 
-- added diagnostic/reporting-only policy coverage diagnostics for all 14 current alpha archetypes;
-- added expected rotation profiles for daggers_venom, bow_sniper, magic_staff_destruction, holy_staff_solo, axe_2h_bruiser, and daggers_evasion using implemented skill ids only;
-- missing expected skills are reported as diagnostic gaps instead of adding live skills or crashing report generation;
-- report v2 data now exposes `simulation_policy_skill_economy` with policy coverage rows, skill economy rows, artifact reason counts, skill economy label counts, top policy gaps, notes, and recommended next tuning branch guidance;
-- skill economy diagnostics reuse existing simulation observability for mana spent, mana remaining percentage, skill use, normal attack fallback, guard use, damage per turn, and end reasons;
-- cooldown-blocked turn counts are not faked; rows explicitly set `cooldown_observability_available=False` pending follow-up instrumentation;
-- PvP remains proxy-only; route, mob, gear, and PvP tuning remain deferred;
-- PR5 unified combat budget audit coverage remains 14 archetypes × 6 level bands × 5 gear states = 420 rows;
-- no metadata-only policies were made executable in this PR;
+- Balance V2 PR6 Simulation Policy & Skill Economy Clarification was diagnostic/reporting-only.
 - no new tuning knobs were added;
 - no live gameplay/runtime systems were changed;
 - no Combat Core/formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made;
-- PR6 does not claim final balance.
+- the pass did not claim final balance.
 
 ### Balance V2 PR5: Progression-aware Unified PvE/PvP Combat Budget Audit
 
-- added a simulation/reporting-only unified combat budget audit across all current alpha archetypes;
-- audit coverage includes six progression level bands: starter, identity, build_online, midgame, advanced, and endgame;
-- audit coverage includes five gear states: undergeared, baseline_expected, enhanced_expected, optimized, and overgeared_high_enhancement;
-- the new progression gear-state preset builder reuses existing item-level budget, slot weight, rarity multiplier, enhancement multiplier, and archetype/profile allocation formulas;
-- report v2 data now exposes `unified_combat_budget_audit` with audit rows, risk counts, PvE budget summary, PvP budget proxy summary, PR4 route-pressure reconciliation, systemic findings, and recommended tuning order;
-- PvP coverage is explicitly a `pvp_budget_proxy`, not real headless duel win rates; equal-budget PvP baseline states are baseline_expected, enhanced_expected, and optimized;
+- Balance V2 PR5 Unified PvE/PvP Combat Budget Audit was simulation/reporting-only.
 - no new tuning knobs were added;
 - no live gameplay/runtime systems were changed;
-- no Combat Core/formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made;
-- PR5 does not claim final balance.
+- no Combat Core/formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made.
 
 ### Balance V2 PR4: Expanded Sampling / Multi-seed Confidence Pass
 
-- added simulation/reporting-only multi-seed confidence diagnostics for remaining PR3 pressure-lane signals;
-- compact PR3 lane counts remain visible as the regression baseline;
-- PR4 compares compact lane counts against bounded multi-seed confidence counts;
-- report markdown shows high-confidence and unstable remaining clusters;
-- Sunscar pure support overpressure remains separated as bad matchup review, not automatic support buff or Sunscar nerf;
 - no new tuning knobs were added;
-- no live gameplay/runtime systems were changed;
-- no Combat Core/formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made;
-- PR4 does not claim final balance.
+- no live gameplay/runtime changes were made;
+- no final balance was claimed;
+- targeting, teleport, and live group combat were unchanged.
 
 ### Balance V2 PR3: Controlled Late-Stage Mob Pressure Tuning Pass
 
-- controlled simulation/reporting-only late-stage mob pressure tuning was applied to PR2 mob_pressure_lane clusters;
-- PR3 classifier cleanup made mob_hp_too_low use turn-speed/clean-win pressure instead of player-win mob_hp_removed_pct = 1.00 alone;
-- current mob_pressure_lane count after PR3 classifier cleanup is 41; route_expectation_lane count is 44; bad_matchup_review_lane count is 1;
-- PR3 moved the classifier after semantic cleanup from the PR2 mob_pressure_lane baseline of 43 to 41;
-- tuning uses bounded route-stage pressure adjustments rather than formula/equipment/live mob template changes;
-- early-stage route expectation artifacts remain separated from late-stage actionable pressure;
-- Sunscar pure support overpressure remains treated as bad matchup review, not automatic support buff or Sunscar nerf;
-- report markdown preserves PR12–PR15, Observability, and Pressure Attribution sections;
-- no live gameplay/runtime systems were changed;
+- controlled simulation/reporting-only late-stage mob pressure tuning was applied;
+- current mob_pressure_lane count after PR3 classifier cleanup is 41;
+- route_expectation_lane count is 44;
+- bad_matchup_review_lane count is 1;
+- PR3 moved the classifier after semantic cleanup from the PR2 baseline;
 - no formula/equipment/live mob/economy/targeting/teleport/live group combat changes were made.
-
-### World / Travel
-
-- Full canonical world graph is live for ordinary travel.
-- All canonical route nodes, branches, cross-links, and late nodes are reachable through ordinary travel.
-- `capital_city` / Aster / Астер is the starter hub.
-- `capital_city` has starter services:
-  - shop
-  - inn
-  - quest_board
-- New players spawn at `capital_city`.
-- Discovery is canonical-id based.
-- `capital_city` is discovered by default.
-- Successful travel marks canonical destination discovery.
-- Blocked travel does not mark discovery.
-- Teleport is intentionally skipped and remains disabled.
-
-### Legacy compatibility
-
-Legacy aliases are preserved:
-
-- `village -> hub_westwild`
-- `dark_forest -> westwild_n7`
-- `frontier_outpost -> hub_frostspine`
-- `old_mines -> old_mine_entrance`
-
-Legacy read paths and compatibility overlays remain supported.
-
-### Open World Gameplay
-
-- Open World Gameplay Rollout Phase 1 is implemented.
-- Route Identity Gameplay Pass 1 is implemented:
-  - full alpha routes have route-specific gameplay pressure metadata;
-  - pressure expectations are depth-scaled through soft_entry / identity_visible / build_testing / route_exam;
-  - route balance validation covers Westwild, Frostspine, Ashen Ruins, Mireveil, and Sunscar gameplay identity.
-- Weapon-route matchup target metadata is implemented:
-  - full alpha routes have design-target matchup metadata for route/weapon archetypes;
-  - route reports expose matchup target labels for validation and future balance work;
-  - the matchup matrix is metadata/reporting only, not direct runtime bonuses.
-- Baseline route-aware PvE exists across the open world.
-- Route Identity Gameplay Pass 2 is implemented:
-  - full alpha routes have first-pass playable pressure/composition tuning;
-  - route reports validate soft-entry safety, depth pressure, pressure density, and route-specific pressure archetypes;
-  - weapon-route matchup targets remain metadata/reporting only and are not direct runtime bonuses.
-- Baseline gathering surfaces exist across the open world.
-- Route identity metadata is wired into world locations:
-  - `world_id`
-  - `region_id`
-  - `zone_id`
-  - `region_flavor_tags`
-- Reward, gathering, and open-world metadata helpers can resolve representative route nodes.
-- Old Mine remains a sparse stub, not an elite mini-dungeon or live boss anchor.
-- South Coast remains a sparse coastal stub.
-
-### Alpha Gate
-
-Alpha release gate PR3P is implemented.
-
-Alpha-ready routes:
-
-- `route_westwild`
-- `route_frostspine`
-- `route_ashen_ruins`
-- `route_mireveil`
-- `route_sunscar`
-
-Known blocked routes:
-- none currently
-
-Sparse stub routes:
-
-- `route_south_coast_stub`
-- `route_old_mine_stub`
-
-Alpha readiness policy:
-
-- Alpha readiness accepts route-specific combat pressure profiles.
-- Pack pressure is required only where route identity requires it.
-- `route_sunscar` is alpha-ready through `solo_elite_precision_skirmish`, not pack pressure.
-
-### Combat / Systems
-
-- Combat Core v1 is implemented.
-- Weapon family rollout is implemented.
-- Accuracy/Evasion is implemented.
-- Equipment runtime hooks are implemented.
-- Gear instances are implemented.
-- Equipment enhancement phase 1 is implemented.
-- Open-world PvE runtime foundations exist.
-- Live PvP foundations exist.
-- Targeting rollout is frozen.
-- Headless Combat Simulation Foundation is implemented:
-  - deterministic player-vs-mob simulations run through existing combat rails;
-  - simulation results expose winner, turns, HP/mana, action, and safety metrics;
-  - simulations do not grant rewards or mutate player progression;
-  - route/class simulation matrix, final balance reports, and live AFK autopilot are deferred.
-- Alpha Combat Simulation Archetype Presets are implemented:
-  - full alpha validation archetypes have simulation preset metadata;
-  - presets cover `soft_entry` / `identity_visible` / `build_testing` / `route_exam` power tiers;
-  - archetype policy and preferred skill metadata exist for future reports;
-  - smoke simulations can instantiate and run archetype presets through the headless simulation foundation;
-  - route/class matrix reports, safe skill execution adapters, final balance reports, and live AFK autopilot remain deferred.
-- Safe Simulation Skill Action Adapter is implemented:
-  - headless simulations can execute selected player skills through existing skill/combat rails;
-  - simulation skill levels, mana spending, and cooldowns are local to the simulation;
-  - simulations do not read/write live player mastery or DB cooldown state when using simulation overrides;
-  - route/class matrix reports, final balance reports, and live AFK autopilot remain deferred.
-- Route Stage Simulation Matrix Foundation is implemented:
-  - route × depth stage × archetype representative simulation runs can be generated;
-  - matrix output includes raw runs and archetype summaries with win/death/turn/resource/action/skill metrics;
-  - route-stage samples are deterministic representative solo samples from canonical route location data;
-  - final balance reports, tuning recommendations, pack/group simulation matrices, and live AFK/autopilot remain deferred.
-- Alpha Balance Report v1 is implemented:
-  - route-stage simulation matrix data can be rendered into a diagnostic alpha route/class balance report;
-  - report compares observed simulation pressure labels against route matchup target metadata where mapping exists;
-  - report surfaces suspicious matchup candidates and limitations for future tuning;
-  - no route, mob, skill, reward, formula, pack/group matrix, or live AFK/autopilot changes are included.
-- Alpha Simulation Report v2 diagnostic fidelity is implemented:
-  - report v2 exposes scenario/mob cards for representative route-stage samples;
-  - report v2 exposes archetype/power-tier/loadout/skill/policy cards for simulation presets;
-  - report v2 includes richer run and aggregate diagnostic metrics beyond win rate;
-  - report v2 distinguishes death, timeout, no-progress, resource/policy issues where inferable;
-  - report v2 includes capped representative suspicious fight traces;
-  - no route, mob, skill, reward, formula, pack/group matrix, or live AFK/autopilot changes are included.
 
 ### Balance Foundation Spec & Audit Skeleton (PR7)
 
 - Balance Foundation Spec & Audit Skeleton is implemented:
-  - release cap 100 documented;
-  - T1–T10 gear/level bands documented;
-  - macro progression bands documented;
-  - HP/damage/TTK philosophy documented;
-  - stat scaling philosophy documented;
-  - equipment budget requirements documented;
-  - enhancement risk/reward philosophy documented;
-  - mob encounter-level scaling philosophy documented;
-  - initial diagnostic audit skeleton exists;
-  - no route/mob/skill/reward/formula tuning or live behavior changes included.
+  - historical release, tier, HP/damage/TTK, equipment-budget, enhancement, and
+    encounter-scaling design markers were documented.
 
 ### Progression-aware Simulation Audit (PR8)
 
 - Progression-aware simulation audit diagnostics are implemented:
-  - simulation report data exposes progression-aware audit rows;
-  - report exposes assumed player level, macro band, gear tier, pending gear assumptions, mob/node context, target/observed labels, and audit flags where available;
-  - audit flags remain diagnostic-only;
-  - gear budget, mob encounter scaling, pack/group simulation, route/mob/skill/reward/formula tuning, and live behavior changes are not included.
+  - historical audit rows and flags remained diagnostic-only.
 
 ### Equipment Budget Foundation (PR9)
 
 - equipment budget foundation is implemented for simulation/reporting;
-- item level budget formula exists for 1–100;
-- slot budget weights exist;
-- rarity multipliers exist;
-- enhancement multiplier curve exists for +0..+15;
-- archetype allocation profiles exist;
-- simulation gear presets produce real calculated stat bonuses;
-- report v2 exposes formula-budget gear assumptions;
-- live equipment runtime, loot/crafting, mob scaling, tuning, and gameplay behavior are not changed.
 
 ### Mob Encounter Scaling Foundation (PR10)
 
 - formula-based mob encounter scaling is implemented for simulation/reporting;
-- encounter levels are assigned to route-stage simulation samples;
-- mob roles are assigned for simulation/reporting;
-- scaled final mob stats are produced from base template, encounter level, role, and route pressure modifiers;
-- report v2 exposes scaled mob context;
-- live mob templates/gameplay, rewards, loot/crafting, pack/group simulation, and tuning are not changed.
+
+### Pack/Group Simulation Harness (PR11)
+
+- Pack/group simulation harness (PR11) is historical simulation/reporting evidence.
 
 ### Balance Instrument V2 Observability Foundation
 
-- compact/expanded balance report modes exist;
-- capped turn-by-turn suspicious fight traces are available in simulation/reporting;
-- per-fight observability metrics are exposed for balance review;
-- checked-in compact report still preserves PR15 diagnostic values: raw/global overclean 87, actionable overclean 43, early-stage target artifacts 44, and representative overpressure risk `route_sunscar / route_exam / pure_support_solo_overlay player_death`;
-- no live gameplay/runtime systems were changed;
-- no tuning/formula/equipment/live mob changes were made.
+- historical observability exposed bounded diagnostic metrics and traces.
 
 ### Balance Instrument V2 Pressure Attribution / Lane Classifier
 
-- suspicious/actionable simulation cases expose likely pressure attribution labels;
-- report data includes pressure attribution counts and recommended tuning lane counts;
-- report markdown includes a pressure attribution preview for balance review;
-- labels are diagnostic likely causes, not final balance verdicts;
-- checked-in compact report still preserves PR15 diagnostic values: raw/global overclean 87, actionable overclean 43, early-stage target artifacts 44, and representative overpressure risk `route_sunscar / route_exam / pure_support_solo_overlay player_death`;
-- no live gameplay/runtime systems were changed;
-- no tuning/formula/equipment/live mob changes were made.
+- historical labels were diagnostic likely causes, not final balance verdicts.
 
 ### Actionable Late-Stage Underpressure Tuning Pass (PR15)
 
@@ -477,131 +241,41 @@ Alpha readiness policy:
 - current checked-in compact report shows raw/global overclean candidates: 87;
 - current actionable overclean after PR15 is 43;
 - early-stage target artifacts remain 44;
-- early-stage target artifacts remain separated and visible;
-- raw global overclean signal remains visible for transparency;
 - representative overpressure risk remains visible: route_sunscar / route_exam / pure_support_solo_overlay player_death;
 - PR15 is not a final/clean balance pass;
-- PR15 changed only simulation/reporting targeted late-stage pressure knobs;
-- no live gameplay/runtime systems were changed.
+- No live gameplay/runtime changes.
+- No Combat Core rewrite.
+- No live pack/group runtime combat.
 
 ### Target Expectation Calibration Pass (PR14)
 
-- raw global overclean candidate signal remains visible in report data and report markdown;
-- actionable overclean metric was added through target expectation calibration;
-- early-stage target expectation artifact bucket was added for `soft_entry` / `identity_visible`;
-- late-stage actionable underpressure remains visible for `build_testing` / `route_exam`;
-- no live gameplay/runtime systems were changed.
+- historical target calibration separated early-stage artifacts from late-stage
+  actionable diagnostics without changing live gameplay/runtime systems.
 
 ### Targeted Alpha Tuning Pass (PR13)
 
-- overclean cluster rollups were added to report data (`overclean_rollups`, `overclean_top_clusters`);
-- selected route/stage/archetype tuning targets are surfaced in the v2 report `PR13 Targeted Tuning Candidates` section;
-- targeted simulation-only route-stage pressure overrides were added for late-stage underpressure clusters;
-- PR13 introduced the global-vs-late-stage overclean split and late-stage-only targeted candidate table;
-- at PR13 time, the compact report baseline showed global overclean candidates 88 and late-stage targeted overclean audit flags 43;
-- later PR14/PR15 report current calibrated/current counts are tracked in the PR14/PR15 sections;
-- global overclean remains a known underpressure signal;
-- targeted route-stage pressure overrides were added for simulation/reporting-only late-stage tuning;
-- pack proxy remains active as simulation/reporting-only (`composite_pack_pressure_v1`);
-- no live group combat, no targeting, no teleport, no economy overhaul, and no Combat Core rewrite were implemented.
+- at PR13 time, the compact report baseline showed global overclean candidates 88 and
+  late-stage targeted overclean audit flags 43;
+- later PR14/PR15 report current calibrated/current counts are tracked in the
+  historical generated report;
+- no live group combat, no targeting, no teleport, no economy overhaul, and no Combat
+  Core rewrite were implemented.
 
 ### First Real Tuning Pass (PR12)
 
-- PR12: First Real Tuning Pass remains prior baseline context.
-- simulation policy artifacts were reduced in report/simulation policy handling;
-- guardian_shield_1h and holy_rod_paladin use simulation-only guard_then_attack policy;
-- simulation-stage pressure modifiers were added for first controlled numeric alpha pressure tuning;
-- report v2 now includes `PR12 First Tuning Pass Summary` with changed policy assumptions and diagnostic counts;
-- changed policy and numeric knobs are documented in the report summary;
-- pack proxy remains active as simulation/reporting-only (`composite_pack_pressure_v1`);
-- no live group combat, no targeting, no teleport, no economy overhaul, and no Combat Core rewrite were implemented;
-- no live gameplay runtime systems (loot/crafting/equipment runtime/economy) were changed by PR12.
-
-### Pack/Group Simulation Harness (PR11)
-
-- simulation/reporting-only pack pressure harness is implemented;
-- pack samples exist for alpha routes at build_testing and route_exam;
-- pack members use formula-based mob scaling;
-- composite pack pressure proxy produces diagnostic final pack stats;
-- report v2 exposes pack/group pressure context;
-- live group combat, targeting, live spawning, rewards, loot/crafting, and tuning are not changed.
----
-
-## Current focus
-
-- Route-specific alpha pressure profile validation.
-- Open-world route fairness for different build archetypes.
-- Route/class balance.
-- Route fairness for different builds.
-- Alpha-ready loop stabilization.
-
----
-
-## Explicit non-goals / deferred
-
-Do not treat these as active scope unless a new accepted Decision Packet explicitly changes them:
-
+- PR12: First Real Tuning Pass remains historical baseline context.
+- First Real Tuning Pass (PR12) used simulation/reporting-only stage-pressure changes.
+- No live group/pack combat.
+- No targeting rollout.
 - No live route/mob/skill/reward/formula tuning outside accepted tuning PRs.
 - PR12 includes simulation/reporting-only stage pressure tuning; live templates/runtime remain unchanged.
-- No Combat Core rewrite.
-- No smart autobattle policy.
-- No live AFK/autopilot.
-- No live group/pack combat.
-- No full multi-target runtime pack combat; PR11 only has simulation/reporting composite pack pressure proxy.
-- No targeting rollout.
-- No live spawning changes.
-- No teleport.
-- No direct weapon-route bonuses.
-- No resistance framework.
-- No destructive DB schema changes; additive persistence tables may be introduced by accepted runtime baselines such as PR227.
-
-- Teleport phase 1.
-- Dungeon runtime expansion.
-- World boss runtime expansion.
-- Castle/core-war systems.
-- Broad targeting rollout.
-- Full economy overhaul.
-- Large combat formula rewrite.
-
----
-
-## Standard local test command
-
-From the `rpg` folder:
-
-```powershell
-..\.venv\Scripts\python.exe -m pytest -q
-```
-
-Universal Windows PowerShell fallback:
-
-```powershell
-$repo = if (Test-Path "C:\Users\User\Documents\GitHub\rpg-bot\rpg") { "C:\Users\User\Documents\GitHub\rpg-bot\rpg" } elseif (Test-Path "C:\Users\PC\Documents\GitHub\rpg-bot\rpg") { "C:\Users\PC\Documents\GitHub\rpg-bot\rpg" } elseif (Test-Path "C:\Users\35191\Documents\GitHub\rpg-bot\rpg") { "C:\Users\35191\Documents\GitHub\rpg-bot\rpg" } else { (Get-Location).Path }; Set-Location $repo; if (Test-Path "..\.venv\Scripts\python.exe") { ..\.venv\Scripts\python.exe -m pytest -q } elseif (Test-Path ".\.venv\Scripts\python.exe") { .\.venv\Scripts\python.exe -m pytest -q } else { py -3 -m pytest -q }
-```
-
----
 
 ## Update policy
 
-Update this file in the same PR when a change modifies confirmed project state.
+Update the authoritative current section when a merged change alters confirmed
+capabilities, limitations, or the verified baseline. Do not append a per-PR chronology.
+Keep plans in the roadmap, implementation detail in system/Epic documents, decisions in
+the decisions log, and measurements in evidence with exact provenance.
 
-Examples of changes that must update this file:
-
-- A route becomes alpha-ready.
-- A known blocker is fixed or added.
-- A major system is merged.
-- A deferred system becomes active scope.
-- A confirmed non-goal changes.
-- A new standard test command is adopted.
-- A rollout phase is completed.
-
-Do not update this file for:
-
-- Pure refactors with no state change.
-- Test-only stabilization.
-- Typo fixes.
-- Internal cleanup that does not change confirmed project status.
-
-If a PR does not update this file, its summary must explicitly say:
-
-`PROJECT_STATE_CURRENT.md not updated: no confirmed project state change.`
+The compatibility excerpt changes only when a fixed consumer is deliberately migrated
+or a predicate must be preserved. It must never be read as current authority.

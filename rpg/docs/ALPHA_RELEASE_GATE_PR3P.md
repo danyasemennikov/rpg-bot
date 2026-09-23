@@ -1,5 +1,8 @@
 # ALPHA RELEASE GATE PR3P
 
+> **Historical gate record at a compatibility-retained path.** It does not prove that
+> the current integrated build is universally balanced or deployed.
+
 This document follows PR 3O and defines the first alpha release gate / stabilization pass.
 
 ## Scope

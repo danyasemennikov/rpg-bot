@@ -1,5 +1,8 @@
 # Open-world pack encounter balance baseline (PR 3A)
 
+> **Historical delivery record at a compatibility-retained path.** Its pass-era scope
+> remains accurate; use [PROJECT_STATE_CURRENT.md](PROJECT_STATE_CURRENT.md) for now.
+
 This is the first open-world content/balance pass after the targeting chapter lock from PR 2C11.
 
 ## What this baseline adds

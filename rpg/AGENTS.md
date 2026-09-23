@@ -3,15 +3,23 @@
 ## Purpose
 This repository contains a Telegram text MMORPG bot.
 
-This file is the main instruction file for the coding agent. Codex is the current implementation coding agent.
-Read this file first, then read `rpg/docs/CLAUDE.md`, then read `rpg/docs/GAME_FOUNDATION.md` before making important changes.
+This file is the main contributor and agent instruction file. Read it first, then use
+`rpg/docs/DOCS_INDEX.md` to select the task-specific authorities. `Astra` and `Sol`
+name architecture/review and implementation responsibilities; either role may operate
+through Codex.
 
 ## Primary workflow
-The working model for this repository is:
-1. A design/spec/review assistant is used for architecture, balance, specifications, design decisions, and review.
-2. Codex is used to implement approved changes in the codebase. Codex is the current implementation coding agent.
-3. Do not assume any previously generated `*_v2.py` files or patches were merged unless the user explicitly says they were merged.
-4. Until the user clearly confirms otherwise, assume the project files in the repository are still the original versions.
+
+The canonical lifecycle is defined in `rpg/docs/AI_WORKFLOW.md`:
+
+1. Astra audits/architects and freezes an implementation contract.
+2. Sol implements that contract in one coherent Draft PR.
+3. Astra independently reviews the actual candidate and any focused repairs.
+4. The user merges only after approval.
+5. Post-merge work verifies the actual merge and reconciles current state.
+
+Do not infer merge, deployment, or implementation from plans, generated patches,
+branch reports, or chat history. Verify the repository, branch, and HEAD.
 
 ## Developer profile
 The repository owner knows Python only at a basic level.
@@ -34,18 +42,25 @@ High-level repository structure:
 - `game/` — game logic
 - `handlers/` — Telegram handlers
 - `locales/` — i18n files
-- `rpg/docs/CLAUDE.md` — current technical/context file
-- `rpg/docs/GAME_FOUNDATION.md` — design and balance foundation
+- `rpg/docs/DOCS_INDEX.md` — documentation navigation and authority map
+- `rpg/docs/PROJECT_STATE_CURRENT.md` — current merged-state summary
+- `rpg/docs/ROADMAP_CURRENT.md` — forward priorities
+- `rpg/docs/CLAUDE.md` — compact technical navigation adapter
+- `rpg/docs/foundation/GAME_FOUNDATION.md` — durable game-design foundation
 
 ## Mandatory reading order for non-trivial tasks
 For any medium or large task, read in this order:
+
 1. `rpg/AGENTS.md`
-2. `rpg/docs/CLAUDE.md`
-3. `rpg/docs/GAME_FOUNDATION.md`
-4. `rpg/docs/PROJECT_STATE_CURRENT.md`
+2. `rpg/docs/DOCS_INDEX.md`
+3. `rpg/docs/PROJECT_STATE_CURRENT.md`
+4. `rpg/docs/AI_CONTEXT_BOOTSTRAP.md`
 5. `rpg/docs/AI_WORKFLOW.md`
-6. the target file(s)
-7. directly related neighboring files
+6. the relevant entry in `rpg/docs/systems/README.md`
+7. only the applicable foundation, Epic/evidence record, target files, and directly
+   related neighbors
+
+Do not load every historical document by default.
 
 ## Current design rules
 Treat the following as approved project rules unless the user explicitly changes them.
@@ -124,7 +139,8 @@ Preferred example shape:
 - Do not perform broad repo-wide refactors without explicit approval.
 - Do not introduce complex frameworks or unnecessary dependencies.
 - Do not replace readable procedural code with advanced patterns unless there is a clear payoff.
-- Do not ignore `rpg/docs/CLAUDE.md` or `rpg/docs/GAME_FOUNDATION.md` when working on systems that touch gameplay.
+- Do not ignore the applicable current-state, system-map, and foundation authorities
+  when working on gameplay systems.
 
 ## Project State Update Requirement
 

@@ -2,12 +2,18 @@
 
 ## Status and authority
 
-This document describes the implementation in the current Epic branch for review. It is not a claim that the branch has merged. The confirmed merged baseline remains the baseline recorded in `PROJECT_STATE_CURRENT.md` until the Draft PR is reviewed and merged.
+- Status: Merged delivery record for [PR231](https://github.com/danyasemennikov/rpg-bot/pull/231)
+- Authority: Historical implementation, migration, validation, and limitation record
+- Merged baseline: `ad5435e577e45e63da2ca57af2296203d88cedd5`
+
+PR231 is merged. This report records the delivered Epic; it does not replace
+`PROJECT_STATE_CURRENT.md`, current code, or `systems/README.md`, and merge does not
+establish deployment.
 
 The frozen Astra implementation contract is the product and architecture authority. Runtime constants in `game/build_contract.py`, the shared evaluator in `game/combat_identity.py`, and the checked evidence artifact in `docs/evidence/character_builds_combat_identity_v1.json` are the executable review surfaces.
 
 - Baseline: `c8768626e388babfed09adac83ddaf23f0daee71`
-- Integrated runtime/presentation checkpoint: `94c9872ea6583d557d00f169d55f6692f2bca698`
+- Integrated runtime/presentation checkpoint recorded by the delivery report: `94c9872ea6583d557d00f169d55f6692f2bca698`
 - Regenerated combat-evidence authority: `c547cf87e1a2ffa526a3e732cbb3658eca5953ec`
 - Rules version: `character_builds_combat_identity_v1`
 - Scope: 10 weapon families, 20 branches, 100 canonical branch skills, plus universal Power Strike
@@ -137,9 +143,11 @@ These are exercised ordinary paths. The level/mastery matrix at levels `1/1`, `3
 
 ## Balance evidence and J5 changes
 
-The checked JSON uses 200 paired seeds (`0..199`), production field item definitions, real enemy source IDs/profiles, the shared actor/effect evaluators, and the shared affected-side scheduler. It contains 20 passing accessibility rows, 20 passing role gates, 240 encounter-matrix results, 100 legal progression/loadout comparisons backed by 20 real combat runs per branch, four legal cross-branch allocations, explicit stalls/failing seeds, and no legacy simulator authority. The Venom sustained-role gate uses the full four-opportunity window and records a 13.98% mean damage advantage with a positive 95% paired confidence interval. `dark_treant` is excluded because its 500,000 HP is not ordinary-content evidence.
+The checked JSON uses 200 paired seeds (`0..199`), production field item definitions, real enemy source IDs/profiles, the shared actor/effect evaluators, and the shared affected-side scheduler. It contains 20 passing accessibility rows, 20 passing role gates, 240 encounter-matrix results, 100 legal progression/loadout comparisons backed by 20 real combat runs per branch, four legal cross-branch allocations, explicit stalls/failing seeds, and no legacy simulator authority. The Venom sustained-role gate uses the full four-opportunity window and records a 13.98% mean damage advantage with a positive 95% paired confidence interval. `dark_treant` is excluded because its 500,000 HP is not ordinary-content evidence. The artifact supports the recorded evidence head; it does not independently validate every later final-main integration change or deployment.
 
-The only numerical tuning under J5 is recorded below and in the JSON. No other live formula, item, mob, reward, economy, or route number was tuned in this Epic.
+The only numerical tuning under J5 is recorded below and in the JSON: 17 bounded
+field adjustments across 14 skills. No other live formula, item, mob, reward, economy,
+or route number was tuned in this Epic.
 
 | Skill | Field | Old | New | Relative change |
 |---|---|---:|---:|---:|

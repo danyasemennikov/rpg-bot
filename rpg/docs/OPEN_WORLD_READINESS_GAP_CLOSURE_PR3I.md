@@ -1,5 +1,8 @@
 # Open-world Readiness Gap Closure (PR 3I)
 
+> **Historical delivery record at a compatibility-retained path.** Its classifications
+> do not override the current route summary.
+
 This pass follows PR 3H and consolidates open-world readiness gaps before numeric PvE tuning.
 
 ## What this pass does

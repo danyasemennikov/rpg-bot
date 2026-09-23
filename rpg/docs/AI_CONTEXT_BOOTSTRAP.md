@@ -1,47 +1,46 @@
 # AI Context Bootstrap
 
-This document provides a compact but useful overview of the RPG bot project for AI assistants.
-It is intended to bootstrap AI assistants with the current project state, rules, and constraints without relying on old chat memory.
+- Status: Active
+- Authority: Supporting context-loading protocol
+- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
 
-## Project State
-**GitHub `main` and `rpg/docs/PROJECT_STATE_CURRENT.md` are the ultimate source of truth for the project.**
-Do not treat any planned, discussed, or unmerged work as confirmed state.
+Use this checklist to enter a task without relying on chat memory.
 
-*Current confirmed state summary:*
-- **Codex Workflow Restoration** is the latest workflow/docs state.
-- **Balance V2 PR8 Simulation Action Resolution / Fallback Attribution** remains the latest gameplay/simulation/balance confirmed state before this docs migration.
-- No gameplay/runtime/formula/equipment/mob/economy/targeting/teleport/cooldown reset/reward/live group combat changes were made by this workflow docs update.
+## Establish the actual state
 
-## Workflow Rules
-- The project follows the active Codex implementation workflow (`rpg/docs/AI_WORKFLOW.md`).
-- ChatGPT / Design & Balance handles theory, design, and balance.
-- ChatGPT / Producer / Specs handles implementation planning, PR scope, Codex prompts, and review guidance.
-- **Codex** is the current implementation coding agent.
-- Unrelated large scopes must not be mixed.
-- Cheap tails should be fixed before merge.
-- Do not replace existing rails with a new foundation unless necessary.
+1. Identify the repository, task mode, working branch, base branch, and actual HEAD.
+2. Verify whether the checkout is clean before editing. Preserve unrelated changes.
+3. Read [../AGENTS.md](../AGENTS.md), [DOCS_INDEX.md](DOCS_INDEX.md), and
+   [PROJECT_STATE_CURRENT.md](PROJECT_STATE_CURRENT.md).
+4. Distinguish confirmed `main` from candidate-branch changes. A plan, report, Draft
+   PR, or test result does not prove that code is merged or deployed.
 
-## Hard Constraints
-- **Teleport remains skipped.**
-- **Targeting rollout remains frozen.**
-- Do not record planned/unmerged work as confirmed state.
-- Do not change gameplay code, combat, balance, world, routes, rewards, equipment, PvP, targeting, teleport, economy, or runtime behavior unless explicitly requested and confirmed by a design decision packet.
-- Do not claim that future workflow experiments are confirmed gameplay state.
+## Load only relevant context
 
-## What Not to Assume
-- Do not assume that the current database structure or legacy combat states should be casually replaced.
-- Do not assume that theoretical design discussions mean that code has already been written.
-- Do not assume that unmerged `*_v2.py` files exist or are active.
-- Do not create external workflow files directly from the repository unless explicitly requested.
+- Use [systems/README.md](systems/README.md) to find current implementation owners.
+- Load the applicable foundation for durable design intent.
+- Load an Epic report to understand a delivery boundary, migration, or historical
+  validation—not as a replacement for current code.
+- Load evidence only with its recorded commit, inputs, and limitations.
+- Use [ROADMAP_CURRENT.md](ROADMAP_CURRENT.md) for forward priority, and
+  [DECISIONS_LOG.md](DECISIONS_LOG.md) for accepted decisions.
 
-## Standard Test Command
-To verify changes, use the standard test command from the `rpg` directory:
+Do not infer implementation from plans. Preserve the classless build philosophy and
+established transaction, persistence, settlement, and migration authorities unless an
+accepted task explicitly changes them. Record unknowns instead of inventing state or
+resolving open design questions.
 
-```powershell
-..\.venv\Scripts\python.exe -m pytest -q
-```
+## Execute the task contract
 
-Universal Windows PowerShell fallback:
-```powershell
-$repo = if (Test-Path "C:\Users\User\Documents\GitHub\rpg-bot\rpg") { "C:\Users\User\Documents\GitHub\rpg-bot\rpg" } elseif (Test-Path "C:\Users\PC\Documents\GitHub\rpg-bot\rpg") { "C:\Users\PC\Documents\GitHub\rpg-bot\rpg" } elseif (Test-Path "C:\Users\35191\Documents\GitHub\rpg-bot\rpg") { "C:\Users\35191\Documents\GitHub\rpg-bot\rpg" } else { (Get-Location).Path }; Set-Location $repo; if (Test-Path "..\.venv\Scripts\python.exe") { ..\.venv\Scripts\python.exe -m pytest -q } elseif (Test-Path ".\.venv\Scripts\python.exe") { .\.venv\Scripts\python.exe -m pytest -q } else { py -3 -m pytest -q }
-```
+- Follow the task's explicit scope, non-goals, and validation restrictions.
+- Read the target files and directly related neighbors before editing.
+- Do not assume every task requires pytest; use the validation policy authorized for
+  that task. Conversely, do not skip required checks unless the task forbids them.
+- Keep merge state, deployment state, review approval, and validation evidence as
+  separate facts.
+
+## Handoff
+
+Report the verified base/head, scope completed, files changed, validation performed,
+evidence provenance, unresolved questions, risks, and the next responsible role. Use
+the lifecycle and statuses in [AI_WORKFLOW.md](AI_WORKFLOW.md).

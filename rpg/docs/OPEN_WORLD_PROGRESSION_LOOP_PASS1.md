@@ -1,5 +1,8 @@
 # OPEN_WORLD_PROGRESSION_LOOP_PASS1 (PR 3M)
 
+> **Historical delivery record at a compatibility-retained path.** Statements about
+> future gear drops predate merged PR230 itemization.
+
 This pass follows PR 3K (open-world PvE numeric tuning package 1) and PR 3L (open-world reward/loot sanity package 1).
 
 ## Goal

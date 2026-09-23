@@ -1,5 +1,9 @@
 # Target Pattern System V1
 
+- Status: Compatibility-retained supporting chapter
+- Authority: Historical registry/rollout context; exact current targeting behavior is mapped in [systems/README.md](systems/README.md)
+- Last reconciled: 2026-09-23
+
 ## Purpose
 This document stabilizes the targeting chapter after PRs **2C5–2C10**.
 
