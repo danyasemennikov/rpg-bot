@@ -1,5 +1,9 @@
 # Balance Foundation: Alpha to Release
 
+- Status: Active, scoped foundation at a compatibility-retained path
+- Authority: Canonical for durable balance intent; historical simulation notes are not current certification
+- Last reconciled: 2026-09-23
+
 ## Balance V2 PR13 Cooldown-Aware Normal Request Suppression Note
 
 - Adopts PR12 Candidate A only in the simulation resolver for the unchanged five profile-aware pilot archetypes.

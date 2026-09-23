@@ -1,5 +1,8 @@
 # Open-world spawn profile placement v1 (PR 3D)
 
+> **Historical delivery record at a compatibility-retained path.** Preserved with its
+> original placement-validation scope.
+
 This pass follows PR 3A/3B/3C and keeps the existing runtime spawn system intact.
 
 ## What is validated now

@@ -1,5 +1,8 @@
 # OPEN_WORLD_REWARD_LOOT_SANITY_PASS1 (PR 3L)
 
+> **Historical delivery record at a compatibility-retained path.** Preserved with its
+> reward adjustments and original exclusions.
+
 This pass follows PR 3K combat numeric tuning and is the first explicit open-world reward + loot sanity pass.
 
 Primary route scope:

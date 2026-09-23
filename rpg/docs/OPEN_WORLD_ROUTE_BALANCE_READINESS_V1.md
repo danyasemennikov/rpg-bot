@@ -1,5 +1,8 @@
 # Open-world Route Balance Readiness V1 (PR 3E)
 
+> **Historical diagnostic record at a compatibility-retained path.** It is not a
+> current release verdict or integrated-build balance certificate.
+
 This document follows PR 3A–3D and adds **route balance readiness** reporting.
 
 ## What this adds

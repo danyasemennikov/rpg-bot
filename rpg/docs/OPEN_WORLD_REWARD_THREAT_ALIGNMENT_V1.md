@@ -1,5 +1,8 @@
 # OPEN_WORLD_REWARD_THREAT_ALIGNMENT_V1
 
+> **Historical delivery record at a compatibility-retained path.** Preserved with its
+> original PR3C scope; not a current reward-system specification.
+
 This pass follows PR 3A (open-world pack balance baseline) and PR 3B (route encounter composition).
 
 ## What this pass adds

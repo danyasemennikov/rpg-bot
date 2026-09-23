@@ -1,5 +1,8 @@
 # Open-world PvE Numeric Tuning Pass 1 (PR 3K)
 
+> **Historical tuning record at a compatibility-retained path.** Preserved with its
+> exact pass scope; later delivery may supersede its operational limitations.
+
 This pass follows the PR 3J numeric baseline and performs the first targeted numeric tuning update for numeric-ready open-world routes.
 
 ## Tuned routes

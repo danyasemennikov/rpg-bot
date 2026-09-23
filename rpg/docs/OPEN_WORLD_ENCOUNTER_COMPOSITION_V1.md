@@ -1,5 +1,8 @@
 # Open-world encounter composition V1 (PR 3B)
 
+> **Historical delivery record at a compatibility-retained path.** Its pass-era
+> limitations do not override later merged mixed-encounter support.
+
 This pass builds directly on PR 3A (`OPEN_WORLD_PACK_BALANCE_BASELINE.md`).
 
 ## What this adds

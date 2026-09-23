@@ -1,5 +1,8 @@
 # PR 3O — Alpha UX / onboarding / recovery pass 1
 
+> **Historical delivery record at a compatibility-retained path.** Preserved as the
+> PR3O baseline, not a complete description of later chapter or mixed encounters.
+
 This pass follows PR 3N.
 
 ## Scope

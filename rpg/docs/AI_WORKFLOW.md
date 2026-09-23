@@ -1,146 +1,72 @@
 # AI Workflow
 
-This project uses a ChatGPT / Producer / Specs + Codex implementation workflow.
+- Status: Active
+- Authority: Canonical delivery lifecycle
+- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+Supersedes: [archived PR pipeline](archive/workflow/PR_PIPELINE.md) and the historical
+Google AI / Gemini / Jules workflow material catalogued in [archive/README.md](archive/README.md)
 
-The goal is to avoid context fragmentation and avoid mixing theoretical design with concrete implementation and review.
+Role labels describe responsibility, not the product or model used to perform it.
+Astra and Sol may both operate through Codex while retaining separate duties.
 
----
+## Lifecycle
 
-## Working modes
+1. **Astra — architecture / audit**
+   - Verify current `main`, inventory relevant authorities and consumers, identify
+     contradictions, compatibility constraints, risks, and unresolved decisions.
+2. **Astra — frozen implementation contract**
+   - Define scope, non-goals, authority, file/migration matrix, validation policy, and
+     acceptance criteria. The contract binds the implementation candidate.
+3. **Sol — implementation in one coherent Draft PR**
+   - Implement the frozen contract without independent product redesign. Preserve
+     unrelated work and report deviations or non-derivable decisions.
+4. **Astra — independent acceptance review**
+   - Review the actual diff and evidence against the frozen contract and the verified
+     base/head. Approval attaches to that specific candidate.
+5. **Sol — focused repair packet, if required**
+   - Address only the bounded findings and update the candidate/evidence as authorized.
+6. **Astra — narrow re-review**
+   - Verify the repairs and affected neighbors; do not reopen unrelated design scope.
+7. **User — merge after `APPROVE`**
+   - The user owns the landing decision. A Draft PR is never merge authorization.
+8. **Post-merge reconciliation**
+   - Verify the actual merge commit and reconcile current state. Do not equate merge
+     with deployment or production validation.
 
-### 1. ChatGPT / Design & Balance
+## Canonical statuses
 
-Purpose:
+`DESIGN → CONTRACT_FROZEN → IMPLEMENTING → DRAFT_REVIEW → FIX_REQUIRED → APPROVED → MERGED`
 
-- game design
-- balance
-- route identity
-- class/archetype fantasy
-- PvE/PvP philosophy
-- economy/rewards
-- player experience
-- theoretical decisions before implementation
+`FIX_REQUIRED` returns to `IMPLEMENTING`; a repaired candidate then returns to
+`DRAFT_REVIEW`. `APPROVED` is invalidated by material unreviewed changes.
 
-Output:
+## Evidence rules
 
-- Decision Packet
-- balance specifications
-- risks
+- Merge status and test evidence are separate facts.
+- Historical green checks apply only to their recorded candidate and environment.
+- Evidence artifacts retain exact commit/input provenance and stated limitations.
+- Validation follows the frozen task policy. A docs-only contract may require static
+  inspection and explicitly forbid tests or runtime execution.
 
-Does not output implementation code or PRs.
+## Handoff packet
 
----
-
-### 2. ChatGPT / Producer / Specs / Codex Review
-
-Purpose:
-
-- implementation plans
-- coherent PR scope
-- Codex prompts
-- PR review
-- blockers / cheap tails
-- fix prompts
-- merge/test guidance
-
-Output:
-
-- implementation plan
-- Codex prompt
-- blocker list / fix prompt if needed
-- merge/test guidance if ready
-
----
-
-### 3. Implementation (Codex)
-
-Purpose:
-
-- write code based on Codex prompts
-- run tests
-- implement PRs
-
-Codex is the current implementation coding agent for implementation PRs.
-
----
-
-## Codex App Draft PR Workflow
-
-- ChatGPT / Producer / Specs provides prompts and review.
-- Codex App may use a local worktree as a working copy.
-- Codex must create a fresh branch for each task.
-- Codex must push the branch and create a Draft PR.
-- Codex must not merge PRs.
-- The user sends Summary / Testing / Changed files / PR link back to Producer review.
-- Merge happens only after Producer says “можно мержить”.
-
----
-
-## Handoff protocol
-
-When an assistant finishes its role for the current stage, it must stop and produce a handoff packet instead of continuing into another role.
-
-Format:
+Each role stops at its boundary and reports:
 
 ```text
-HANDOFF PACKET
-
-From:
-To:
-Topic:
-Current confirmed state:
-Decision / Result:
-Why:
-Scope:
-Non-goals:
-Risks:
-Done criteria:
-Open questions:
-Recommended next action:
+From / To:
+Lifecycle status:
+Repository, branch, base and head:
+Contract or reviewed candidate:
+Result and scope:
+Validation/evidence:
+Risks and unresolved questions:
+Required next action:
 ```
 
-Routing:
+## State maintenance
 
-- Design & Balance → Producer / Specs
-- Producer / Specs → Codex
-- Codex result → Codex Review / Integration
-- Codex Review / Integration after merge → update Project State and choose next stage
-
----
-
-## Project state rule
-
-`rpg/docs/PROJECT_STATE_CURRENT.md` is the source of truth for confirmed merged state.
-
-Any PR that changes confirmed project state must update this file in the same PR.
-
-If the PR does not change confirmed state, the PR summary must explicitly say:
-
-```text
-PROJECT_STATE_CURRENT.md not updated: no confirmed project state change.
-```
-
----
-
-## Source of truth order
-
-Use this priority order:
-
-1. Explicit user confirmation that a PR was merged and tests are green.
-2. Current GitHub `main`.
-3. Repository docs.
-4. Chat discussion / planned work.
-
-Planned work is not confirmed state until merged.
-
----
-
-## Persistent constraints
-
-Unless explicitly changed by a new accepted Decision Packet:
-
-- Teleport is skipped.
-- Targeting rollout is frozen.
-- Do not mix unrelated large scopes in one PR.
-- Cheap tails should be fixed before merge.
-- Do not replace existing rails with a new foundation unless necessary.
+[PROJECT_STATE_CURRENT.md](PROJECT_STATE_CURRENT.md) is the only merged-state summary.
+A state-changing PR updates its current section without turning it into a PR log.
+[ROADMAP_CURRENT.md](ROADMAP_CURRENT.md) is the only forward-priority authority.
+Post-merge reconciliation must verify GitHub `main`; prose written before merge is not
+proof that the merge occurred.

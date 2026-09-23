@@ -1,5 +1,8 @@
 # Open-world route tuning pass 2 (PR 3G)
 
+> **Historical delivery record at a compatibility-retained path.** Preserved for its
+> original Frostspine/mine pass scope.
+
 This pass follows the PR 3E/3F route-readiness layers and is intentionally limited to:
 
 - `route_frostspine`

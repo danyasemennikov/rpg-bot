@@ -1,5 +1,8 @@
 # OPEN WORLD PvE NUMERIC TUNING BASELINE V1 (PR 3J)
 
+> **Historical numeric baseline at a compatibility-retained path.** Preserved with its
+> original exclusions; not current all-system evidence.
+
 This document follows PR 3I and establishes the first **numeric PvE** tuning baseline for open-world routes that are readiness-valid.
 
 ## Scope

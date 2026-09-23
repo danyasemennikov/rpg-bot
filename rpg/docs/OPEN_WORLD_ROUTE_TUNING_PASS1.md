@@ -1,5 +1,8 @@
 # Open-world route tuning pass 1 (PR 3F)
 
+> **Historical delivery record at a compatibility-retained path.** Preserved for its
+> original Westwild/coast pass scope.
+
 This pass follows the PR 3E route readiness report layer and intentionally tunes only:
 
 - `route_westwild`

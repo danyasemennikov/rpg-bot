@@ -1,8 +1,14 @@
 # Decisions Log
 
+- Status: Active
+- Authority: Canonical for accepted decisions; not current state or roadmap
+- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+
 This log is used to track **accepted decisions only**. Loose ideas or theoretical discussions should not be recorded here.
 
-Current workflow note: Codex Workflow Restoration supersedes the prior Google AI / Jules implementation workflow experiment; Codex is the active implementation coding agent.
+Operational status belongs in `PROJECT_STATE_CURRENT.md`; forward candidates belong in
+`ROADMAP_CURRENT.md`. A decision may be implemented, pending, or superseded without
+becoming a competing status summary.
 
 ## Template for Accepted Decisions
 
@@ -15,9 +21,23 @@ Current workflow note: Codex Workflow Restoration supersedes the prior Google AI
 
 ---
 
+### Decision: Astra / Sol Acceptance Workflow
+- **Date:** 2026-09-23
+- **Context:** Architecture, implementation, acceptance, and landing responsibilities
+  need explicit separation even when the same application hosts multiple roles.
+- **Decision:** Use the lifecycle in `AI_WORKFLOW.md`: Astra audit and frozen contract,
+  Sol Draft-PR implementation, Astra acceptance and narrow re-review, then user merge
+  after approval and post-merge state reconciliation.
+- **Impact:** Supersedes active use of the old Google AI, Gemini, Jules, and parallel
+  PR-pipeline documents. Those files remain in `archive/workflow/` as history.
+- **Status:** Accepted; implemented by Documentation Architecture & Consolidation V1.
+
+---
+
 ### Decision: Migrate to Google AI Workflow (Archived / Superseded)
 - **Date:** 2026-06-02
 - **Context:** The previous ChatGPT/Codex workflow caused context fragmentation because agents did not reliably share memory.
 - **Decision:** Move to a two-Gem + Jules workflow. Gemini handles design, spec, and review, while Jules handles code implementation.
 - **Impact:** Documentation updated (AGENTS.md, AI_WORKFLOW.md, etc.) to reflect the new roles.
-- **Status:** Implemented in PR #213; superseded by Codex Workflow Restoration.
+- **Status:** Implemented in PR #213; superseded first by Codex Workflow Restoration
+  and then by the Astra / Sol acceptance workflow above.

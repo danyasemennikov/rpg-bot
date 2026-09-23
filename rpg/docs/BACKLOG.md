@@ -1,20 +1,23 @@
 # Backlog
 
-This document is a template for future ideas and tasks.
-**Important:** Items in this backlog are **unconfirmed/planned** work and do not represent the current confirmed state of the project.
+- Status: Active
+- Authority: Supporting idea inventory only
+- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
 
-## Future Ideas / Tasks
+Items here are unconfirmed ideas. They do not represent current merged state, an
+accepted decision, a roadmap commitment, or an implementation contract.
 
-### Template
-- **Task/Idea:** [Short description]
-- **Category:** [e.g., Gameplay, Balance, UI, Infrastructure]
-- **Status:** Unconfirmed / Planned
-- **Notes:** [Any relevant context, links to discussions, or dependencies]
+- Merged facts belong in `PROJECT_STATE_CURRENT.md`.
+- Accepted forward priorities belong in `ROADMAP_CURRENT.md`.
+- Accepted product decisions belong in `DECISIONS_LOG.md`.
 
----
+## Item template
 
-### Example Item
-- **Task/Idea:** Expand targeted targeting system to AoE effects
-- **Category:** Gameplay / Combat
-- **Status:** Unconfirmed
-- **Notes:** Depends on finalizing the single-target pattern rollout (currently frozen).
+- **Task/idea:** [Short description]
+- **Category:** [Gameplay, balance, UI, infrastructure, and so on]
+- **Status:** Unconfirmed / Proposed
+- **Evidence or dependency:** [Current system link, observed gap, or prerequisite]
+- **Notes:** [Relevant context; do not infer implementation state]
+
+Before adding an item, verify the current system map. Do not copy old pass-era
+restrictions forward as permanent rules.
