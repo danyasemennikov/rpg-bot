@@ -1346,6 +1346,58 @@ async def _render_authoritative_after_rejected_result(
         await query.answer(t('battle.turn_not_ready', player.get('lang', 'ru')), show_alert=True)
 
 
+async def _persist_final_v1_projection_and_resolve(
+    *,
+    query,
+    context,
+    user_id: int,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str,
+) -> bool:
+    """Persist the final projection before deriving any terminal consequence."""
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    persisted = persist_solo_pve_encounter_state(
+        encounter_id=encounter_id,
+        battle_state=battle_state,
+        mob=mob,
+    )
+    if not persisted:
+        restored = load_active_pve_encounter(encounter_id=encounter_id) if encounter_id else None
+        if restored:
+            authoritative_state, authoritative_mob = restored
+            battle_state.clear()
+            battle_state.update(authoritative_state)
+            mob.clear()
+            mob.update(authoritative_mob)
+            await _render_authoritative_after_rejected_result(
+                query=query,
+                context=context,
+                player=player,
+                mob=mob,
+                battle_state=battle_state,
+                answer=True,
+            )
+        else:
+            # Another callback may already have finalized the encounter. Drop
+            # only this rejected local projection and repeat no consequences.
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
+            await query.answer(t('battle.already_over', lang), show_alert=True)
+        return True
+
+    return await _resolve_post_attack_combat_resolution(
+        query=query,
+        context=context,
+        user_id=user_id,
+        player=player,
+        mob=mob,
+        battle_state=battle_state,
+        lang=lang,
+    )
+
+
 async def _handle_battle_continues_update(
     query,
     user_id: int,
@@ -2081,14 +2133,14 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         # runtime at this point.  Persist that new revision before any render
         # or participant re-entry can reload the just-resolved side and issue
         # stale action tokens for it.
-        persist_solo_pve_encounter_state(
-            encounter_id=str(battle_state.get('pve_encounter_id', '')),
-            battle_state=battle_state,
+        handled = await _persist_final_v1_projection_and_resolve(
+            query=query,
+            context=context,
+            user_id=user.id,
+            player=p,
             mob=mob,
-        )
-        handled = await _resolve_post_attack_combat_resolution(
-            query=query, context=context, user_id=user.id, player=p, mob=mob,
-            battle_state=battle_state, lang=lang,
+            battle_state=battle_state,
+            lang=lang,
         )
         if not handled:
             await _handle_battle_continues_update(

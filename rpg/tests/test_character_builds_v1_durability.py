@@ -407,6 +407,87 @@ def test_rejected_enemy_result_restores_authority_before_terminal_consequences()
     continuing.assert_awaited_once()
 
 
+def test_final_encounter_persistence_rejection_cannot_dispatch_stale_terminal_state():
+    authoritative = {
+        'rules_version': RULES_VERSION,
+        'pve_encounter_id': 'final-persist-authority',
+        'player_hp': 80,
+        'player_dead': False,
+        'mob_hp': 20,
+        'mob_dead': False,
+        'log': ['authoritative'],
+    }
+    authoritative_mob = {'id': 'westwild_rabbit', 'hp': 20}
+    stale = {
+        **authoritative,
+        'player_hp': 0,
+        'player_dead': True,
+        'mob_hp': 0,
+        'mob_dead': True,
+        'log': ['rejected terminal'],
+    }
+    stale_mob = {'id': 'westwild_rabbit', 'hp': 0}
+    query = SimpleNamespace(answer=AsyncMock())
+    context = SimpleNamespace(user_data={'battle': stale, 'battle_mob': stale_mob})
+
+    with patch('handlers.battle.persist_solo_pve_encounter_state', return_value=False), \
+         patch('handlers.battle.load_active_pve_encounter', return_value=(authoritative, authoritative_mob)), \
+         patch.object(battle_handler, '_render_authoritative_after_rejected_result', new=AsyncMock()) as render, \
+         patch.object(battle_handler, '_resolve_post_attack_combat_resolution', new=AsyncMock()) as terminal_dispatch, \
+         patch.object(battle_handler, 'apply_death') as apply_death:
+        handled = asyncio.run(battle_handler._persist_final_v1_projection_and_resolve(
+            query=query,
+            context=context,
+            user_id=1,
+            player={'telegram_id': 1, 'lang': 'en'},
+            mob=stale_mob,
+            battle_state=stale,
+            lang='en',
+        ))
+
+    assert handled is True
+    assert stale == authoritative
+    assert stale_mob == authoritative_mob
+    render.assert_awaited_once()
+    terminal_dispatch.assert_not_awaited()
+    apply_death.assert_not_called()
+
+    missing_stale = {
+        **authoritative,
+        'pve_encounter_id': 'already-finished',
+        'player_hp': 0,
+        'player_dead': True,
+        'mob_hp': 0,
+        'mob_dead': True,
+    }
+    missing_mob = {'id': 'westwild_rabbit', 'hp': 0}
+    missing_query = SimpleNamespace(answer=AsyncMock())
+    missing_context = SimpleNamespace(user_data={
+        'battle': missing_stale,
+        'battle_mob': missing_mob,
+    })
+    with patch('handlers.battle.persist_solo_pve_encounter_state', return_value=False), \
+         patch('handlers.battle.load_active_pve_encounter', return_value=None), \
+         patch.object(battle_handler, '_resolve_post_attack_combat_resolution', new=AsyncMock()) as terminal_dispatch, \
+         patch.object(battle_handler, 'apply_death') as apply_death:
+        handled = asyncio.run(battle_handler._persist_final_v1_projection_and_resolve(
+            query=missing_query,
+            context=missing_context,
+            user_id=1,
+            player={'telegram_id': 1, 'lang': 'en'},
+            mob=missing_mob,
+            battle_state=missing_stale,
+            lang='en',
+        ))
+
+    assert handled is True
+    assert 'battle' not in missing_context.user_data
+    assert 'battle_mob' not in missing_context.user_data
+    missing_query.answer.assert_awaited_once()
+    terminal_dispatch.assert_not_awaited()
+    apply_death.assert_not_called()
+
+
 def test_group_flee_is_participant_scoped_and_replays_durable_result():
     migrate_character_builds_v1()
     state = {
