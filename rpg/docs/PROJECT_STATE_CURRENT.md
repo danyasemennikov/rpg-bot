@@ -25,8 +25,10 @@ production operation require separate evidence.
 - The Aster–Elmor playable chapter connects registration/starter state, journal
   assignments, ordinary travel, combat, gathering, bounded hunting, crafting, sales,
   and chapter rewards.
-- Ordinary travel uses the canonical world graph. Five routes are alpha-ready;
-  `route_mireveil` and `route_voidmarch` remain sparse route stubs.
+- Ordinary travel uses the canonical world graph. Five routes are alpha-ready:
+  `route_westwild`, `route_frostspine`, `route_ashen_ruins`, `route_mireveil`, and
+  `route_sunscar`. The two sparse stubs are `route_south_coast_stub` and
+  `route_old_mine_stub`.
 - Teleport activation is disabled. The retained teleport document is deferred design,
   not live capability.
 
@@ -155,15 +157,15 @@ Historical marker: the alpha core loop preceded the merged Epic trio.
 ### Balance V2 PR9 Availability-aware Profile Policy Selection
 
 - Historical Status: Balance V2 PR9 Availability-aware Profile Policy Selection.
-- This PR did not change gameplay/balance diagnostic state; it stabilized the test baseline only.
 
 ### PR218 Test Suite Baseline Stabilization / SQLite Runtime Test Isolation
 
-- This docs/workflow-only update did not change gameplay/balance diagnostic state.
+- This PR did not change gameplay/balance diagnostic state; it stabilized the test baseline only.
 
 ### Codex Workflow Restoration
 
 - PR: Codex Workflow Restoration (Docs only).
+- This docs/workflow-only update did not change gameplay/balance diagnostic state.
 
 ### Balance V2 PR8 Simulation Action Resolution / Fallback Attribution
 

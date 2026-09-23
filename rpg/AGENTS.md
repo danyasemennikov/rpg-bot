@@ -92,9 +92,11 @@ When adding new content:
 - add locale entries for all supported languages used by the repository.
 
 ### Battle state
-Combat currently relies on `context.user_data['battle']`.
-Do not casually replace this with a new state model unless the task explicitly calls for a migration.
-Prefer incremental refactors.
+Durable V1 combat authority is persisted across the relevant actor, participant,
+enemy, order, and side-result state. `context.user_data['battle']` is only a
+UI/runtime or legacy projection where applicable; never treat it as the sole combat
+authority. Read `rpg/docs/systems/README.md` for the current combat ownership map.
+Do not introduce unsolicited state-model migrations or parallel authority systems.
 
 ### Cooldowns and rewards
 Skill cooldown behavior and battle reward flow are already part of the current game loop.
