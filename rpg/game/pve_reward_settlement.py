@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from database import get_connection
 from game.balance import exp_to_next_level
+from game.build_contract import FAMILIES, MAX_MASTERY, RULES_VERSION, normalize_family
 from game.field_catalog import (
     DRY_STREAK_INCREMENT_BY_SPAWN_PROFILE,
     FIELD_DRY_STREAK_THRESHOLD,
@@ -66,6 +67,44 @@ def _participant_snapshot(battle_state: dict, player_id: int) -> dict:
     snapshots = battle_state.get('participant_states') or {}
     raw = snapshots.get(str(player_id), snapshots.get(player_id, {}))
     return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _v1_participant_snapshot(battle_state: dict, player_id: int) -> dict:
+    snapshots = battle_state.get('participant_states_v1') or {}
+    raw = snapshots.get(str(player_id), snapshots.get(player_id, {}))
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _v1_mastery_awards(*, battle_state: dict, eligible: list[int], units: list[dict]) -> list[dict]:
+    """Freeze the exact outcome-only mastery awards into settlement T1."""
+    awards = []
+    for player_id in eligible:
+        actor = _v1_participant_snapshot(battle_state, player_id)
+        family = str(actor.get('family') or '')
+        if family not in FAMILIES or not bool(actor.get('manual_contribution')):
+            continue
+        actor_level = max(1, int(actor.get('level', 1) or 1))
+        total = 0
+        contributions = []
+        for unit in units:
+            unit_level = max(1, int(unit.get('mob_level', 1) or 1))
+            profile = str(unit.get('spawn_profile') or 'normal').lower()
+            base = 40 if profile in {'elite', 'rare'} else 20
+            amount = max(5, base // 4) if actor_level - unit_level >= 5 else base
+            total += amount
+            contributions.append({
+                'unit_id': str(unit.get('unit_id') or ''),
+                'mob_level': unit_level,
+                'spawn_profile': profile,
+                'exp': amount,
+            })
+        awards.append({
+            'player_id': int(player_id),
+            'weapon_id': family,
+            'exp': min(80, total),
+            'units': contributions,
+        })
+    return awards
 
 
 def _source_unit_descriptor(raw_unit: dict, *, location_id: str) -> dict:
@@ -144,25 +183,34 @@ def _locked_roster(conn, encounter: dict) -> tuple[list[int], dict[int, str]]:
     status_by_player = {int(row['player_id']): str(row['status']) for row in participant_rows}
     persisted = _load_json(encounter.get('locked_roster_json'))
     raw_locked = persisted.get('player_ids') if persisted else None
-    if isinstance(raw_locked, list):
-        locked = [int(player_id) for player_id in raw_locked]
+    has_persisted_lock = isinstance(raw_locked, list)
+    if has_persisted_lock:
+        original_locked = [int(player_id) for player_id in raw_locked]
     else:
         # Reviewed-head encounters predate locked_roster_json.  Leaving is only
         # legal while forming, so active/defeated rows are the recoverable lock.
-        locked = [
+        original_locked = [
             int(row['player_id']) for row in participant_rows
             if str(row['status']) in {'active', 'defeated'}
         ]
-    if not locked or len(locked) != len(set(locked)):
+    if not original_locked or len(original_locked) != len(set(original_locked)):
         raise ValueError('invalid_locked_roster')
-    if int(encounter['owner_player_id']) not in locked:
+    if int(encounter['owner_player_id']) not in original_locked:
         raise ValueError('owner_not_in_locked_roster')
-    if set(locked) != {
+    provenance_statuses = {'active', 'defeated', 'fled'} if has_persisted_lock else {'active', 'defeated'}
+    if set(original_locked) != {
         player_id for player_id, status in status_by_player.items()
-        if status in {'active', 'defeated'}
+        if status in provenance_statuses
     }:
         raise ValueError('locked_roster_status_mismatch')
-    return locked, status_by_player
+    # A participant who fled remains part of immutable encounter provenance,
+    # but is no longer an active or defeated combat snapshot and cannot receive
+    # victory rewards.  Keep the two concepts separate for terminal validation.
+    combat_roster = [
+        player_id for player_id in original_locked
+        if status_by_player.get(player_id) in {'active', 'defeated'}
+    ]
+    return combat_roster, status_by_player
 
 
 def _validate_terminal_snapshot(*, conn, encounter: dict, supplied_state: dict, supplied_mob: dict) -> tuple[dict, dict]:
@@ -448,7 +496,7 @@ def build_reward_plan(*, conn, encounter: dict, battle_state: dict, fallback_mob
 
     owner_player_id = int(encounter['owner_player_id'])
     owner_snapshot = _participant_snapshot(battle_state, owner_player_id)
-    return {
+    plan = {
         'schema_version': SETTLEMENT_SCHEMA_VERSION,
         'policy_version': policy_version,
         'encounter_id': encounter_id,
@@ -468,6 +516,22 @@ def build_reward_plan(*, conn, encounter: dict, battle_state: dict, fallback_mob
             'exp': 10 if owner_player_id in eligible else 0,
         },
     }
+    if str(battle_state.get('rules_version') or '') == RULES_VERSION:
+        plan['mastery_awards'] = _v1_mastery_awards(
+            battle_state=battle_state,
+            eligible=eligible,
+            units=[unit for recipient in recipients[:1] for unit in recipient.get('units', [])]
+            if recipients else [
+                {
+                    **unit,
+                    'mob_level': int((MOBS.get(str(unit.get('mob_id') or '')) or fallback_mob).get('level', 1)),
+                }
+                for unit in units
+            ],
+        )
+        # The legacy owner-only grant must never coexist with V1 awards.
+        plan['owner_mastery']['exp'] = 0
+    return plan
 
 
 def prepare_victory_settlement(*, encounter_id: str, battle_state: dict, mob: dict,
@@ -527,7 +591,11 @@ def prepare_victory_settlement(*, encounter_id: str, battle_state: dict, mob: di
 
 def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
                        failure_hook: FailureHook | None = None) -> dict:
-    row = conn.execute('SELECT level, exp, gold, stat_points FROM players WHERE telegram_id=?', (player_id,)).fetchone()
+    row = conn.execute(
+        '''SELECT level, exp, gold, stat_points, attribute_budget, build_revision
+           FROM players WHERE telegram_id=?''',
+        (player_id,),
+    ).fetchone()
     if not row:
         raise RuntimeError(f'settlement_player_missing:{player_id}')
     old_level = int(row['level'])
@@ -536,10 +604,19 @@ def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
     while exp_value >= exp_to_next_level(level):
         exp_value -= exp_to_next_level(level)
         level += 1
-    stat_points = int(row['stat_points']) + (level - old_level) * 3
+    levels_gained = level - old_level
+    earned_points = levels_gained * 3
+    stat_points = int(row['stat_points']) + earned_points
+    attribute_budget = (
+        None if row['attribute_budget'] is None
+        else int(row['attribute_budget']) + earned_points
+    )
     gold = int(row['gold']) + gold_gain
-    conn.execute('UPDATE players SET level=?, exp=?, stat_points=? WHERE telegram_id=?',
-                 (level, exp_value, stat_points, player_id))
+    conn.execute(
+        '''UPDATE players SET level=?, exp=?, stat_points=?, attribute_budget=?,
+           build_revision=build_revision+? WHERE telegram_id=?''',
+        (level, exp_value, stat_points, attribute_budget, int(levels_gained > 0), player_id),
+    )
     if failure_hook:
         failure_hook('after_xp_update')
     conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (gold, player_id))
@@ -547,6 +624,74 @@ def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
         failure_hook('after_gold_update')
     return {'level_before': old_level, 'level_after': level, 'exp_after': exp_value,
             'gold_after': gold, 'leveled_up': level > old_level}
+
+
+def _add_legacy_mastery_exp(conn, player_id: int, weapon_id: str, exp: int) -> dict:
+    """Apply a pre-V1 award with the historical ``50 * level`` thresholds.
+
+    Old settlements are drained before the V1 migration.  Alias rows are
+    alternative evidence, so the award is applied to the strongest matching
+    legacy row; the migration can then normalize and convert that result once.
+    """
+    item = get_item(str(weapon_id or '')) or {}
+    family = normalize_family(item.get('weapon_profile') or weapon_id)
+    if family not in FAMILIES:
+        family = 'unarmed'
+
+    rows = [
+        dict(row) for row in conn.execute(
+            'SELECT rowid AS mastery_rowid, * FROM weapon_mastery WHERE telegram_id=?',
+            (int(player_id),),
+        ).fetchall()
+        if (
+            normalize_family(
+                (get_item(str(row['weapon_id'])) or {}).get('weapon_profile')
+                or row['weapon_id']
+            )
+        ) == family
+    ]
+    if rows:
+        selected = max(
+            rows,
+            key=lambda row: max(0, int(row.get('exp', 0)))
+            + 25 * (max(1, int(row.get('level', 1))) - 1) * max(1, int(row.get('level', 1))),
+        )
+    else:
+        conn.execute(
+            '''INSERT INTO weapon_mastery
+               (telegram_id, weapon_id, level, exp, skill_points)
+               VALUES (?, ?, 1, 0, 0)''',
+            (int(player_id), family),
+        )
+        selected = {
+            'mastery_rowid': int(conn.execute('SELECT last_insert_rowid()').fetchone()[0]),
+            'level': 1,
+            'exp': 0,
+            'skill_points': 0,
+        }
+
+    old_level = max(1, min(MAX_MASTERY, int(selected.get('level', 1))))
+    new_level = old_level
+    new_exp = max(0, int(selected.get('exp', 0))) + max(0, int(exp))
+    new_points = max(0, int(selected.get('skill_points', 0)))
+    while new_level < MAX_MASTERY and new_exp >= 50 * new_level:
+        new_exp -= 50 * new_level
+        new_level += 1
+        new_points += 1
+    if new_level >= MAX_MASTERY:
+        new_exp = 0
+    conn.execute(
+        'UPDATE weapon_mastery SET level=?, exp=?, skill_points=? WHERE rowid=?',
+        (new_level, new_exp, new_points, int(selected['mastery_rowid'])),
+    )
+    return {
+        'leveled_up': new_level > old_level,
+        'new_level': new_level,
+        'new_exp': new_exp,
+        'new_points': new_points,
+        'new_skills': [],
+        'exp_needed': 0 if new_level >= MAX_MASTERY else 50 * new_level,
+    }
 
 
 def _stack_quantity(conn, player_id: int, item_id: str) -> int:
@@ -717,15 +862,32 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
                 **progression,
             })
 
-        mastery = plan.get('owner_mastery') or {}
-        mastery_exp = int(mastery.get('exp', 0))
-        mastery_result = None
-        if mastery_exp > 0:
+        mastery_results = []
+        for mastery in plan.get('mastery_awards') or []:
+            mastery_exp = int(mastery.get('exp', 0))
+            if mastery_exp <= 0:
+                continue
             mastery_result = add_mastery_exp(
-                int(mastery.get('player_id', plan.get('owner_player_id', 0))),
+                int(mastery.get('player_id', 0)),
                 str(mastery.get('weapon_id') or 'unarmed'),
                 mastery_exp,
                 conn=conn,
+            )
+            mastery_results.append({
+                'player_id': int(mastery.get('player_id', 0)),
+                'weapon_id': str(mastery.get('weapon_id') or ''),
+                'exp': mastery_exp,
+                'result': mastery_result,
+            })
+        legacy_mastery = plan.get('owner_mastery') or {}
+        legacy_mastery_exp = int(legacy_mastery.get('exp', 0))
+        legacy_mastery_result = None
+        if legacy_mastery_exp > 0:
+            legacy_mastery_result = _add_legacy_mastery_exp(
+                conn,
+                int(legacy_mastery.get('player_id', plan.get('owner_player_id', 0))),
+                str(legacy_mastery.get('weapon_id') or 'unarmed'),
+                legacy_mastery_exp,
             )
         if failure_hook:
             failure_hook('after_mastery_award')
@@ -749,7 +911,11 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
             'location_id': plan.get('location_id'),
             'route_id': plan.get('route_id'),
             'recipients': recipient_results,
-            'mastery': mastery_result,
+            'mastery': legacy_mastery_result or next((
+                row['result'] for row in mastery_results
+                if int(row['player_id']) == int(plan.get('owner_player_id', 0))
+            ), None),
+            'mastery_awards': mastery_results,
             'applied_at': datetime.now(timezone.utc).isoformat(),
         }
         conn.execute('''UPDATE pve_reward_settlements SET status='applied', result_json=?,

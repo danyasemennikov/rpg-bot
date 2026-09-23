@@ -3,9 +3,14 @@ from __future__ import annotations
 import json
 import uuid
 import zlib
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from database import get_connection
+from game.actor_snapshot import build_actor_snapshot
+from game.build_contract import RULES_VERSION
+from game.build_progression import ensure_build_schema
+from game.combat_orders import load_combat_orders, persist_turn_result, submit_combat_order
 from game.balance import (
     normalize_armor_class,
     normalize_encumbrance,
@@ -159,6 +164,9 @@ def _ensure_pve_encounter_table() -> None:
             reward_seed       TEXT,
             locked_roster_json TEXT,
             source_units_json TEXT
+            ,rules_version TEXT NOT NULL DEFAULT 'legacy_v0'
+            ,combat_seed TEXT
+            ,turn_revision INTEGER NOT NULL DEFAULT 0
         )
         '''
     )
@@ -200,6 +208,7 @@ def _ensure_pve_encounter_table() -> None:
         # terminal state. Recovery uses older authoritative evidence or fails
         # closed when that evidence is unavailable.
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN source_units_json TEXT")
+    ensure_build_schema(conn)
     conn.commit()
     conn.close()
 
@@ -534,6 +543,43 @@ def list_location_available_spawn_instances(*, location_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def list_location_available_mixed_encounters(*, location_id: str) -> list[dict]:
+    """List recipes whose exact normal source roster is currently idle."""
+    from game.enemy_profiles import MIXED_ENCOUNTERS
+
+    recipes = [
+        (recipe_id, recipe)
+        for recipe_id, recipe in MIXED_ENCOUNTERS.items()
+        if str(recipe.get('location_id') or '') == str(location_id)
+    ]
+    if not recipes:
+        return []
+    ensure_location_pve_spawn_instances(location_id=location_id)
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT mob_id, COUNT(*) AS available
+        FROM pve_spawn_instances
+        WHERE location_id=?
+          AND spawn_profile=?
+          AND COALESCE(TRIM(special_spawn_key), '')=''
+          AND COALESCE(TRIM(special_spawn_name), '')=''
+          AND state=?
+          AND linked_encounter_id IS NULL
+        GROUP BY mob_id
+        ''',
+        (location_id, DEFAULT_WORLD_SPAWN_PROFILE, SPAWN_STATE_IDLE),
+    ).fetchall()
+    conn.close()
+    available_counts = {str(row['mob_id']): int(row['available']) for row in rows}
+    result = []
+    for recipe_id, recipe in recipes:
+        required = Counter(str(mob_id) for mob_id, _formation in recipe.get('units', ()))
+        if all(available_counts.get(mob_id, 0) >= count for mob_id, count in required.items()):
+            result.append({'recipe_id': recipe_id, **recipe})
+    return result
+
+
 def resolve_available_spawn_for_group_click(*, location_id: str, clicked_spawn_instance_id: str) -> dict | None:
     ensure_location_pve_spawn_instances(location_id=location_id)
     conn = get_connection()
@@ -658,7 +704,8 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
         conn.commit()
     rows = conn.execute(
         '''
-        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id, s.state AS spawn_state,
+        SELECT e.encounter_id, e.mob_id, e.location_id, e.anchor_spawn_instance_id,
+               e.battle_state_json, s.state AS spawn_state,
                s.spawn_profile, s.special_spawn_key, s.special_spawn_name
         FROM pve_encounters e
         JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
@@ -674,6 +721,8 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
     encounters: list[dict] = []
     for row in rows:
         encounter = dict(row)
+        battle_state = _deserialize_payload(encounter.pop('battle_state_json', None))
+        encounter['mixed_encounter_id'] = battle_state.get('mixed_encounter_id')
         participant_count = conn.execute(
             '''
             SELECT COUNT(*) AS total
@@ -684,10 +733,12 @@ def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
         ).fetchone()
         participant_rows = conn.execute(
             '''
-            SELECT player_id
-            FROM pve_encounter_participants
-            WHERE encounter_id=? AND status='active' AND side_id=?
-            ORDER BY joined_at ASC, player_id ASC
+            SELECT p.player_id
+            FROM pve_encounter_participants p
+            JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+            WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+            ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                     p.joined_at ASC, p.player_id ASC
             ''',
             (encounter['encounter_id'], SIDE_PLAYER),
         ).fetchall()
@@ -721,6 +772,7 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
         'e.mob_id',
         'e.location_id',
         'e.anchor_spawn_instance_id',
+        'e.battle_state_json',
         's.state AS spawn_state',
     ]
     if has_spawn_profile_column:
@@ -756,10 +808,12 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     ).fetchone()
     participant_rows = conn.execute(
         '''
-        SELECT player_id
-        FROM pve_encounter_participants
-        WHERE encounter_id=? AND status='active' AND side_id=?
-        ORDER BY joined_at ASC, player_id ASC
+        SELECT p.player_id
+        FROM pve_encounter_participants p
+        JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+        WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+        ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                 p.joined_at ASC, p.player_id ASC
         ''',
         (encounter_id, SIDE_PLAYER),
     ).fetchall()
@@ -773,6 +827,8 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
     ).fetchone()
     conn.close()
     detail = dict(encounter_row)
+    battle_state = _deserialize_payload(detail.pop('battle_state_json', None))
+    detail['mixed_encounter_id'] = battle_state.get('mixed_encounter_id')
     if 'spawn_profile' not in detail:
         detail['spawn_profile'] = DEFAULT_WORLD_SPAWN_PROFILE
     if 'special_spawn_key' not in detail:
@@ -1103,10 +1159,12 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
 
         roster_rows = conn.execute(
             '''
-            SELECT player_id
-            FROM pve_encounter_participants
-            WHERE encounter_id=? AND status='active' AND side_id=?
-            ORDER BY joined_at ASC, player_id ASC
+            SELECT p.player_id
+            FROM pve_encounter_participants p
+            JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+            WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+            ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                     p.joined_at ASC, p.player_id ASC
             ''',
             (encounter_id, SIDE_PLAYER),
         ).fetchall()
@@ -1613,8 +1671,11 @@ def create_pve_encounter(
     encounter_id: str | None = None,
     location_id: str | None = None,
     anchor_spawn_instance_id: str | None = None,
+    conn=None,
 ) -> str:
-    _ensure_pve_encounter_table()
+    owns_connection = conn is None
+    if owns_connection:
+        _ensure_pve_encounter_table()
     participant_ids = _normalize_player_ids(side_a_player_ids)
     if not participant_ids:
         raise ValueError('side_a_player_ids must include at least one player id.')
@@ -1628,13 +1689,63 @@ def create_pve_encounter(
     resolved_anchor_id = str(
         anchor_spawn_instance_id or battle_state.get('anchor_spawn_instance_id') or ''
     ) or None
+    combat_seed = str(battle_state.get('combat_seed') or uuid.uuid4().hex)
+    battle_state['combat_seed'] = combat_seed
+    battle_state.setdefault('turn_revision', 0)
+    battle_state.setdefault('state_revision', 0)
     source_units = _build_source_units_snapshot(
         battle_state=battle_state,
         mob=mob or {},
         location_id=resolved_location_id,
         anchor_spawn_instance_id=resolved_anchor_id,
     )
-    conn = get_connection()
+    if owns_connection:
+        conn = get_connection()
+        conn.execute('BEGIN IMMEDIATE')
+    ensure_build_schema(conn)
+    # Real encounters always have durable player rows.  The legacy fallback is
+    # retained only for replay/test envelopes that predate persisted actors.
+    v1_cutover = conn.execute(
+        "SELECT 1 FROM build_rules_state WHERE migration_key=? AND state='active'",
+        (RULES_VERSION,),
+    ).fetchone()
+    v1_ready = bool(v1_cutover) and all(
+        conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (pid,)).fetchone()
+        for pid in participant_ids
+    )
+    encounter_rules_version = RULES_VERSION if v1_ready else 'legacy_v0'
+    battle_state['rules_version'] = encounter_rules_version
+    if v1_ready:
+        participant_v1 = {
+            str(pid): build_actor_snapshot(pid, conn=conn)
+            for pid in participant_ids
+        }
+        battle_state['participant_states_v1'] = participant_v1
+
+        from game.enemy_profiles import resolve_enemy_snapshot
+        from game.mobs import get_mob
+        enemy_v1 = []
+        raw_units = list(battle_state.get('enemy_units') or [])
+        if raw_units:
+            for index, unit in enumerate(raw_units):
+                unit_mob = get_mob(str(unit.get('mob_id') or battle_state.get('mob_id') or '')) or mob or {}
+                snapshot = resolve_enemy_snapshot(
+                    unit_mob,
+                    unit_id=unit.get('unit_id') or unit.get('spawn_instance_id') or f'enemy-{index}',
+                    formation=unit.get('formation') or unit.get('formation_line'),
+                    spawn_profile=unit.get('spawn_profile', 'normal'),
+                )
+                snapshot['hp'] = max(0, int(unit.get('hp', snapshot['hp'])))
+                snapshot['max_hp'] = max(snapshot['hp'], int(unit.get('max_hp', snapshot['max_hp'])))
+                enemy_v1.append(snapshot)
+        else:
+            resolved_mob = get_mob(str(battle_state.get('mob_id') or (mob or {}).get('id') or '')) or mob or {}
+            enemy_v1.append(resolve_enemy_snapshot(
+                resolved_mob,
+                unit_id=battle_state.get('mob_id') or resolved_mob.get('id') or 'enemy-0',
+                spawn_profile=battle_state.get('spawn_profile', 'normal'),
+            ))
+        battle_state['enemy_states_v1'] = enemy_v1
 
     _supersede_active_encounters_for_players(conn, participant_ids)
 
@@ -1644,7 +1755,8 @@ def create_pve_encounter(
             encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json, location_id,
             anchor_spawn_instance_id, reward_policy_version, reward_seed, locked_roster_json,
             source_units_json
-        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ,rules_version, combat_seed, turn_revision
+        ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
         ''',
         (
             encounter_id,
@@ -1658,6 +1770,8 @@ def create_pve_encounter(
             uuid.uuid4().hex,
             None if resolved_anchor_id else _serialize_payload({'player_ids': participant_ids}),
             _serialize_payload(source_units),
+            encounter_rules_version,
+            combat_seed,
         ),
     )
 
@@ -1670,8 +1784,9 @@ def create_pve_encounter(
             (encounter_id, int(player_id), SIDE_PLAYER),
         )
 
-    conn.commit()
-    conn.close()
+    if owns_connection:
+        conn.commit()
+        conn.close()
     return encounter_id
 
 
@@ -1694,6 +1809,130 @@ def create_solo_pve_encounter(*, player_id: int, battle_state: dict, mob: dict |
         battle_state=battle_state,
         mob=mob,
     )
+
+
+def create_mixed_open_world_pve_encounter(
+    *,
+    owner_player_id: int,
+    recipe_id: str,
+    battle_state: dict,
+    side_a_player_ids: list[int] | None = None,
+) -> tuple[str | None, str]:
+    """Atomically reserve a frozen mixed recipe and its durable encounter."""
+    from game.enemy_profiles import MIXED_ENCOUNTERS
+    from game.mobs import get_mob
+
+    recipe = MIXED_ENCOUNTERS.get(str(recipe_id))
+    if not recipe:
+        return None, 'spawn_unavailable'
+    location_id = str(recipe.get('location_id') or '')
+    units_recipe = tuple(recipe.get('units') or ())
+    if not location_id or not units_recipe:
+        return None, 'spawn_unavailable'
+
+    _ensure_pve_encounter_table()
+    ensure_location_pve_spawn_instances(location_id=location_id)
+    encounter_id = f'pve-enc-{uuid.uuid4().hex[:12]}'
+    participant_ids = side_a_player_ids or [int(owner_player_id)]
+    required_counts = Counter(str(mob_id) for mob_id, _formation in units_recipe)
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        selected_by_mob: dict[str, list[str]] = {}
+        selected_spawn_ids: list[str] = []
+        for mob_id, required_count in required_counts.items():
+            rows = conn.execute(
+                '''
+                SELECT spawn_instance_id
+                FROM pve_spawn_instances
+                WHERE location_id=?
+                  AND mob_id=?
+                  AND spawn_profile=?
+                  AND COALESCE(TRIM(special_spawn_key), '')=''
+                  AND COALESCE(TRIM(special_spawn_name), '')=''
+                  AND state=?
+                  AND linked_encounter_id IS NULL
+                ORDER BY spawn_instance_id ASC
+                LIMIT ?
+                ''',
+                (location_id, mob_id, DEFAULT_WORLD_SPAWN_PROFILE, SPAWN_STATE_IDLE, required_count),
+            ).fetchall()
+            spawn_ids = [str(row['spawn_instance_id']) for row in rows]
+            if len(spawn_ids) != required_count:
+                conn.rollback()
+                return None, 'spawn_unavailable'
+            selected_by_mob[mob_id] = spawn_ids
+            selected_spawn_ids.extend(spawn_ids)
+
+        placeholders = ','.join('?' for _ in selected_spawn_ids)
+        updated = conn.execute(
+            f'''
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=?, updated_at=CURRENT_TIMESTAMP
+            WHERE spawn_instance_id IN ({placeholders})
+              AND state=?
+              AND linked_encounter_id IS NULL
+            ''',
+            (SPAWN_STATE_FORMING, encounter_id, *selected_spawn_ids, SPAWN_STATE_IDLE),
+        ).rowcount
+        if updated != len(selected_spawn_ids):
+            conn.rollback()
+            return None, 'spawn_unavailable'
+
+        claimed_by_mob = {mob_id: iter(spawn_ids) for mob_id, spawn_ids in selected_by_mob.items()}
+        enemy_units = []
+        primary_mob = None
+        for index, (mob_id, formation) in enumerate(units_recipe, start=1):
+            unit_mob = get_mob(str(mob_id))
+            if not unit_mob:
+                raise ValueError(f'Unknown mixed encounter mob: {mob_id}')
+            primary_mob = primary_mob or unit_mob
+            spawn_id = next(claimed_by_mob[str(mob_id)])
+            max_hp = max(1, int(unit_mob.get('hp', 1) or 1))
+            enemy_units.append({
+                'unit_id': f'unit-{index}',
+                'spawn_instance_id': spawn_id,
+                'mob_id': str(mob_id),
+                'spawn_profile': DEFAULT_WORLD_SPAWN_PROFILE,
+                'special_spawn_key': '',
+                'special_spawn_name': '',
+                'hp': max_hp,
+                'max_hp': max_hp,
+                'dead': False,
+                'mob_effects': [],
+                'formation_line': str(formation),
+            })
+
+        anchor_spawn_id = str(enemy_units[0]['spawn_instance_id'])
+        battle_state.update({
+            'location_id': location_id,
+            'mob_id': str(enemy_units[0]['mob_id']),
+            'anchor_spawn_instance_id': anchor_spawn_id,
+            'encounter_kind': 'pve',
+            'mixed_encounter_id': str(recipe_id),
+            'mixed_encounter_label': dict(recipe.get('label') or {}),
+            'enemy_units': enemy_units,
+            'active_enemy_unit_id': str(enemy_units[0]['unit_id']),
+            'pack_size': len(enemy_units),
+            'pack_archetype': {'pack_archetype_id': str(recipe_id), 'mixed': True},
+        })
+        create_pve_encounter(
+            owner_player_id=int(owner_player_id),
+            side_a_player_ids=participant_ids,
+            battle_state=battle_state,
+            mob=primary_mob,
+            encounter_id=encounter_id,
+            location_id=location_id,
+            anchor_spawn_instance_id=anchor_spawn_id,
+            conn=conn,
+        )
+        conn.commit()
+        return encounter_id, 'created'
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def create_or_load_open_world_pve_encounter(
@@ -1987,10 +2226,12 @@ def get_pve_encounter_player_ids(*, encounter_id: str, side_id: str = SIDE_PLAYE
     conn = get_connection()
     rows = conn.execute(
         '''
-        SELECT player_id
-        FROM pve_encounter_participants
-        WHERE encounter_id=? AND status='active' AND side_id=?
-        ORDER BY joined_at ASC, player_id ASC
+        SELECT p.player_id
+        FROM pve_encounter_participants p
+        JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+        WHERE p.encounter_id=? AND p.status='active' AND p.side_id=?
+        ORDER BY CASE WHEN p.player_id=e.owner_player_id THEN 0 ELSE 1 END,
+                 p.joined_at ASC, p.player_id ASC
         ''',
         (encounter_id, side_id),
     ).fetchall()
@@ -2028,25 +2269,49 @@ def load_active_solo_pve_encounter(*, player_id: int) -> tuple[dict, dict] | Non
     return load_active_pve_encounter(player_id=player_id)
 
 
-def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, mob: dict | None = None) -> None:
+def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, mob: dict | None = None) -> bool:
     if not encounter_id:
-        return
+        return False
     conn = get_connection()
     try:
-        conn.execute(
-            '''
-            UPDATE pve_encounters
-            SET battle_state_json=?, mob_json=?, mob_id=?, updated_at=CURRENT_TIMESTAMP
-            WHERE encounter_id=? AND status='active'
-            ''',
-            (
-                _serialize_payload(battle_state),
-                _serialize_payload(mob or {}),
-                str(battle_state.get('mob_id') or (mob or {}).get('id') or ''),
-                encounter_id,
-            ),
-        )
+        ensure_build_schema(conn)
+        if battle_state.get('rules_version') == RULES_VERSION:
+            expected_turn = int(battle_state.get('turn_revision', 0) or 0)
+            expected_state = int(battle_state.get('state_revision', 0) or 0)
+            authority = conn.execute('''SELECT turn_revision, state_revision FROM pve_encounters
+                WHERE encounter_id=? AND status='active' AND rules_version=?''', (
+                    encounter_id, RULES_VERSION,
+                )).fetchone()
+            if (
+                not authority
+                or int(authority['state_revision'] or 0) != expected_state
+                or int(authority['turn_revision'] or 0) not in {expected_turn, expected_turn - 1}
+            ):
+                conn.rollback()
+                return False
+            current_turn = int(authority['turn_revision'] or 0)
+            battle_state['state_revision'] = expected_state + 1
+            updated = conn.execute('''UPDATE pve_encounters SET battle_state_json=?, mob_json=?, mob_id=?,
+                turn_revision=?, state_revision=state_revision+1, updated_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=? AND status='active' AND rules_version=?
+                AND turn_revision=? AND state_revision=?''', (
+                    _serialize_payload(battle_state), _serialize_payload(mob or {}),
+                    str(battle_state.get('mob_id') or (mob or {}).get('id') or ''),
+                    expected_turn, encounter_id, RULES_VERSION, current_turn, expected_state,
+                ))
+            if updated.rowcount != 1:
+                battle_state['state_revision'] = expected_state
+                conn.rollback()
+                return False
+        else:
+            updated = conn.execute('''UPDATE pve_encounters
+                SET battle_state_json=?, mob_json=?, mob_id=?, updated_at=CURRENT_TIMESTAMP
+                WHERE encounter_id=? AND status='active' ''', (
+                    _serialize_payload(battle_state), _serialize_payload(mob or {}),
+                    str(battle_state.get('mob_id') or (mob or {}).get('id') or ''), encounter_id,
+                ))
         conn.commit()
+        return updated.rowcount == 1
     finally:
         conn.close()
 
@@ -2252,6 +2517,137 @@ def mark_group_participant_defeated(
             side.participant_order = [pid for pid in side.participant_order if pid != int(participant_id)]
 
 
+def resolve_pve_flee_intent(
+    *, player_id: int, encounter_id: str, action_token: str, success: bool,
+) -> dict:
+    """Consume a flee intent and durably depart only that participant."""
+    from game.action_receipts import ActionRejected, consume_action
+
+    conn = get_connection()
+    departed = False
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        ensure_build_schema(conn)
+        duplicate = conn.execute('''SELECT result_json FROM pve_participant_departures_v1
+            WHERE action_token=? AND encounter_id=? AND player_id=?''', (
+                action_token, encounter_id, int(player_id),
+            )).fetchone()
+        if duplicate:
+            conn.rollback()
+            return {**json.loads(str(duplicate['result_json'])), 'already_applied': True}
+        raw = consume_action(conn, int(player_id), 'combat_v1', action_token)
+        try:
+            intent = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ActionRejected('stale_action') from exc
+        action = intent.get('action') if isinstance(intent, dict) else None
+        if (
+            not isinstance(action, dict) or action.get('kind') != 'flee'
+            or intent.get('rules_version') != RULES_VERSION
+            or intent.get('encounter_kind') != 'pve'
+            or str(intent.get('encounter_id')) != str(encounter_id)
+            or int(intent.get('actor_id', 0)) != int(player_id)
+        ):
+            raise ActionRejected('stale_action')
+        row = conn.execute('''SELECT e.* FROM pve_encounters e
+            JOIN pve_encounter_participants p ON p.encounter_id=e.encounter_id
+            WHERE e.encounter_id=? AND e.status='active' AND e.rules_version=?
+            AND p.player_id=? AND p.status='active' ''', (
+                encounter_id, RULES_VERSION, int(player_id),
+            )).fetchone()
+        revision = int(intent.get('turn_revision', -1))
+        if not row or int(row['turn_revision']) not in {revision, revision - 1}:
+            raise ActionRejected('stale_action')
+        state = json.loads(str(row['battle_state_json']))
+        result = {
+            'accepted': True, 'success': bool(success), 'fled': bool(success),
+            'encounter_id': encounter_id, 'player_id': int(player_id),
+        }
+        if success:
+            v1_states = state.get('participant_states_v1') or {}
+            legacy_states = state.get('participant_states') or {}
+            v1_actor = v1_states.get(str(player_id)) or {}
+            legacy_actor = legacy_states.get(str(player_id)) or {}
+            hp = int(v1_actor.get('hp', legacy_actor.get('hp', legacy_actor.get('player_hp', 0))) or 0)
+            mana = int(v1_actor.get('mana', legacy_actor.get('mana', legacy_actor.get('player_mana', 0))) or 0)
+            # Departure removes the actor from every active combat projection.
+            # Resource values have already been captured above for the player
+            # row, while the durable participant status retains settlement
+            # provenance without keeping a targetable/healable entity alive.
+            if isinstance(v1_states, dict):
+                v1_states.pop(str(player_id), None)
+                v1_states.pop(player_id, None)
+                for remaining_actor in v1_states.values():
+                    if not isinstance(remaining_actor, dict):
+                        continue
+                    remaining_actor['effects'] = [
+                        effect for effect in list(remaining_actor.get('effects') or [])
+                        if not (
+                            effect.get('kind') == 'intercept'
+                            and str((effect.get('metadata') or {}).get('protector_id')) == str(player_id)
+                        )
+                    ]
+            if isinstance(legacy_states, dict):
+                legacy_states.pop(str(player_id), None)
+                legacy_states.pop(player_id, None)
+            state['side_a_player_ids'] = [
+                int(pid) for pid in state.get('side_a_player_ids', []) if int(pid) != int(player_id)
+            ]
+            state.get('ally_commit_status', {}).pop(str(player_id), None)
+            conn.execute('''UPDATE pve_encounter_participants SET status='fled',
+                updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND player_id=? AND status='active' ''', (
+                    encounter_id, int(player_id),
+                ))
+            conn.execute('UPDATE players SET hp=MAX(0, ?), mana=MAX(0, ?), in_battle=0 WHERE telegram_id=?', (
+                hp, mana, int(player_id),
+            ))
+            remaining = conn.execute('''SELECT COUNT(*) AS total FROM pve_encounter_participants
+                WHERE encounter_id=? AND side_id=? AND status='active' ''', (
+                    encounter_id, SIDE_PLAYER,
+                )).fetchone()
+            encounter_status = 'active' if int(remaining['total'] or 0) > 0 else 'fled'
+            state['state_revision'] = int(row['state_revision']) + 1
+            updated = conn.execute('''UPDATE pve_encounters SET battle_state_json=?, status=?,
+                state_revision=state_revision+1, updated_at=CURRENT_TIMESTAMP,
+                finished_at=CASE WHEN ?='fled' THEN CURRENT_TIMESTAMP ELSE finished_at END
+                WHERE encounter_id=? AND status='active' AND state_revision=?''', (
+                    _serialize_payload(state), encounter_status, encounter_status,
+                    encounter_id, int(row['state_revision']),
+                ))
+            if updated.rowcount != 1:
+                raise ActionRejected('stale_action')
+            if encounter_status == 'fled':
+                _transition_anchored_spawns_for_encounters(
+                    conn, encounter_ids=[encounter_id], state=SPAWN_STATE_RESPAWNING,
+                    clear_link=True, respawn_seconds=DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS,
+                )
+            result.update({'battle': state, 'encounter_status': encounter_status})
+            departed = True
+        conn.execute('''INSERT INTO pve_participant_departures_v1
+            (action_token, encounter_id, player_id, result_json) VALUES (?, ?, ?, ?)''', (
+                action_token, encounter_id, int(player_id), _serialize_payload(result),
+            ))
+        conn.commit()
+    except ActionRejected as exc:
+        conn.rollback()
+        return {'accepted': False, 'reason': str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    if departed:
+        runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
+        if runtime_state is not None:
+            runtime_state.participants.pop(int(player_id), None)
+            runtime_state.submitted_actions.pop(int(player_id), None)
+            for side in runtime_state.sides.values():
+                if int(player_id) in side.participant_order:
+                    side.participant_order = [pid for pid in side.participant_order if pid != int(player_id)]
+    return result
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -2260,6 +2656,18 @@ def _to_iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def _from_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _remaining_seconds(deadline: datetime | None, now: datetime | None = None) -> int | None:
@@ -2507,13 +2915,63 @@ def ensure_runtime_for_battle(
             raise OpenWorldRuntimeStartBlocked('open_world_anchor_unavailable')
         # start_mode == active_resume | non_anchored: no extra lock step required.
 
+        active_side = str(battle_state.get('active_side') or SIDE_PLAYER)
+        if active_side not in {SIDE_PLAYER, SIDE_ENEMY}:
+            active_side = SIDE_PLAYER
         runtime_state = _SOLO_PVE_RUNTIME.create_encounter(
             encounter_id=encounter_id,
             side_a_participants=side_a_players,
             side_b_participants=expected_enemy_participants,
-            active_side_id=SIDE_PLAYER,
+            active_side_id=active_side,
         )
-        runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
+        persisted_revision = max(0, int(battle_state.get('turn_revision', 0) or 0))
+        candidate_orders = load_combat_orders(
+            encounter_kind='pve', encounter_id=encounter_id,
+            turn_revision=persisted_revision + 1,
+        )
+        restore_same_revision = (
+            not candidate_orders
+            and str(battle_state.get('side_turn_state')) in {'collecting_orders', 'ready_to_lock'}
+            and bool(battle_state.get('side_deadline_at'))
+        )
+        if candidate_orders or restore_same_revision:
+            restore_revision = persisted_revision + 1 if candidate_orders else persisted_revision
+            if candidate_orders:
+                # A completed persisted side points at the next active side.
+                runtime_state.active_side_id = active_side
+            runtime_state.turn_revision = restore_revision
+            runtime_state.round_index = max(1, int(battle_state.get('round_index', 1) or 1))
+            runtime_state.side_turn_state = 'collecting_orders'
+            deadline_source = (
+                candidate_orders[0].get('deadline_at') if candidate_orders
+                else battle_state.get('side_deadline_at')
+            )
+            runtime_state.side_deadline_at = _from_iso(str(deadline_source or '')) or (
+                check_now + timedelta(seconds=DEFAULT_SIDE_TURN_TIMEOUT_SECONDS)
+            )
+            for order in candidate_orders or load_combat_orders(
+                encounter_kind='pve', encounter_id=encounter_id,
+                turn_revision=restore_revision,
+            ):
+                action = order.get('action') or {}
+                action_kind = str(action.get('kind') or '')
+                action_type = 'fallback_guard' if action_kind == 'timeout_guard' else action_kind
+                committed = _SOLO_PVE_RUNTIME.commit_action(
+                    encounter_id=encounter_id,
+                    participant_id=int(order['actor_id']),
+                    action_type=action_type,
+                    target_info=action.get('target_info'),
+                    skill_id=action.get('skill_id'),
+                    item_id=action.get('item_id'),
+                    committed_at=_from_iso(str(order.get('created_at') or '')) or check_now,
+                    turn_revision=restore_revision,
+                )
+                if committed.accepted and str(order.get('order_kind')) == 'timeout':
+                    runtime_state.participants[int(order['actor_id'])].phase_state = 'auto_fallback'
+        else:
+            runtime_state.turn_revision = persisted_revision
+            runtime_state.side_turn_state = 'completed'
+            runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
     elif runtime_state.side_turn_state == 'completed':
         runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
 
@@ -2522,6 +2980,31 @@ def ensure_runtime_for_battle(
         participant_ids=side_a_players,
         preferred_player_id=player_id,
     )
+    if battle_state.get('rules_version') == RULES_VERSION:
+        # A forming source encounter is persisted when the owner clicks it,
+        # before other players join.  Locking the roster must therefore extend
+        # the authoritative V1 actor map as well as the legacy projection; a
+        # joiner may never fall back to legacy buttons or lose ally targeting.
+        participant_states_v1 = {
+            str(key): dict(value)
+            for key, value in (battle_state.get('participant_states_v1') or {}).items()
+            if isinstance(value, dict)
+        }
+        missing_ids = [
+            int(pid) for pid in side_a_players
+            if str(int(pid)) not in participant_states_v1
+        ]
+        if missing_ids:
+            conn = get_connection()
+            try:
+                for participant_id in missing_ids:
+                    participant_states_v1[str(participant_id)] = build_actor_snapshot(
+                        participant_id,
+                        conn=conn,
+                    )
+            finally:
+                conn.close()
+        battle_state['participant_states_v1'] = participant_states_v1
     sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state, now=check_now)
     return runtime_state
 
@@ -2547,6 +3030,7 @@ def submit_player_commit(
     action_type: str,
     skill_id: str | None = None,
     item_id: str | None = None,
+    target_info: dict | None = None,
     battle_state: dict | None = None,
     encounter_id: str | None = None,
 ) -> tuple[bool, str]:
@@ -2556,16 +3040,31 @@ def submit_player_commit(
     runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
     if runtime_state is None:
         return False, 'encounter_not_found'
+    if runtime_state.side_turn_state != 'collecting_orders':
+        return False, 'turn_not_collecting'
+    participant = runtime_state.participants.get(int(player_id))
+    if not participant or participant.side_id != runtime_state.active_side_id:
+        return False, 'wrong_side'
+    if participant.phase_state != 'eligible':
+        return False, 'participant_not_eligible'
 
+    durable = submit_combat_order(
+        encounter_kind='pve', encounter_id=encounter_id,
+        turn_revision=runtime_state.turn_revision, actor_id=int(player_id),
+        action={
+            'kind': action_type, 'skill_id': skill_id,
+            'item_id': item_id, 'target_info': target_info,
+        },
+        target_id=(target_info or {}).get('id'),
+        deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(_utc_now()),
+        order_kind='manual',
+    )
+    if not durable.get('accepted'):
+        return False, str(durable.get('reason') or 'combat_order_conflict')
     commit_result = _SOLO_PVE_RUNTIME.commit_action(
-        encounter_id=encounter_id,
-        participant_id=int(player_id),
-        action_type=action_type,
-        target_info=None,
-        skill_id=skill_id,
-        item_id=item_id,
-        committed_at=_utc_now(),
-        turn_revision=runtime_state.turn_revision,
+        encounter_id=encounter_id, participant_id=int(player_id), action_type=action_type,
+        target_info=target_info, skill_id=skill_id, item_id=item_id,
+        committed_at=_utc_now(), turn_revision=runtime_state.turn_revision,
     )
     _sync_projection_targets(encounter_id=encounter_id, battle_state=battle_state)
     return commit_result.accepted, commit_result.reason
@@ -2609,8 +3108,94 @@ def resolve_current_side_if_ready(
     batch = _SOLO_PVE_RUNTIME.build_resolution_batch(encounter_id=encounter_id)
     _resolve_batch_by_action(batch=batch, on_player_action=on_player_action, on_enemy_action=on_enemy_action)
 
+    if battle_state is not None and battle_state.get('rules_version') == RULES_VERSION:
+        from game.combat_identity import advance_affected_side
+        if runtime_state.active_side_id == SIDE_PLAYER:
+            ticked = advance_affected_side(
+                list((battle_state.get('participant_states_v1') or {}).values()),
+                side_index=turn_revision,
+            )
+            battle_state['participant_states_v1'] = {
+                str(item.get('actor_id')): item for item in ticked['entities']
+            }
+            legacy_states = battle_state.setdefault('participant_states', {})
+            for pid, item in battle_state['participant_states_v1'].items():
+                legacy = legacy_states.setdefault(str(pid), {})
+                legacy['player_hp'] = legacy['hp'] = int(item.get('hp', 0))
+                legacy['player_dead'] = legacy['defeated'] = int(item.get('hp', 0)) <= 0
+                legacy['effects_v1'] = list(item.get('effects') or [])
+        else:
+            ticked = advance_affected_side(
+                list(battle_state.get('enemy_states_v1') or []),
+                side_index=turn_revision,
+            )
+            battle_state['enemy_states_v1'] = ticked['entities']
+            legacy_units = list(battle_state.get('enemy_units') or [])
+            for index, item in enumerate(ticked['entities']):
+                if index < len(legacy_units):
+                    legacy_units[index]['hp'] = int(item.get('hp', 0))
+                    legacy_units[index]['dead'] = int(item.get('hp', 0)) <= 0
+            battle_state['enemy_units'] = legacy_units
+            # Periodic damage resolves at the affected side boundary.  If that
+            # damage defeats the active/final enemy, refresh the compact battle
+            # projection immediately so post-action settlement runs instead of
+            # rendering a targetless card with legacy fallback buttons.
+            active_enemy = next(
+                (item for item in ticked['entities'] if int(item.get('hp', 0)) > 0),
+                None,
+            )
+            if active_enemy is None:
+                battle_state['mob_hp'] = 0
+                battle_state['mob_dead'] = True
+            else:
+                battle_state['active_enemy_unit_id'] = active_enemy.get('unit_id')
+                battle_state['mob_hp'] = int(active_enemy.get('hp', 0))
+                battle_state['mob_max_hp'] = int(active_enemy.get('max_hp', 1))
+                battle_state['mob_dead'] = False
+        battle_state.setdefault('combat_events_v1', []).extend(ticked['events'])
+
     _SOLO_PVE_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)
     _sync_projection_targets(encounter_id=encounter_id, battle_state=battle_state, projection_states=projection_states)
+    if battle_state is not None and battle_state.get('rules_version') == RULES_VERSION:
+        try:
+            durable_result = persist_turn_result(
+                encounter_kind='pve', encounter_id=encounter_id,
+                turn_revision=turn_revision,
+                result={
+                    'active_side': runtime_state.active_side_id,
+                    'actions': [
+                        {
+                            'actor_id': action.participant_id,
+                            'action_type': action.action_type,
+                            'skill_id': action.skill_id,
+                            'source': action.source,
+                        }
+                        for action in batch
+                    ],
+                },
+                complete_state=battle_state,
+            )
+        except RuntimeError as exc:
+            if str(exc) != 'combat_result_cas_conflict':
+                raise
+            durable_result = {'applied': False, 'reason': 'stale_revision'}
+        if not durable_result.get('applied'):
+            _SOLO_PVE_RUNTIME_STORE.remove(encounter_id)
+            if battle_state is not None:
+                restored = load_active_pve_encounter(encounter_id=encounter_id)
+                if restored:
+                    authoritative_state, _authoritative_mob = restored
+                    battle_state.clear()
+                    battle_state.update(authoritative_state)
+                else:
+                    # The rejected local result is never allowed to remain
+                    # terminal authority when the durable encounter vanished.
+                    battle_state['mob_dead'] = False
+                    battle_state['player_dead'] = False
+            return False
+        if durable_result.get('duplicate'):
+            battle_state.clear()
+            battle_state.update(durable_result['state'])
     return True
 
 
@@ -2634,8 +3219,39 @@ def resolve_due_player_timeout_if_any(
     if runtime_state is None:
         return False
 
-    assigned = _SOLO_PVE_RUNTIME.apply_timeout_fallbacks(encounter_id=encounter_id, now=now or _utc_now())
-    if assigned <= 0:
+    check_now = now or _utc_now()
+    if runtime_state.side_deadline_at and check_now < runtime_state.side_deadline_at:
+        return False
+    existing = {
+        int(item['actor_id']): item for item in load_combat_orders(
+            encounter_kind='pve', encounter_id=encounter_id, turn_revision=runtime_state.turn_revision,
+        )
+    }
+    for participant_id in _SOLO_PVE_RUNTIME.get_active_side_eligible_participants(encounter_id=encounter_id):
+        order = existing.get(int(participant_id))
+        if order:
+            action = order.get('action') or {}
+            kind = str(action.get('kind') or '')
+            _SOLO_PVE_RUNTIME.commit_action(
+                encounter_id=encounter_id, participant_id=int(participant_id),
+                action_type='fallback_guard' if kind == 'timeout_guard' else kind,
+                target_info=action.get('target_info'), skill_id=action.get('skill_id'),
+                item_id=action.get('item_id'), committed_at=check_now,
+                turn_revision=runtime_state.turn_revision,
+            )
+            continue
+        durable = submit_combat_order(
+            encounter_kind='pve', encounter_id=encounter_id,
+            turn_revision=runtime_state.turn_revision, actor_id=int(participant_id),
+            action={'kind': 'timeout_guard'}, target_id=None,
+            deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(check_now),
+            order_kind='timeout',
+        )
+        if not durable.get('accepted'):
+            return False
+    assigned = _SOLO_PVE_RUNTIME.apply_timeout_fallbacks(encounter_id=encounter_id, now=check_now)
+    runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
+    if assigned <= 0 and (not runtime_state or runtime_state.side_turn_state != 'ready_to_lock'):
         return False
 
     return resolve_current_side_if_ready(
@@ -2656,6 +3272,31 @@ def process_due_timeout_for_battle(
     on_enemy_action=None,
     now: datetime | None = None,
 ) -> bool:
+    encounter_id = _resolve_encounter_id(player_id=player_id, battle_state=battle_state)
+    runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id) if encounter_id else None
+    if runtime_state is not None and runtime_state.side_turn_state == 'ready_to_lock':
+        recovered_side = runtime_state.active_side_id
+        resolved = resolve_current_side_if_ready(
+            player_id=player_id,
+            battle_state=battle_state,
+            on_player_action=on_player_timeout_action or (lambda _action: None),
+            on_enemy_action=on_enemy_action or (lambda _action: None),
+        )
+        if not resolved:
+            return False
+        if not _encounter_continues_after_timeout_resolution(battle_state):
+            return True
+        if recovered_side == SIDE_PLAYER:
+            enemy_result_applied = run_enemy_instant_side(
+                player_id=player_id,
+                battle_state=battle_state,
+                on_enemy_action=on_enemy_action or (lambda _action: None),
+            )
+            if not enemy_result_applied:
+                return False
+        else:
+            open_next_player_side_turn(player_id=player_id, battle_state=battle_state)
+        return True
     timed_out = resolve_due_player_timeout_if_any(
         player_id=player_id,
         battle_state=battle_state,
@@ -2667,12 +3308,12 @@ def process_due_timeout_for_battle(
     if not _encounter_continues_after_timeout_resolution(battle_state):
         return True
 
-    run_enemy_instant_side(
+    enemy_result_applied = run_enemy_instant_side(
         player_id=player_id,
         battle_state=battle_state,
         on_enemy_action=on_enemy_action or (lambda _action: None),
     )
-    return True
+    return enemy_result_applied
 
 
 def _encounter_continues_after_timeout_resolution(battle_state: dict) -> bool:
@@ -2733,6 +3374,14 @@ def _sync_runtime_enemy_roster_for_pack(
     side_a_participants = list(side_a.participant_order if side_a else [])
     if not side_a_participants:
         side_a_participants = list(battle_state.get('side_a_player_ids') or [])
+    previous_revision = int(runtime_state.turn_revision)
+    previous_round = int(runtime_state.round_index)
+    previous_claimed_revision = runtime_state.last_claimed_revision
+    permanently_unavailable = {
+        participant_id: participant.phase_state
+        for participant_id, participant in runtime_state.participants.items()
+        if participant.phase_state in {'defeated', 'fled', 'released'}
+    }
     _SOLO_PVE_RUNTIME_STORE.remove(encounter_id)
     recreated = _SOLO_PVE_RUNTIME.create_encounter(
         encounter_id=encounter_id,
@@ -2740,40 +3389,67 @@ def _sync_runtime_enemy_roster_for_pack(
         side_b_participants=expected_enemy_participants,
         active_side_id=SIDE_ENEMY,
     )
+    # Replacing defeated pack units changes membership, not combat history.
+    # Keep revisions monotonic so durable orders/results and newly rendered UI
+    # tokens continue to describe the same authoritative side sequence.
+    recreated.turn_revision = previous_revision
+    recreated.round_index = previous_round
+    recreated.last_claimed_revision = previous_claimed_revision
+    for participant_id, phase_state in permanently_unavailable.items():
+        participant = recreated.participants.get(participant_id)
+        if participant is not None:
+            participant.phase_state = phase_state
     return _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=now, timeout_seconds=0)
 
 
-def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_action) -> None:
+def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_action) -> bool:
     encounter_id = _resolve_encounter_id(player_id=player_id, battle_state=battle_state)
     if not encounter_id:
-        return
+        return False
     now = _utc_now()
     runtime_state = None
     if battle_state.get('enemy_units'):
         runtime_state = _sync_runtime_enemy_roster_for_pack(encounter_id=encounter_id, battle_state=battle_state, now=now)
     if runtime_state is None:
         runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=now, timeout_seconds=0)
+    elif runtime_state.side_turn_state == 'completed':
+        # A pack whose roster already matches the durable unit list still
+        # needs its newly active enemy side opened before AI orders can commit.
+        # Roster recreation opens the side itself, so only the existing-state
+        # path reaches this branch.
+        runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(
+            encounter_id=encounter_id,
+            now=now,
+            timeout_seconds=0,
+        )
     enemy_participants = enemy_participant_ids_for_battle(encounter_id=encounter_id, battle_state=battle_state)
     is_pack_side = bool(battle_state.get('enemy_units'))
     if is_pack_side:
         battle_state['_pack_enemy_side_total'] = len(enemy_participants)
         battle_state['_pack_enemy_side_processed'] = 0
     for enemy_pid in enemy_participants:
+        durable = submit_combat_order(
+            encounter_kind='pve', encounter_id=encounter_id,
+            turn_revision=runtime_state.turn_revision, actor_id=enemy_pid,
+            action={'kind': 'enemy_basic_attack'}, target_id=None,
+            deadline_at=_to_iso(runtime_state.side_deadline_at) or _to_iso(now),
+            order_kind='ai',
+        )
+        if not durable.get('accepted'):
+            sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
+            battle_state.pop('_pack_enemy_side_total', None)
+            battle_state.pop('_pack_enemy_side_processed', None)
+            return False
         commit = _SOLO_PVE_RUNTIME.commit_action(
-            encounter_id=encounter_id,
-            participant_id=enemy_pid,
-            action_type='enemy_basic_attack',
-            target_info=None,
-            skill_id=None,
-            item_id=None,
-            committed_at=_utc_now(),
-            turn_revision=runtime_state.turn_revision,
+            encounter_id=encounter_id, participant_id=enemy_pid,
+            action_type='enemy_basic_attack', target_info=None, skill_id=None, item_id=None,
+            committed_at=_utc_now(), turn_revision=runtime_state.turn_revision,
         )
         if not commit.accepted:
             sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
             battle_state.pop('_pack_enemy_side_total', None)
             battle_state.pop('_pack_enemy_side_processed', None)
-            return
+            return False
 
     resolved = resolve_current_side_if_ready(
         player_id=player_id,
@@ -2782,14 +3458,16 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
         on_enemy_action=on_enemy_action,
     )
     if not resolved:
-        sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
         battle_state.pop('_pack_enemy_side_total', None)
         battle_state.pop('_pack_enemy_side_processed', None)
-        return
+        return False
 
     runtime_state = open_next_player_side_turn(player_id=player_id, battle_state=battle_state)
     sync_battle_projection_from_runtime(battle_state=battle_state, runtime_state=runtime_state)
     battle_state.pop('_pack_enemy_side_total', None)
     battle_state.pop('_pack_enemy_side_processed', None)
+    return True
+
+
 def is_pack_enabled_mob(mob_id: str) -> bool:
     return is_open_world_pack_enabled_mob(mob_id)

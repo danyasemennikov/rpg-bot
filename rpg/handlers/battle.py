@@ -3,12 +3,20 @@
 # ============================================================
 
 import sys, json, logging
+from html import escape
 sys.path.append('/content/rpg_bot')
 import random
 
 logger = logging.getLogger(__name__)
 
 from game.skill_engine import get_battle_skills
+from game.build_contract import POWER_STRIKE, RULES_VERSION, SKILL_SPECS, rank_mana_cost
+from game.combat_identity import (
+    combat_seed, cooldown_remaining, evaluate_action, evaluate_enemy_action,
+    hit_chance, legal_actions, preview_damage_range,
+)
+from game.combat_orders import consume_combat_intent, issue_combat_intents
+from game.enemy_profiles import choose_enemy_action
 from game.weapon_mastery import get_mastery, add_mastery_exp, tick_cooldowns
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -21,8 +29,10 @@ from game.combat import (
     process_enemy_side_turn, apply_timeout_fallback_guard, preview_skill_turn_precheck,
 )
 from game.pve_live import (
+    SIDE_ENEMY,
     claim_pve_encounter_victory,
     release_pve_encounter_victory_claim,
+    create_mixed_open_world_pve_encounter,
     create_or_load_open_world_pve_encounter,
     choose_enemy_target_participant_id,
     clear_solo_pve_runtime,
@@ -177,9 +187,22 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
     try:
         conn.execute(
             '''UPDATE players SET
-                exp=?, gold=?, level=?, stat_points=?
+                exp=?, gold=?, level=?, stat_points=?,
+                attribute_budget=CASE
+                    WHEN attribute_budget IS NULL THEN NULL
+                    ELSE attribute_budget + ?
+                END,
+                build_revision=build_revision + ?
                WHERE telegram_id=?''',
-            (new_exp, new_gold, new_level, stat_points, telegram_id)
+            (
+                new_exp,
+                new_gold,
+                new_level,
+                stat_points,
+                levels_gained * 3,
+                int(levels_gained > 0),
+                telegram_id,
+            )
         )
         conn.commit()
     finally:
@@ -250,6 +273,221 @@ def apply_death(telegram_id: int, player: dict):
 # ────────────────────────────────────────
 # ОТОБРАЖЕНИЕ БОЯ
 # ────────────────────────────────────────
+
+_V1_EVENT_COPY = {
+    'en': {
+        'hit': '{actor} hits {target} with {skill}: {amount} damage{details}.',
+        'miss': '{actor} misses {target} with {skill}.',
+        'heal': '{target} recovers {amount} HP.', 'mana': '{target} recovers {amount} MP.',
+        'dot': '{effect} deals {amount} damage to {target}.',
+        'guard': '{actor} guards: Ward 20% for the next affected-side opportunity.',
+        'controlled': '{actor} loses the opportunity to hard control and gains Resolve.',
+        'flee': '{actor} fails to flee and spends the opportunity.',
+        'rupture': 'Consumed poison deals {amount} damage to {target}.',
+        'burn': 'Consumed Burn deals {amount} damage to {target}.',
+        'ward': '{actor} raises Ward.', 'intent': '{actor} prepares a heavy strike against {target}.',
+        'blocked': ', blocked', 'barrier': ', Barrier absorbed {amount}', 'prevented': ', death prevented',
+    },
+    'ru': {
+        'hit': '{actor} поражает {target} навыком {skill}: {amount} урона{details}.',
+        'miss': '{actor} промахивается по {target} навыком {skill}.',
+        'heal': '{target} восстанавливает {amount} ОЗ.', 'mana': '{target} восстанавливает {amount} МП.',
+        'dot': '{effect} наносит {amount} урона цели {target}.',
+        'guard': '{actor} защищается: Ward 20% до следующей возможности затронутой стороны.',
+        'controlled': '{actor} теряет возможность из-за жёсткого контроля и получает Resolve.',
+        'flee': '{actor} не удаётся сбежать; возможность потрачена.',
+        'rupture': 'Поглощённый яд наносит {amount} урона цели {target}.',
+        'burn': 'Поглощённое Горение наносит {amount} урона цели {target}.',
+        'ward': '{actor} поднимает Ward.', 'intent': '{actor} готовит тяжёлый удар по цели {target}.',
+        'blocked': ', заблокировано', 'barrier': ', Барьер поглотил {amount}', 'prevented': ', смерть предотвращена',
+    },
+    'es': {
+        'hit': '{actor} golpea a {target} con {skill}: {amount} de daño{details}.',
+        'miss': '{actor} falla contra {target} con {skill}.',
+        'heal': '{target} recupera {amount} PV.', 'mana': '{target} recupera {amount} PM.',
+        'dot': '{effect} inflige {amount} de daño a {target}.',
+        'guard': '{actor} usa Guardia: Ward 20% hasta la próxima oportunidad del lado afectado.',
+        'controlled': '{actor} pierde la oportunidad por control fuerte y obtiene Resolve.',
+        'flee': '{actor} no logra huir y gasta la oportunidad.',
+        'rupture': 'El veneno consumido inflige {amount} de daño a {target}.',
+        'burn': 'La Quemadura consumida inflige {amount} de daño a {target}.',
+        'ward': '{actor} levanta Ward.', 'intent': '{actor} prepara un golpe fuerte contra {target}.',
+        'blocked': ', bloqueado', 'barrier': ', Barrera absorbió {amount}', 'prevented': ', muerte evitada',
+    },
+}
+
+_V1_EFFECT_COPY = {
+    'en': {'guard': 'Guard', 'ward': 'Ward', 'barrier': 'Barrier', 'challenge': 'Challenged', 'opening': 'Opening', 'poison': 'Poison', 'burn': 'Burn', 'bleed': 'Bleed', 'resolve': 'Resolve', 'weakness': 'Weakness', 'slow': 'Slow', 'chilled': 'Chilled', 'physical_break': 'Armor broken'},
+    'ru': {'guard': 'Защита', 'ward': 'Ward', 'barrier': 'Барьер', 'challenge': 'Вызов', 'opening': 'Открытие', 'poison': 'Яд', 'burn': 'Горение', 'bleed': 'Кровотечение', 'resolve': 'Resolve', 'weakness': 'Слабость', 'slow': 'Замедление', 'chilled': 'Охлаждение', 'physical_break': 'Броня разрушена'},
+    'es': {'guard': 'Guardia', 'ward': 'Ward', 'barrier': 'Barrera', 'challenge': 'Desafiado', 'opening': 'Apertura', 'poison': 'Veneno', 'burn': 'Quemadura', 'bleed': 'Sangrado', 'resolve': 'Resolve', 'weakness': 'Debilidad', 'slow': 'Lentitud', 'chilled': 'Enfriado', 'physical_break': 'Armadura rota'},
+}
+
+_V1_ACTION_COPY = {
+    'en': {
+        'normal': 'Normal attack', 'basic': 'Enemy attack', 'basic_attack': 'Normal attack',
+        'heavy': 'Heavy attack', 'shaman': 'Shaman attack', 'priest': 'Priest attack',
+        'witch': 'Witch attack', 'fire_elemental': 'Fire attack', 'unknown': 'Combat action',
+    },
+    'ru': {
+        'normal': 'Обычная атака', 'basic': 'Атака врага', 'basic_attack': 'Обычная атака',
+        'heavy': 'Тяжёлая атака', 'shaman': 'Атака шамана', 'priest': 'Атака жреца',
+        'witch': 'Атака ведьмы', 'fire_elemental': 'Огненная атака', 'unknown': 'Боевое действие',
+    },
+    'es': {
+        'normal': 'Ataque normal', 'basic': 'Ataque enemigo', 'basic_attack': 'Ataque normal',
+        'heavy': 'Ataque pesado', 'shaman': 'Ataque del chamán', 'priest': 'Ataque del sacerdote',
+        'witch': 'Ataque de la bruja', 'fire_elemental': 'Ataque de fuego', 'unknown': 'Acción de combate',
+    },
+}
+
+
+def _v1_name_map(battle_state: dict, lang: str) -> dict[str, str]:
+    result = {}
+    for actor in (battle_state.get('participant_states_v1') or battle_state.get('participants_v1') or {}).values():
+        result[str(actor.get('actor_id'))] = str(actor.get('name') or actor.get('actor_id'))
+    for enemy in battle_state.get('enemy_states_v1') or []:
+        mob_id = str(enemy.get('mob_id') or '')
+        result[str(enemy.get('unit_id'))] = (
+            get_mob_name(mob_id, lang)
+            if mob_id else str(enemy.get('name') or enemy.get('unit_id'))
+        )
+    return result
+
+
+def _render_v1_event(event: dict, battle_state: dict, lang: str) -> str | None:
+    copy = _V1_EVENT_COPY.get(lang, _V1_EVENT_COPY['en'])
+    names = _v1_name_map(battle_state, lang)
+    actor = escape(names.get(str(event.get('actor_id')), str(event.get('actor_id') or '?')))
+    target = escape(names.get(str(event.get('target_id')), str(event.get('target_id') or '?')))
+    kind = str(event.get('kind') or '')
+    if kind in {'direct', 'enemy_direct', 'retaliation'}:
+        skill_id = str(event.get('skill_id') or event.get('behavior') or kind)
+        if skill_id in SKILL_SPECS or skill_id == 'power_strike':
+            skill_name = get_skill_name(skill_id, lang)
+        else:
+            action_copy = _V1_ACTION_COPY.get(lang, _V1_ACTION_COPY['en'])
+            skill_name = action_copy.get(skill_id, action_copy['unknown'])
+        skill = escape(skill_name)
+        if not bool(event.get('hit', True)):
+            return copy['miss'].format(actor=actor, target=target, skill=skill)
+        details = copy['blocked'] if event.get('blocked') else ''
+        if int(event.get('barrier_absorbed', 0) or 0):
+            details += copy['barrier'].format(amount=int(event['barrier_absorbed']))
+        if event.get('death_prevented'):
+            details += copy['prevented']
+        return copy['hit'].format(actor=actor, target=target, skill=skill, amount=int(event.get('hp_removed', 0) or 0), details=details)
+    if kind in {'heal', 'enemy_heal', 'hot'}:
+        return copy['heal'].format(target=target, amount=int(event.get('amount', 0) or 0))
+    if kind == 'mana':
+        return copy['mana'].format(target=target, amount=int(event.get('amount', 0) or 0))
+    if kind == 'dot':
+        effect_copy = _V1_EFFECT_COPY.get(lang, _V1_EFFECT_COPY['en'])
+        effect = effect_copy.get(str(event.get('effect')), {
+            'ru': 'Периодический эффект', 'en': 'Periodic effect', 'es': 'Efecto periódico',
+        }.get(lang, 'Periodic effect'))
+        return copy['dot'].format(effect=escape(effect), target=target, amount=int(event.get('amount', 0) or 0))
+    if kind == 'guard':
+        return copy['guard'].format(actor=actor)
+    if kind == 'controlled_skip':
+        return copy['controlled'].format(actor=actor)
+    if kind == 'flee_failed':
+        return copy['flee'].format(actor=actor)
+    if kind == 'poison_rupture':
+        return copy['rupture'].format(target=target, amount=int(event.get('hp_removed', 0) or 0))
+    if kind == 'burn_consumed':
+        return copy['burn'].format(target=target, amount=int(event.get('hp_removed', 0) or 0))
+    if kind == 'enemy_ward':
+        return copy['ward'].format(actor=actor)
+    if kind == 'enemy_intent':
+        return copy['intent'].format(actor=actor, target=target)
+    return None
+
+def _v1_action_buttons(player: dict, battle_state: dict, lang: str) -> tuple[list, list[str]]:
+    actor = (battle_state.get('participant_states_v1') or {}).get(str(player['telegram_id']))
+    if not actor:
+        return [], []
+    opponents = [item for item in battle_state.get('enemy_states_v1', []) if int(item.get('hp', 0)) > 0]
+    allies = [item for item in (battle_state.get('participant_states_v1') or {}).values() if int(item.get('hp', 0)) > 0]
+    if not opponents:
+        return [], []
+    primary = next(
+        (item for item in opponents if str(item.get('unit_id')) == str(battle_state.get('active_enemy_unit_id'))),
+        opponents[0],
+    )
+    revision = int(battle_state.get('turn_revision', 0))
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    deadline = str(battle_state.get('side_deadline_at') or '')
+    if not encounter_id or not deadline:
+        return [], []
+
+    definitions: list[tuple[str, dict]] = []
+    normal_label = {
+        'ru': '⚔️ Обычная атака · +6 МП', 'en': '⚔️ Normal attack · +6 MP',
+        'es': '⚔️ Ataque normal · +6 PM',
+    }.get(lang, '⚔️ Normal attack · +6 MP')
+    guard_label = {'ru': '🛡️ Защита · Ward 20%', 'en': '🛡️ Guard · Ward 20%', 'es': '🛡️ Guardia · Ward 20%'}.get(lang, '🛡️ Guard · Ward 20%')
+    definitions.append((normal_label, {
+        'kind': 'basic_attack', 'skill_id': None, 'item_id': None,
+        'target_info': {'id': str(primary.get('unit_id'))},
+    }))
+    definitions.append((guard_label, {
+        'kind': 'guard', 'skill_id': None, 'item_id': None, 'target_info': None,
+    }))
+    flee_label = {'ru': '🏃 Сбежать', 'en': '🏃 Flee', 'es': '🏃 Huir'}.get(lang, '🏃 Flee')
+    definitions.append((flee_label, {
+        'kind': 'flee', 'skill_id': None, 'item_id': None, 'target_info': None,
+    }))
+
+    for skill_id in legal_actions(actor):
+        if skill_id in {'normal', 'guard'}:
+            continue
+        spec = POWER_STRIKE if skill_id == 'power_strike' else SKILL_SPECS[skill_id]
+        rank = 1 if skill_id == 'power_strike' else int(actor.get('skill_ranks', {}).get(skill_id, 0))
+        remaining = cooldown_remaining(actor, skill_id)
+        cost = rank_mana_cost(spec, rank)
+        suffix = f"⏳{remaining}" if remaining else f"🔵{cost}"
+        base_label = f"{get_skill_name(skill_id, lang)} {t('common.level_short', lang)}{rank} · {suffix}"
+        if spec.target in {'Self', 'Party', 'F', 'A', '2x2'}:
+            recipients = [(None, '')]
+        elif spec.target == 'Ally':
+            recipients = [({'id': str(item.get('actor_id'))}, f" → {item.get('name', item.get('actor_id'))}") for item in allies]
+        elif spec.target == 'AllyOrEnemy':
+            recipients = [({'id': str(item.get('actor_id'))}, f" → 👤 {item.get('name', item.get('actor_id'))}") for item in allies]
+            recipients.extend(({'id': str(item.get('unit_id'))}, f" → 👹 {item.get('name', item.get('mob_id'))}") for item in opponents)
+        else:
+            recipients = [({'id': str(item.get('unit_id'))}, f" → {item.get('name', item.get('mob_id'))}") for item in opponents]
+        for target_info, target_label in recipients:
+            definitions.append((base_label + target_label, {
+                'kind': 'skill', 'skill_id': skill_id, 'item_id': None,
+                'target_info': target_info,
+            }))
+
+    tokens = issue_combat_intents(
+        int(player['telegram_id']), encounter_id=encounter_id,
+        turn_revision=revision, deadline_at=deadline,
+        actions=[action for _, action in definitions],
+    )
+    keyboard = []
+    for label, action in definitions:
+        key = json.dumps(action, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        token = tokens.get(key)
+        if token:
+            keyboard.append([InlineKeyboardButton(label, callback_data=f"battle_v1_{token}")])
+    chance = hit_chance(actor, primary)
+    low, high = preview_damage_range(actor, primary)
+    status = [
+        {'ru': '🎯 По выбранной цели', 'en': '🎯 Versus selected target', 'es': '🎯 Contra el objetivo'}.get(lang, '🎯 Versus selected target')
+        + f": {chance}% · {low}–{high}",
+    ]
+    effect_names = _V1_EFFECT_COPY.get(lang, _V1_EFFECT_COPY['en'])
+    for effect in list(actor.get('effects') or []) + list(primary.get('effects') or []):
+        name = effect_names.get(str(effect.get('kind')), str(effect.get('kind')).replace('_', ' ').title())
+        value = f" {int(effect.get('value', 0))}" if effect.get('kind') == 'barrier' else ''
+        status.append(f"• {name}{value} · {effect.get('duration')}t")
+    intent = next((item for item in opponents if item.get('heavy_intent')), None)
+    if intent:
+        status.append({'ru': '⚠️ Враг готовит тяжёлый удар', 'en': '⚠️ Enemy is charging a heavy hit', 'es': '⚠️ El enemigo prepara un golpe fuerte'}.get(lang, '⚠️ Enemy is charging a heavy hit'))
+    return keyboard, status
 
 def build_battle_message(player, mob, battle_state, log):
     lang = player.get('lang', 'ru')
@@ -327,12 +565,31 @@ def build_battle_message(player, mob, battle_state, log):
         text += '\n'.join(buff_lines) + '\n'
 
     # Лог последних ходов
-    if log:
+    if log and battle_state.get('rules_version') != RULES_VERSION:
         text += '\n' + '\n'.join(
             f'▫️ {l}' for l in log[-4:] if isinstance(l, str)
         ) + '\n'
+    elif battle_state.get('rules_version') == RULES_VERSION:
+        rendered = [
+            line for line in (
+                _render_v1_event(event, battle_state, lang)
+                for event in (battle_state.get('combat_events_v1') or [])[-8:]
+            ) if line
+        ][-4:]
+        if rendered:
+            text += '\n' + '\n'.join(f'▫️ {line}' for line in rendered) + '\n'
 
     # Кнопки
+    if battle_state.get('rules_version') == RULES_VERSION:
+        v1_keyboard, v1_status = _v1_action_buttons(player, battle_state, lang)
+        if v1_status:
+            text += '\n' + '\n'.join(v1_status) + '\n'
+        if v1_keyboard:
+            v1_keyboard.append([InlineKeyboardButton(
+                t('battle.potions_btn', lang), callback_data=f"battle_potions_{mob['id']}"
+            )])
+            return text, InlineKeyboardMarkup(v1_keyboard)
+
     keyboard = [[
         InlineKeyboardButton(t('battle.attack_btn', lang), callback_data=f"battle_attack_{mob['id']}"),
         InlineKeyboardButton(t('battle.flee_btn', lang),   callback_data=f"battle_flee_{mob['id']}"),
@@ -378,6 +635,7 @@ async def start_battle(
     mob_id: str,
     mob_first: bool = False,
     spawn_instance_id: str | None = None,
+    mixed_encounter_id: str | None = None,
     open_runtime_now: bool = True,
 ):
     """Запускает бой — вызывается из location.py."""
@@ -388,7 +646,15 @@ async def start_battle(
     app_state = context.application.user_data.setdefault(user.id, {}) if context is not None else {}
     aggro_prelock = _is_aggro_prelock_start(player_row=p, app_state=app_state)
 
-    if spawn_instance_id:
+    if mixed_encounter_id:
+        from game.enemy_profiles import MIXED_ENCOUNTERS
+        recipe = MIXED_ENCOUNTERS.get(str(mixed_encounter_id))
+        if not recipe or str(recipe.get('location_id') or '') != str(p.get('location_id') or ''):
+            _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
+            await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)
+            return
+        mob_id = str(recipe['units'][0][0])
+    elif spawn_instance_id:
         location_id = str(p.get('location_id') or '')
         ensure_location_pve_spawn_instances(location_id=location_id)
         spawn_rows = list_location_available_spawn_instances(location_id=location_id)
@@ -502,16 +768,24 @@ async def start_battle(
     battle_state['weapon_id']     = actual_weapon_id
     battle_state['mastery_level'] = mastery['level']
     battle_state['mastery_exp']   = mastery['exp']
-    encounter_id, encounter_status = create_or_load_open_world_pve_encounter(
-        owner_player_id=user.id,
-        location_id=str(p.get('location_id') or ''),
-        mob_id=mob_id,
-        battle_state=battle_state,
-        mob=mob,
-        side_a_player_ids=[user.id],
-        spawn_instance_id=spawn_instance_id,
-        pack_claim_from_visible_group=True,
-    )
+    if mixed_encounter_id:
+        encounter_id, encounter_status = create_mixed_open_world_pve_encounter(
+            owner_player_id=user.id,
+            recipe_id=str(mixed_encounter_id),
+            battle_state=battle_state,
+            side_a_player_ids=[user.id],
+        )
+    else:
+        encounter_id, encounter_status = create_or_load_open_world_pve_encounter(
+            owner_player_id=user.id,
+            location_id=str(p.get('location_id') or ''),
+            mob_id=mob_id,
+            battle_state=battle_state,
+            mob=mob,
+            side_a_player_ids=[user.id],
+            spawn_instance_id=spawn_instance_id,
+            pack_claim_from_visible_group=True,
+        )
     if not encounter_id:
         _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
         await query.answer(t('location.pve_spawn_unavailable', lang), show_alert=True)
@@ -522,8 +796,50 @@ async def start_battle(
         return
     battle_state['pve_encounter_id'] = encounter_id
 
-    # Если моб ходит первым — сразу обрабатываем его ход
-    if mob_first:
+    # V1 aggression uses the same durable enemy-side runtime/evaluator as every
+    # later enemy turn. The legacy strike remains only for legacy encounters.
+    if mob_first and battle_state.get('rules_version') == RULES_VERSION:
+        battle_state['active_side'] = SIDE_ENEMY
+        try:
+            ensure_runtime_for_battle(player_id=user.id, battle_state=battle_state, mob=mob)
+        except OpenWorldRuntimeStartBlocked:
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
+            await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
+            return
+        enemy_result_applied = run_enemy_instant_side(
+            player_id=user.id,
+            battle_state=battle_state,
+            on_enemy_action=lambda action: _run_group_enemy_side_action(
+                action=action, owner_player=p, mob=mob,
+                battle_state=battle_state, lang=lang,
+            ),
+        )
+        sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
+        if enemy_result_applied is False:
+            await _render_authoritative_after_rejected_result(
+                query=query, context=context, player=p, mob=mob,
+                battle_state=battle_state, answer=False,
+            )
+            return
+        if battle_state.get('player_dead'):
+            penalty = apply_death(user.id, p)
+            finish_solo_pve_encounter(
+                player_id=user.id,
+                encounter_id=battle_state.get('pve_encounter_id'),
+                status='death',
+            )
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
+            await query.edit_message_text(
+                t('battle.death_first_strike', lang,
+                  mob_name=get_mob_name(mob['id'], lang),
+                  exp_loss=penalty['exp_loss'], gold_loss=penalty['gold_loss']),
+                parse_mode='HTML',
+            )
+            return
+    elif mob_first:
         from game.combat import mob_attack
         mob_result = mob_attack(mob, p)
         p['hp']    = mob_result['player_hp']
@@ -1009,6 +1325,79 @@ async def _resolve_post_attack_combat_resolution(
     )
     return False
 
+
+async def _render_authoritative_after_rejected_result(
+    *,
+    query,
+    context,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    answer: bool,
+) -> None:
+    """Render reloaded durable PvE state without applying local consequences."""
+    context.user_data['battle'] = battle_state
+    context.user_data['battle_mob'] = mob
+    text, keyboard = build_battle_message(
+        player, mob, battle_state, battle_state.get('log', []),
+    )
+    await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+    if answer:
+        await query.answer(t('battle.turn_not_ready', player.get('lang', 'ru')), show_alert=True)
+
+
+async def _persist_final_v1_projection_and_resolve(
+    *,
+    query,
+    context,
+    user_id: int,
+    player: dict,
+    mob: dict,
+    battle_state: dict,
+    lang: str,
+) -> bool:
+    """Persist the final projection before deriving any terminal consequence."""
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    persisted = persist_solo_pve_encounter_state(
+        encounter_id=encounter_id,
+        battle_state=battle_state,
+        mob=mob,
+    )
+    if not persisted:
+        restored = load_active_pve_encounter(encounter_id=encounter_id) if encounter_id else None
+        if restored:
+            authoritative_state, authoritative_mob = restored
+            battle_state.clear()
+            battle_state.update(authoritative_state)
+            mob.clear()
+            mob.update(authoritative_mob)
+            await _render_authoritative_after_rejected_result(
+                query=query,
+                context=context,
+                player=player,
+                mob=mob,
+                battle_state=battle_state,
+                answer=True,
+            )
+        else:
+            # Another callback may already have finalized the encounter. Drop
+            # only this rejected local projection and repeat no consequences.
+            context.user_data.pop('battle', None)
+            context.user_data.pop('battle_mob', None)
+            await query.answer(t('battle.already_over', lang), show_alert=True)
+        return True
+
+    return await _resolve_post_attack_combat_resolution(
+        query=query,
+        context=context,
+        user_id=user_id,
+        player=player,
+        mob=mob,
+        battle_state=battle_state,
+        lang=lang,
+    )
+
+
 async def _handle_battle_continues_update(
     query,
     user_id: int,
@@ -1018,21 +1407,34 @@ async def _handle_battle_continues_update(
 ) -> None:
     """Общий путь для продолжающегося боя: persist hp/mana + рендер."""
     update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user_id)
-    if _is_group_encounter(battle_state):
-        _persist_group_participant_hp_mana(battle_state)
-    else:
-        conn = get_connection()
-        conn.execute(
-            'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
-            (battle_state['player_hp'], battle_state['player_mana'], user_id)
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    persisted = True
+    if encounter_id:
+        persisted = persist_solo_pve_encounter_state(
+            encounter_id=encounter_id,
+            battle_state=battle_state,
+            mob=mob,
         )
-        conn.commit()
-        conn.close()
-    persist_solo_pve_encounter_state(
-        encounter_id=str(battle_state.get('pve_encounter_id', '')),
-        battle_state=battle_state,
-        mob=mob,
-    )
+        if not persisted:
+            restored = load_active_pve_encounter(encounter_id=encounter_id)
+            if restored:
+                authoritative_state, authoritative_mob = restored
+                battle_state.clear()
+                battle_state.update(authoritative_state)
+                mob.clear()
+                mob.update(authoritative_mob)
+
+    if persisted:
+        if _is_group_encounter(battle_state):
+            _persist_group_participant_hp_mana(battle_state)
+        else:
+            conn = get_connection()
+            conn.execute(
+                'UPDATE players SET hp=?, mana=? WHERE telegram_id=?',
+                (battle_state['player_hp'], battle_state['player_mana'], user_id)
+            )
+            conn.commit()
+            conn.close()
 
     # Бой продолжается
     text, keyboard = build_battle_message(player, mob, battle_state, battle_state['log'])
@@ -1140,6 +1542,141 @@ def _apply_timeout_fallback_action(action, battle_state: dict, lang: str) -> Non
         )
 
 
+def _v1_log_events(battle_state: dict, events: list[dict]) -> None:
+    """Persist compact structural events; localized rendering stays at UI edge."""
+    battle_state.setdefault('combat_events_v1', []).extend(events)
+    # A bounded fallback log keeps old compact battle cards useful while the
+    # locale renderer consumes the structured events.
+    for event in events[-8:]:
+        kind = str(event.get('kind') or 'event')
+        if kind in {'direct', 'enemy_direct', 'retaliation', 'dot'}:
+            amount = int(event.get('hp_removed', event.get('amount', 0)) or 0)
+            battle_state.setdefault('log', []).append(f"{kind}: {amount}")
+        elif kind in {'heal', 'hot', 'mana'}:
+            battle_state.setdefault('log', []).append(f"{kind}: +{int(event.get('amount', 0) or 0)}")
+
+
+def _sync_v1_to_legacy_projection(battle_state: dict) -> None:
+    participants = battle_state.get('participant_states_v1') or {}
+    legacy = battle_state.setdefault('participant_states', {})
+    for pid, actor in participants.items():
+        target = legacy.setdefault(str(pid), {})
+        target.update({
+            'player_hp': int(actor.get('hp', 0)),
+            'hp': int(actor.get('hp', 0)),
+            'player_max_hp': int(actor.get('max_hp', 1)),
+            'max_hp': int(actor.get('max_hp', 1)),
+            'player_mana': int(actor.get('mana', 0)),
+            'mana': int(actor.get('mana', 0)),
+            'player_max_mana': int(actor.get('max_mana', 0)),
+            'max_mana': int(actor.get('max_mana', 0)),
+            'player_dead': not int(actor.get('hp', 0)) > 0,
+            'defeated': not int(actor.get('hp', 0)) > 0,
+            'effects_v1': list(actor.get('effects') or []),
+            'manual_contribution': bool(actor.get('manual_contribution')),
+            'snapshotted_family': actor.get('family'),
+            'level_at_encounter_start': int(actor.get('level', 1)),
+        })
+    enemies = list(battle_state.get('enemy_states_v1') or [])
+    units = list(battle_state.get('enemy_units') or [])
+    for index, enemy in enumerate(enemies):
+        if index < len(units):
+            units[index]['hp'] = int(enemy.get('hp', 0))
+            units[index]['max_hp'] = int(enemy.get('max_hp', 1))
+            units[index]['dead'] = not int(enemy.get('hp', 0)) > 0
+            units[index]['effects_v1'] = list(enemy.get('effects') or [])
+    if units:
+        battle_state['enemy_units'] = units
+    active = next((enemy for enemy in enemies if int(enemy.get('hp', 0)) > 0), None)
+    if active:
+        battle_state['active_enemy_unit_id'] = active.get('unit_id')
+        battle_state['mob_hp'] = int(active.get('hp', 0))
+        battle_state['mob_max_hp'] = int(active.get('max_hp', 1))
+        battle_state['mob_dead'] = False
+    else:
+        battle_state['mob_hp'] = 0
+        battle_state['mob_dead'] = True
+
+
+def _dispatch_v1_player_action(action, *, battle_state: dict) -> None:
+    actor_id = int(getattr(action, 'participant_id', 0) or 0)
+    participants = dict(battle_state.get('participant_states_v1') or {})
+    actor = participants.get(str(actor_id))
+    if not actor:
+        return
+    opponents = list(battle_state.get('enemy_states_v1') or [])
+    action_type = str(getattr(action, 'action_type', '') or '')
+    if action_type == 'basic_attack':
+        action_payload = {
+            'kind': 'normal',
+            'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
+            'manual': True,
+        }
+    elif action_type == 'skill':
+        action_payload = {
+            'kind': 'skill', 'skill_id': getattr(action, 'skill_id', None),
+            'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
+            'manual': True,
+        }
+    elif action_type == 'fallback_guard':
+        action_payload = {'kind': 'timeout_guard', 'manual': False}
+    elif action_type == 'flee_failed':
+        action_payload = {'kind': 'flee_failed', 'manual': True}
+    else:
+        action_payload = {'kind': 'guard', 'manual': True}
+    result = evaluate_action(
+        actor,
+        list(participants.values()),
+        opponents,
+        action_payload,
+        rng_seed=combat_seed(
+            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
+            actor_id, action_payload.get('target_id'), len(battle_state.get('combat_events_v1', [])),
+        ),
+        side_index=int(battle_state.get('turn_revision', 0)),
+    )
+    if not result.get('accepted'):
+        return
+    updated_participants = {str(item.get('actor_id')): item for item in result['allies']}
+    battle_state['participant_states_v1'] = updated_participants
+    battle_state['enemy_states_v1'] = result['opponents']
+    _v1_log_events(battle_state, result['events'])
+    _sync_v1_to_legacy_projection(battle_state)
+
+
+def _dispatch_v1_enemy_action(action, *, battle_state: dict) -> None:
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    enemy_index = resolve_enemy_unit_index_for_participant(
+        encounter_id=encounter_id,
+        battle_state=battle_state,
+        participant_id=int(getattr(action, 'participant_id', 0) or 0),
+    )
+    enemies = list(battle_state.get('enemy_states_v1') or [])
+    if enemy_index is None or enemy_index >= len(enemies):
+        enemy_index = next((index for index, enemy in enumerate(enemies) if int(enemy.get('hp', 0)) > 0), None)
+    if enemy_index is None:
+        return
+    enemy = enemies[enemy_index]
+    players = list((battle_state.get('participant_states_v1') or {}).values())
+    chosen = choose_enemy_action(enemy, enemies)
+    result = evaluate_enemy_action(
+        enemy, enemies, players, chosen,
+        rng_seed=combat_seed(
+            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
+            enemy.get('unit_id'), chosen.get('target_id'), len(battle_state.get('combat_events_v1', [])),
+        ),
+        side_index=int(battle_state.get('turn_revision', 0)),
+    )
+    if not result.get('accepted'):
+        return
+    battle_state['enemy_states_v1'] = result['allies']
+    battle_state['participant_states_v1'] = {
+        str(item.get('actor_id')): item for item in result['players']
+    }
+    _v1_log_events(battle_state, result['events'])
+    _sync_v1_to_legacy_projection(battle_state)
+
+
 def _run_group_enemy_side_action(
     *,
     action=None,
@@ -1149,6 +1686,9 @@ def _run_group_enemy_side_action(
     lang: str,
     include_pre_enemy_ticks: bool = False,
 ) -> None:
+    if battle_state.get('rules_version') == RULES_VERSION:
+        _dispatch_v1_enemy_action(action, battle_state=battle_state)
+        return
     enemy_side_total = int(battle_state.get('_pack_enemy_side_total') or 0)
     enemy_side_processed = int(battle_state.get('_pack_enemy_side_processed') or 0)
     pack_side_timing = enemy_side_total > 0
@@ -1320,6 +1860,9 @@ def _dispatch_group_player_action(
     battle_state: dict,
     lang: str,
 ) -> None:
+    if battle_state.get('rules_version') == RULES_VERSION:
+        _dispatch_v1_player_action(action, battle_state=battle_state)
+        return
     actor_id = int(getattr(action, 'participant_id', owner_player.get('telegram_id', 0)) or 0)
     if actor_id <= 0:
         return
@@ -1459,6 +2002,153 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer()
         return
 
+    # Complete V1 callbacks contain only a short server-issued token.  The
+    # persisted intent binds encounter, revision, actor, action and recipient.
+    if data.startswith('battle_v1_'):
+        token = data.removeprefix('battle_v1_')
+        actor = (battle_state.get('participant_states_v1') or {}).get(str(user.id), {})
+        # Read the token payload without trusting it for mutation; the atomic
+        # consumer below repeats encounter/revision/participant validation.
+        conn = get_connection()
+        token_row = conn.execute('''SELECT payload FROM player_ui_actions
+            WHERE token=? AND player_id=? AND kind='combat_v1' AND used=0''', (token, user.id)).fetchone()
+        conn.close()
+        try:
+            intent_preview = json.loads(str(token_row['payload'])) if token_row else {}
+        except (TypeError, ValueError):
+            intent_preview = {}
+        action = intent_preview.get('action') if isinstance(intent_preview, dict) else None
+        if (
+            not isinstance(action, dict)
+            or intent_preview.get('encounter_id') != battle_state.get('pve_encounter_id')
+            or int(intent_preview.get('turn_revision', -1)) != int(battle_state.get('turn_revision', 0))
+        ):
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+            return
+        action_type = str(action.get('kind') or '')
+        skill_id = action.get('skill_id')
+        target_info = action.get('target_info') if isinstance(action.get('target_info'), dict) else None
+        target_id = str((target_info or {}).get('id') or '')
+        living_ids = {
+            str(item.get('unit_id')) for item in battle_state.get('enemy_states_v1', [])
+            if int(item.get('hp', 0)) > 0
+        } | {
+            str(item.get('actor_id')) for item in (battle_state.get('participant_states_v1') or {}).values()
+            if int(item.get('hp', 0)) > 0
+        }
+        valid = action_type in {'basic_attack', 'guard', 'skill', 'flee'}
+        if target_id and target_id not in living_ids:
+            valid = False
+        if action_type == 'skill':
+            spec = POWER_STRIKE if skill_id == 'power_strike' else SKILL_SPECS.get(str(skill_id))
+            rank = 1 if skill_id == 'power_strike' else int(actor.get('skill_ranks', {}).get(str(skill_id), 0))
+            valid = bool(
+                valid and spec and rank > 0
+                and (skill_id == 'power_strike' or spec.family == actor.get('family'))
+                and cooldown_remaining(actor, str(skill_id)) == 0
+                and int(actor.get('mana', 0)) >= rank_mana_cost(spec, rank)
+            )
+        if not valid:
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+            return
+        if action_type == 'flee':
+            from game.pve_live import resolve_pve_flee_intent
+            flee_result = resolve_pve_flee_intent(
+                player_id=user.id,
+                encounter_id=str(battle_state.get('pve_encounter_id', '')),
+                action_token=token,
+                success=random.randint(1, 100) <= 20,
+            )
+            if not flee_result.get('accepted'):
+                await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+                return
+            if flee_result.get('fled'):
+                end_battle(user.id)
+                context.user_data.pop('battle', None)
+                context.user_data.pop('battle_mob', None)
+                await safe_edit(
+                    query,
+                    t('battle.flee_success', lang, mob_name=get_mob_name(mob['id'], lang)),
+                    parse_mode='HTML',
+                )
+                await query.answer()
+                return
+            action_type = 'flee_failed'
+        else:
+            consumed = consume_combat_intent(user.id, token)
+            if not consumed.get('accepted'):
+                await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+                return
+        accepted, _ = submit_player_commit(
+            player_id=user.id,
+            action_type=action_type,
+            skill_id=str(skill_id) if skill_id else None,
+            item_id=action.get('item_id'),
+            target_info=target_info,
+            battle_state=battle_state,
+        )
+        if not accepted:
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+            return
+        resolved_player_side = resolve_current_side_if_ready(
+            player_id=user.id,
+            battle_state=battle_state,
+            on_player_action=lambda committed: _dispatch_group_player_action(
+                committed, owner_player=p, mob=mob, battle_state=battle_state, lang=lang,
+            ),
+            on_enemy_action=lambda _action: None,
+        )
+        if not resolved_player_side:
+            context.user_data['battle'] = battle_state
+            await _handle_battle_continues_update(
+                query=query, user_id=user.id, player=p, mob=mob, battle_state=battle_state,
+            )
+            await query.answer()
+            return
+        _reconcile_group_participant_outcomes(battle_state)
+        _process_group_participant_death_consequences(
+            battle_state=battle_state, owner_player_id=user.id,
+            log=battle_state.get('log'), lang=lang,
+        )
+        sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+        if not battle_state.get('mob_dead') and not battle_state.get('player_dead'):
+            enemy_result_applied = run_enemy_instant_side(
+                player_id=user.id,
+                battle_state=battle_state,
+                on_enemy_action=lambda committed: _run_group_enemy_side_action(
+                    action=committed, owner_player=p, mob=mob,
+                    battle_state=battle_state, lang=lang,
+                ),
+            )
+            sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+            if enemy_result_applied is False:
+                await _render_authoritative_after_rejected_result(
+                    query=query, context=context, player=p, mob=mob,
+                    battle_state=battle_state, answer=True,
+                )
+                return
+        context.user_data['battle'] = battle_state
+        update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
+        # The player side and instant enemy side have both advanced the shared
+        # runtime at this point.  Persist that new revision before any render
+        # or participant re-entry can reload the just-resolved side and issue
+        # stale action tokens for it.
+        handled = await _persist_final_v1_projection_and_resolve(
+            query=query,
+            context=context,
+            user_id=user.id,
+            player=p,
+            mob=mob,
+            battle_state=battle_state,
+            lang=lang,
+        )
+        if not handled:
+            await _handle_battle_continues_update(
+                query=query, user_id=user.id, player=p, mob=mob, battle_state=battle_state,
+            )
+            await query.answer()
+        return
+
     # ── Открыть зелья в бою ──
     if data.startswith('battle_potions_'):
         mob_id  = data.replace('battle_potions_', '')
@@ -1469,10 +2159,20 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             potions = conn.execute("""SELECT inv.id, inv.item_id, inv.quantity FROM inventory inv
                 JOIN items i ON inv.item_id=i.item_id
                 WHERE inv.telegram_id=? AND i.item_type='potion' AND inv.quantity>0""", (user.id,)).fetchall()
+            encounter_row = conn.execute('''SELECT turn_revision, state_revision FROM pve_encounters
+                WHERE encounter_id=? AND status='active' ''', (
+                    str(battle_state.get('pve_encounter_id', '')),
+                )).fetchone()
         finally:
             conn.close()
         encounter_id = str(battle_state.get('pve_encounter_id', ''))
-        payloads = [f"{encounter_id}:{pot['id']}:{pot['quantity']}" for pot in potions]
+        if not encounter_row:
+            await query.answer(t('battle.already_over', lang), show_alert=True)
+            return
+        payloads = [
+            f"{encounter_id}:{pot['id']}:{pot['quantity']}:{int(encounter_row['turn_revision'])}:{int(encounter_row['state_revision'])}"
+            for pot in potions
+        ]
         tokens = issue_actions(user.id, 'battle_use', payloads)
 
         if not potions:
@@ -1533,12 +2233,18 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         skill_id, mob_id = rest.split('|', 1)
 
         mob = context.user_data.get('battle_mob')
-        precheck_result = preview_skill_turn_precheck(
-            skill_id,
-            battle_state,
-            user_id=user.id,
-            lang=lang,
-        )
+        if battle_state.get('rules_version') == RULES_VERSION:
+            text, keyboard = build_battle_message(p, mob, battle_state, battle_state.get('log', []))
+            await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+            return
+        else:
+            precheck_result = preview_skill_turn_precheck(
+                skill_id,
+                battle_state,
+                user_id=user.id,
+                lang=lang,
+            )
         if not precheck_result.get('success'):
             await query.answer(precheck_result.get('log', t('battle.turn_not_ready', lang)), show_alert=True)
             return
@@ -1555,6 +2261,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
         resolved_player_side = resolve_current_side_if_ready(
             player_id=user.id,
+            battle_state=battle_state,
             on_player_action=lambda action: _dispatch_group_player_action(
                 action,
                 owner_player=p,
@@ -1600,7 +2307,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             not battle_state.get('mob_dead')
             and not battle_state.get('player_dead')
         ):
-            run_enemy_instant_side(
+            enemy_result_applied = run_enemy_instant_side(
                 player_id=user.id,
                 battle_state=battle_state,
                 on_enemy_action=lambda _action: _run_group_enemy_side_action(
@@ -1613,6 +2320,12 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 ),
             )
             sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+            if enemy_result_applied is False:
+                await _render_authoritative_after_rejected_result(
+                    query=query, context=context, player=p, mob=mob,
+                    battle_state=battle_state, answer=True,
+                )
+                return
 
         if battle_state.get('mob_dead'):
             await _handle_victory_cleanup(
@@ -1641,6 +2354,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
     # ── АТАКА ──
     if data.startswith('battle_attack_'):
+        if battle_state.get('rules_version') == RULES_VERSION:
+            text, keyboard = build_battle_message(p, mob, battle_state, battle_state.get('log', []))
+            await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+            return
         accepted, _ = submit_player_commit(
             player_id=user.id,
             action_type='basic_attack',
@@ -1652,6 +2370,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
         resolved_player_side = resolve_current_side_if_ready(
             player_id=user.id,
+            battle_state=battle_state,
             on_player_action=lambda action: _dispatch_group_player_action(
                 action,
                 owner_player=p,
@@ -1687,7 +2406,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             not battle_state.get('mob_dead')
             and not battle_state.get('player_dead')
         ):
-            run_enemy_instant_side(
+            enemy_result_applied = run_enemy_instant_side(
                 player_id=user.id,
                 battle_state=battle_state,
                 on_enemy_action=lambda _action: _run_group_enemy_side_action(
@@ -1699,6 +2418,12 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 ),
             )
             sync_projection_for_participant(battle_state=battle_state, player_id=user.id)
+            if enemy_result_applied is False:
+                await _render_authoritative_after_rejected_result(
+                    query=query, context=context, player=p, mob=mob,
+                    battle_state=battle_state, answer=True,
+                )
+                return
         context.user_data['battle'] = battle_state
         update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user.id)
 
@@ -1716,6 +2441,11 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
     # ── ПОБЕГ ──
     elif data.startswith('battle_flee_'):
+        if battle_state.get('rules_version') == RULES_VERSION:
+            text, keyboard = build_battle_message(p, mob, battle_state, battle_state.get('log', []))
+            await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+            await query.answer(t('battle.turn_not_ready', lang), show_alert=True)
+            return
         if random.randint(1, 100) <= 20:
             end_battle(user.id)
             finish_solo_pve_encounter(

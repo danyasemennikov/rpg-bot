@@ -366,35 +366,89 @@ def use_inventory_consumable(telegram_id: int, action_token: str) -> dict:
 
 
 def use_battle_consumable(telegram_id: int, action_token: str, encounter_id: str) -> dict:
-    """Consume and persist the active solo encounter in the same transaction."""
+    """Atomically consume inventory and update the authoritative V1 actor snapshot."""
     from game.action_receipts import ActionRejected, consume_action
+    from game.build_contract import RULES_VERSION
+    from game.build_progression import ensure_build_schema
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        ensure_build_schema(conn)
+        duplicate = conn.execute('''SELECT result_json FROM battle_consumable_receipts_v1
+            WHERE action_token=? AND encounter_id=? AND player_id=?''', (
+                action_token, encounter_id, telegram_id,
+            )).fetchone()
+        if duplicate:
+            conn.rollback()
+            return {**json.loads(str(duplicate['result_json'])), 'already_applied': True}
         payload = consume_action(conn, telegram_id, 'battle_use', action_token)
-        saved_encounter, inv_id, quantity = payload.split(':')
+        values = payload.split(':')
+        if len(values) not in {3, 5}:
+            raise ActionRejected('stale_action')
+        saved_encounter, inv_id, quantity = values[:3]
         row = conn.execute("""SELECT e.* FROM pve_encounters e JOIN pve_encounter_participants p
             ON p.encounter_id=e.encounter_id WHERE e.encounter_id=? AND e.status='active'
             AND p.player_id=? AND p.status='active'""", (encounter_id, telegram_id)).fetchone()
         if saved_encounter != encounter_id or not row:
             raise ActionRejected('stale_action')
+        expected_turn = int(values[3]) if len(values) == 5 else int(row['turn_revision'])
+        expected_state = int(values[4]) if len(values) == 5 else int(row['state_revision'])
+        if int(row['turn_revision']) != expected_turn or int(row['state_revision']) != expected_state:
+            raise ActionRejected('stale_action')
         state = json.loads(row['battle_state_json'])
-        from game.pve_live import sync_projection_for_participant
-        sync_projection_for_participant(battle_state=state, player_id=telegram_id)
-        if state.get('player_dead') or state.get('mob_dead'):
+        is_v1 = str(row['rules_version']) == RULES_VERSION and state.get('rules_version') == RULES_VERSION
+        actor = (state.get('participant_states_v1') or {}).get(str(telegram_id)) if is_v1 else None
+        if is_v1 and not isinstance(actor, dict):
+            raise ActionRejected('stale_action')
+        if actor is not None:
+            hp = int(actor.get('hp', 0))
+            mana = int(actor.get('mana', 0))
+            max_hp = int(actor.get('max_hp', 1))
+            max_mana = int(actor.get('max_mana', 0))
+            dead = bool(actor.get('dead')) or hp <= 0
+        else:
+            from game.pve_live import sync_projection_for_participant
+            sync_projection_for_participant(battle_state=state, player_id=telegram_id)
+            hp, mana = int(state['player_hp']), int(state['player_mana'])
+            max_hp, max_mana = int(state['player_max_hp']), int(state['player_max_mana'])
+            dead = bool(state.get('player_dead')) or hp <= 0
+        if dead or state.get('mob_dead'):
             raise ActionRejected('stale_action')
         result = consume_owned_potion(conn, telegram_id, int(inv_id),
-                    hp=state['player_hp'], mana=state['player_mana'],
-                    max_hp=state['player_max_hp'], max_mana=state['player_max_mana'],
+                    hp=hp, mana=mana, max_hp=max_hp, max_mana=max_mana,
                     expected_quantity=int(quantity))
-        state['player_hp'] += result['heal']
-        state['player_mana'] += result['mana']
-        from game.pve_live import update_participant_combat_state_from_projection
-        update_participant_combat_state_from_projection(battle_state=state, player_id=telegram_id)
-        conn.execute('UPDATE pve_encounters SET battle_state_json=?, updated_at=CURRENT_TIMESTAMP WHERE encounter_id=?',
-                     (json.dumps(state, ensure_ascii=False), encounter_id))
+        if actor is not None:
+            actor['hp'] = hp + int(result['heal'])
+            actor['mana'] = mana + int(result['mana'])
+            legacy = (state.get('participant_states') or {}).get(str(telegram_id))
+            if isinstance(legacy, dict):
+                legacy.update({
+                    'hp': actor['hp'], 'mana': actor['mana'],
+                    'player_hp': actor['hp'], 'player_mana': actor['mana'],
+                    'player_dead': False, 'defeated': False,
+                })
+            if int(state.get('active_player_id', telegram_id)) == telegram_id or state.get('player_id') == telegram_id:
+                state['player_hp'], state['player_mana'] = actor['hp'], actor['mana']
+        else:
+            state['player_hp'] += result['heal']
+            state['player_mana'] += result['mana']
+            from game.pve_live import update_participant_combat_state_from_projection
+            update_participant_combat_state_from_projection(battle_state=state, player_id=telegram_id)
+        state['state_revision'] = expected_state + 1
+        updated = conn.execute('''UPDATE pve_encounters SET battle_state_json=?, state_revision=state_revision+1,
+            updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND turn_revision=? AND state_revision=?''', (
+                json.dumps(state, ensure_ascii=False, sort_keys=True), encounter_id, expected_turn, expected_state,
+            ))
+        if updated.rowcount != 1:
+            raise ActionRejected('stale_action')
+        stored = {**result, 'battle': state, 'state_revision': expected_state + 1}
+        conn.execute('''INSERT INTO battle_consumable_receipts_v1
+            (action_token, encounter_id, player_id, result_json) VALUES (?, ?, ?, ?)''', (
+                action_token, encounter_id, telegram_id,
+                json.dumps(stored, ensure_ascii=False, sort_keys=True),
+            ))
         conn.commit()
-        return {**result, 'battle': state}
+        return stored
     except ActionRejected as exc:
         conn.rollback()
         return {'status': str(exc)}

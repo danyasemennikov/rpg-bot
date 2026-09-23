@@ -48,8 +48,10 @@ from game.pve_live import (
     join_open_world_pve_encounter,
     leave_open_world_pve_encounter,
     list_location_active_pve_encounters,
+    list_location_available_mixed_encounters,
     list_location_available_spawn_instances,
 )
+from game.enemy_profiles import MIXED_ENCOUNTERS
 from game.quest_board import (
     accept_hunt_contract,
     abandon_hunt_contract,
@@ -79,6 +81,7 @@ from game.pvp_live import (
     invite_reinforcement_ally,
     is_pvp_mobility_blocked,
     get_manual_pvp_action_labels,
+    issue_manual_pvp_action_labels,
     is_player_busy_with_live_pvp,
     join_pending_encounter_side,
     list_reinforcement_candidates,
@@ -86,6 +89,8 @@ from game.pvp_live import (
     resolve_engagement_escape,
     resolve_live_battle_turn,
 )
+from game.combat_orders import consume_combat_intent
+from game.build_contract import RULES_VERSION
 from game.pvp_rules import (
     clear_respawn_protection,
     clear_respawn_protection_on_dangerous_reentry,
@@ -448,11 +453,15 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         return t('location.pve_no_encounter', lang), InlineKeyboardMarkup([])
 
     profile_marker = _format_spawn_profile_marker(str(detail.get('spawn_profile') or 'normal'), lang)
-    display_name = _resolve_world_spawn_display_name(
-        mob_id=str(detail.get('mob_id') or ''),
-        lang=lang,
-        special_spawn_key=str(detail.get('special_spawn_key') or ''),
-        special_spawn_name=str(detail.get('special_spawn_name') or ''),
+    mixed_recipe = MIXED_ENCOUNTERS.get(str(detail.get('mixed_encounter_id') or ''))
+    display_name = (
+        str((mixed_recipe.get('label') or {}).get(lang) or (mixed_recipe.get('label') or {}).get('en'))
+        if mixed_recipe else _resolve_world_spawn_display_name(
+            mob_id=str(detail.get('mob_id') or ''),
+            lang=lang,
+            special_spawn_key=str(detail.get('special_spawn_key') or ''),
+            special_spawn_name=str(detail.get('special_spawn_name') or ''),
+        )
     )
     mob_name = f"{profile_marker} {display_name}".strip()
     status_key = 'location.pve_status_locked'
@@ -970,18 +979,34 @@ def build_location_message(
                         lang,
                     ),
                 ) + '\n'
+                if battle.get('rules_version') == RULES_VERSION and battle.get('events_v1'):
+                    from handlers.battle import _render_v1_event
+                    rendered = [
+                        line for line in (
+                            _render_v1_event(event, battle, lang)
+                            for event in (battle.get('events_v1') or [])[-6:]
+                        ) if line
+                    ][-3:]
+                    if rendered:
+                        text += '\n' + '\n'.join(f'▫️ {line}' for line in rendered) + '\n'
                 if turn_owner_id == int(player['telegram_id']):
-                    for action_id, action_label in get_manual_pvp_action_labels(
-                        player_id=int(player['telegram_id']),
-                        lang=lang,
-                        battle=battle,
-                        attacker_id=int(engagement_row['attacker_id']),
-                        defender_id=int(engagement_row['defender_id']),
-                    ):
-                        keyboard.append([InlineKeyboardButton(
-                            action_label,
-                            callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
-                        )])
+                    if battle.get('rules_version') == RULES_VERSION:
+                        for token, action_label in issue_manual_pvp_action_labels(
+                            engagement_id=int(engagement_row['id']),
+                            player_id=int(player['telegram_id']), lang=lang, battle=battle,
+                            attacker_id=int(engagement_row['attacker_id']),
+                            defender_id=int(engagement_row['defender_id']),
+                        ):
+                            keyboard.append([InlineKeyboardButton(action_label, callback_data=f"pvp_v1_{token}")])
+                    else:
+                        for action_id, action_label in get_manual_pvp_action_labels(
+                            player_id=int(player['telegram_id']), lang=lang, battle=battle,
+                            attacker_id=int(engagement_row['attacker_id']),
+                            defender_id=int(engagement_row['defender_id']),
+                        ):
+                            keyboard.append([InlineKeyboardButton(
+                                action_label, callback_data=f"pvp_act_{engagement_row['id']}_{action_id}",
+                            )])
             else:
                 text += t('location.pvp_reinforcement_commitment_released', lang) + '\n'
 
@@ -992,6 +1017,15 @@ def build_location_message(
             for encounter in active_pve_encounters:
                 mob_id = str(encounter.get('mob_id') or '')
                 profile_marker = _format_spawn_profile_marker(str(encounter.get('spawn_profile') or 'normal'), lang)
+                mixed_recipe = MIXED_ENCOUNTERS.get(str(encounter.get('mixed_encounter_id') or ''))
+                encounter_name = (
+                    str((mixed_recipe.get('label') or {}).get(lang) or (mixed_recipe.get('label') or {}).get('en'))
+                    if mixed_recipe else _resolve_world_spawn_display_name(
+                        mob_id=mob_id, lang=lang,
+                        special_spawn_key=str(encounter.get('special_spawn_key') or ''),
+                        special_spawn_name=str(encounter.get('special_spawn_name') or ''),
+                    )
+                )
                 participant_ids = {
                     int(pid) for pid in encounter.get('participant_player_ids', [])
                 } if isinstance(encounter.get('participant_player_ids'), list) else set()
@@ -1001,7 +1035,7 @@ def build_location_message(
                     'location.pve_encounter_row',
                     lang,
                     id=encounter['encounter_id'],
-                    mob=f"{profile_marker} {_resolve_world_spawn_display_name(mob_id=mob_id, lang=lang, special_spawn_key=str(encounter.get('special_spawn_key') or ''), special_spawn_name=str(encounter.get('special_spawn_name') or ''))}".strip(),
+                    mob=f"{profile_marker} {encounter_name}".strip(),
                     players=int(encounter.get('participant_count', 0)),
                     join_state=t(
                         (
@@ -1012,6 +1046,15 @@ def build_location_message(
                         lang,
                     ),
                 ) + f" | /enc {encounter['encounter_id']}")
+
+        for mixed in list_location_available_mixed_encounters(location_id=location['id']):
+            mixed_label = str((mixed.get('label') or {}).get(lang) or (mixed.get('label') or {}).get('en'))
+            unit_names = ', '.join(get_mob_name(str(mob_id), lang) for mob_id, _formation in mixed.get('units', ()))
+            mob_lines.append(f"• ⚔️ {mixed_label} ×{len(mixed.get('units', ()))} — {unit_names}")
+            keyboard.append([InlineKeyboardButton(
+                f"⚔️ {mixed_label} ×{len(mixed.get('units', ()))}",
+                callback_data=f"fight_mixed_{mixed['recipe_id']}",
+            )])
 
         available_spawns = list_location_available_spawn_instances(location_id=location['id'])
         if available_spawns:
@@ -1249,8 +1292,14 @@ async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('location.not_found', lang))
         return
     encounters = get_pending_location_encounters(location_id=location['id'], limit=10)
+    build_label = {'ru': '🧭 PvP-билд', 'en': '🧭 PvP build', 'es': '🧭 Configuración JcJ'}.get(lang, '🧭 PvP build')
     if not encounters:
-        await update.message.reply_text(t('location.pvp_list_empty', lang))
+        await update.message.reply_text(
+            t('location.pvp_list_empty', lang),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(build_label, callback_data='bv_pvp'),
+            ]]),
+        )
         return
     text = t('location.pvp_list_title', lang, location=get_location_name(location['id'], lang)) + '\n\n'
     keyboard = []
@@ -1269,6 +1318,7 @@ async def pvp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             t('location.pvp_view_fight_btn', lang, id=encounter['id']),
             callback_data=f"pvp_view_{encounter['id']}",
         )])
+    keyboard.append([InlineKeyboardButton(build_label, callback_data='bv_pvp')])
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 
@@ -1619,7 +1669,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer(t('location.pvp_context_block', lang), show_alert=True)
         return
     
-    if p and p['in_battle'] and not data.startswith('pvp_'):
+    if (
+        p
+        and p['in_battle']
+        and not data.startswith('pvp_')
+        and not data.startswith('pve_enter_')
+    ):
         await query.answer(t('location.in_battle_block', lang), show_alert=True)
         return
 
@@ -1855,6 +1910,38 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             context,
             refreshed_player,
             location,
+            pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
+        )
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_v1_'):
+        consumed = consume_combat_intent(int(user.id), data.removeprefix('pvp_v1_'))
+        if not consumed.get('accepted'):
+            await query.answer(t('location.pvp_action_not_ready', lang), show_alert=True)
+            return
+        action = consumed.get('action') or {}
+        kind = str(action.get('kind') or '')
+        action_id = (
+            'normal_attack' if kind == 'normal' else 'guard' if kind == 'guard'
+            else f"skill:{action.get('skill_id')}" if kind == 'skill' else ''
+        )
+        engagement_id = int(consumed['encounter_id'])
+        conn = get_connection()
+        engagement_row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+        conn.close()
+        status, _payload = resolve_live_battle_turn(
+            engagement_row, actor_id=int(user.id), selected_action_id=action_id,
+        ) if engagement_row and action_id else ('invalid_action', {})
+        status_key = {
+            'waiting': 'location.pvp_wait_turn_timeout', 'invalid_action': 'location.pvp_action_not_ready',
+            'not_your_turn': 'location.pvp_not_your_turn', 'finished': 'location.pvp_battle_finished',
+        }.get(status, 'location.pvp_action_done')
+        await query.answer(t(status_key, lang), show_alert=True)
+        refreshed_player = dict(get_player(user.id))
+        location = get_location(refreshed_player['location_id'])
+        text, keyboard = _build_location_message_with_snapshot(
+            context, refreshed_player, location,
             pvp_only_view=_should_use_pvp_only_location_view(refreshed_player),
         )
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -2471,6 +2558,18 @@ async def handle_combat_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             mob_id='',
             mob_first=False,
             spawn_instance_id=spawn_instance_id,
+            open_runtime_now=False,
+        )
+
+    elif data.startswith('fight_mixed_'):
+        mixed_encounter_id = data.replace('fight_mixed_', '', 1)
+        from handlers.battle import start_battle
+        await start_battle(
+            update,
+            context,
+            mob_id='',
+            mob_first=False,
+            mixed_encounter_id=mixed_encounter_id,
             open_runtime_now=False,
         )
 

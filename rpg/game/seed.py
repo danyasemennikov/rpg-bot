@@ -34,6 +34,12 @@ def seed_items():
                 item['skills_json'], item['stat_bonus_json']
             ))
             count += 1
+    # Named V1 reconciliation: existing instances resolve their immutable
+    # identity/rolls against this corrected central base on the next snapshot.
+    staff = ITEMS['magic_staff']
+    conn.execute('''UPDATE items SET damage_min=?, damage_max=?
+        WHERE item_id='magic_staff' AND (damage_min<>? OR damage_max<>?)''',
+        (staff['damage_min'], staff['damage_max'], staff['damage_min'], staff['damage_max']))
     conn.commit()
     conn.close()
     print(f'✅ Загружено предметов: {count}')

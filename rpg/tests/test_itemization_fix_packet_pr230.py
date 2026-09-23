@@ -738,7 +738,7 @@ def test_r2_provable_pr229_anchored_resume_uses_spawn_authority_and_is_determini
     )) == 1
 
 
-def test_r1_real_handler_terminal_gap_is_discovered_by_startup_once(monkeypatch):
+def test_r1_real_handler_terminal_gap_is_discovered_and_v1_cutover_cancels_old_fights_once(monkeypatch):
     owner, other_pve, pvp_a, pvp_b = (BASE_PID + 23, BASE_PID + 24, BASE_PID + 25, BASE_PID + 26)
     for player_id in (owner, other_pve, pvp_a, pvp_b):
         _make_player(player_id)
@@ -824,13 +824,21 @@ def test_r1_real_handler_terminal_gap_is_discovered_by_startup_once(monkeypatch)
     assert receipt['encounter_id'] == encounter_id
     gold_after = get_player(owner)['gold']
     assert get_player(owner)['in_battle'] == 0
-    assert unrelated_before == {
+    # Before V1, startup recovery deliberately preserved unrelated fights.
+    # The approved global rules cutover now ends every pre-version encounter so
+    # no process can resume one under a different combat contract.
+    assert unrelated_before['pve'][0]['status'] == 'active'
+    assert unrelated_before['pvp'][0]['engagement_state'] == 'pending'
+    unrelated_after = {
         'pve': _rows(
             'SELECT status,battle_state_json FROM pve_encounters WHERE encounter_id=?',
             ('r1-unrelated-pve',),
         ),
         'pvp': _rows('SELECT id,engagement_state FROM pvp_engagements'),
     }
+    assert unrelated_after['pve'][0]['status'] == 'rules_updated'
+    assert unrelated_after['pvp'][0]['engagement_state'] == 'cancelled'
+    assert unrelated_after['pve'][0]['battle_state_json'] == unrelated_before['pve'][0]['battle_state_json']
 
     initialize_runtime()
     assert get_player(owner)['gold'] == gold_after

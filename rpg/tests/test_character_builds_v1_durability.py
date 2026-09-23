@@ -1,0 +1,784 @@
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+from database import get_connection
+from game.build_contract import RULES_VERSION
+from game.build_progression import ensure_build_schema
+from game.build_progression import migrate_character_builds_v1
+from game.combat_orders import consume_combat_intent, issue_combat_intents, load_combat_orders
+from game.mobs import get_mob
+from game.pve_reward_settlement import apply_prepared_settlement, prepare_victory_settlement
+from game.pve_reward_settlement import _v1_mastery_awards
+from game.pve_live import (
+    _SOLO_PVE_RUNTIME_STORE,
+    create_pve_encounter,
+    ensure_runtime_for_battle,
+    get_pve_encounter_player_ids,
+    load_active_pve_encounter,
+    open_next_player_side_turn,
+    persist_solo_pve_encounter_state,
+    resolve_current_side_if_ready,
+    resolve_pve_flee_intent,
+    reset_solo_pve_runtime_store,
+    run_enemy_instant_side,
+    submit_player_commit,
+)
+from game.pvp_live import (
+    _LIVE_PVP_RUNTIME_STORE,
+    _deserialize_reason_context,
+    _ensure_live_runtime_for_battle,
+    _init_live_battle_payload,
+    _write_engagement_state,
+    create_live_engagement,
+    issue_manual_pvp_action_labels,
+    recover_terminal_pvp_settlements,
+    resolve_live_battle_turn,
+    _finalize_pvp_battle,
+)
+from handlers import battle as battle_handler
+
+
+def test_mastery_awards_only_manual_survivors_with_frozen_family_and_caps_at_80():
+    state = {
+        "participant_states_v1": {
+            "1": {"family": "bow", "level": 10, "manual_contribution": True},
+            "2": {"family": "wand", "level": 10, "manual_contribution": False},
+            "3": {"family": "unarmed", "level": 10, "manual_contribution": True},
+        }
+    }
+    units = [
+        {"unit_id": "a", "mob_level": 10, "spawn_profile": "normal"},
+        {"unit_id": "b", "mob_level": 10, "spawn_profile": "elite"},
+        {"unit_id": "c", "mob_level": 1, "spawn_profile": "rare"},
+        {"unit_id": "d", "mob_level": 10, "spawn_profile": "normal"},
+    ]
+    assert _v1_mastery_awards(battle_state=state, eligible=[1, 2, 3], units=units) == [{
+        "player_id": 1,
+        "weapon_id": "bow",
+        "exp": 80,
+        "units": [
+            {"unit_id": "a", "mob_level": 10, "spawn_profile": "normal", "exp": 20},
+            {"unit_id": "b", "mob_level": 10, "spawn_profile": "elite", "exp": 40},
+            {"unit_id": "c", "mob_level": 1, "spawn_profile": "rare", "exp": 10},
+            {"unit_id": "d", "mob_level": 10, "spawn_profile": "normal", "exp": 20},
+        ],
+    }]
+
+
+def test_pve_ui_intent_is_single_use_deadline_bound_and_durable():
+    conn = get_connection()
+    ensure_build_schema(conn)
+    conn.execute(
+        """INSERT INTO pve_encounters
+        (encounter_id, owner_player_id, status, mob_id, battle_state_json, mob_json,
+         source_units_json, rules_version, turn_revision)
+        VALUES ('intent-v1', 1, 'active', 'rat', '{}', '{}', '[]', ?, 0)""",
+        (RULES_VERSION,),
+    )
+    conn.execute(
+        "INSERT INTO pve_encounter_participants (encounter_id, player_id, status) VALUES ('intent-v1', 1, 'active')"
+    )
+    conn.commit()
+    conn.close()
+
+    deadline = (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()
+    action = {"kind": "normal", "target_info": {"id": "enemy-1"}}
+    token = issue_combat_intents(
+        1, encounter_id="intent-v1", turn_revision=1,
+        deadline_at=deadline, actions=[action],
+    )[__import__("json").dumps(action, ensure_ascii=False, sort_keys=True, separators=(",", ":"))]
+    assert consume_combat_intent(1, token)["accepted"] is True
+    assert consume_combat_intent(1, token) == {"accepted": False, "reason": "stale_action"}
+    orders = load_combat_orders(encounter_kind="pve", encounter_id="intent-v1", turn_revision=1)
+    assert len(orders) == 1
+    assert orders[0]["action"] == action
+
+
+def test_v1_pvp_uses_opaque_durable_order_and_recovers_it_after_runtime_loss():
+    migrate_character_builds_v1()
+    attacker = 1
+    defender = 777
+    conn = get_connection()
+    attacker_row = dict(conn.execute("SELECT * FROM players WHERE telegram_id=?", (attacker,)).fetchone())
+    defender_row = dict(conn.execute("SELECT * FROM players WHERE telegram_id=?", (defender,)).fetchone())
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker_row, defender=defender_row,
+        location_id="capital_city", illegal_aggression=False,
+    )
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM pvp_engagements WHERE id=?", (engagement_id,)).fetchone()
+    conn.close()
+    battle = _init_live_battle_payload(
+        attacker_id=attacker, defender_id=defender, now=datetime.now(timezone.utc),
+    )
+    _ensure_live_runtime_for_battle(engagement_row=row, battle=battle)
+    initial_attacker_mana = battle["participants_v1"][str(attacker)]["mana"]
+    payload = {"flow": "open_world_1v1", "battle": battle}
+    _write_engagement_state(engagement_id=engagement_id, state="converted_to_battle", payload=payload)
+
+    actions = issue_manual_pvp_action_labels(
+        engagement_id=engagement_id, player_id=attacker, lang="en", battle=battle,
+        attacker_id=attacker, defender_id=defender,
+    )
+    assert len(actions) == 3  # normal, Guard, universal Power Strike
+    normal_token = actions[0][0]
+    consumed = consume_combat_intent(attacker, normal_token)
+    assert consumed["accepted"] is True
+    assert consumed["encounter_kind"] == "pvp"
+
+    # Simulate a process crash after the atomic order insert but before the
+    # in-memory runtime receives/resolves that order.
+    _LIVE_PVP_RUNTIME_STORE.reset()
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM pvp_engagements WHERE id=?", (engagement_id,)).fetchone()
+    conn.close()
+    status, result_payload = resolve_live_battle_turn(
+        row, actor_id=attacker, selected_action_id=None,
+    )
+    assert status == "resolved"
+    assert result_payload["battle"]["turn_owner"] == defender
+    assert result_payload["battle"]["participants_v1"][str(attacker)]["mana"] > initial_attacker_mana
+    conn = get_connection()
+    result = conn.execute(
+        "SELECT result_json FROM combat_turn_results_v1 WHERE encounter_kind='pvp' AND encounter_id=?",
+        (str(engagement_id),),
+    ).fetchone()
+    persisted = conn.execute("SELECT reason_context FROM pvp_engagements WHERE id=?", (engagement_id,)).fetchone()
+    conn.close()
+    assert result is not None
+    assert _deserialize_reason_context(persisted["reason_context"])["battle"]["turn_owner"] == defender
+
+
+def test_v1_mob_first_uses_shared_enemy_side_not_legacy_strike():
+    player = {
+        'telegram_id': 1, 'name': 'Hero', 'lang': 'en', 'location_id': 'westwild_n1',
+        'hp': 118, 'mana': 62, 'level': 1, 'strength': 1, 'agility': 1,
+        'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1,
+    }
+    effective = {
+        **{key: player[key] for key in ('strength', 'agility', 'intuition', 'vitality', 'wisdom', 'luck')},
+        'max_hp': 118, 'max_mana': 62, 'physical_defense_bonus': 0,
+        'magic_defense_bonus': 0, 'accuracy_bonus': 0, 'evasion_bonus': 0,
+        'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+    }
+    battle = {
+        'mob_id': 'westwild_rabbit', 'log': [], 'player_hp': 118, 'player_max_hp': 118,
+        'player_mana': 62, 'player_max_mana': 62,
+    }
+    query = SimpleNamespace(
+        from_user=SimpleNamespace(id=1), answer=AsyncMock(), edit_message_text=AsyncMock(),
+    )
+    context = SimpleNamespace(user_data={}, application=SimpleNamespace(user_data={1: {}}))
+
+    def create_v1(**kwargs):
+        kwargs['battle_state'].update({
+            'rules_version': RULES_VERSION, 'participant_states_v1': {
+                '1': {'actor_id': 1, 'hp': 118, 'max_hp': 118, 'mana': 62, 'max_mana': 62},
+            },
+            'enemy_states_v1': [{'unit_id': 'enemy-1', 'hp': 20, 'max_hp': 20}],
+        })
+        return 'v1-first', 'created'
+
+    with patch('handlers.battle.get_player', return_value=player), \
+         patch('handlers.battle.get_mob', return_value={'id': 'westwild_rabbit', 'hp': 20, 'level': 1}), \
+         patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+         patch('handlers.battle.get_player_effective_stats', return_value=effective), \
+         patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+         patch('handlers.battle.init_battle', return_value=battle), \
+         patch('handlers.battle.create_or_load_open_world_pve_encounter', side_effect=create_v1), \
+         patch('handlers.battle.ensure_runtime_for_battle'), \
+         patch('handlers.battle.run_enemy_instant_side') as enemy_side, \
+         patch('handlers.battle.sync_projection_for_participant'), \
+         patch('handlers.battle.update_participant_combat_state_from_projection'), \
+         patch('handlers.battle.persist_solo_pve_encounter_state'), \
+         patch('handlers.battle.save_battle'), \
+         patch('handlers.battle.build_battle_message', return_value=('battle', None)), \
+         patch('game.combat.mob_attack', side_effect=AssertionError('legacy bypass')):
+        asyncio.run(battle_handler.start_battle(
+            SimpleNamespace(callback_query=query), context, 'westwild_rabbit', mob_first=True,
+        ))
+
+    enemy_side.assert_called_once()
+    assert battle['active_side'] == 'side_b'
+
+
+def test_continuing_battle_cas_rejection_cannot_write_stale_player_resources():
+    authoritative = {
+        'rules_version': RULES_VERSION,
+        'pve_encounter_id': 'pve-cas-authority',
+        'mob_id': 'westwild_rabbit',
+        'turn_revision': 0,
+        'state_revision': 1,
+        'player_hp': 80,
+        'player_mana': 40,
+        'player_dead': False,
+        'mob_dead': False,
+        'log': ['authoritative'],
+        'participant_states_v1': {
+            '1': {'actor_id': 1, 'hp': 80, 'max_hp': 118, 'mana': 40, 'max_mana': 62},
+        },
+        'enemy_states_v1': [{'unit_id': 'enemy-1', 'hp': 20, 'max_hp': 20}],
+    }
+    mob = {'id': 'westwild_rabbit', 'hp': 20}
+    conn = get_connection()
+    ensure_build_schema(conn)
+    conn.execute('UPDATE players SET hp=80, mana=40 WHERE telegram_id=1')
+    conn.execute(
+        """INSERT INTO pve_encounters
+           (encounter_id, owner_player_id, status, mob_id, battle_state_json,
+            mob_json, source_units_json, rules_version, turn_revision, state_revision)
+           VALUES ('pve-cas-authority', 1, 'active', 'westwild_rabbit', ?, ?, '[]', ?, 0, 1)""",
+        (json.dumps(authoritative), json.dumps(mob), RULES_VERSION),
+    )
+    conn.execute(
+        """INSERT INTO pve_encounter_participants (encounter_id, player_id, status)
+           VALUES ('pve-cas-authority', 1, 'active')"""
+    )
+    conn.commit()
+    conn.close()
+
+    stale = json.loads(json.dumps(authoritative))
+    stale['state_revision'] = 0
+    stale['player_hp'] = 5
+    stale['player_mana'] = 3
+    stale['log'] = ['stale']
+    stale['participant_states_v1']['1']['hp'] = 5
+    stale['participant_states_v1']['1']['mana'] = 3
+    query = SimpleNamespace(edit_message_text=AsyncMock())
+
+    with patch('handlers.battle.build_battle_message', return_value=('authority', None)) as render:
+        asyncio.run(battle_handler._handle_battle_continues_update(
+            query=query,
+            user_id=1,
+            player={'telegram_id': 1},
+            mob={'id': 'westwild_rabbit', 'hp': 5},
+            battle_state=stale,
+        ))
+
+    conn = get_connection()
+    player = dict(conn.execute('SELECT hp, mana FROM players WHERE telegram_id=1').fetchone())
+    encounter = dict(conn.execute(
+        "SELECT battle_state_json, state_revision FROM pve_encounters WHERE encounter_id='pve-cas-authority'"
+    ).fetchone())
+    conn.close()
+
+    assert player == {'hp': 80, 'mana': 40}
+    assert json.loads(encounter['battle_state_json'])['player_hp'] == 80
+    assert encounter['state_revision'] == 1
+    assert stale['player_hp'] == 80
+    assert stale['participant_states_v1']['1']['hp'] == 80
+    render.assert_called_once()
+    assert render.call_args.args[2]['player_hp'] == 80
+
+
+def test_enemy_side_dot_kill_refreshes_terminal_projection_for_settlement():
+    reset_solo_pve_runtime_store()
+    migrate_character_builds_v1()
+    effect = {
+        'kind': 'bleed', 'source_id': '1', 'skill_id': 'bleeding_cut',
+        'duration': 1, 'value': 0, 'created_side_index': 0,
+        'school': 'physical', 'raw_tick': 5,
+        'metadata': {'source_level': 1, 'weakness_snapshot': 0},
+    }
+    battle = {
+        'rules_version': RULES_VERSION,
+        'mob_id': 'westwild_rabbit',
+        'mob_hp': 1,
+        'mob_dead': False,
+        'active_side': 'side_b',
+        'log': [],
+        'participant_states_v1': {
+            '1': {'actor_id': 1, 'hp': 100, 'max_hp': 100, 'mana': 50,
+                  'max_mana': 50, 'effects': [], 'cooldowns': {}},
+        },
+        'enemy_states_v1': [
+            {'unit_id': 'enemy-dot', 'mob_id': 'westwild_rabbit', 'hp': 1,
+             'max_hp': 22, 'effects': [effect]},
+        ],
+        'enemy_units': [
+            {'unit_id': 'enemy-dot', 'mob_id': 'westwild_rabbit', 'hp': 1,
+             'max_hp': 22, 'dead': False},
+        ],
+    }
+    ensure_runtime_for_battle(
+        player_id=1, battle_state=battle,
+        mob={'id': 'westwild_rabbit', 'hp': 22},
+    )
+    battle['enemy_states_v1'][0].update({'hp': 1, 'effects': [effect]})
+    battle['enemy_units'][0].update({'hp': 1, 'dead': False})
+    battle['mob_hp'] = 1
+    battle['mob_dead'] = False
+    run_enemy_instant_side(
+        player_id=1, battle_state=battle,
+        on_enemy_action=lambda _action: None,
+    )
+
+    assert battle['enemy_states_v1'][0]['hp'] == 0
+    assert battle['enemy_units'][0]['dead'] is True
+    assert battle['mob_hp'] == 0
+    assert battle['mob_dead'] is True
+
+
+def test_rejected_enemy_result_restores_authority_before_terminal_consequences():
+    reset_solo_pve_runtime_store()
+    migrate_character_builds_v1()
+    battle = {
+        'rules_version': RULES_VERSION,
+        'mob_id': 'westwild_rabbit',
+        'mob_hp': 20,
+        'mob_max_hp': 20,
+        'mob_dead': False,
+        'player_hp': 100,
+        'player_max_hp': 100,
+        'player_mana': 50,
+        'player_max_mana': 50,
+        'player_dead': False,
+        'active_side': 'side_b',
+        'side_a_player_ids': [1],
+        'log': ['durable'],
+        'participant_states': {
+            '1': {
+                'player_hp': 100, 'player_max_hp': 100,
+                'player_mana': 50, 'player_max_mana': 50,
+                'player_dead': False,
+            },
+        },
+        'participant_states_v1': {
+            '1': {
+                'actor_id': 1, 'hp': 100, 'max_hp': 100,
+                'mana': 50, 'max_mana': 50, 'effects': [], 'cooldowns': {},
+            },
+        },
+        'enemy_states_v1': [{
+            'unit_id': 'enemy-authority', 'mob_id': 'westwild_rabbit',
+            'hp': 20, 'max_hp': 20, 'effects': [],
+        }],
+    }
+    mob = {'id': 'westwild_rabbit', 'hp': 20}
+    ensure_runtime_for_battle(player_id=1, battle_state=battle, mob=mob)
+
+    def stale_lethal_enemy_action(_action):
+        battle['participant_states_v1']['1']['hp'] = 0
+        battle['participant_states']['1']['player_hp'] = 0
+        battle['participant_states']['1']['player_dead'] = True
+        battle['player_hp'] = 0
+        battle['player_dead'] = True
+        battle['log'] = ['stale lethal']
+
+    with patch('game.pve_live.persist_turn_result', return_value={
+        'applied': False, 'reason': 'stale_revision',
+    }):
+        applied = run_enemy_instant_side(
+            player_id=1,
+            battle_state=battle,
+            on_enemy_action=stale_lethal_enemy_action,
+        )
+
+    assert applied is False
+    assert battle['player_hp'] == 100
+    assert battle['player_dead'] is False
+    assert battle['participant_states_v1']['1']['hp'] == 100
+    assert battle['log'] == ['durable']
+
+    query = SimpleNamespace(edit_message_text=AsyncMock())
+    context = SimpleNamespace(user_data={'battle': battle, 'battle_mob': mob})
+    with patch.object(battle_handler, '_handle_victory_cleanup', new=AsyncMock()) as victory, \
+         patch.object(battle_handler, '_handle_death_or_resurrection', new=AsyncMock()) as death, \
+         patch.object(battle_handler, '_handle_battle_continues_update', new=AsyncMock()) as continuing:
+        handled = asyncio.run(battle_handler._resolve_post_attack_combat_resolution(
+            query=query,
+            context=context,
+            user_id=1,
+            player={'telegram_id': 1, 'lang': 'en'},
+            mob=mob,
+            battle_state=battle,
+            lang='en',
+        ))
+
+    assert handled is False
+    victory.assert_not_awaited()
+    death.assert_not_awaited()
+    continuing.assert_awaited_once()
+
+
+def test_final_encounter_persistence_rejection_cannot_dispatch_stale_terminal_state():
+    authoritative = {
+        'rules_version': RULES_VERSION,
+        'pve_encounter_id': 'final-persist-authority',
+        'player_hp': 80,
+        'player_dead': False,
+        'mob_hp': 20,
+        'mob_dead': False,
+        'log': ['authoritative'],
+    }
+    authoritative_mob = {'id': 'westwild_rabbit', 'hp': 20}
+    stale = {
+        **authoritative,
+        'player_hp': 0,
+        'player_dead': True,
+        'mob_hp': 0,
+        'mob_dead': True,
+        'log': ['rejected terminal'],
+    }
+    stale_mob = {'id': 'westwild_rabbit', 'hp': 0}
+    query = SimpleNamespace(answer=AsyncMock())
+    context = SimpleNamespace(user_data={'battle': stale, 'battle_mob': stale_mob})
+
+    with patch('handlers.battle.persist_solo_pve_encounter_state', return_value=False), \
+         patch('handlers.battle.load_active_pve_encounter', return_value=(authoritative, authoritative_mob)), \
+         patch.object(battle_handler, '_render_authoritative_after_rejected_result', new=AsyncMock()) as render, \
+         patch.object(battle_handler, '_resolve_post_attack_combat_resolution', new=AsyncMock()) as terminal_dispatch, \
+         patch.object(battle_handler, 'apply_death') as apply_death:
+        handled = asyncio.run(battle_handler._persist_final_v1_projection_and_resolve(
+            query=query,
+            context=context,
+            user_id=1,
+            player={'telegram_id': 1, 'lang': 'en'},
+            mob=stale_mob,
+            battle_state=stale,
+            lang='en',
+        ))
+
+    assert handled is True
+    assert stale == authoritative
+    assert stale_mob == authoritative_mob
+    render.assert_awaited_once()
+    terminal_dispatch.assert_not_awaited()
+    apply_death.assert_not_called()
+
+    missing_stale = {
+        **authoritative,
+        'pve_encounter_id': 'already-finished',
+        'player_hp': 0,
+        'player_dead': True,
+        'mob_hp': 0,
+        'mob_dead': True,
+    }
+    missing_mob = {'id': 'westwild_rabbit', 'hp': 0}
+    missing_query = SimpleNamespace(answer=AsyncMock())
+    missing_context = SimpleNamespace(user_data={
+        'battle': missing_stale,
+        'battle_mob': missing_mob,
+    })
+    with patch('handlers.battle.persist_solo_pve_encounter_state', return_value=False), \
+         patch('handlers.battle.load_active_pve_encounter', return_value=None), \
+         patch.object(battle_handler, '_resolve_post_attack_combat_resolution', new=AsyncMock()) as terminal_dispatch, \
+         patch.object(battle_handler, 'apply_death') as apply_death:
+        handled = asyncio.run(battle_handler._persist_final_v1_projection_and_resolve(
+            query=missing_query,
+            context=missing_context,
+            user_id=1,
+            player={'telegram_id': 1, 'lang': 'en'},
+            mob=missing_mob,
+            battle_state=missing_stale,
+            lang='en',
+        ))
+
+    assert handled is True
+    assert 'battle' not in missing_context.user_data
+    assert 'battle_mob' not in missing_context.user_data
+    missing_query.answer.assert_awaited_once()
+    terminal_dispatch.assert_not_awaited()
+    apply_death.assert_not_called()
+
+
+def test_group_flee_is_participant_scoped_and_replays_durable_result():
+    migrate_character_builds_v1()
+    state = {
+        'rules_version': RULES_VERSION, 'turn_revision': 0, 'state_revision': 0,
+        'pve_encounter_id': 'group-flee', 'mob_id': 'westwild_rabbit',
+        'location_id': 'westwild_n1', 'mob_hp': 22, 'mob_dead': False,
+        'side_a_player_ids': [1, 777],
+    }
+    mob = get_mob('westwild_rabbit')
+    create_pve_encounter(
+        owner_player_id=1, side_a_player_ids=[1, 777], battle_state=state,
+        mob=mob, encounter_id='group-flee', location_id='westwild_n1',
+    )
+    state['participant_states_v1']['1'].update(hp=73, mana=21, effects=[{
+        'kind': 'poison', 'source_id': 'enemy', 'skill_id': 'enemy_venom',
+        'duration': 3, 'value': 0, 'school': 'physical', 'raw_tick': 7,
+        'created_side_index': 0, 'metadata': {'source_level': 1},
+    }])
+    state['participant_states_v1']['777'].setdefault('effects', []).append({
+        'kind': 'intercept', 'source_id': '1', 'skill_id': 'aura_of_resolve',
+        'duration': 1, 'value': 0, 'school': None, 'raw_tick': None,
+        'created_side_index': 0, 'metadata': {'protector_id': '1'},
+    })
+    state['participant_states'] = {
+        '1': {'hp': 73, 'mana': 21, 'player_hp': 73, 'player_mana': 21},
+        '777': {'hp': 88, 'mana': 32, 'player_hp': 88, 'player_mana': 32},
+    }
+    persist_solo_pve_encounter_state(encounter_id='group-flee', battle_state=state, mob=mob)
+    ensure_runtime_for_battle(player_id=1, battle_state=state, mob=mob)
+    conn = get_connection()
+    conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id IN (1, 777)')
+    conn.commit()
+    conn.close()
+    action = {'kind': 'flee', 'skill_id': None, 'item_id': None, 'target_info': None}
+    deadline = (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()
+    token = issue_combat_intents(
+        1, encounter_id='group-flee', turn_revision=int(state['turn_revision']),
+        deadline_at=deadline, actions=[action],
+    )[json.dumps(action, ensure_ascii=False, sort_keys=True, separators=(',', ':'))]
+    first = resolve_pve_flee_intent(
+        player_id=1, encounter_id='group-flee', action_token=token, success=True,
+    )
+    replay = resolve_pve_flee_intent(
+        player_id=1, encounter_id='group-flee', action_token=token, success=False,
+    )
+    assert first['fled'] is True
+    assert replay['fled'] is True and replay['already_applied'] is True
+    assert get_pve_encounter_player_ids(encounter_id='group-flee') == [777]
+    active = first['battle']
+    assert '1' not in active['participant_states_v1']
+    assert '1' not in active['participant_states']
+    assert active['side_a_player_ids'] == [777]
+    assert not any(
+        effect.get('kind') == 'intercept'
+        for effect in active['participant_states_v1']['777']['effects']
+    )
+    runtime = _SOLO_PVE_RUNTIME_STORE.get('group-flee')
+    assert 1 not in runtime.participants
+    assert runtime.sides['side_a'].participant_order == [777]
+
+    accepted, reason = submit_player_commit(
+        player_id=777, action_type='guard', battle_state=active,
+    )
+    assert (accepted, reason) == (True, 'committed')
+    assert resolve_current_side_if_ready(
+        encounter_id='group-flee', battle_state=active,
+        on_player_action=lambda action: battle_handler._dispatch_v1_player_action(
+            action, battle_state=active,
+        ),
+        on_enemy_action=lambda _action: None,
+    ) is True
+    run_enemy_instant_side(
+        player_id=777, battle_state=active,
+        on_enemy_action=lambda action: battle_handler._dispatch_v1_enemy_action(
+            action, battle_state=active,
+        ),
+    )
+    enemy_targets = [
+        event.get('target_id') for event in active.get('combat_events_v1', [])
+        if event.get('kind') == 'enemy_direct'
+    ]
+    assert enemy_targets and set(enemy_targets) == {'777'}
+    next_side = open_next_player_side_turn(player_id=777, battle_state=active)
+    assert next_side.sides['side_a'].participant_order == [777]
+
+    reset_solo_pve_runtime_store()
+    restored, restored_mob = load_active_pve_encounter(encounter_id='group-flee')
+    restarted = ensure_runtime_for_battle(player_id=777, battle_state=restored, mob=restored_mob)
+    assert '1' not in restored['participant_states_v1']
+    assert '1' not in restored['participant_states']
+    assert 1 not in restarted.participants
+
+    restored['enemy_states_v1'][0].update(hp=0, dead=True)
+    restored['mob_hp'] = 0
+    restored['mob_dead'] = True
+    persist_solo_pve_encounter_state(
+        encounter_id='group-flee', battle_state=restored, mob=restored_mob,
+    )
+    prepared = prepare_victory_settlement(
+        encounter_id='group-flee', battle_state=restored, mob=restored_mob,
+    )
+    assert prepared['status'] == 'prepared', prepared
+    assert prepared['plan']['eligible_recipient_ids'] == [777]
+    applied = apply_prepared_settlement('group-flee')
+    assert applied['status'] == 'applied'
+    assert [row['player_id'] for row in applied['result']['recipients']] == [777]
+    conn = get_connection()
+    encounter = conn.execute("""SELECT status, state_revision, battle_state_json
+        FROM pve_encounters WHERE encounter_id='group-flee'""").fetchone()
+    players = {row['telegram_id']: row['in_battle'] for row in conn.execute(
+        'SELECT telegram_id, in_battle FROM players WHERE telegram_id IN (1, 777)')}
+    participant_statuses = {
+        row['player_id']: row['status'] for row in conn.execute(
+            "SELECT player_id, status FROM pve_encounter_participants WHERE encounter_id='group-flee'"
+        )
+    }
+    departed_rewards = conn.execute(
+        'SELECT 1 FROM player_gear_progress WHERE player_id=1'
+    ).fetchone()
+    conn.close()
+    assert encounter['status'] == 'victory'
+    assert int(encounter['state_revision']) >= 4
+    assert '1' not in json.loads(str(encounter['battle_state_json']))['participant_states_v1']
+    assert players == {1: 0, 777: 0}
+    assert participant_statuses == {1: 'fled', 777: 'victory'}
+    assert departed_rewards is None
+
+
+def test_terminal_pvp_settlement_rolls_back_failure_and_applies_exactly_once():
+    migrate_character_builds_v1()
+    conn = get_connection()
+    attacker = dict(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=777').fetchone())
+    conn.execute("UPDATE players SET location_id='westwild_n1' WHERE telegram_id IN (1, 777)")
+    conn.execute("INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (777, 'wolf_pelt', 10)")
+    conn.commit()
+    attacker['location_id'] = defender['location_id'] = 'westwild_n1'
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker, defender=defender, location_id='westwild_n1', illegal_aggression=False,
+    )
+    conn = get_connection()
+    conn.execute("UPDATE pvp_engagements SET engagement_state='converted_to_battle', rules_version=? WHERE id=?", (
+        RULES_VERSION, engagement_id,
+    ))
+    row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    conn.commit()
+    conn.close()
+    payload = {'flow': 'open_world_1v1', 'battle': {
+        'state': 'live', 'attacker_hp': 70, 'attacker_mana': 25,
+        'defender_hp': 0, 'defender_mana': 10,
+    }}
+    try:
+        _finalize_pvp_battle(
+            engagement_row=row, payload=payload, winner_id=1, loser_id=777,
+            failure_hook=lambda point: (_ for _ in ()).throw(RuntimeError(point)) if point == 'after_inventory' else None,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == 'after_inventory'
+    conn = get_connection()
+    assert conn.execute('SELECT 1 FROM pvp_terminal_settlements_v1 WHERE engagement_id=?', (engagement_id,)).fetchone() is None
+    assert conn.execute('SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777').fetchone()['total'] == 0
+    assert conn.execute("SELECT quantity FROM inventory WHERE telegram_id=777 AND item_id='wolf_pelt'").fetchone()['quantity'] == 10
+    conn.close()
+    first = _finalize_pvp_battle(engagement_row=row, payload=payload, winner_id=1, loser_id=777)
+    replay = _finalize_pvp_battle(engagement_row=row, payload=payload, winner_id=1, loser_id=777)
+    assert first['status'] == 'applied'
+    assert replay['already_applied'] is True
+    conn = get_connection()
+    assert conn.execute('SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777').fetchone()['total'] == 1
+    conn.close()
+
+
+def test_terminal_pvp_recovery_filters_before_limit_and_finalizes_once():
+    migrate_character_builds_v1()
+    conn = get_connection()
+    attacker = dict(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=777').fetchone())
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker, defender=defender,
+        location_id='capital_city', illegal_aggression=False,
+    )
+    terminal_state = {'flow': 'open_world_1v1', 'battle': {
+        'state': 'live', 'attacker_hp': 70, 'attacker_mana': 20,
+        'defender_hp': 0, 'defender_mana': 10,
+    }}
+    conn = get_connection()
+    ensure_build_schema(conn)
+    conn.execute(
+        "UPDATE pvp_engagements SET engagement_state='converted_to_battle', rules_version=? WHERE id=?",
+        (RULES_VERSION, engagement_id),
+    )
+    for revision in range(101):
+        conn.execute('''INSERT INTO combat_turn_results_v1
+            (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
+            VALUES ('pvp', ?, ?, ?, ?, ?)''', (
+                str(engagement_id), revision,
+                json.dumps({'actor_id': 1, 'action': 'guard'}),
+                json.dumps({'flow': 'open_world_1v1', 'battle': {
+                    'state': 'live', 'attacker_hp': 70, 'defender_hp': 70,
+                }}),
+                RULES_VERSION,
+            ))
+    conn.execute('''INSERT INTO combat_turn_results_v1
+        (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
+        VALUES ('pvp', ?, 101, ?, ?, ?)''', (
+            str(engagement_id),
+            json.dumps({'actor_id': 1, 'action': 'normal_attack', 'winner_id': 1}),
+            json.dumps(terminal_state), RULES_VERSION,
+        ))
+    conn.commit()
+    conn.close()
+
+    recovered = recover_terminal_pvp_settlements(limit=100)
+    assert len(recovered) == 1
+    assert recovered[0]['engagement_id'] == engagement_id
+    assert recovered[0]['winner_id'] == 1
+    assert recover_terminal_pvp_settlements(limit=100) == []
+    conn = get_connection()
+    assert conn.execute(
+        'SELECT COUNT(*) AS total FROM pvp_terminal_settlements_v1 WHERE engagement_id=?',
+        (engagement_id,),
+    ).fetchone()['total'] == 1
+    assert conn.execute(
+        'SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777'
+    ).fetchone()['total'] == 1
+    conn.close()
+
+
+def test_pvp_local_lethal_result_cannot_override_durable_nonterminal_result():
+    migrate_character_builds_v1()
+    conn = get_connection()
+    attacker = dict(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    defender = dict(conn.execute('SELECT * FROM players WHERE telegram_id=777').fetchone())
+    conn.close()
+    engagement_id = create_live_engagement(
+        attacker=attacker, defender=defender,
+        location_id='capital_city', illegal_aggression=False,
+    )
+    battle = _init_live_battle_payload(
+        attacker_id=1, defender_id=777, now=datetime.now(timezone.utc),
+    )
+    row = None
+    conn = get_connection()
+    row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    conn.close()
+    _ensure_live_runtime_for_battle(engagement_row=row, battle=battle)
+    payload = {'flow': 'open_world_1v1', 'battle': battle}
+    _write_engagement_state(
+        engagement_id=engagement_id, state='converted_to_battle', payload=payload,
+    )
+    authoritative = json.loads(json.dumps(payload))
+    authoritative['battle']['attacker_hp'] = max(1, int(authoritative['battle']['attacker_hp']))
+    authoritative['battle']['defender_hp'] = max(1, int(authoritative['battle']['defender_hp']))
+    revision = int(battle['turn_revision'])
+    conn = get_connection()
+    conn.execute('''INSERT INTO combat_turn_results_v1
+        (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
+        VALUES ('pvp', ?, ?, ?, ?, ?)''', (
+            str(engagement_id), revision,
+            json.dumps({'actor_id': 1, 'action': 'normal_attack'}),
+            json.dumps(authoritative), RULES_VERSION,
+        ))
+    conn.commit()
+    row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    conn.close()
+
+    def local_lethal(**kwargs):
+        local_battle = kwargs['battle']
+        local_battle['defender_hp'] = 0
+        local_battle['participants_v1']['777']['hp'] = 0
+        local_battle['participants_v1']['777']['dead'] = True
+        return True
+
+    with patch('game.pvp_live._resolve_v1_pvp_submission', side_effect=local_lethal):
+        status, returned = resolve_live_battle_turn(
+            row, actor_id=1, selected_action_id='normal_attack',
+        )
+
+    assert status == 'resolved'
+    assert returned == authoritative
+    conn = get_connection()
+    assert conn.execute(
+        'SELECT 1 FROM pvp_terminal_settlements_v1 WHERE engagement_id=?',
+        (engagement_id,),
+    ).fetchone() is None
+    assert conn.execute(
+        'SELECT COUNT(*) AS total FROM pvp_log WHERE attacker_id=1 AND defender_id=777'
+    ).fetchone()['total'] == 0
+    assert conn.execute(
+        'SELECT engagement_state FROM pvp_engagements WHERE id=?', (engagement_id,),
+    ).fetchone()['engagement_state'] == 'converted_to_battle'
+    conn.close()

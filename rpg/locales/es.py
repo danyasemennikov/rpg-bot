@@ -12,6 +12,7 @@ STRINGS = {
         'error':        '❌ Error',
         'no_character': '❌ Primero crea un personaje — /start',
         'level':        'Nivel',
+        'level_short':  'Nv.',
         'exp':          'Experiencia',
         'gold':         'Oro',
         'hp':           'HP',

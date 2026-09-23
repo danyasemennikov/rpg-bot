@@ -136,7 +136,7 @@ def resolve_default_player_formation_line(*, formation_line=None, weapon_profile
         return FORMATION_LINE_FRONT
 
     normalized_weapon_profile = str(weapon_profile or '').strip().lower()
-    if normalized_weapon_profile in {'holy_staff', 'holy_rod', 'tome'}:
+    if normalized_weapon_profile in {'holy_staff', 'tome'}:
         return FORMATION_LINE_SUPPORT
     if normalized_weapon_profile in {'bow', 'wand', 'magic_staff'}:
         return FORMATION_LINE_RANGED

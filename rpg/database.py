@@ -345,6 +345,8 @@ def init_db():
     ensure_alpha_schema(conn)
     from game.gear_progression import ensure_gear_progression_schema
     ensure_gear_progression_schema(conn)
+    from game.build_progression import ensure_build_schema
+    ensure_build_schema(conn)
     conn.commit()
     conn.close()
     print('✅ База данных создана!')
@@ -383,6 +385,15 @@ def create_player(telegram_id: int, username: str, name: str, stats: dict, *, la
              calc_carry_weight(stats['strength']), lang if lang in ('ru', 'en', 'es') else 'ru'))
         conn.execute('INSERT INTO equipment(telegram_id) VALUES (?)', (telegram_id,))
         conn.execute("INSERT INTO player_location_discovery(telegram_id, location_id) VALUES (?, 'capital_city')", (telegram_id,))
+        # New characters start on the V1 conserved six-point ledger.  The
+        # universal action is independent of every family point budget.
+        from game.build_contract import MASTERY_MODEL_VERSION
+        conn.execute('''UPDATE players SET attribute_budget=6,
+            build_migration_version=?, build_revision=0 WHERE telegram_id=?''',
+            (MASTERY_MODEL_VERSION, telegram_id))
+        conn.execute('''INSERT OR REPLACE INTO player_skills
+            (telegram_id, skill_id, level) VALUES (?, 'power_strike', 1)''',
+            (telegram_id,))
         conn.executemany('INSERT INTO player_gathering_professions(telegram_id, profession_key) VALUES (?, ?)',
                          ((telegram_id, key) for key in GATHERING_PROFESSION_KEYS))
         ensure_crafting_professions(conn, telegram_id)

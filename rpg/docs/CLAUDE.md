@@ -1,5 +1,12 @@
 # 🎮 Осколки Вечности — RPG Telegram Bot
 
+> **Current branch context:** Character Builds & Combat Identity V1 is implemented
+> for review with a shared evaluator, durable participant combat, 10 families,
+> 20 branches, 100 canonical skills, bounded PvP, migration and `/build` in ru/en/es.
+> Read `CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md` for current runtime, rollout and
+> evidence. The legacy combat-state, callback and skill sections below remain useful
+> historical context, but no longer describe V1 authority on this branch.
+
 ## Стек
 - Python 3.12 + python-telegram-bot
 - SQLite (файл: game.db)

@@ -2337,6 +2337,67 @@ SKILL_TREES = {
     },
 }
 
+def _apply_character_builds_v1_catalogue() -> None:
+    """Attach frozen metadata without mutating archived legacy definitions.
+
+    New-rules combat and build UI read ``game.build_contract`` directly.  The
+    historical fields remain only so old-rule settlement/recovery fixtures can
+    still be replayed during migration.
+    """
+    from game.build_contract import (
+        POWER_STRIKE,
+        RETIRED_SKILL_IDS,
+        SKILL_SPECS,
+        SKILL_TREES as CONTRACT_TREES,
+    )
+
+    target_kind = {
+        'S': 'enemy', 'F': 'enemy_front', 'B': 'enemy_back',
+        'A': 'all_enemies', '2x2': 'enemy_2x2', 'Self': 'self',
+        'Ally': 'ally', 'Party': 'all_allies',
+        'AllyOrEnemy': 'ally_or_enemy', 'Attacker': 'attacker',
+    }
+    for skill_id, spec in SKILL_SPECS.items():
+        skill = SKILLS.setdefault(skill_id, {'id': skill_id, 'name': skill_id})
+        skill.update({
+            'v1_weapon_id': spec.family,
+            'v1_branch': spec.branch,
+            'v1_unlock_mastery': spec.unlock_mastery,
+            'v1_max_level': 3,
+            'v1_mana_cost': spec.mana,
+            'v1_cooldown': spec.cooldown or 0,
+            'v1_type': 'passive' if spec.passive else spec.kind,
+            'v1_target_kind': target_kind[spec.target],
+            'v1_damage_school': spec.school,
+            'v1_contract_target': spec.target,
+            'v1_contract_kind': spec.kind,
+            'v1_contract_power': spec.power,
+            'v1_contract_hits': spec.hits,
+            'v1_description': spec.description,
+            'v1_rules_version': 'character_builds_combat_identity_v1',
+        })
+    power = SKILLS.setdefault('power_strike', {'id': 'power_strike', 'name': '⚔️ Силовой удар'})
+    power.update({
+        'v1_weapon_id': 'universal', 'v1_branch': 'base', 'v1_unlock_mastery': 1,
+        'v1_max_level': 1, 'v1_mana_cost': POWER_STRIKE.mana,
+        'v1_cooldown': POWER_STRIKE.cooldown, 'v1_type': 'damage',
+        'v1_target_kind': 'enemy', 'v1_damage_school': None,
+        'v1_contract_target': 'S', 'v1_contract_kind': 'damage',
+        'v1_contract_power': POWER_STRIKE.power, 'v1_contract_hits': 1,
+        'v1_description': POWER_STRIKE.description,
+        'v1_rules_version': 'character_builds_combat_identity_v1',
+    })
+    global V1_SKILL_TREES
+    V1_SKILL_TREES = {
+        'base': {'base': ['power_strike']},
+        **{family: {branch: list(ids) for branch, ids in branches.items()}
+           for family, branches in CONTRACT_TREES.items()},
+    }
+
+
+_apply_character_builds_v1_catalogue()
+
+
 def get_skill(skill_id: str) -> dict:
     return SKILLS.get(skill_id)
 

@@ -4,6 +4,7 @@ Only randomness, travel delays and spawn availability are controlled. No rewards
 completed objectives, combat outcomes or character power are injected.
 """
 import asyncio
+import json
 import random
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -14,10 +15,14 @@ from database import get_connection, get_player, get_gathering_profession_state
 from game.contextual_keyboard import build_contextual_main_keyboard
 from game.locations import get_location
 from game.pve_live import ensure_location_pve_spawn_instances, reset_solo_pve_runtime_store
+from game.build_contract import BRANCH_IDENTITIES, SKILL_TREES
+from game.build_progression import migrate_character_builds_v1
+from game.field_catalog import FIELD_ITEMS
 from game.quest_board import get_contract_history, get_player_hunt_contract_state
 from handlers.start import start_command, handle_name_input, handle_stat_buttons
 from handlers.location import handle_location_buttons, handle_combat_buttons, handle_lower_menu_gather_text, build_quest_board_message
 from handlers.battle import handle_battle_buttons
+from handlers.build import build_skills_command, handle_build_buttons
 from handlers.chapter import handle_chapter_buttons, build_journal, build_workshop, build_sell_menu
 from handlers.inventory import handle_inventory_buttons, build_item_detail
 
@@ -71,7 +76,10 @@ class Journey:
     async def text(self, text, handler):
         self.message_id += 1
         message = SimpleNamespace(text=text, message_id=self.message_id, chat_id=PLAYER, reply_text=AsyncMock(side_effect=self.output))
-        await handler(SimpleNamespace(message=message, effective_user=self.user, effective_message=message), self.context)
+        await handler(SimpleNamespace(
+            message=message, callback_query=None,
+            effective_user=self.user, effective_message=message,
+        ), self.context)
 
     async def travel(self, *locations):
         for location in locations:
@@ -115,7 +123,23 @@ class Journey:
         assert (get_player(PLAYER)['exp'], get_player(PLAYER)['gold']) == (after['exp'], after['gold'])
         assert state['contract_key'] in get_contract_history(PLAYER)
 
-    async def fight(self, mob, restart=False):
+    def v1_action_callback(self, *, kind, skill_id=None):
+        for callback in buttons(self.messages[-1][1]):
+            if not callback.startswith('battle_v1_'):
+                continue
+            token = callback.removeprefix('battle_v1_')
+            row = rows(
+                "SELECT payload FROM player_ui_actions WHERE player_id=? AND kind='combat_v1' AND token=?",
+                (PLAYER, token),
+            )
+            if not row:
+                continue
+            action = json.loads(row[0]['payload']).get('action') or {}
+            if action.get('kind') == kind and action.get('skill_id') == skill_id:
+                return callback
+        raise AssertionError((kind, skill_id, buttons(self.messages[-1][1])))
+
+    async def fight(self, mob, restart=False, opening_skill=None):
         location = get_player(PLAYER)['location_id']
         ensure_location_pve_spawn_instances(location_id=location)
         # Controlled spawn availability: one ordinary creature, unchanged template.
@@ -129,6 +153,7 @@ class Journey:
         await self.callback(f'fight_spawn_{spawn[0]}', handle_combat_buttons)
         encounter = rows("SELECT encounter_id FROM pve_encounters WHERE owner_player_id=? AND status='active'", (PLAYER,))[0]['encounter_id']
         await self.callback(f'pve_enter_{encounter}', handle_location_buttons)
+        last_action = f'battle_attack_{mob}'
         for turn in range(100):
             state = self.context.user_data.get('battle')
             if not state:
@@ -141,10 +166,17 @@ class Journey:
             if restart and turn == 1:
                 self.context.user_data.clear()
                 reset_solo_pve_runtime_store()
-            await self.callback(f'battle_attack_{mob}', handle_battle_buttons)
+            if state.get('rules_version') == 'character_builds_combat_identity_v1':
+                last_action = self.v1_action_callback(
+                    kind='skill' if turn == 0 and opening_skill else 'basic_attack',
+                    skill_id=opening_skill if turn == 0 else None,
+                )
+            else:
+                last_action = f'battle_attack_{mob}'
+            await self.callback(last_action, handle_battle_buttons)
         assert rows('SELECT status FROM pve_encounters WHERE encounter_id=?', (encounter,))[0]['status'] == 'victory', (mob, dict(get_player(PLAYER)), self.messages[-1])
         before = (get_player(PLAYER)['exp'], get_player(PLAYER)['gold'])
-        await self.callback(f'battle_attack_{mob}', handle_battle_buttons)
+        await self.callback(last_action, handle_battle_buttons)
         assert before == (get_player(PLAYER)['exp'], get_player(PLAYER)['gold'])
         return encounter
 
@@ -162,22 +194,72 @@ def test_complete_chapter_with_ordinary_new_character(lang):
     asyncio.run(run_chapter(lang))
 
 
-async def run_chapter(lang):
+@pytest.mark.parametrize(
+    'family,branch',
+    [('sword_1h', 'A'), ('bow', 'B'), ('holy_staff', 'A'), ('tome', 'B')],
+    ids=['guardian', 'ranger', 'healer', 'synthesis'],
+)
+def test_complete_chapter_with_required_v1_builds(family, branch):
+    migrate_character_builds_v1()
+    asyncio.run(run_chapter('en', build_case=(family, branch)))
+
+
+async def run_chapter(lang, build_case=None):
     random.seed(901)
     reset_solo_pve_runtime_store()
     j = Journey(lang)
     await j.text('/start', start_command)
     await j.text('Traveler', handle_name_input)
-    for stat in ['strength'] * 3 + ['vitality'] * 3:
+    if build_case:
+        family, branch = build_case
+        item_id = f'field_{family}'
+        primary = next(
+            key.removeprefix('req_')
+            for key, value in FIELD_ITEMS[item_id].items()
+            if key.startswith('req_') and key != 'req_level' and int(value or 0) > 0
+        )
+        allocation = [primary] * 2 + ['vitality'] * 4
+    else:
+        allocation = ['strength'] * 3 + ['vitality'] * 3
+    for stat in allocation:
         await j.callback(f'stat_plus_{stat}', handle_stat_buttons)
     await j.callback('stat_confirm', handle_stat_buttons)
     assert sum(get_player(PLAYER)[s] for s in ('strength', 'vitality', 'agility', 'intuition', 'wisdom', 'luck')) == 12
+    entry_skill = None
+    if build_case:
+        await j.callback('shop', handle_location_buttons)
+        await j.callback(f'shop_preview_{item_id}|0', handle_location_buttons)
+        buy = next(value for value in buttons(j.messages[-1][1]) if value.startswith(f'shop_buy_{item_id}|'))
+        await j.callback(buy, handle_location_buttons)
+        instance = rows(
+            'SELECT id FROM gear_instances WHERE telegram_id=? AND base_item_id=?',
+            (PLAYER, item_id),
+        )[0]['id']
+        detail, markup = build_item_detail(PLAYER, f'g{instance}', 'weapon', lang)
+        await j.output(detail, reply_markup=markup)
+        equip = next(value for value in buttons(markup) if value.startswith('inv_gequip_'))
+        await j.callback(equip, handle_inventory_buttons)
+        await j.text('/skills', build_skills_command)
+        await j.callback(f'bv_family_{family}', handle_build_buttons)
+        entry_skill = SKILL_TREES[family][branch][0]
+        await j.callback(f'bv_skill_{entry_skill}', handle_build_buttons)
+        await j.callback(f'bv_buy_{entry_skill}', handle_build_buttons)
+        apply_callback = next(
+            value for value in buttons(j.messages[-1][1]) if value.startswith('bv_apply_')
+        )
+        await j.callback(apply_callback, handle_build_buttons)
+        equipped = rows(
+            "SELECT base_item_id FROM gear_instances WHERE telegram_id=? AND equipped_slot='weapon'",
+            (PLAYER,),
+        )[0]['base_item_id']
+        assert equipped == item_id
+        assert BRANCH_IDENTITIES[family][branch]
     await j.callback('alpha_kit_practice_sword', handle_chapter_buttons)
     assert quantity('health_potion_small') == 3
     await j.accept('chapter_first_watch')
     await j.travel('westwild_n1')
     await j.gather('herbalism', 12)
-    await j.fight('westwild_rabbit', restart=True)
+    await j.fight('westwild_rabbit', restart=True, opening_skill=entry_skill)
     await j.fight('westwild_rabbit')
     await j.travel('capital_city')
     await j.claim()

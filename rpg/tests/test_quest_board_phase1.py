@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import database
 from database import get_connection, init_db
+from game.balance import exp_to_next_level
+from game.build_progression import build_migration_audit, migrate_character_builds_v1
 from game.locations import get_location
 from game.pve_live import list_location_available_spawn_instances
 from game.quest_board import (
@@ -209,6 +211,51 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(ok_claim)
         self.assertEqual(reason_claim, 'claimed')
         self.assertIsNotNone(reward)
+
+    def test_contract_level_up_preserves_v1_attribute_ledger(self):
+        migrate_character_builds_v1()
+        conn = get_connection()
+        before = dict(conn.execute(
+            'SELECT level, attribute_budget, build_revision FROM players WHERE telegram_id=8101'
+        ).fetchone())
+        conn.execute(
+            'UPDATE players SET exp=? WHERE telegram_id=8101',
+            (exp_to_next_level(int(before['level'])) - 70,),
+        )
+        conn.commit()
+        conn.close()
+
+        self.move_fixture('capital_city')
+        self.assertEqual(
+            accept_hunt_contract(
+                player_id=8101,
+                location_id='capital_city',
+                contract_key='hunt_forest_wolves',
+            ),
+            (True, 'accepted'),
+        )
+        for _ in range(5):
+            register_hunt_kill_progress(
+                player_id=8101,
+                mob_id='forest_wolf',
+                location_id='westwild_n3',
+            )
+        ok, reason, reward = claim_completed_hunt_contract(
+            player_id=8101,
+            location_id='capital_city',
+        )
+        self.assertEqual((ok, reason), (True, 'claimed'))
+        self.assertEqual(reward['new_level'], int(before['level']) + 1)
+
+        conn = get_connection()
+        after = dict(conn.execute(
+            'SELECT stat_points, attribute_budget, build_revision FROM players WHERE telegram_id=8101'
+        ).fetchone())
+        conn.close()
+        self.assertEqual(after['stat_points'], 3)
+        self.assertEqual(after['attribute_budget'], int(before['attribute_budget']) + 3)
+        self.assertEqual(after['build_revision'], int(before['build_revision']) + 1)
+        self.assertEqual(build_migration_audit()['attribute_invariant_failures'], [])
 
     def test_curated_contract_set_is_broader_than_phase1_baseline(self):
         contracts = list_hunt_contracts_for_location('village')

@@ -1,5 +1,12 @@
 # WEAPON_BRANCHES_5_SKILLS_FINAL_DESIGN.md
 
+> **Current branch authority:** This remains the historical identity/design framework.
+> Character Builds & Combat Identity V1 has now implemented all 10 families and 20
+> five-skill branches under a later frozen contract. Exact IDs, rank-1 mechanics,
+> progression, migration, PvP scope and evidence are reconciled in
+> `CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md` and `game/build_contract.py`; those sources
+> supersede provisional mechanics or implementation sequencing in this document.
+
 ## Назначение
 
 Этот файл фиксирует **финальный дизайн-каркас weapon branches** под стандарт:

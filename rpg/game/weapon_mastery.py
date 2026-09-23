@@ -6,6 +6,12 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import get_connection
+from game.build_contract import (
+    FAMILIES,
+    MASTERY_MODEL_VERSION,
+    legal_family_budget,
+    mastery_exp_needed as contract_mastery_exp_needed,
+)
 
 MAX_MASTERY = 20
 
@@ -30,12 +36,26 @@ def _exp_to_level(total_exp: int) -> tuple[int, int]:
     return level, exp_left
 
 def _merge_rows(rows: list[dict]) -> dict:
-    total_exp = sum(_mastery_total_exp(row['level'], row['exp']) for row in rows)
-    level, exp = _exp_to_level(total_exp)
+    legacy = any(int(row.get('model_version', 0) or 0) < MASTERY_MODEL_VERSION for row in rows)
+    if legacy:
+        # Read-only old-rules compatibility until the startup migration applies
+        # its stricter greatest-evidence conversion and archives these rows.
+        total_exp = sum(max(0, int(row['exp'])) + 25 * (max(1, int(row['level'])) - 1) * max(1, int(row['level'])) for row in rows)
+        level = 1
+        exp = total_exp
+        while level < MAX_MASTERY and exp >= level * 50:
+            exp -= level * 50
+            level += 1
+        points = sum(max(0, int(row['skill_points'])) for row in rows)
+    else:
+        best = max(rows, key=lambda row: _mastery_total_exp(row['level'], row['exp']))
+        total_exp = _mastery_total_exp(best['level'], best['exp'])
+        level, exp = _exp_to_level(total_exp)
+        points = max(0, int(best['skill_points']))
     return {
         'level': level,
         'exp': exp,
-        'skill_points': sum(max(0, int(row['skill_points'])) for row in rows),
+        'skill_points': points,
     }
 
 def get_all_masteries_grouped(telegram_id: int) -> list[dict]:
@@ -65,11 +85,21 @@ def get_all_masteries_grouped(telegram_id: int) -> list[dict]:
 
 def mastery_exp_needed(level: int) -> int:
     """Опыт для следующего уровня владения."""
-    return level * 50
+    return contract_mastery_exp_needed(level)
 
 def get_mastery(telegram_id: int, weapon_id: str, *, conn=None) -> dict:
     """Получить данные владения оружием."""
     weapon_id = _normalize_weapon_id(weapon_id)
+    if weapon_id not in FAMILIES:
+        return {
+            'telegram_id': telegram_id,
+            'weapon_id': weapon_id,
+            'level': 1,
+            'exp': 0,
+            'skill_points': 0,
+            'model_version': MASTERY_MODEL_VERSION,
+            'virtual': True,
+        }
     owns_connection = conn is None
     if owns_connection:
         conn = get_connection()
@@ -91,9 +121,9 @@ def get_mastery(telegram_id: int, weapon_id: str, *, conn=None) -> dict:
             merged = _merge_rows(matching)
             conn.execute(
                 '''INSERT OR REPLACE INTO weapon_mastery
-                   (telegram_id, weapon_id, level, exp, skill_points)
-                   VALUES (?, ?, ?, ?, ?)''',
-                (telegram_id, weapon_id, merged['level'], merged['exp'], merged['skill_points'])
+                   (telegram_id, weapon_id, level, exp, skill_points, model_version)
+                   VALUES (?, ?, ?, ?, ?, ?)''',
+                (telegram_id, weapon_id, merged['level'], merged['exp'], merged['skill_points'], MASTERY_MODEL_VERSION)
             )
             if owns_connection:
                 conn.commit()
@@ -118,14 +148,16 @@ def get_mastery(telegram_id: int, weapon_id: str, *, conn=None) -> dict:
 def create_mastery(telegram_id: int, weapon_id: str, *, conn=None) -> dict:
     """Создаёт запись владения если её нет."""
     weapon_id = _normalize_weapon_id(weapon_id)
+    if weapon_id not in FAMILIES:
+        raise ValueError('unknown_weapon_family')
     owns_connection = conn is None
     if owns_connection:
         conn = get_connection()
     conn.execute(
         '''INSERT OR IGNORE INTO weapon_mastery
-           (telegram_id, weapon_id, level, exp, skill_points)
-           VALUES (?, ?, 1, 0, 1)''',
-        (telegram_id, weapon_id)
+           (telegram_id, weapon_id, level, exp, skill_points, model_version)
+           VALUES (?, ?, 1, 0, 2, ?)''',
+        (telegram_id, weapon_id, MASTERY_MODEL_VERSION)
     )
     if owns_connection:
         conn.commit()
@@ -147,7 +179,15 @@ def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int, *, conn=None) ->
     if owns_connection:
         conn = get_connection()
     mastery    = get_mastery(telegram_id, weapon_id, conn=conn)
-    new_exp    = mastery['exp'] + exp
+    if mastery['level'] >= MAX_MASTERY:
+        result = {
+            'leveled_up': False, 'new_level': MAX_MASTERY, 'new_exp': 0,
+            'new_points': mastery['skill_points'], 'new_skills': [], 'exp_needed': 0,
+        }
+        if owns_connection:
+            conn.close()
+        return result
+    new_exp    = mastery['exp'] + max(0, int(exp))
     new_level  = mastery['level']
     new_points = mastery['skill_points']
     leveled_up = False
@@ -168,6 +208,9 @@ def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int, *, conn=None) ->
                 skill = get_skill(skill_id)
                 if skill and skill['unlock_mastery'] == new_level:
                     new_skills.append(skill)
+
+    if new_level >= MAX_MASTERY:
+        new_exp = 0
 
     conn.execute(
         '''UPDATE weapon_mastery SET
@@ -190,6 +233,8 @@ def add_mastery_exp(telegram_id: int, weapon_id: str, exp: int, *, conn=None) ->
 
 def get_skill_level(telegram_id: int, skill_id: str) -> int:
     """Получить уровень прокачки скилла."""
+    if skill_id == 'power_strike':
+        return 1
     conn = get_connection()
     row  = conn.execute(
         'SELECT level FROM player_skills WHERE telegram_id=? AND skill_id=?',
@@ -227,6 +272,22 @@ def upgrade_skill(telegram_id: int, weapon_id: str, skill_id: str) -> dict:
         if current_level >= skill['max_level']:
             conn.rollback()
             return {'success': False, 'reason': 'upgrade_max_level', 'max': skill['max_level']}
+        wanted_rank = current_level + 1
+        rank_requirement = {1: skill['unlock_mastery'], 2: 4, 3: 10}[wanted_rank]
+        if mastery['level'] < rank_requirement:
+            conn.rollback()
+            return {'success': False, 'reason': 'upgrade_mastery_required',
+                    'required': rank_requirement}
+        if wanted_rank == 1 and skill.get('unlock_mastery') == 8:
+            branch_skills = [item for item in get_weapon_tree(weapon_id).get(skill['branch'], [])
+                             if item != skill_id]
+            placeholders = ','.join('?' for _ in branch_skills)
+            spent_row = conn.execute(f'''SELECT COALESCE(SUM(level), 0) AS spent FROM player_skills
+                WHERE telegram_id=? AND skill_id IN ({placeholders})''',
+                (telegram_id, *branch_skills)).fetchone()
+            if int(spent_row['spent']) < 8:
+                conn.rollback()
+                return {'success': False, 'reason': 'capstone_branch_points_required', 'required': 8}
         if current_level == 0:
             conn.execute('INSERT INTO player_skills (telegram_id, skill_id, level) VALUES (?,?,1)',
                          (telegram_id, skill_id))

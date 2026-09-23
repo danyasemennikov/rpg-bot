@@ -270,4 +270,6 @@ def test_battle_consumption_updates_projection_and_rolls_back_on_persist_failure
     restored, _ = load_active_pve_encounter(encounter_id=encounter)
     assert restored['player_hp'] == state['player_hp'] + result['heal']
     assert restored['participant_states'][str(PID)]['player_hp'] == restored['player_hp']
-    assert use_battle_consumable(PID, token, encounter)['status'] == 'stale_action'
+    replay = use_battle_consumable(PID, token, encounter)
+    assert replay['status'] == 'used'
+    assert replay['already_applied'] is True
