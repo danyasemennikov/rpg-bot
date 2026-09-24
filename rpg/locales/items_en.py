@@ -91,6 +91,15 @@ ITEM_NAMES.update({
     'field_prayer_amulet': '📿 Field Prayer Amulet',
 })
 
+ITEM_NAMES.update({
+    'frostpine_wood': 'Frostpine wood', 'sunscar_ore': 'Sunscar ore',
+    'deep_marsh_fish': 'Deep-marsh fish', 'bear_hide': 'Bear hide', 'troll_sinew': 'Troll sinew',
+    'pe_mana_potion_medium': 'Medium mana potion', 'pe_health_potion_large': 'Large health potion',
+    'pe_mana_potion_large': 'Large mana potion', 'pe_shore_broth': 'Coastal fish broth',
+    'pe_marsh_stew': 'Marsh stew', 'pe_boar_feast': 'Boar roast',
+    'pe_oasis_meal': 'Oasis fish meal', 'pe_deep_marsh_meal': 'Hearty marsh meal',
+})
+
 ITEM_DESCRIPTIONS = {
     **{item_id: 'Reliable field weapon using the existing combat family shown on its card.' for item_id in (
         'field_sword_1h', 'field_sword_2h', 'field_axe_2h', 'field_daggers', 'field_bow',
@@ -109,3 +118,7 @@ ITEM_DESCRIPTIONS = {
     'field_mind_ring': 'A ring that adds mana and intuition.',
     'field_prayer_amulet': 'An amulet that adds wisdom and healing power.',
 }
+ITEM_DESCRIPTIONS.update({
+    'frostpine_wood':'Cold-resistant timber gathered in Frostspine.','sunscar_ore':'Heat-scarred ore gathered in Sunscar.','deep_marsh_fish':'A rare fish from Mireveil’s deepest water.','bear_hide':'A durable harvested bear hide.','troll_sinew':'A strong harvested troll sinew.',
+    'pe_mana_potion_medium':'Restores 100 mana.','pe_health_potion_large':'Restores 150 HP.','pe_mana_potion_large':'Restores 160 mana.','pe_shore_broth':'Restores 25 HP and 15 mana.','pe_marsh_stew':'Restores 80 HP and 20 mana.','pe_boar_feast':'Restores 120 HP.','pe_oasis_meal':'Restores 100 HP and 50 mana.','pe_deep_marsh_meal':'Restores 180 HP and 80 mana.',
+})

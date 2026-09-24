@@ -14,6 +14,8 @@ from typing import Literal
 
 from game.gathering_foundation import GatherResourceIdentity, resolve_gather_resource_identity
 from game.items_data import get_item_reward_tags
+from game.profession_resources import RESOURCES
+from game.profession_recipes import ACTIVE_RECIPES
 
 CraftingProfessionKey = Literal[
     'heavy_armor',
@@ -62,7 +64,7 @@ CRAFTING_PROFESSION_CONTRACTS: dict[CraftingProfessionKey, CraftingProfessionCon
         profession_key='heavy_armor',
         output_families=('heavy_armor',),
         base_material_logic=('metal_plates', 'forged_fasteners', 'smithing_fuel'),
-        bulk_resource_groups=('ore', 'fuel'),
+        bulk_resource_groups=('ore', 'fuel', 'stone', 'gem'),
         special_ingredient_groups=('core', 'heart', 'trophy', 'monster_part'),
     ),
     'medium_armor': CraftingProfessionContract(
@@ -83,14 +85,14 @@ CRAFTING_PROFESSION_CONTRACTS: dict[CraftingProfessionKey, CraftingProfessionCon
         profession_key='blacksmith',
         output_families=('metal_weapons', 'shields', 'metal_parts'),
         base_material_logic=('ore_smelting', 'forged_shapes', 'temper_with_fuel'),
-        bulk_resource_groups=('ore', 'fuel', 'wood'),
+        bulk_resource_groups=('ore', 'fuel', 'wood', 'stone', 'hide'),
         special_ingredient_groups=('core', 'trophy', 'monster_part', 'essence'),
     ),
     'arcane_engineer': CraftingProfessionContract(
         profession_key='arcane_engineer',
         output_families=('bows', 'staffs', 'wands', 'rods', 'tomes', 'foci', 'censers', 'arcane_ranged_gear'),
         base_material_logic=('wooden_or_arcane_frame', 'focus_components', 'infused_binding'),
-        bulk_resource_groups=('wood', 'fiber', 'gem'),
+        bulk_resource_groups=('wood', 'fiber', 'gem', 'stone', 'herb_base', 'hide'),
         special_ingredient_groups=('core', 'essence', 'heart', 'monster_part'),
     ),
     'alchemy': CraftingProfessionContract(
@@ -104,7 +106,7 @@ CRAFTING_PROFESSION_CONTRACTS: dict[CraftingProfessionKey, CraftingProfessionCon
         profession_key='cooking',
         output_families=('food', 'long_buffs', 'edible_recovery'),
         base_material_logic=('raw_food_base', 'herb_seasoning', 'controlled_heat'),
-        bulk_resource_groups=('meat', 'fish', 'herb_base', 'fuel'),
+        bulk_resource_groups=('meat', 'fish', 'herb_base', 'fuel', 'seasoning'),
         special_ingredient_groups=('heart', 'trophy', 'special_reagent'),
     ),
 }
@@ -191,6 +193,20 @@ def get_crafting_profession_contract(profession_key: CraftingProfessionKey) -> C
 
 
 def resolve_crafting_material_identity(item_id: str) -> CraftMaterialIdentity | None:
+    pev1 = RESOURCES.get(item_id)
+    if pev1 is not None:
+        professions = tuple(dict.fromkeys(
+            recipe.profession_key for recipe in ACTIVE_RECIPES
+            if any(material_id == item_id for material_id, _ in recipe.requirements)
+        ))
+        special = pev1.resource_group if pev1.resource_group in {'trophy', 'monster_part'} else None
+        return CraftMaterialIdentity(
+            item_id=item_id, reward_family='creature_loot' if pev1.profession_key == 'hunting' else 'gathering_material',
+            material_subtype=pev1.resource_group, origin_channel='hunting' if pev1.profession_key == 'hunting' else 'gathering',
+            bulk_resource_group=None if special else pev1.resource_group,
+            special_ingredient_group=special, default_professions=professions,
+            gather_profession_key=pev1.profession_key, gather_resource_family=pev1.resource_group,
+        )
     tags = get_item_reward_tags(item_id)
     gather_identity = resolve_gather_resource_identity(item_id)
     explicit = EXPLICIT_CRAFT_IDENTITY_BY_ITEM_ID.get(item_id, {})

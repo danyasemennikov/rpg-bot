@@ -29,20 +29,19 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
                 telegram_id, username, name, level, gold, hp, max_hp, mana, max_mana,
                 strength, agility, intuition, vitality, wisdom, luck, location_id
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (9101, 'craft', 'CraftTester', 10, 500, 100, 100, 60, 60, 8, 8, 8, 8, 8, 8, 'village'),
+            (9101, 'craft', 'CraftTester', 10, 500, 100, 100, 60, 60, 8, 8, 8, 8, 8, 8, 'capital_city'),
         )
 
         from game.items_data import get_item
         for item_id in (
             'herb_common',
-            'herb_magic',
             'spider_venom',
             'health_potion_small',
             'iron_ore',
             'coal',
-            'wood_dark',
-            'wolf_fang',
-            'iron_sword',
+            'wood_common',
+            'stone_chunk',
+            'field_sword_1h',
         ):
             item = get_item(item_id)
             conn.execute(
@@ -65,6 +64,9 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
                 ),
             )
 
+        from game.profession_schema import ensure_profession_rows, grant_new_player_starters
+        ensure_profession_rows(conn, 9101)
+        grant_new_player_starters(conn, 9101)
         conn.commit()
         conn.close()
 
@@ -98,6 +100,16 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
         conn.close()
         return int(row['quantity']) if row else 0
 
+    def _know_at_level(self, recipe_id: str, profession_key: str, level: int):
+        conn = get_connection()
+        conn.execute('''UPDATE player_crafting_professions SET level=?, exp=0
+            WHERE player_id=? AND profession_key=?''', (level, 9101, profession_key))
+        conn.execute('''INSERT OR IGNORE INTO player_recipe_knowledge
+            (player_id, recipe_id, acquired_via, catalog_version)
+            VALUES (?, ?, 'guild', 1)''', (9101, recipe_id))
+        conn.commit()
+        conn.close()
+
     def test_recipe_schema_defaults_to_permanent(self):
         recipe = get_recipe('alchemy_minor_health_potion')
         self.assertIsNotNone(recipe)
@@ -118,7 +130,7 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
         self.assertTrue(any('not allowed for alchemy' in error for error in errors))
 
     def test_starter_recipe_contract_is_valid_for_output_and_material_domains(self):
-        errors = validate_recipe_contract(RECIPE_BY_ID['alchemy_minor_health_potion'])
+        errors = validate_recipe_contract(RECIPE_BY_ID['field_tonic'])
         self.assertEqual(errors, [])
 
     def test_recipe_contract_rejects_output_domain_conflict(self):
@@ -141,57 +153,52 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
 
     def test_validation_path_uses_craft_identity_resolver(self):
         with patch('game.crafting_runtime.resolve_crafting_material_identity', return_value=None):
-            errors = validate_recipe_contract(RECIPE_BY_ID['alchemy_minor_health_potion'])
+            errors = validate_recipe_contract(RECIPE_BY_ID['field_tonic'])
         self.assertTrue(errors)
         self.assertTrue(any('missing crafting identity' in error for error in errors))
 
     def test_profession_requirement_is_checked(self):
+        self._know_at_level('pe_shield_06', 'blacksmith', 1)
         result = craft_recipe(
             telegram_id=9101,
-            recipe_id='blacksmith_iron_sword',
+            recipe_id='pe_shield_06',
             profession_levels={'blacksmith': 1},
         )
         self.assertEqual(result.status, 'profession_level_too_low')
-        self.assertEqual(result.required_profession_level, 2)
+        self.assertEqual(result.required_profession_level, 6)
 
     def test_material_consumption_and_output_grant_for_stackable_recipe(self):
         self._set_inventory('herb_common', 5)
-        self._set_inventory('herb_magic', 2)
-        self._set_inventory('spider_venom', 1)
-
         result = craft_recipe(
             telegram_id=9101,
-            recipe_id='alchemy_minor_health_potion',
+            recipe_id='field_tonic',
             profession_levels={'alchemy': 2},
         )
 
         self.assertEqual(result.status, 'crafted')
         self.assertEqual(result.crafted_item_id, 'health_potion_small')
         self.assertEqual(result.crafted_quantity, 1)
-        self.assertEqual(self._get_inventory_qty('herb_common'), 3)
-        self.assertEqual(self._get_inventory_qty('herb_magic'), 1)
-        self.assertEqual(self._get_inventory_qty('spider_venom'), 0)
+        self.assertEqual(self._get_inventory_qty('herb_common'), 2)
         self.assertEqual(self._get_inventory_qty('health_potion_small'), 1)
 
     def test_starter_recipe_runtime_end_to_end_for_gear_output(self):
         self._set_inventory('iron_ore', 3)
         self._set_inventory('coal', 1)
-        self._set_inventory('wood_dark', 1)
-        self._set_inventory('wolf_fang', 1)
+        self._set_inventory('wood_common', 1)
 
         result = craft_recipe(
             telegram_id=9101,
-            recipe_id='blacksmith_iron_sword',
+            recipe_id='pe_sword_1h_01',
             profession_levels={'blacksmith': 3},
         )
 
         self.assertEqual(result.status, 'crafted')
-        self.assertEqual(result.crafted_item_id, 'iron_sword')
+        self.assertEqual(result.crafted_item_id, 'field_sword_1h')
 
         conn = get_connection()
         gear_row = conn.execute(
             'SELECT id, base_item_id FROM gear_instances WHERE telegram_id=? AND base_item_id=?',
-            (9101, 'iron_sword'),
+            (9101, 'field_sword_1h'),
         ).fetchone()
         conn.close()
 
@@ -201,20 +208,15 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
 
     def test_crafting_is_atomic_when_grant_fails(self):
         self._set_inventory('herb_common', 5)
-        self._set_inventory('herb_magic', 2)
-        self._set_inventory('spider_venom', 1)
-
         with patch('game.crafting_runtime.grant_item_to_player', side_effect=RuntimeError('grant_failed')):
             result = craft_recipe(
                 telegram_id=9101,
-                recipe_id='alchemy_minor_health_potion',
+                recipe_id='field_tonic',
                 profession_levels={'alchemy': 2},
             )
 
         self.assertEqual(result.status, 'craft_failed_atomic')
         self.assertEqual(self._get_inventory_qty('herb_common'), 5)
-        self.assertEqual(self._get_inventory_qty('herb_magic'), 2)
-        self.assertEqual(self._get_inventory_qty('spider_venom'), 1)
 
     def test_duplicate_requirements_are_aggregated_for_validation_and_consume(self):
         duplicate_recipe = RecipeDefinition(
@@ -241,21 +243,24 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
 
         result = craft_recipe(
             telegram_id=9101,
-            recipe_id='alchemy_minor_health_potion',
+            recipe_id='field_tonic',
             profession_levels={'alchemy': 2},
         )
-        self.assertEqual(result.status, 'missing_materials')
+        self.assertEqual(result.status, 'crafted')
+        self._set_inventory('herb_common', 4)
+        self._set_inventory('spider_venom', 1)
 
-        original = RECIPE_BY_ID['alchemy_minor_health_potion']
-        RECIPE_BY_ID['alchemy_minor_health_potion'] = duplicate_recipe
+        original = RECIPE_BY_ID['field_tonic']
+        duplicate_recipe = RecipeDefinition(**{**duplicate_recipe.__dict__, 'recipe_id': 'field_tonic'})
+        RECIPE_BY_ID['field_tonic'] = duplicate_recipe
         try:
             result = craft_recipe(
                 telegram_id=9101,
-                recipe_id='alchemy_minor_health_potion',
+                recipe_id='field_tonic',
                 profession_levels={'alchemy': 2},
             )
         finally:
-            RECIPE_BY_ID['alchemy_minor_health_potion'] = original
+            RECIPE_BY_ID['field_tonic'] = original
 
         self.assertEqual(result.status, 'crafted')
         self.assertEqual(self._get_inventory_qty('herb_common'), 0)

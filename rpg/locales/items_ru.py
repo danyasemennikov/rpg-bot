@@ -91,6 +91,15 @@ ITEM_NAMES.update({
     'field_prayer_amulet': '📿 Полевой молитвенный амулет',
 })
 
+ITEM_NAMES.update({
+    'frostpine_wood': 'Морозная сосна', 'sunscar_ore': 'Руда Санскара',
+    'deep_marsh_fish': 'Глубинная болотная рыба', 'bear_hide': 'Медвежья шкура', 'troll_sinew': 'Сухожилие тролля',
+    'pe_mana_potion_medium': 'Среднее зелье маны', 'pe_health_potion_large': 'Большое зелье здоровья',
+    'pe_mana_potion_large': 'Большое зелье маны', 'pe_shore_broth': 'Прибрежная уха',
+    'pe_marsh_stew': 'Болотная похлёбка', 'pe_boar_feast': 'Жаркое из кабана',
+    'pe_oasis_meal': 'Оазисное рыбное блюдо', 'pe_deep_marsh_meal': 'Сытная болотная трапеза',
+})
+
 ITEM_DESCRIPTIONS = {
     **{item_id: 'Надёжное полевое оружие существующего семейства, указанного в карточке.' for item_id in (
         'field_sword_1h', 'field_sword_2h', 'field_axe_2h', 'field_daggers', 'field_bow',
@@ -109,3 +118,7 @@ ITEM_DESCRIPTIONS = {
     'field_mind_ring': 'Кольцо, повышающее ману и интуицию.',
     'field_prayer_amulet': 'Амулет, повышающий мудрость и силу лечения.',
 }
+ITEM_DESCRIPTIONS.update({
+    'frostpine_wood':'Морозостойкая древесина Фростспайна.','sunscar_ore':'Закалённая жаром руда Санскара.','deep_marsh_fish':'Редкая рыба глубин Мирвейла.','bear_hide':'Прочная добытая медвежья шкура.','troll_sinew':'Крепкое добытое сухожилие тролля.',
+    'pe_mana_potion_medium':'Восстанавливает 100 маны.','pe_health_potion_large':'Восстанавливает 150 HP.','pe_mana_potion_large':'Восстанавливает 160 маны.','pe_shore_broth':'Восстанавливает 25 HP и 15 маны.','pe_marsh_stew':'Восстанавливает 80 HP и 20 маны.','pe_boar_feast':'Восстанавливает 120 HP.','pe_oasis_meal':'Восстанавливает 100 HP и 50 маны.','pe_deep_marsh_meal':'Восстанавливает 180 HP и 80 маны.',
+})
