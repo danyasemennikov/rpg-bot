@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "contract": "PEV1-1",
+  "status": "draft_pr_candidate",
+  "base_commit": "27347ece2b17108a1aed1f6eb01f2a395480e6c9",
+  "branch": "codex/professions-economy-v1",
+  "candidate_head": null,
+  "pull_request": null,
+  "catalog": {
+    "gathering_professions": 5,
+    "crafting_professions": 7,
+    "total_professions": 12,
+    "active_recipes": 63,
+    "starter_recipes": 17,
+    "paid_recipes": 46,
+    "mandatory_materials": 28,
+    "new_materials": 5,
+    "new_recovery_outputs": 8
+  },
+  "migration": {
+    "marker": "professions_economy_v1",
+    "crafting_constraint_keys": 7,
+    "row_preservation_check": "tested",
+    "foreign_key_check": "tested",
+    "idempotent_restart": "tested"
+  },
+  "journeys": {
+    "required": 11,
+    "test": "tests/test_professions_economy_v1_journeys.py",
+    "result": "pending final rerun",
+    "shortcuts": "none for production acquisitions; fixtures limited to migration/adversarial tests"
+  },
+  "focused_tests": [],
+  "broad_final_suite": null,
+  "deviations": []
+}

@@ -8,6 +8,11 @@ Files in this directory are checked, compact acceptance artifacts. They identify
 exact rules commit, inputs, seeds, production authorities, and failed/stalled runs.
 Human interpretation and rollout guidance live in the corresponding delivery report.
 
+`professions_economy_v1.json` records the PEV1-1 Stage 3 candidate's frozen base,
+catalogue counts, migration checks, production-journey result, focused checks, and
+single broad final-suite result. Its candidate head and Draft PR URL are populated
+only after the tested branch has been pushed.
+
 `character_builds_combat_identity_v1.json` is interpreted by
 `../CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md`. Its `head_sha` is the integrated runtime
 checkpoint used to generate the matrix:

@@ -47,14 +47,17 @@ record delivery history.
 ## Professions and economy
 
 - Design intent: [loot/crafting/progression foundation](../foundation/LOOT_CRAFT_PROGRESSION_FOUNDATION.md)
+- Active frozen contract: [Professions & Economy V1](../epics/PROFESSIONS_ECONOMY_V1_SPEC.md)
+- Draft candidate report: [PEV1-1 delivery record](../epics/PROFESSIONS_ECONOMY_V1_REPORT.md)
 - Playable subset delivery: [PR229 vertical slice](../epics/PLAYABLE_ALPHA_VERTICAL_SLICE_V1.md)
 - Current owners: `game/gathering_foundation.py`, `game/gathering_runtime.py`,
   `game/gathering_progression.py`, `game/resource_handbook.py`, `game/hunting.py`,
   `game/crafting_foundation.py`, `game/crafting_runtime.py`, `game/quest_board.py`,
-  and `handlers/location.py`
-- Current implementation contains persisted gathering/progression, bounded hunting,
-  and a limited live crafting/shop subset. The next architecture assessment remains a
-  proposed roadmap item, not an approved implementation contract.
+  `game/profession_resources.py`, `game/profession_recipes.py`,
+  `game/profession_schema.py`, `game/recipe_knowledge.py`,
+  `game/economy_actions.py`, `handlers/professions.py`, and `handlers/location.py`
+- The merged baseline remains the bounded PR229 subset. The active PEV1-1 candidate
+  expands this boundary but is not merged or deployed.
 
 ## PvE and playable chapter
 

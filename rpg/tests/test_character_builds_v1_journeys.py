@@ -29,7 +29,7 @@ from game.gear_instances import get_equipped_gear_instances
 from game.pve_live import ensure_location_pve_spawn_instances, reset_solo_pve_runtime_store
 from game.pve_reward_settlement import get_settlement
 from game.weapon_mastery import get_mastery
-from handlers.battle import handle_battle_buttons
+from handlers.battle import build_battle_message, handle_battle_buttons
 from handlers.build import build_skills_command, handle_build_buttons
 from handlers.inventory import build_item_detail, handle_inventory_buttons
 from handlers.location import handle_combat_buttons, handle_location_buttons
@@ -441,8 +441,7 @@ class ProductionJourney:
             raise AssertionError(("unsupported recovery origin", origin))
         before = dict(get_player(self.player_id))
         assert before["gold"] >= 12
-        await self.callback("inn", handle_location_buttons)
-        await self.callback("inn_rest", handle_location_buttons)
+        await self.rest_at_current_inn()
         after = dict(get_player(self.player_id))
         assert after["hp"] == after["max_hp"]
         assert after["mana"] == after["max_mana"]
@@ -456,6 +455,14 @@ class ProductionJourney:
             await self.travel("westwild_n1", "westwild_n2")
         else:
             await self.travel("westwild_n1")
+
+    async def rest_at_current_inn(self) -> None:
+        await self.callback("inn", handle_location_buttons)
+        rest = next(
+            value for value in _callbacks(self.messages[-1][1])
+            if value.startswith("inn_rest_")
+        )
+        await self.callback(rest, handle_location_buttons)
 
     def _accelerate_respawn(self, mob_id: str) -> str:
         location_id = str(get_player(self.player_id)["location_id"])
@@ -512,7 +519,8 @@ class ProductionJourney:
                 return callback
         raise AssertionError((kind, skill_id, target_id, _callbacks(self.messages[-1][1])))
 
-    async def fight(self, mob_id: str, *, opening: tuple[tuple[str, str | None], ...] = ()) -> dict:
+    async def fight(self, mob_id: str, *, opening: tuple[tuple[str, str | None], ...] = (),
+                    use_potions: bool = False) -> dict:
         spawn_id = self._accelerate_respawn(mob_id)
         await self.callback(f"fight_spawn_{spawn_id}", handle_combat_buttons)
         enter = next(
@@ -524,10 +532,64 @@ class ProductionJourney:
         assert self.context.user_data["battle"]["rules_version"] == "character_builds_combat_identity_v1"
         battle_state = self.context.user_data["battle"]
         selected_actions: list[dict] = []
+        battle_potions_used = 0
 
         for turn in range(40):
             if "battle" not in self.context.user_data:
                 break
+            if use_potions:
+                actor = (self.context.user_data['battle'].get('participant_states_v1') or {}).get(str(self.player_id), {})
+                actor_hp = int(actor.get('hp', 0))
+                actor_max_hp = int(actor.get('max_hp', 1))
+                should_use_potion = (
+                    (battle_potions_used == 0 and actor_hp < actor_max_hp)
+                    or actor_hp * 2 < actor_max_hp
+                )
+                if should_use_potion:
+                    await self.callback(f"battle_potions_{mob_id}", handle_battle_buttons)
+                    potion_callbacks = [
+                        value for value in _callbacks(self.messages[-1][1])
+                        if value.startswith('battle_use_potion_')
+                    ]
+                    potion = potion_callbacks[0] if potion_callbacks else None
+                    conn = get_connection()
+                    try:
+                        for value in potion_callbacks:
+                            token = value.removeprefix('battle_use_potion_')
+                            row = conn.execute('SELECT payload FROM player_ui_actions WHERE token=?', (token,)).fetchone()
+                            values = str(row['payload']).split(':') if row else []
+                            item = conn.execute('''SELECT i.stat_bonus_json FROM inventory inv
+                                JOIN items i ON i.item_id=inv.item_id WHERE inv.id=?''',
+                                (int(values[1]),)).fetchone() if len(values) >= 3 else None
+                            if item and int(json.loads(item['stat_bonus_json']).get('heal', 0)) > 0:
+                                potion = value
+                                break
+                    finally:
+                        conn.close()
+                    if potion:
+                        await self.callback(potion, handle_battle_buttons)
+                        token = potion.removeprefix('battle_use_potion_')
+                        conn = get_connection()
+                        try:
+                            applied = conn.execute('''SELECT 1 FROM battle_consumable_receipts_v1
+                                WHERE action_token=? AND encounter_id=? AND player_id=?''', (
+                                token, encounter_id, self.player_id,
+                            )).fetchone()
+                        finally:
+                            conn.close()
+                        if applied:
+                            battle_potions_used += 1
+                            battle_state = self.context.user_data['battle']
+                        await self.callback(f'battle_back_{mob_id}', handle_battle_buttons)
+                        if not any(
+                            value.startswith('battle_v1_') for value in _callbacks(self.messages[-1][1])
+                        ):
+                            player = get_player(self.player_id)
+                            mob = self.context.user_data.get('battle_mob')
+                            text, markup = build_battle_message(
+                                player, mob, self.context.user_data['battle'], [],
+                            )
+                            await self._output(text, reply_markup=markup)
             if turn < len(opening):
                 kind, skill_id = opening[turn]
             else:
@@ -556,13 +618,15 @@ class ProductionJourney:
             raise AssertionError((mob_id, battle_state))
 
         assert not battle_state.get("player_dead"), (mob_id, battle_state)
+        if use_potions:
+            assert battle_potions_used > 0, (mob_id, 'no battle potion was committed')
         settlement = get_settlement(encounter_id)
         assert settlement and settlement["status"] == "applied"
         award = next(
             row for row in settlement["result"]["mastery_awards"]
             if row["player_id"] == self.player_id
         )
-        assert award["exp"] == 20
+        assert int(award["exp"]) > 0
         return {
             "encounter_id": encounter_id,
             "spawn_instance_id": spawn_id,

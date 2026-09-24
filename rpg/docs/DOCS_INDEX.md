@@ -56,6 +56,15 @@ It also catalogues compatibility-retained system and pass documents.
 reports and the historical open-world pass records. These reports preserve the
 validation and limitations that applied to their delivery baseline.
 
+## Active implementation contracts
+
+- [Professions & Economy V1 frozen contract](epics/PROFESSIONS_ECONOMY_V1_SPEC.md)
+- [Professions & Economy V1 candidate report](epics/PROFESSIONS_ECONOMY_V1_REPORT.md)
+- [Professions & Economy V1 evidence](evidence/professions_economy_v1.json)
+
+These describe an active Draft-PR candidate and do not alter merged-state authority
+until the candidate is accepted and merged.
+
 ## Evidence
 
 [evidence/README.md](evidence/README.md) records provenance and interpretation limits

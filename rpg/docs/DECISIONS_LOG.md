@@ -21,6 +21,21 @@ becoming a competing status summary.
 
 ---
 
+### Decision: Freeze Professions & Economy V1
+- **Date:** 2026-09-24
+- **Context:** The post-PR232 baseline had persisted gathering and a four-recipe
+  chapter subset but no accepted full V1 economy boundary.
+- **Decision:** Implement PEV1-1 Stage 3 exactly: 12 professions, 63 active recipes,
+  28 mandatory materials, permanent knowledge, lossless migration, durable economic
+  receipts, and ru/en/es UX. All eight new recovery outputs use `item_type='potion'`;
+  heal/mana authority is `stat_bonus_json`, and environmental sources have one runtime
+  authority.
+- **Impact:** Professions, sources, crafting outputs, economy mutations, journal UX,
+  migrations, acceptance journeys, evidence, and documentation.
+- **Status:** Accepted contract; implementation is an unmerged Draft-PR candidate.
+
+---
+
 ### Decision: Astra / Sol Acceptance Workflow
 - **Date:** 2026-09-23
 - **Context:** Architecture, implementation, acceptance, and landing responsibilities

@@ -181,10 +181,10 @@ class Journey:
         return encounter
 
     async def craft(self, recipe):
-        from game.crafting_runtime import LIVE_RECIPE_IDS
-        _, markup = build_workshop(dict(get_player(PLAYER)))
-        data = [b for b in buttons(markup) if b.startswith('alpha_craft_')][LIVE_RECIPE_IDS.index(recipe)]
-        response = await self.callback(data, handle_chapter_buttons)
+        from handlers.professions import build_recipe, handle_profession_buttons
+        _, markup = build_recipe(dict(get_player(PLAYER)), recipe)
+        data = next(b for b in buttons(markup) if b.startswith('pe_a:'))
+        response = await self.callback(data, handle_profession_buttons)
         assert 'craft_failed' not in str(response.answer.call_args)
         return data
 
@@ -270,15 +270,19 @@ async def run_chapter(lang, build_case=None):
         encounter = await j.fight('forest_boar')
         from game.hunting import harvest_victory
         from tests.test_alpha_transactions_v1 import snapshot
+        assert harvest_victory(1, encounter)['status'] == 'harvest_not_applied'
+        from handlers.chapter import build_harvest_menu
+        from handlers.professions import handle_profession_buttons
+        _, harvest_markup = build_harvest_menu(dict(get_player(PLAYER)))
+        harvest_action = next(b for b in buttons(harvest_markup) if b.startswith('pe_a:'))
         before = snapshot()
-        assert harvest_victory(1, encounter)['status'] == 'stale_action'
         with patch('game.hunting.add_gathering_profession_exp', side_effect=RuntimeError('harvest progression')):
             with pytest.raises(RuntimeError):
-                await j.callback(f'alpha_extract_{encounter}', handle_chapter_buttons)
+                await j.callback(harvest_action, handle_profession_buttons)
         assert snapshot() == before
-        await j.callback(f'alpha_extract_{encounter}', handle_chapter_buttons)
+        await j.callback(harvest_action, handle_profession_buttons)
         before = quantity('boar_meat')
-        await j.callback(f'alpha_extract_{encounter}', handle_chapter_buttons)
+        await j.callback(harvest_action, handle_profession_buttons)
         assert quantity('boar_meat') == before
     await j.travel('westwild_n3', 'westwild_n4', 'westwild_n5', 'hub_westwild')
     await j.claim()
@@ -286,7 +290,11 @@ async def run_chapter(lang, build_case=None):
     await j.travel('westwild_n5', 'westwild_n4', 'westwild_n3')
     for _ in range(2):
         encounter = await j.fight('forest_wolf')
-        await j.callback(f'alpha_extract_{encounter}', handle_chapter_buttons)
+        from handlers.chapter import build_harvest_menu
+        from handlers.professions import handle_profession_buttons
+        _, harvest_markup = build_harvest_menu(dict(get_player(PLAYER)))
+        harvest_action = next(b for b in buttons(harvest_markup) if b.startswith('pe_a:'))
+        await j.callback(harvest_action, handle_profession_buttons)
     await j.travel('westwild_n4', 'westwild_n5', 'hub_westwild')
     await j.craft('trail_vest')
     await j.craft('trail_ration')
@@ -298,7 +306,8 @@ async def run_chapter(lang, build_case=None):
     await j.travel('westwild_n5', 'westwild_n4', 'westwild_n3', 'westwild_n2', 'westwild_n1', 'capital_city')
     token = await j.craft('field_tonic')
     before = quantity('health_potion_small')
-    await j.callback(token, handle_chapter_buttons)
+    from handlers.professions import handle_profession_buttons
+    await j.callback(token, handle_profession_buttons)
     assert quantity('health_potion_small') == before
     _, markup = build_sell_menu(dict(get_player(PLAYER)))
     sale = next(b for b in buttons(markup) if b.startswith('alpha_sellone_'))

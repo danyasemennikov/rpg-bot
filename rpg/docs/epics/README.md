@@ -8,6 +8,12 @@ Epic reports record what a candidate delivered, how it was migrated and validate
 and which limitations applied at that baseline. They do not replace current code,
 [PROJECT_STATE_CURRENT.md](../PROJECT_STATE_CURRENT.md), or system documentation.
 
+## Active Draft candidates
+
+| Delivery record | Contract | Disposition |
+|---|---|---|
+| [Professions & Economy V1](PROFESSIONS_ECONOMY_V1_REPORT.md) | PEV1-1 Stage 3 | Draft PR candidate; not merged or deployed |
+
 ## Merged Epics
 
 | Delivery record | Repository PR | Disposition | Later scope notes |

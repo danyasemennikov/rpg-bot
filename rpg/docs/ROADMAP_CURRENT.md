@@ -15,6 +15,16 @@ in this roadmap.
 
 ## CURRENT
 
+### Professions & Economy V1
+
+- Status: **in progress** under frozen contract PEV1-1 Stage 3.
+- Outcome: five gathering and seven crafting professions, 63 active recipes,
+  28 mandatory materials, permanent knowledge, durable economic receipts, and
+  complete ru/en/es professions journeys.
+- Candidate record: [epics/PROFESSIONS_ECONOMY_V1_REPORT.md](epics/PROFESSIONS_ECONOMY_V1_REPORT.md).
+- Completion: the single Draft PR satisfies the focused and production-journey
+  matrix plus one final broad suite; merge remains a separate user decision.
+
 ### Documentation Architecture & Consolidation V1
 
 - Status: **in progress** under the frozen Astra documentation contract.
@@ -25,15 +35,11 @@ in this roadmap.
 
 ## NEXT
 
-### Professions / Economy architecture and gap assessment
+### Professions / Economy follow-up assessment
 
-- Status: **proposed** design candidate.
-- Outcome: reconcile implemented gathering, bounded hunting, the current crafting
-  subset, shops/exchange, progression bands, and unresolved economy gaps.
-- Prerequisite: a fresh audit of current implementation and existing foundation text.
-- Contract: none yet. This is not an approved implementation Epic.
-- Completion: an accepted design decision and frozen implementation contract, if the
-  owner chooses to proceed.
+- Status: **proposed** only after PEV1-1 acceptance.
+- Outcome: assess operational behavior, receipt retention, balance, and explicitly
+  deferred economy expansion without reopening the frozen V1 contract.
 
 ## LATER
 

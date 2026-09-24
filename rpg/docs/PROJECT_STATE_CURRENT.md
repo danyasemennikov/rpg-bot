@@ -10,6 +10,11 @@ This current section is the only merged-state summary. Plans belong in
 measured artifacts retain their own commit provenance. Merge does not establish
 deployment.
 
+> **Active candidate note:** PEV1-1 Professions & Economy V1 is implemented on
+> `codex/professions-economy-v1` as a Draft-PR candidate. It is not part of the
+> confirmed merged state below. See
+> [the candidate report](epics/PROFESSIONS_ECONOMY_V1_REPORT.md).
+
 ## Verified baseline
 
 - [PR229 — Playable Alpha Vertical Slice V1](https://github.com/danyasemennikov/rpg-bot/pull/229): merged.
