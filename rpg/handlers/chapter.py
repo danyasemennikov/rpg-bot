@@ -51,16 +51,17 @@ def build_journal(player: dict):
         if player['location_id'] == 'capital_city':
             rows.extend(_button(get_item_name(key, lang), f'alpha_kit_{key}') for key in STARTER_WEAPONS)
     lines += ['', t('chapter.professions', lang)]
+    rows.append(_button(t('professions.title', lang).replace('<b>', '').replace('</b>', ''), 'pe_o:0'))
     for row in list_gathering_profession_states(player_id):
         key = row['profession_key']
-        lines.append(t('chapter.profession_row', lang, name=t(f'chapter.prof_{key}', lang),
+        lines.append(t('chapter.profession_row', lang, name=t(f'professions.names.{key}', lang),
                        level=row['level'], exp=row['exp'], needed=row['level'] * 50 if row['level'] < 20 else '—'))
     conn = get_connection()
     try:
         ensure_crafting_professions(conn, player_id)
         conn.commit()
         for row in conn.execute('SELECT * FROM player_crafting_professions WHERE player_id=? ORDER BY profession_key', (player_id,)):
-            lines.append(t('chapter.profession_row', lang, name=t(f"chapter.prof_{row['profession_key']}", lang),
+            lines.append(t('chapter.profession_row', lang, name=t(f"professions.names.{row['profession_key']}", lang),
                            level=row['level'], exp=row['exp'], needed=row['level'] * 50 if row['level'] < 20 else '—'))
     finally:
         conn.close()
@@ -74,67 +75,54 @@ def build_journal(player: dict):
     if 'quest_board' in location.get('services', []):
         rows.append(_button(t('location.quests_btn', lang), 'quest_board'))
     if 'craftsmen_guild' in location.get('services', []):
-        rows.append(_button(t('chapter.workshop', lang), 'alpha_workshop'))
+        rows.append(_button(t('chapter.workshop', lang), 'pe_o:0'))
     rows.append(_button(t('chapter.harvest', lang), 'alpha_harvest'))
     return '\n'.join(lines), InlineKeyboardMarkup(rows)
 
 
 def build_workshop(player: dict):
-    player_id, lang = player['telegram_id'], player.get('lang', 'ru')
-    location = get_location(player['location_id']) or {}
-    if 'craftsmen_guild' not in location.get('services', []):
-        return t('chapter.wrong_location', lang), InlineKeyboardMarkup([_button(t('chapter.journal', lang), 'alpha_home')])
-    conn = get_connection()
-    try:
-        ensure_crafting_professions(conn, player_id)
-        conn.commit()
-        professions = {r['profession_key']: dict(r) for r in conn.execute(
-            'SELECT * FROM player_crafting_professions WHERE player_id=?', (player_id,))}
-        quantities = {r['item_id']: r['qty'] for r in conn.execute(
-            'SELECT item_id, SUM(quantity) AS qty FROM inventory WHERE telegram_id=? GROUP BY item_id', (player_id,))}
-    finally:
-        conn.close()
-    tokens = issue_actions(player_id, 'craft', list(LIVE_RECIPE_IDS))
-    lines, rows = [t('chapter.workshop', lang), t('chapter.workshop_intro', lang)], []
-    for recipe_id in LIVE_RECIPE_IDS:
-        recipe = get_recipe(recipe_id)
-        state = professions[recipe.profession_key]
-        lines += ['', get_item_name(recipe.output_item_id, lang),
-                  t('chapter.recipe_level', lang, profession=t(f'chapter.prof_{recipe.profession_key}', lang),
-                    level=state['level'], required=recipe.minimum_profession_level)]
-        for material in recipe.material_requirements + recipe.special_ingredient_requirements:
-            lines.append(f"• {get_item_name(material.item_id, lang)}: {quantities.get(material.item_id, 0)}/{material.quantity}")
-        rows.append(_button(t('chapter.craft_button', lang, name=get_item_name(recipe.output_item_id, lang)),
-                            f'alpha_craft_{tokens[recipe_id]}'))
-    rows.append(_button(t('chapter.journal', lang), 'alpha_home'))
-    return '\n'.join(lines), InlineKeyboardMarkup(rows)
+    """Legacy callback refreshes into the PEV1 overview; mutation stays token-bound."""
+    from handlers.professions import build_overview
+    return build_overview(player)
 
 
 def build_harvest_menu(player: dict):
+    import json
     lang = player.get('lang', 'ru')
     victories = list_harvestable_victories(player['telegram_id'])
-    rows = [_button(t('chapter.harvest_button', lang, name=get_mob_name(v['mob_id'], lang)),
-                    f"alpha_extract_{v['encounter_id']}") for v in victories[:5]]
+    payloads = [json.dumps({'encounter_id':v['encounter_id'],'unit_id':v['unit_id'],'item_id':v['item_id']},
+                           sort_keys=True,separators=(',',':')) for v in victories]
+    tokens = issue_actions(player['telegram_id'], 'harvest', payloads) if payloads else {}
+    rows = [_button(t('chapter.harvest_button', lang, name=get_item_name(v['item_id'], lang)),
+                    f"pe_a:{tokens[payload]}") for v, payload in zip(victories, payloads)]
     rows.append(_button(t('chapter.journal', lang), 'alpha_home'))
     return t('chapter.harvest_intro' if victories else 'chapter.harvest_empty', lang), InlineKeyboardMarkup(rows)
 
 
-def build_sell_menu(player: dict):
+def build_sell_menu(player: dict, page: int = 0):
     lang, player_id = player.get('lang', 'ru'), player['telegram_id']
     conn = get_connection()
     try:
-        items = conn.execute('''SELECT inv.id, inv.item_id, inv.quantity FROM inventory inv
+        candidates = conn.execute('''SELECT inv.id, inv.item_id, inv.quantity FROM inventory inv
             JOIN items i ON i.item_id=inv.item_id WHERE inv.telegram_id=?
-            AND i.item_type='material' AND i.sell_price>0 AND inv.quantity>0 ORDER BY inv.item_id LIMIT 20''',
+            AND i.sell_price>0 AND inv.quantity>0 ORDER BY inv.item_id''',
                              (player_id,)).fetchall()
     finally:
         conn.close()
     from game.items_data import get_item
+    from game.seed import PEV1_CONSUMABLE_IDS
+    items = [row for row in candidates if get_item(row['item_id'])['item_type'] == 'material' or row['item_id'] in PEV1_CONSUMABLE_IDS]
+    pages = max(1, (len(items) + 7) // 8); page = min(max(0, int(page)), pages - 1)
+    items = items[page * 8:(page + 1) * 8]
     payloads = [f"{row['id']}:{row['quantity']}" for row in items]
     tokens = issue_actions(player_id, 'sell', payloads)
     rows = [_button(t('chapter.sell_button', lang, name=get_item_name(row['item_id'], lang),
                       price=get_item(row['item_id'])['sell_price'], qty=row['quantity']),
                     f'alpha_sellone_{tokens[payload]}') for row, payload in zip(items, payloads)]
+    nav = []
+    if page: nav.append(InlineKeyboardButton('◀️', callback_data=f'alpha_sell_page_{page-1}'))
+    if page + 1 < pages: nav.append(InlineKeyboardButton('▶️', callback_data=f'alpha_sell_page_{page+1}'))
+    if nav: rows.append(nav)
     rows.append(_button(t('location.shop_btn', lang), 'shop'))
     return t('chapter.sell_intro', lang), InlineKeyboardMarkup(rows)
 
@@ -192,20 +180,21 @@ async def handle_chapter_buttons(update, context):
     elif data == 'alpha_harvest':
         view = build_harvest_menu
     elif data.startswith('alpha_extract_'):
-        result = harvest_victory(player_id, data.removeprefix('alpha_extract_'))
-        status, view = result['status'], build_harvest_menu
-        if status == 'harvested':
-            progress = result['progression']
-            await query.answer(t('chapter.harvested', lang, item=get_item_name(result['item_id'], lang),
-                                 xp=progress.xp_awarded, level=progress.new_level), show_alert=True)
-            answered = True
-            status = None
-    elif data == 'alpha_sell' or data.startswith('alpha_sellone_'):
+        # Legacy victory buttons only refresh the explicit, token-bound choice
+        # preview. They never mutate from the encounter ID alone.
+        view = build_harvest_menu
+    elif data == 'alpha_sell' or data.startswith('alpha_sellone_') or data.startswith('alpha_sell_page_'):
         location = get_location(player['location_id']) or {}
         if 'shop' not in location.get('services', []):
             status = 'wrong_location'
         else:
             view = build_sell_menu
+            if data.startswith('alpha_sell_page_'):
+                page = int(data.removeprefix('alpha_sell_page_'))
+                text, keyboard = build_sell_menu(dict(get_player(player_id)), page)
+                await query.answer()
+                await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+                return
             if data.startswith('alpha_sellone_'):
                 from handlers.inventory import try_sell_inventory_item
                 result = try_sell_inventory_item(player_id, data.removeprefix('alpha_sellone_'))

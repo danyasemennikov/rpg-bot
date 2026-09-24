@@ -290,18 +290,27 @@ def _calc_safe_restore_amount(current_value: int, effective_cap: int, restore_va
 def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
     """Sell one owned material at a shop with its receipt and objective atomically."""
     from game.action_receipts import ActionRejected, peaceful_player, consume_action
+    from game.economy_actions import find_receipt, intent_hash, store_receipt
+    from game.seed import PEV1_CONSUMABLE_IDS
     from game.quest_board import register_contract_objective
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        token_row = conn.execute("SELECT payload FROM player_ui_actions WHERE token=? AND player_id=? AND kind='sell'",
+                                 (action_token, telegram_id)).fetchone()
+        payload = str(token_row['payload']) if token_row else ''
+        receipt_hash = intent_hash('sell', telegram_id, {'payload': payload})
+        recovered = find_receipt(conn, telegram_id, f'ui:{action_token}', 'sell', receipt_hash)
+        if recovered is not None:
+            conn.commit(); return {**recovered, 'recovered': True}
         player = peaceful_player(conn, telegram_id, service='shop')
-        payload = consume_action(conn, telegram_id, 'sell', action_token)
+        payload = consume_action(conn, telegram_id, 'sell', action_token, payload=payload)
         inv_id, expected_quantity = (int(value) for value in payload.split(':'))
         row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inv_id, telegram_id)).fetchone()
         if not row or row['quantity'] != expected_quantity or expected_quantity <= 0:
             raise ActionRejected('stale_action')
         item = get_item(row['item_id'])
-        if not item or item['item_type'] != 'material' or item['sell_price'] <= 0:
+        if not item or (item['item_type'] != 'material' and row['item_id'] not in PEV1_CONSUMABLE_IDS) or item['sell_price'] <= 0:
             raise ActionRejected('stale_action')
         if expected_quantity == 1:
             conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
@@ -309,8 +318,14 @@ def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
             conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
         conn.execute('UPDATE players SET gold=gold+? WHERE telegram_id=?', (item['sell_price'], telegram_id))
         register_contract_objective(conn, telegram_id, 'sell', row['item_id'], 1, player['location_id'])
+        result = {'schema_version':1,'action_kind':'sell','status':'sold','player_id':telegram_id,
+                  'location_id':player['location_id'],'recipe_id':None,
+                  'consumed':[{'item_id':row['item_id'],'quantity':1}],'granted':[],
+                  'gold_delta':item['sell_price'],'gold_after':int(player['gold'])+item['sell_price'],
+                  'progression':[],'source':{'inventory_id':inv_id},'details':{}}
+        store_receipt(conn, telegram_id, f'ui:{action_token}', 'sell', receipt_hash, result)
         conn.commit()
-        return {'status': 'sold', 'gold': item['sell_price']}
+        return {**result, 'gold': item['sell_price']}
     except ActionRejected as exc:
         conn.rollback()
         return {'status': str(exc)}
@@ -344,17 +359,31 @@ def consume_owned_potion(conn, telegram_id: int, inventory_id: int, *, hp: int, 
 
 def use_inventory_consumable(telegram_id: int, action_token: str) -> dict:
     from game.action_receipts import ActionRejected, peaceful_player, consume_action
+    from game.economy_actions import find_receipt, intent_hash, store_receipt
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        token_row = conn.execute("SELECT payload FROM player_ui_actions WHERE token=? AND player_id=? AND kind='use'",
+                                 (action_token, telegram_id)).fetchone()
+        payload = str(token_row['payload']) if token_row else ''
+        receipt_hash = intent_hash('consume', telegram_id, {'payload': payload})
+        recovered = find_receipt(conn, telegram_id, f'ui:{action_token}', 'consume', receipt_hash)
+        if recovered is not None:
+            conn.commit(); return {**recovered, **(recovered.get('details') or {}), 'recovered': True}
         player = peaceful_player(conn, telegram_id)
-        payload = consume_action(conn, telegram_id, 'use', action_token)
+        payload = consume_action(conn, telegram_id, 'use', action_token, payload=payload)
         inv_id, expected_quantity = (int(value) for value in payload.split(':'))
         effective = get_player_effective_stats(telegram_id, player)
         result = consume_owned_potion(conn, telegram_id, inv_id, hp=player['hp'], mana=player['mana'],
                     max_hp=effective['max_hp'], max_mana=effective['max_mana'], expected_quantity=expected_quantity)
+        receipt = {'schema_version':1,'action_kind':'consume','status':'used','player_id':telegram_id,
+                   'location_id':player['location_id'],'recipe_id':None,
+                   'consumed':[{'item_id':result['item_id'],'quantity':1}],'granted':[],
+                   'gold_delta':0,'gold_after':player['gold'],'progression':[],
+                   'source':{'inventory_id':inv_id},'details':{'heal':result['heal'],'mana':result['mana']}}
+        store_receipt(conn,telegram_id,f'ui:{action_token}','consume',receipt_hash,receipt)
         conn.commit()
-        return result
+        return {**receipt, **result}
     except ActionRejected as exc:
         conn.rollback()
         return {'status': str(exc)}
@@ -1004,7 +1033,7 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     lang  = get_player_lang(user.id)
     effective_stats = get_player_effective_stats(user.id, p)
 
-    if data.startswith(('inv_equip_', 'inv_unequip_', 'inv_enhance_', 'inv_drop_', 'inv_transfer_',
+    if data.startswith(('inv_equip_', 'inv_unequip_', 'inv_enhance_', 'inv_drop_', 'inv_transfer_', 'inv_gift_',
                         'inv_gequip_', 'inv_gunequip_', 'inv_genh_', 'inv_lequip_', 'inv_lunequip_',
                         'inv_sellask_', 'inv_gsell_')):
         from game.pvp_live import has_active_live_pvp_engagement
@@ -1323,6 +1352,17 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         await query.answer()
         return
 
+    if data.startswith('inv_gift_'):
+        from game.economy_actions import gift_inventory_item
+        result = gift_inventory_item(user.id, data.removeprefix('inv_gift_'))
+        if result.get('status') != 'gifted':
+            await query.answer(t('gear.state_changed', lang), show_alert=True)
+            return
+        await query.answer(t('inventory.transfer_ok', lang, name=get_item_name(result['consumed'][0]['item_id'], lang), username=''), show_alert=True)
+        text, keyboard = build_inventory_list(user.id, 'misc', lang)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
     await query.answer()
 
 # ── Обработка ввода username для передачи ──
@@ -1356,39 +1396,21 @@ async def handle_transfer_input(update: Update, context: ContextTypes.DEFAULT_TY
         return True
 
     if inv_row.get('entry_type') == 'gear_instance':
-        if inv_row.get('equipped_slot'):
-            await update.message.reply_text(t('inventory.drop_equipped', lang))
-            conn.close()
-            return True
-        conn.execute(
-            'UPDATE gear_instances SET telegram_id=? WHERE id=? AND telegram_id=?',
-            (target['telegram_id'], inv_row['id'], user.id),
-        )
-    else:
-        existing = conn.execute(
-            'SELECT id, quantity FROM inventory WHERE telegram_id=? AND item_id=?',
-            (target['telegram_id'], inv_row['item_id'])
-        ).fetchone()
-
-        if existing:
-            conn.execute('UPDATE inventory SET quantity=quantity+1 WHERE id=?', (existing['id'],))
-        else:
-            conn.execute(
-                'INSERT INTO inventory (telegram_id, item_id, quantity) VALUES (?,?,1)',
-                (target['telegram_id'], inv_row['item_id'])
-            )
-
-        if inv_row['quantity'] > 1:
-            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_row['id'],))
-        else:
-            conn.execute('DELETE FROM inventory WHERE id=?', (inv_row['id'],))
-
-    conn.commit()
+        await update.message.reply_text(t('gear.state_changed', lang))
+        conn.close()
+        return True
+    import json as _json
+    from game.action_receipts import issue_actions
+    payload = _json.dumps({'inventory_id':int(inv_row['id']), 'item_id':inv_row['item_id'],
+        'quantity':int(inv_row['quantity']), 'enhance_level':int(inv_row.get('enhance_level',0)),
+        'durability':int(inv_row.get('durability',100)), 'recipient_id':int(target['telegram_id'])},
+        sort_keys=True, separators=(',', ':'))
     conn.close()
-
+    token = issue_actions(user.id, 'gift', [payload])[payload]
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('common.confirm', lang), callback_data=f'inv_gift_{token}')]])
     await update.message.reply_text(
-        t('inventory.transfer_ok', lang, name=get_item_name(inv_row['item_id'], lang), username=username),
-        parse_mode='HTML'
+        t('inventory.transfer_prompt', lang) + '\n' + get_item_name(inv_row['item_id'], lang) + f' → @{username}',
+        reply_markup=keyboard, parse_mode='HTML'
     )
     return True
 

@@ -489,9 +489,14 @@ def apply_gear_intent(player_id: int, action: str, token: str, *, rng_roll: floa
 def exchange_enhancement_crystal(player_id: int, action_token: str) -> dict:
     """10 shards + 25 gold -> one crystal, after the Homecoming chapter."""
     from game.gear_instances import grant_item_to_player
+    from game.economy_actions import find_receipt, intent_hash, store_receipt
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        receipt_hash = intent_hash('crystal_exchange', player_id, {'shards':10,'gold':25})
+        recovered = find_receipt(conn, player_id, f'ui:{action_token}', 'crystal_exchange', receipt_hash)
+        if recovered is not None:
+            conn.commit(); return {**recovered, 'recovered':True}
         player = peaceful_player(conn, player_id, service='craftsmen_guild')
         consume_action(conn, player_id, 'gear_crystal_exchange', action_token, payload='10:25')
         unlocked = conn.execute('''SELECT 1 FROM player_contract_history
@@ -508,8 +513,15 @@ def exchange_enhancement_crystal(player_id: int, action_token: str) -> dict:
         conn.execute('''INSERT INTO gear_mutation_receipts
             (action_token, player_id, action_kind, result_json) VALUES (?, ?, 'crystal_exchange', ?)''',
             (action_token, player_id, json.dumps({'status': 'exchanged'}, sort_keys=True)))
+        receipt={'schema_version':1,'action_kind':'crystal_exchange','status':'exchanged','player_id':player_id,
+                 'location_id':player['location_id'],'recipe_id':None,
+                 'consumed':[{'item_id':'enhance_shard','quantity':10}],
+                 'granted':[{'item_id':'enhancement_crystal','quantity':1,'instance_ids':[],'gear_specs':[]}],
+                 'gold_delta':-25,'gold_after':int(player['gold'])-25,'progression':[],
+                 'source':{'chapter':'chapter_homecoming'},'details':{}}
+        store_receipt(conn,player_id,f'ui:{action_token}','crystal_exchange',receipt_hash,receipt)
         conn.commit()
-        return {'status': 'exchanged'}
+        return receipt
     except ActionRejected as exc:
         conn.rollback()
         return {'status': str(exc)}
