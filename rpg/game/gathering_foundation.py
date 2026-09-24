@@ -16,6 +16,7 @@ from game.items_data import get_item_reward_tags
 from game.locations import get_location
 from game.reward_policies import resolve_content_tier_band
 from game.world_scaffolding import resolve_open_world_region_identity
+from game.profession_resources import RESOURCES, location_sources
 
 GatherProfessionKey = Literal['herbalism', 'woodcutting', 'mining', 'fishing', 'hunting']
 
@@ -294,6 +295,21 @@ def get_gathering_profession_contract(profession_key: GatherProfessionKey) -> Ga
 
 
 def resolve_gather_resource_identity(item_id: str) -> GatherResourceIdentity | None:
+    pev1 = RESOURCES.get(item_id)
+    if pev1 is not None:
+        contract = GATHERING_PROFESSION_CONTRACTS[pev1.profession_key]
+        family = {
+            'herb_base': 'herb_common', 'fiber': 'plant_fiber', 'stone': 'ore',
+            'seasoning': 'ore', 'trophy': 'trophy_parts', 'monster_part': 'trophy_parts',
+        }.get(pev1.resource_group, pev1.resource_group)
+        return GatherResourceIdentity(
+            item_id=item_id, profession_key=pev1.profession_key,
+            resource_family=family, reward_family='creature_loot' if pev1.profession_key == 'hunting' else 'gathering_material',
+            base_gather_surface=contract.base_gather_surface,
+            minimum_profession_level=pev1.required_level,
+            min_zone_tier_band=1, max_zone_tier_band=10,
+            is_basic_resource=pev1.required_level == 1,
+        )
     explicit = GATHER_RESOURCE_IDENTITY_BY_ITEM_ID.get(item_id)
     if explicit is not None:
         return explicit
@@ -329,7 +345,7 @@ def build_location_gather_source_profiles(location_id: str) -> tuple[LocationGat
     world_region = resolve_open_world_region_identity(location_id=location_id)
 
     profiles: list[LocationGatherSourceProfile] = []
-    for raw in location.get('gather', ()):  # tuple[item_id, chance, display_name]
+    for raw in location_sources(location_id):
         item_id = raw[0]
         chance = float(raw[1])
         identity = resolve_gather_resource_identity(item_id)
@@ -373,10 +389,8 @@ def resolve_gather_access_decision(
         return None
 
     normalized_zone_tier = max(1, min(10, int(zone_tier_band)))
-    zone_allowed = identity.min_zone_tier_band <= normalized_zone_tier <= identity.max_zone_tier_band
-    # High-danger zones should not be freely farmed by very low profession levels.
-    zone_pressure = max(0, normalized_zone_tier - identity.min_zone_tier_band) * 2
-    required_profession_level = identity.minimum_profession_level + zone_pressure
+    zone_allowed = True
+    required_profession_level = identity.minimum_profession_level
     level_allowed = int(player_profession_level) >= required_profession_level
 
     return GatherAccessDecision(
