@@ -1,6 +1,7 @@
 """Additive storage for the Aster–Elmor chapter; owns no player data migration."""
 
 from game.action_receipts import ensure_action_schema
+from game.profession_schema import ensure_profession_rows, ensure_profession_schema
 
 
 def ensure_alpha_schema(conn):
@@ -38,9 +39,8 @@ def ensure_alpha_schema(conn):
         claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (encounter_id, player_id)
     )''')
+    ensure_profession_schema(conn)
 
 
 def ensure_crafting_professions(conn, player_id: int):
-    conn.executemany('''INSERT OR IGNORE INTO player_crafting_professions
-        (player_id, profession_key) VALUES (?, ?)''',
-                     ((player_id, key) for key in ('alchemy', 'cooking', 'medium_armor')))
+    ensure_profession_rows(conn, player_id)
