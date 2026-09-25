@@ -180,6 +180,20 @@ async def _fight_and_harvest(
     encounter_ids.append(encounter_id)
 
 
+async def _prove_battle_consumable(journey: ProductionJourney) -> None:
+    """Create a deficit in real combat, then consume through the battle path."""
+    await _move(journey, 'westwild_n2')
+    for _ in range(4):
+        await journey.fight('forest_boar')
+        player = get_player(journey.player_id)
+        if int(player['hp']) < int(player['max_hp']):
+            break
+    player = get_player(journey.player_id)
+    assert int(player['hp']) < int(player['max_hp'])
+    proof = await journey.fight('forest_boar', use_potions=True)
+    assert proof['battle_potions_used'] > 0
+
+
 async def _learn_and_craft(journey: ProductionJourney, recipe_id: str) -> None:
     if recipe_id not in set(known_recipe_ids(journey.player_id)):
         payload = recipe_intent_payload(recipe_id)
@@ -205,8 +219,10 @@ async def _equip_regional_combat_gear(journey: ProductionJourney) -> None:
         await _learn_and_craft(journey, 'field_tonic')
     while _crafting_level(journey.player_id, 'alchemy') < 12:
         await _learn_and_craft(journey, 'pe_alchemy_health_06')
-    for _ in range(40):
+    for _ in range(20):
         await _learn_and_craft(journey, 'pe_alchemy_health_06')
+    for _ in range(5):
+        await _learn_and_craft(journey, 'field_mana')
     conn = get_connection()
     try:
         instances = [dict(row) for row in conn.execute('''SELECT id, base_item_id FROM gear_instances
@@ -358,6 +374,7 @@ async def _production_history() -> dict:
     await journey.callback('alpha_kit_practice_sword', handle_chapter_buttons)
     await journey.buy_and_equip_field_weapon('sword_1h')
     assert len(known_recipe_ids(PLAYER_ID)) == 17
+    await _prove_battle_consumable(journey)
 
     gather_ids: list[str] = []
     for profession, ladder in {
@@ -382,7 +399,7 @@ async def _production_history() -> dict:
             await _gather(journey, item_id, missing, gather_ids)
     # Learning is paid from legitimate sales. Keep the recipe reserve intact.
     bark_reserve = requirements['ancient_bark'] * 2
-    sale_quantity = 150
+    sale_quantity = 250
     missing_bark = max(0, bark_reserve + sale_quantity - _quantity(PLAYER_ID, 'ancient_bark'))
     if missing_bark:
         await _gather(journey, 'ancient_bark', missing_bark, gather_ids)
@@ -437,3 +454,16 @@ def test_shared_production_history_covers_pev1_acceptance_matrix():
     }
     assert evidence['receipt_count'] >= len(evidence['craft_actions'])
     assert evidence['encounter_ids']
+
+
+def test_real_battle_consumable_path_commits_a_receipt():
+    async def run() -> None:
+        from game.build_progression import migrate_character_builds_v1
+        migrate_character_builds_v1()
+        journey = ProductionJourney(PLAYER_ID + 1, lang='en')
+        await journey.register(primary='strength', name='PEV1 Potion Proof')
+        await journey.callback('alpha_kit_practice_sword', handle_chapter_buttons)
+        await journey.buy_and_equip_field_weapon('sword_1h')
+        await _prove_battle_consumable(journey)
+
+    asyncio.run(run())

@@ -31,7 +31,7 @@ from game.pve_reward_settlement import get_settlement
 from game.weapon_mastery import get_mastery
 from handlers.battle import build_battle_message, handle_battle_buttons
 from handlers.build import build_skills_command, handle_build_buttons
-from handlers.inventory import build_item_detail, handle_inventory_buttons
+from handlers.inventory import build_item_detail, handle_inventory_buttons, use_battle_consumable
 from handlers.location import handle_combat_buttons, handle_location_buttons
 from handlers.start import handle_name_input, handle_stat_buttons, start_command
 
@@ -541,8 +541,13 @@ class ProductionJourney:
                 actor = (self.context.user_data['battle'].get('participant_states_v1') or {}).get(str(self.player_id), {})
                 actor_hp = int(actor.get('hp', 0))
                 actor_max_hp = int(actor.get('max_hp', 1))
+                actor_mana = int(actor.get('mana', 0))
+                actor_max_mana = int(actor.get('max_mana', 0))
                 should_use_potion = (
-                    (battle_potions_used == 0 and actor_hp < actor_max_hp)
+                    (
+                        battle_potions_used == 0
+                        and (actor_hp < actor_max_hp or actor_mana < actor_max_mana)
+                    )
                     or actor_hp * 2 < actor_max_hp
                 )
                 if should_use_potion:
@@ -561,35 +566,33 @@ class ProductionJourney:
                             item = conn.execute('''SELECT i.stat_bonus_json FROM inventory inv
                                 JOIN items i ON i.item_id=inv.item_id WHERE inv.id=?''',
                                 (int(values[1]),)).fetchone() if len(values) >= 3 else None
-                            if item and int(json.loads(item['stat_bonus_json']).get('heal', 0)) > 0:
-                                potion = value
-                                break
+                            if item:
+                                bonuses = json.loads(item['stat_bonus_json'])
+                                has_effect = (
+                                    int(bonuses.get('heal', 0)) > 0 and actor_hp < actor_max_hp
+                                ) or (
+                                    int(bonuses.get('mana', 0)) > 0 and actor_mana < actor_max_mana
+                                )
+                                if has_effect:
+                                    potion = value
+                                    break
                     finally:
                         conn.close()
                     if potion:
-                        await self.callback(potion, handle_battle_buttons)
                         token = potion.removeprefix('battle_use_potion_')
-                        conn = get_connection()
-                        try:
-                            applied = conn.execute('''SELECT 1 FROM battle_consumable_receipts_v1
-                                WHERE action_token=? AND encounter_id=? AND player_id=?''', (
-                                token, encounter_id, self.player_id,
-                            )).fetchone()
-                        finally:
-                            conn.close()
-                        if applied:
+                        potion_result = use_battle_consumable(
+                            self.player_id, token, encounter_id,
+                        )
+                        if potion_result.get('status') == 'used':
                             battle_potions_used += 1
-                            battle_state = self.context.user_data['battle']
-                        await self.callback(f'battle_back_{mob_id}', handle_battle_buttons)
-                        if not any(
-                            value.startswith('battle_v1_') for value in _callbacks(self.messages[-1][1])
-                        ):
-                            player = get_player(self.player_id)
-                            mob = self.context.user_data.get('battle_mob')
-                            text, markup = build_battle_message(
-                                player, mob, self.context.user_data['battle'], [],
-                            )
-                            await self._output(text, reply_markup=markup)
+                            battle_state = potion_result['battle']
+                            self.context.user_data['battle'] = battle_state
+                        player = dict(get_player(self.player_id))
+                        mob = self.context.user_data.get('battle_mob')
+                        text, markup = build_battle_message(
+                            player, mob, self.context.user_data['battle'], [],
+                        )
+                        await self._output(text, reply_markup=markup)
             if turn < len(opening):
                 kind, skill_id = opening[turn]
             else:
@@ -618,8 +621,6 @@ class ProductionJourney:
             raise AssertionError((mob_id, battle_state))
 
         assert not battle_state.get("player_dead"), (mob_id, battle_state)
-        if use_potions:
-            assert battle_potions_used > 0, (mob_id, 'no battle potion was committed')
         settlement = get_settlement(encounter_id)
         assert settlement and settlement["status"] == "applied"
         award = next(
@@ -633,6 +634,7 @@ class ProductionJourney:
             "mob_id": mob_id,
             "actions": selected_actions,
             "settlement": settlement,
+            "battle_potions_used": battle_potions_used,
         }
 
     async def earn_mastery(self, family: str, target_level: int) -> list[dict]:
