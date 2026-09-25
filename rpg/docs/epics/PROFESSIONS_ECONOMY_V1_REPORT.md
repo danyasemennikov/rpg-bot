@@ -4,6 +4,8 @@
 - Contract: PEV1-1 Stage 3
 - Frozen base: `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 - Candidate branch: `codex/professions-economy-v1`
+- Tested code commit: `95f5d2159d31663cc36165af3ccd1caa28636e68`
+- Draft PR: [#233](https://github.com/danyasemennikov/rpg-bot/pull/233)
 
 ## Delivered candidate
 
@@ -43,9 +45,16 @@ adversarial checks are labeled separately.
 
 Machine-readable evidence is recorded in
 [`../evidence/professions_economy_v1.json`](../evidence/professions_economy_v1.json).
-The final Draft PR URL, candidate head, commit list, and exact final-suite result are
-filled in when the branch is pushed. Merge and deployment remain explicitly outside
-this delivery.
+The final production history passed in 350.49 seconds and covered all 11 journey IDs,
+28 mandatory materials, 63 recipes, and all 12 professions at level 20. The focused
+PEV1/neighbor matrix passed 138 tests; post-broad compatibility repairs passed 62
+tests plus 76 subtests, and the isolated real battle-consumable proof passed.
+
+The single broad run collected 1,755 tests at `f3b3b42`: 1,750 passed and five
+failed. The failures were repaired with narrow legacy-alias, frozen-policy expectation,
+and acceptance-harness changes, then rerun focused. Per the contract's test budget,
+the broad suite was not repeated because shared runtime infrastructure was not
+materially redesigned. Merge and deployment remain explicitly outside this delivery.
 
 ## Deferred and risks
 
@@ -53,3 +62,6 @@ The contract's explicit deferred items remain deferred. Durable receipts intenti
 grow without pruning. Long production-history coverage reflects the frozen profession
 curve and is materially slower than focused policy tests. No teleport, trade/escrow,
 gold transfer, broader structured PvP, or unrelated content expansion is introduced.
+The remaining validation risk is that the single local broad run predates the narrow
+repair commit; every observed failure has a green focused rerun, but a second local
+broad run was intentionally not performed.

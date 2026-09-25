@@ -1,36 +1,117 @@
 {
   "schema_version": 1,
   "contract": "PEV1-1",
-  "status": "draft_pr_candidate",
+  "status": "draft_pr",
   "base_commit": "27347ece2b17108a1aed1f6eb01f2a395480e6c9",
   "branch": "codex/professions-economy-v1",
-  "candidate_head": null,
-  "pull_request": null,
+  "tested_code_commit": "95f5d2159d31663cc36165af3ccd1caa28636e68",
+  "pull_request": "https://github.com/danyasemennikov/rpg-bot/pull/233",
+  "environment": {
+    "platform": "win32",
+    "python": "3.12.10",
+    "pytest": "9.1.1"
+  },
+  "workstream_commits": [
+    "6325607c72e5853057f5ffdd2502655d8f252d37",
+    "164b7c2f30dc42fc274c72fc7f9c5d072d2d43d0",
+    "a0f170feb072a55481224007cd9c44d491c3daf8",
+    "7d2ec474304a2c95d8c90150cf00b8e3c3aa52ba",
+    "49225d3fd29551560e68ec6d8854274c24c7b3bc",
+    "e122dae54b69481833cd5836f43bd20904cbfba3",
+    "f3b3b429edce4d18f5b0c5866e741a1dccf99cbf",
+    "95f5d2159d31663cc36165af3ccd1caa28636e68"
+  ],
   "catalog": {
     "gathering_professions": 5,
     "crafting_professions": 7,
     "total_professions": 12,
     "active_recipes": 63,
+    "inactive_recipes": 4,
     "starter_recipes": 17,
     "paid_recipes": 46,
+    "paid_learning_gold": 4475,
     "mandatory_materials": 28,
     "new_materials": 5,
-    "new_recovery_outputs": 8
+    "new_recovery_outputs": 8,
+    "canonical_weapon_families": 10,
+    "locales": ["ru", "en", "es"]
   },
   "migration": {
     "marker": "professions_economy_v1",
     "crafting_constraint_keys": 7,
-    "row_preservation_check": "tested",
-    "foreign_key_check": "tested",
-    "idempotent_restart": "tested"
+    "row_preservation_check": "passed: retained profession rows, levels, exp, inventory, gear provenance, chapter state, and prepared settlement",
+    "foreign_key_check": "passed",
+    "idempotent_restart": "passed: migration invoked twice and after restart",
+    "grandfathering": "exactly four frozen live recipes for existing players; 17 starters only for normal new-player initialization"
   },
   "journeys": {
-    "required": 11,
+    "required_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
     "test": "tests/test_professions_economy_v1_journeys.py",
-    "result": "pending final rerun",
-    "shortcuts": "none for production acquisitions; fixtures limited to migration/adversarial tests"
+    "final_result": "passed",
+    "final_command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py::test_shared_production_history_covers_pev1_acceptance_matrix",
+    "final_exit_status": 0,
+    "final_duration_seconds": 350.49,
+    "materials_acquired": 28,
+    "recipes_crafted": 63,
+    "professions_at_level_20": 12,
+    "production_controls": ["deterministic gathering rolls", "controlled respawn clock", "mocked Telegram transport", "available encounter/action selection"],
+    "forbidden_shortcuts_used": false,
+    "acquisition_references": {
+      "environmental_requests": "gather:pev1:<sequence>:<attempt>:<item_id>",
+      "hunting": "real owner pve-enc-* settlements followed by server-issued ui:<token> harvest receipts",
+      "learning_and_crafting": "versioned recipe intents followed by server-issued ui:<token> receipts",
+      "battle_consumable": "real forest_boar deficit followed by a server-issued battle_use token and battle_consumable_receipts_v1 row"
+    }
   },
-  "focused_tests": [],
-  "broad_final_suite": null,
+  "economic_invariants": {
+    "all_recipe_sale_values_below_inputs": "passed",
+    "concurrent_craft_sale_gift_conservation": "passed",
+    "duplicate_and_lost_response_recovery": "passed",
+    "failed_delivery_rollback": "passed",
+    "legitimate_learning_funding": "250 ancient_bark sold through normal sale actions; no direct gold grant",
+    "valid_business_rejections_receipted": "passed",
+    "stale_or_foreign_intents_not_receipted": "passed"
+  },
+  "focused_tests": [
+    {
+      "scope": "PEV1 catalog/migration/progression/sources/knowledge/transactions/hunting/economy/UI and affected neighbors",
+      "result": "138 passed",
+      "exit_status": 0,
+      "duration_seconds": 158.70
+    },
+    {
+      "scope": "broad-failure compatibility repairs",
+      "result": "62 passed, 76 subtests passed",
+      "exit_status": 0,
+      "duration_seconds": 11.45
+    },
+    {
+      "scope": "deterministic real battle-consumable receipt",
+      "result": "1 passed",
+      "exit_status": 0,
+      "duration_seconds": 1.86
+    },
+    {
+      "scope": "final shared production history",
+      "result": "1 passed",
+      "exit_status": 0,
+      "duration_seconds": 350.49
+    }
+  ],
+  "broad_final_suite": {
+    "tested_commit": "f3b3b429edce4d18f5b0c5866e741a1dccf99cbf",
+    "command": "python -m pytest tests",
+    "collected": 1755,
+    "passed": 1750,
+    "failed": 5,
+    "exit_status": 1,
+    "duration_seconds": 1131.51,
+    "failure_resolution": "All five affected paths were repaired and rerun focused. The broad suite was not repeated because the repairs were narrow alias/test-expectation and acceptance-harness changes, following the PEV1-1 test budget."
+  },
+  "known_limitations": [
+    "The one local broad run was not green; all observed failures have green focused reruns, but no second local broad run was performed.",
+    "Durable receipt retention and archival remain deferred.",
+    "Free repeated gathering throughput was not balance-measured in this stage."
+  ],
   "deviations": []
 }
