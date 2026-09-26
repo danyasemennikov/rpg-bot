@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from collections import Counter, deque
 import json
+import random
 from unittest.mock import patch
 
 from database import get_connection, get_player
@@ -385,7 +386,9 @@ async def _equip_regional_combat_gear(journey: ProductionJourney) -> None:
         await _learn_and_craft(journey, 'field_tonic')
     while _crafting_level(journey.player_id, 'alchemy') < 12:
         await _learn_and_craft(journey, 'pe_alchemy_health_06')
-    for _ in range(20):
+    # Hunting 18 -> 20 legitimately requires many troll victories. Keep enough
+    # earned healing stock for the deterministic worst segment of that journey.
+    for _ in range(60):
         await _learn_and_craft(journey, 'pe_alchemy_health_06')
     for _ in range(5):
         await _learn_and_craft(journey, 'field_mana')
@@ -744,6 +747,7 @@ def _prove_localized_production_navigation(player_id: int) -> dict[str, tuple[st
 
 
 async def _production_history() -> dict:
+    random.seed(901)
     from game.build_progression import migrate_character_builds_v1
     migrate_character_builds_v1()
     journey = ProductionJourney(PLAYER_ID, lang='en')
@@ -774,7 +778,8 @@ async def _production_history() -> dict:
         'boar_meat', 'wolf_pelt', 'wolf_fang', 'spider_silk', 'bear_hide', 'troll_sinew',
     }
     for item_id in sorted(environmental):
-        target = max(requirements[item_id] * 2, 180 if item_id == 'herb_common' else 0)
+        combat_reserve = {'herb_common': 240, 'marsh_herb': 140}.get(item_id, 0)
+        target = max(requirements[item_id] * 2, combat_reserve)
         missing = max(0, target - _quantity(PLAYER_ID, item_id))
         if missing:
             await _gather(journey, item_id, missing, gather_ids)

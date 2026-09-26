@@ -44,6 +44,9 @@ STRINGS['es'].update({
 STRINGS['ru']['secondary_roll_result'] = '{stat}: +{value}'
 STRINGS['en']['secondary_roll_result'] = '{stat}: +{value}'
 STRINGS['es']['secondary_roll_result'] = '{stat}: +{value}'
+STRINGS['ru']['recipe_xp_award'] = 'Это создание даст {xp} опыта профессии.'
+STRINGS['en']['recipe_xp_award'] = 'This craft awards {xp} profession XP.'
+STRINGS['es']['recipe_xp_award'] = 'Esta fabricación otorga {xp} EXP de profesión.'
 STRINGS['ru'].update({'unknown_item':'Неизвестный предмет ({id})','unknown_item_description':'Сведения о старом предмете недоступны ({id}).','unknown_mob':'Неизвестное существо ({id})'})
 STRINGS['en'].update({'unknown_item':'Unknown item ({id})','unknown_item_description':'Legacy item details are unavailable ({id}).','unknown_mob':'Unknown creature ({id})'})
 STRINGS['es'].update({'unknown_item':'Objeto desconocido ({id})','unknown_item_description':'Los detalles del objeto antiguo no están disponibles ({id}).','unknown_mob':'Criatura desconocida ({id})'})

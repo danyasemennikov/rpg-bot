@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from typing import Literal
 
 from database import get_connection
@@ -236,7 +237,21 @@ def craft_recipe(telegram_id: int, recipe_id: str,
             if token_row:
                 recipe_id = parse_recipe_intent(str(token_row['payload'])) or ''
             else:
-                consume_action(conn, telegram_id, 'craft', action_token)
+                # A newer recipe preview replaces this menu's pending intents. The
+                # committed receipt remains authoritative for a lost-response replay.
+                receipt_row = conn.execute('''SELECT action_kind, result_json
+                    FROM economy_action_receipts WHERE player_id=? AND request_id=?''',
+                    (telegram_id, request_id)).fetchone()
+                if receipt_row:
+                    if str(receipt_row['action_kind']) != 'craft':
+                        raise ActionRejected('stale_action')
+                    committed = json.loads(str(receipt_row['result_json']))
+                    committed_recipe_id = str(committed.get('recipe_id') or '')
+                    if recipe_id and recipe_id != committed_recipe_id:
+                        raise ActionRejected('stale_action')
+                    recipe_id = committed_recipe_id
+                else:
+                    consume_action(conn, telegram_id, 'craft', action_token)
         recipe = get_recipe(recipe_id)
         if recipe is None or recipe_id not in LIVE_RECIPE_IDS:
             return CraftResult(status='recipe_not_found', recipe_id=recipe_id)

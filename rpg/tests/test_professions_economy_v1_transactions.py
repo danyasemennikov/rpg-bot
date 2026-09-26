@@ -32,13 +32,17 @@ def _new_player(tmp_path, monkeypatch, player_id=30, location='old_mine_entrance
     return player_id
 
 
-def test_craft_replay_returns_exact_receipt_without_second_grant(tmp_path, monkeypatch):
+def test_craft_replay_after_new_preview_returns_exact_receipt_without_second_grant(tmp_path, monkeypatch):
     monkeypatch.setattr(database,'DB_PATH',str(tmp_path/'game.db')); database.init_db(); seed_items()
     database.create_player(3,'crafter','Crafter',dict.fromkeys(('strength','agility','intuition','vitality','wisdom','luck'),2),lang='en')
     conn=database.get_connection(); conn.execute("INSERT INTO inventory(telegram_id,item_id,quantity) VALUES (3,'herb_common',3)"); conn.commit(); conn.close()
     payload=recipe_intent_payload('field_tonic')
     token=issue_actions(3,'craft',[payload])[payload]
-    first=craft_recipe(3,'',action_token=token); second=craft_recipe(3,'',action_token=token)
+    first=craft_recipe(3,'',action_token=token)
+    replacement_payload=recipe_intent_payload('field_mana')
+    replacement_token=issue_actions(3,'craft',[replacement_payload])[replacement_payload]
+    assert replacement_token != token
+    second=craft_recipe(3,'',action_token=token)
     assert first.status == second.status == 'crafted' and second.recovered
     conn=database.get_connection()
     assert conn.execute("SELECT quantity FROM inventory WHERE telegram_id=3 AND item_id='health_potion_small'").fetchone()['quantity'] == 1

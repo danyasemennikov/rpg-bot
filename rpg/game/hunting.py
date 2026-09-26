@@ -53,10 +53,9 @@ def _choices(plan: dict) -> list[dict]:
     for unit in sorted(plan.get('enemy_units') or [], key=lambda value: str(value.get('unit_id') or '')):
         mob_id, unit_id = str(unit.get('mob_id') or ''), str(unit.get('unit_id') or '')
         for item_id in HARVEST_MANIFEST.get(mob_id, ()):
-            key = (mob_id, item_id)
-            if not unit_id or key in seen:
+            if not unit_id or item_id in seen:
                 continue
-            seen.add(key)
+            seen.add(item_id)
             choices.append({'unit_id': unit_id, 'mob_id': mob_id, 'item_id': item_id})
     return choices
 
@@ -73,8 +72,8 @@ def harvestable_victory_page(player_id: int, *, page: int = 0,
             LEFT JOIN pve_harvest_claims h ON h.encounter_id=e.encounter_id AND h.player_id=?
             WHERE e.owner_player_id=? AND e.status='victory' AND s.status='applied'
               AND h.encounter_id IS NULL AND e.finished_at >= datetime('now', '-30 minutes')
-              ORDER BY e.finished_at DESC''', (player_id, player_id)).fetchall()
-        output = []
+              ORDER BY e.finished_at DESC, e.encounter_id DESC''', (player_id, player_id)).fetchall()
+        eligible_encounters = []
         for row in rows:
             if resolve_location_id(row['location_id']) != resolve_location_id(player['location_id']):
                 continue
@@ -82,12 +81,19 @@ def harvestable_victory_page(player_id: int, *, page: int = 0,
                 encounter, plan, _ = _authority(conn, player_id, row['encounter_id'])
             except ActionRejected:
                 continue
-            output.extend({'encounter_id': encounter['encounter_id'], 'location_id': encounter['location_id'], **choice}
-                          for choice in _choices(plan))
-        pages = max(1, (len(output) + page_size - 1) // page_size)
+            choices = _choices(plan)
+            if choices:
+                eligible_encounters.append((encounter, choices))
+        pages = max(1, (len(eligible_encounters) + page_size - 1) // page_size)
         page = min(max(0, int(page)), pages - 1)
         start = page * page_size
-        return output[start:start + page_size], page, pages
+        selected = eligible_encounters[start:start + page_size]
+        output = [
+            {'encounter_id': encounter['encounter_id'], 'location_id': encounter['location_id'], **choice}
+            for encounter, choices in selected
+            for choice in choices
+        ]
+        return output, page, pages
     finally:
         conn.close()
 

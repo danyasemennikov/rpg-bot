@@ -1418,6 +1418,9 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
         else:
             await update.message.reply_text(t('location.gather_zone_denied', lang))
         return True
+    if status == 'historical_receipt_unavailable':
+        await update.message.reply_text(t('professions.historical_receipt_unavailable', lang))
+        return True
     if status != 'gathered':
         await update.message.reply_text(t(f'chapter.{status}', lang))
         return True

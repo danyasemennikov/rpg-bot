@@ -21,6 +21,7 @@ from game.profession_recipes import (
 )
 from game.profession_resources import ENVIRONMENTAL_SOURCES, HARVEST_MANIFEST, RESOURCES
 from game.profession_schema import CRAFTING_PROFESSION_KEYS, GATHERING_PROFESSION_KEYS, ensure_profession_rows
+from game.profession_progression import crafting_xp_for_success
 from game.recipe_knowledge import known_recipe_ids, learn_recipe
 from game.hunting import harvest_victory
 
@@ -242,7 +243,14 @@ def build_recipe(player: dict, recipe_id: str):
                        hp=int(bonuses.get('heal', 0)), mana=int(bonuses.get('mana', 0))))
     lines.append(t('professions.output_sale', lang, gold=int(output_item.get('sell_price', 0))))
     lines.append(t('professions.recipe_xp_ceiling', lang, ceiling=recipe.training_ceiling))
-    if int(state['level']) >= recipe.training_ceiling:
+    xp_award = crafting_xp_for_success(
+        current_level=int(state['level']),
+        current_exp=int(state['exp']),
+        recipe_level=recipe.required_level,
+    )
+    if xp_award:
+        lines.append(t('professions.recipe_xp_award', lang, xp=xp_award))
+    else:
         lines.append(t('professions.recipe_zero_xp', lang))
     can_craft = (known and int(state['level']) >= recipe.required_level and enough
                  and _peaceful_guild_access(player_id))
@@ -292,7 +300,16 @@ def build_material(player: dict, item_id: str, page: int = 0):
 
 def build_receipts(player: dict, page: int = 0):
     lang, player_id = player.get('lang', 'ru'), int(player['telegram_id'])
-    page = max(0, int(page))
+    conn = get_connection()
+    try:
+        total = int(conn.execute(
+            'SELECT COUNT(*) AS count FROM economy_action_receipts WHERE player_id=?',
+            (player_id,),
+        ).fetchone()['count'])
+    finally:
+        conn.close()
+    pages = max(1, ceil(total / 5))
+    page = min(max(0, int(page)), pages - 1)
     values = list_receipts(player_id, page=page, page_size=5)
     receipts, has_next = values[:5], len(values) > 5
     payloads = [str(receipt['request_id']) for receipt in receipts]

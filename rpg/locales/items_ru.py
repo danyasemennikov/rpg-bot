@@ -119,6 +119,7 @@ ITEM_DESCRIPTIONS = {
     'field_prayer_amulet': 'Амулет, повышающий мудрость и силу лечения.',
 }
 ITEM_DESCRIPTIONS.update({
+    'health_potion_small':'Восстанавливает 30 HP.','health_potion':'Восстанавливает 80 HP.','mana_potion':'Восстанавливает 50 маны.','field_ration':'Приготовленное мясо с травами. Восстанавливает 40 HP.','trail_vest':'Жилет из местных шкур, сшитый в мастерской Элмора.',
     'frostpine_wood':'Морозостойкая древесина Фростспайна.','sunscar_ore':'Закалённая жаром руда Санскара.','deep_marsh_fish':'Редкая рыба глубин Мирвейла.','bear_hide':'Прочная добытая медвежья шкура.','troll_sinew':'Крепкое добытое сухожилие тролля.',
     'pe_mana_potion_medium':'Восстанавливает 100 маны.','pe_health_potion_large':'Восстанавливает 150 HP.','pe_mana_potion_large':'Восстанавливает 160 маны.','pe_shore_broth':'Восстанавливает 25 HP и 15 маны.','pe_marsh_stew':'Восстанавливает 80 HP и 20 маны.','pe_boar_feast':'Восстанавливает 120 HP.','pe_oasis_meal':'Восстанавливает 100 HP и 50 маны.','pe_deep_marsh_meal':'Восстанавливает 180 HP и 80 маны.',
 })

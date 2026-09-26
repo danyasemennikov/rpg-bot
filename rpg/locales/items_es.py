@@ -119,6 +119,7 @@ ITEM_DESCRIPTIONS = {
     'field_prayer_amulet': 'Amuleto que añade sabiduría y poder de curación.',
 }
 ITEM_DESCRIPTIONS.update({
+    'health_potion_small':'Restaura 30 PV.','health_potion':'Restaura 80 PV.','mana_potion':'Restaura 50 de maná.','field_ration':'Carne cocinada con hierbas. Restaura 40 PV.','trail_vest':'Chaleco hecho con pieles locales en el taller de Elmor.',
     'frostpine_wood':'Madera resistente al frío de Frostspine.','sunscar_ore':'Mineral templado por el calor de Sunscar.','deep_marsh_fish':'Un pez raro de las aguas profundas de Mireveil.','bear_hide':'Una resistente piel de oso recolectada.','troll_sinew':'Un fuerte tendón de trol recolectado.',
     'pe_mana_potion_medium':'Restaura 100 de maná.','pe_health_potion_large':'Restaura 150 PV.','pe_mana_potion_large':'Restaura 160 de maná.','pe_shore_broth':'Restaura 25 PV y 15 de maná.','pe_marsh_stew':'Restaura 80 PV y 20 de maná.','pe_boar_feast':'Restaura 120 PV.','pe_oasis_meal':'Restaura 100 PV y 50 de maná.','pe_deep_marsh_meal':'Restaura 180 PV y 80 de maná.',
 })
