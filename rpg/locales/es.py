@@ -696,6 +696,8 @@ STRINGS = {
         ),
     },
 }
+from locales.professions import STRINGS as _PROFESSION_STRINGS
+STRINGS['professions'] = _PROFESSION_STRINGS['es']
 
 
 from locales.chapter import CHAPTER_STRINGS

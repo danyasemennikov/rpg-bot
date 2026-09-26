@@ -774,49 +774,7 @@ _PHASE1_LOCATION_MOBS = {
     'mireveil_n10': ['toxic_slime', 'old_witch'],
 }
 
-_PHASE1_GATHER = {
-    'south_coast_shore': [('shore_fish', 0.70, '🎣 Прибрежная рыба'), ('shore_herbs', 0.20, '🌿 Береговые травы')],
-    'old_mine_entrance': [('iron_ore', 0.65, '⛏️ Железная руда'), ('coal', 0.30, '🪨 Уголь')],
-    'westwild_n1': [('herb_common', 0.55, '🌾 Полевые травы')],
-    'westwild_n2': [('herb_common', 0.45, '🌿 Луговые травы'), ('wood_common', 0.15, '🪵 Молодая древесина')],
-    'westwild_n3': [('herb_common', 0.35, '🌿 Холмовые травы'), ('wood_common', 0.25, '🪵 Лесная древесина')],
-    'westwild_n4': [('herb_common', 0.35, '🌿 Лесные травы'), ('forest_mushroom', 0.25, '🍄 Лесные грибы'), ('wood_common', 0.35, '🪵 Лиственная древесина')],
-    'westwild_n5': [('herb_common', 0.35, '🌿 Травы перелеска'), ('wood_common', 0.40, '🪵 Древесина перелеска')],
-    'westwild_n6': [('forest_mushroom', 0.30, '🍄 Боровые грибы'), ('wood_dark', 0.45, '🪵 Боровая древесина')],
-    'westwild_n7': [('forest_mushroom', 0.35, '🍄 Тёмные грибы'), ('wood_dark', 0.50, '🪵 Тёмная древесина')],
-    'westwild_n8': [('herb_common', 0.25, '🌿 Ручейные травы'), ('stone_chunk', 0.30, '🪨 Ручейный камень'), ('wood_dark', 0.25, '🪵 Прибрежная древесина')],
-    'westwild_n9': [('forest_mushroom', 0.40, '🍄 Глухие грибы'), ('herb_magic', 0.10, '✨ Дикий реагент')],
-    'westwild_n10': [('forest_mushroom', 0.45, '🍄 Мшистые грибы'), ('herb_magic', 0.15, '✨ Мшистый реагент')],
-    'westwild_n11': [('forest_mushroom', 0.50, '🍄 Шепчущие грибы'), ('wood_dark', 0.35, '🪵 Старая древесина')],
-    'ashen_n3c1': [('herb_magic', 0.35, '✨ Садовый реагент'), ('herb_common', 0.30, '🌿 Дикие травы сада')],
-    'sunscar_n1': [('dry_reagent', 0.45, '🌵 Сухие реагенты')],
-    'sunscar_n2': [('dry_reagent', 0.35, '🌵 Сухие растения'), ('stone_chunk', 0.30, '🪨 Песчаник')],
-    'sunscar_n3': [('dry_reagent', 0.30, '🌵 Овражные реагенты'), ('stone_chunk', 0.35, '🪨 Камень оврага')],
-    'sunscar_n4': [('stone_chunk', 0.45, '🪨 Каньонный камень')],
-    'sunscar_n5': [('stone_chunk', 0.40, '🪨 Камень прохода'), ('dry_reagent', 0.20, '🌵 Сухая трава')],
-    'sunscar_n5a1': [('oasis_fish', 0.65, '🎣 Оазисная рыба'), ('desert_plant', 0.35, '🌵 Растения оазиса')],
-    'sunscar_n6': [('desert_plant', 0.30, '🌵 Пустынные растения')],
-    'sunscar_n7': [('salt_crystal', 0.55, '🧂 Соль солончака')],
-    'sunscar_n8': [('stone_chunk', 0.45, '🪨 Камень ущелья')],
-    'sunscar_n8a1': [('dry_reagent', 0.35, '🌵 Лагерные сухоцветы')],
-    'sunscar_n8a2': [('stone_chunk', 0.50, '🪨 Каменные обломки')],
-    'sunscar_n9': [('salt_crystal', 0.30, '🧂 Сухая соль'), ('stone_chunk', 0.30, '🪨 Русловой камень')],
-    'sunscar_n10': [('salt_crystal', 0.45, '🧂 Соляные наросты'), ('stone_chunk', 0.35, '🪨 Соляная порода')],
-    'sunscar_n11': [('dry_reagent', 0.30, '🌵 Платовые сухоцветы'), ('stone_chunk', 0.30, '🪨 Платовый камень')],
-    'mireveil_n1': [('marsh_herb', 0.50, '🌿 Болотные травы')],
-    'mireveil_n2': [('marsh_herb', 0.45, '🌿 Низинные травы')],
-    'mireveil_n3': [('reed_bundle', 0.55, '🌾 Камыш')],
-    'mireveil_n4': [('marsh_fish', 0.45, '🎣 Заводная рыба'), ('marsh_herb', 0.25, '🌿 Водные травы')],
-    'mireveil_n5': [('marsh_fish', 0.40, '🎣 Бродовая рыба'), ('reed_bundle', 0.30, '🌾 Камыш брода')],
-    'mireveil_n5a1': [('marsh_fish', 0.60, '🎣 Рыба у мостков')],
-    'mireveil_n6': [('marsh_herb', 0.35, '🌿 Мутные травы')],
-    'mireveil_n7': [('reed_bundle', 0.40, '🌾 Заросший камыш'), ('marsh_herb', 0.30, '🌿 Болотные растения')],
-    'mireveil_n8': [('marsh_fish', 0.45, '🎣 Рыба протоки'), ('marsh_herb', 0.25, '🌿 Травы протоки')],
-    'mireveil_n8a1': [('marsh_mushroom', 0.55, '🍄 Болотные грибы')],
-    'mireveil_n8a2': [('toxic_herb', 0.45, '☣️ Ядовитые травы')],
-    'mireveil_n9': [('marsh_mushroom', 0.35, '🍄 Грибы трясины'), ('toxic_herb', 0.25, '☣️ Токсичные травы')],
-    'mireveil_n10': [('toxic_herb', 0.50, '☣️ Травы чёрной воды')],
-}
+from game.profession_resources import ENVIRONMENTAL_SOURCES as _PHASE1_GATHER
 
 _PHASE1_LEVEL_MAX_BY_LOCATION = {
     'south_coast_shore': 3,
@@ -906,8 +864,11 @@ for _phase1_location_id, _phase1_mobs in _PHASE1_LOCATION_MOBS.items():
         if _override_mob_id in WORLD_LOCATIONS[_phase1_location_id]['world_spawn_profiles']:
             WORLD_LOCATIONS[_phase1_location_id]['world_spawn_profiles'][_override_mob_id].update(dict(_override_profile))
 
-for _phase1_location_id, _phase1_gather in _PHASE1_GATHER.items():
-    WORLD_LOCATIONS[_phase1_location_id]['gather'] = list(_phase1_gather)
+from game.profession_resources import ENVIRONMENTAL_SOURCES
+for _phase1_location_id, _phase1_gather in ENVIRONMENTAL_SOURCES.items():
+    WORLD_LOCATIONS[_phase1_location_id]['gather'] = [
+        (item_id, chance, item_id) for item_id, chance in _phase1_gather
+    ]
 
 # The legacy dark_forest semantic layer now consistently belongs to the
 # deeper canonical node that carries the player-facing “Тёмный лес” name.

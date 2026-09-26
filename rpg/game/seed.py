@@ -8,6 +8,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import get_connection
 from game.items_data import ITEMS
+from game.profession_resources import MANDATORY_RESOURCE_IDS
+
+PEV1_CONSUMABLE_IDS = (
+    'health_potion_small', 'mana_potion', 'health_potion', 'field_ration',
+    'pe_mana_potion_medium', 'pe_health_potion_large', 'pe_mana_potion_large',
+    'pe_shore_broth', 'pe_marsh_stew', 'pe_boar_feast', 'pe_oasis_meal', 'pe_deep_marsh_meal',
+)
 
 def seed_items():
     conn = get_connection()
@@ -40,6 +47,13 @@ def seed_items():
     conn.execute('''UPDATE items SET damage_min=?, damage_max=?
         WHERE item_id='magic_staff' AND (damage_min<>? OR damage_max<>?)''',
         (staff['damage_min'], staff['damage_max'], staff['damage_min'], staff['damage_max']))
+    # PEV1 deliberately reconciles only its versioned material/consumable whitelist.
+    for item_id in MANDATORY_RESOURCE_IDS + PEV1_CONSUMABLE_IDS:
+        item = ITEMS[item_id]
+        conn.execute('''UPDATE items SET item_type=?, buy_price=?, sell_price=?,
+            stat_bonus_json=?, weight=? WHERE item_id=?''',
+            (item['item_type'], item['buy_price'], item['sell_price'],
+             item['stat_bonus_json'], item['weight'], item_id))
     conn.commit()
     conn.close()
     print(f'✅ Загружено предметов: {count}')

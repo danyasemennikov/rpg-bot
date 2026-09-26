@@ -432,6 +432,47 @@ ITEMS['field_ration'] = {
     'consumable_family': 'food',
 }
 
+
+def _pev1_stackable(item_id, name, description, *, item_type='material', sell_price=0,
+                    stat_bonus_json='{}', consumable_family=None):
+    item = {
+        'item_id': item_id, 'name': name, 'description': description,
+        'item_type': item_type, 'weapon_type': None, 'rarity': 'common',
+        'damage_min': 0, 'damage_max': 0, 'defense': 0, 'weight': 1,
+        'req_level': 1, 'req_strength': 0, 'req_agility': 0,
+        'req_intuition': 0, 'req_wisdom': 0, 'buy_price': 0,
+        'sell_price': sell_price, 'skills_json': '[]',
+        'stat_bonus_json': stat_bonus_json,
+    }
+    if consumable_family:
+        item['consumable_family'] = consumable_family
+    return item
+
+
+ITEMS.update({
+    'frostpine_wood': _pev1_stackable('frostpine_wood', '🪵 Морозная сосна', 'Древесина из Фростспайна.', sell_price=6),
+    'sunscar_ore': _pev1_stackable('sunscar_ore', '⛏️ Руда Санскара', 'Жаростойкая руда Санскара.', sell_price=8),
+    'deep_marsh_fish': _pev1_stackable('deep_marsh_fish', '🐟 Глубинная болотная рыба', 'Редкая рыба глубоких болот.', sell_price=8),
+    'bear_hide': _pev1_stackable('bear_hide', '🐻 Медвежья шкура', 'Прочная шкура медведя.', sell_price=12),
+    'troll_sinew': _pev1_stackable('troll_sinew', '🧵 Сухожилие тролля', 'Жилистый трофей тролля.', sell_price=18),
+    'pe_mana_potion_medium': _pev1_stackable('pe_mana_potion_medium', '🔵 Среднее зелье маны', 'Восстанавливает 100 маны.', item_type='potion', sell_price=12, stat_bonus_json='{"mana": 100}'),
+    'pe_health_potion_large': _pev1_stackable('pe_health_potion_large', '❤️ Большое зелье здоровья', 'Восстанавливает 150 HP.', item_type='potion', sell_price=15, stat_bonus_json='{"heal": 150}'),
+    'pe_mana_potion_large': _pev1_stackable('pe_mana_potion_large', '🔷 Большое зелье маны', 'Восстанавливает 160 маны.', item_type='potion', sell_price=18, stat_bonus_json='{"mana": 160}'),
+    'pe_shore_broth': _pev1_stackable('pe_shore_broth', '🍲 Прибрежная уха', 'Восстанавливает 25 HP и 15 маны.', item_type='potion', sell_price=4, stat_bonus_json='{"heal": 25, "mana": 15}', consumable_family='food'),
+    'pe_marsh_stew': _pev1_stackable('pe_marsh_stew', '🍲 Болотная похлёбка', 'Восстанавливает 80 HP и 20 маны.', item_type='potion', sell_price=6, stat_bonus_json='{"heal": 80, "mana": 20}', consumable_family='food'),
+    'pe_boar_feast': _pev1_stackable('pe_boar_feast', '🍖 Жаркое из кабана', 'Восстанавливает 120 HP.', item_type='potion', sell_price=8, stat_bonus_json='{"heal": 120}', consumable_family='food'),
+    'pe_oasis_meal': _pev1_stackable('pe_oasis_meal', '🐟 Оазисное рыбное блюдо', 'Восстанавливает 100 HP и 50 маны.', item_type='potion', sell_price=8, stat_bonus_json='{"heal": 100, "mana": 50}', consumable_family='food'),
+    'pe_deep_marsh_meal': _pev1_stackable('pe_deep_marsh_meal', '🍲 Сытная болотная трапеза', 'Восстанавливает 180 HP и 80 маны.', item_type='potion', sell_price=12, stat_bonus_json='{"heal": 180, "mana": 80}', consumable_family='food'),
+})
+
+ITEM_REWARD_TAGS.update({
+    'frostpine_wood': {'reward_family': 'gathering_material', 'material_subtype': 'wood'},
+    'sunscar_ore': {'reward_family': 'gathering_material', 'material_subtype': 'ore'},
+    'deep_marsh_fish': {'reward_family': 'gathering_material', 'material_subtype': 'fish'},
+    'bear_hide': {'reward_family': 'creature_loot', 'material_subtype': 'hide'},
+    'troll_sinew': {'reward_family': 'creature_loot', 'material_subtype': 'special_part'},
+})
+
 # Field Equipment V1 is generated from one validated static manifest.  The
 # ordinary item dictionary remains the runtime authority used by every rail.
 from game.field_catalog import FIELD_ITEMS

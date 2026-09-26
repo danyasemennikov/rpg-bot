@@ -30,7 +30,7 @@ class CraftingProfessionsFoundationTests(unittest.TestCase):
         hide_identity = resolve_crafting_material_identity('wolf_pelt')
         self.assertIsNotNone(hide_identity)
         assert hide_identity is not None
-        self.assertEqual(hide_identity.origin_channel, 'gathering')
+        self.assertEqual(hide_identity.origin_channel, 'hunting')
         self.assertEqual(hide_identity.gather_profession_key, 'hunting')
 
     def test_bulk_and_special_ingredients_are_separated(self):

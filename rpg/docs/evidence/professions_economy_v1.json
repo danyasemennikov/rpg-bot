@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "contract": "PEV1-1",
+  "status": "draft_pr",
+  "base_commit": "27347ece2b17108a1aed1f6eb01f2a395480e6c9",
+  "branch": "codex/professions-economy-v1",
+  "tested_code_commit": "e29e4a368de625f6fb221871761f438f5a617f2c",
+  "final_pr_head": {
+    "reference": "refs/heads/codex/professions-economy-v1",
+    "identity": "the commit containing this evidence update",
+    "previous_pushed_head": "e29e4a368de625f6fb221871761f438f5a617f2c",
+    "exact_sha_location": "Draft PR body and final handoff after push; a Git commit cannot embed its own object ID"
+  },
+  "prior_documentation_only_commits": [
+    "52a854eaec36afb7945f62fe8e24b09bad43de92",
+    "c9f6a4c1181425b842833e21ddd9c9899b164dde"
+  ],
+  "post_tested_code_commits": [
+    {
+      "commit": "HEAD",
+      "classification": "documentation-only",
+      "purpose": "narrow Astra rereview evidence, current-state reconciliation, and final-head provenance"
+    }
+  ],
+  "pull_request": "https://github.com/danyasemennikov/rpg-bot/pull/233",
+  "environment": {"platform": "win32", "python": "3.12.10", "pytest": "9.1.1"},
+  "workstream_commits": [
+    "6325607c72e5853057f5ffdd2502655d8f252d37",
+    "164b7c2f30dc42fc274c72fc7f9c5d072d2d43d0",
+    "a0f170feb072a55481224007cd9c44d491c3daf8",
+    "7d2ec474304a2c95d8c90150cf00b8e3c3aa52ba",
+    "49225d3fd29551560e68ec6d8854274c24c7b3bc",
+    "e122dae54b69481833cd5836f43bd20904cbfba3",
+    "f3b3b429edce4d18f5b0c5866e741a1dccf99cbf",
+    "95f5d2159d31663cc36165af3ccd1caa28636e68",
+    "9fdb46c13172282294efb5f4625e97edb5fc1374",
+    "2c552f8e8d5829b19b37fe50abffab2add2461c0",
+    "e29e4a368de625f6fb221871761f438f5a617f2c"
+  ],
+  "catalog": {
+    "gathering_professions": 5,
+    "crafting_professions": 7,
+    "total_professions": 12,
+    "active_recipes": 63,
+    "inactive_recipes": 4,
+    "starter_recipes": 17,
+    "mandatory_materials": 28,
+    "new_materials": 5,
+    "new_recovery_outputs": 8,
+    "canonical_weapon_families": 10,
+    "locales": ["ru", "en", "es"]
+  },
+  "migration_fixture_evidence": {
+    "classification": "fixture/adversarial; not production acquisition evidence",
+    "marker": "professions_economy_v1",
+    "baseline_schema": "exact frozen three-key crafting table",
+    "target_schema": "exact seven-key table, constraints, PK index, FK and no unexpected dependent objects",
+    "preserved": [
+      "profession rows/level/exp",
+      "inventory",
+      "high-rarity gear instance, roll and provenance",
+      "chapter objective state",
+      "prepared settlement and existing recovery path"
+    ],
+    "rollback": "injected post-rebuild failure preserved original DDL, rows and marker absence",
+    "incompatible_schema": "rejected fail-closed",
+    "unexpected_temp_table": "rejected and preserved",
+    "restart_idempotency": "migration twice plus restart passed",
+    "command": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_professions_economy_v1_migration.py",
+    "result": "5 passed in 1.34s",
+    "exit_status": 0,
+    "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c",
+    "prepared_settlement_recovery": "preserved exactly through migration, survived database restart, then recovered to applied through recover_prepared_settlements"
+  },
+  "production_journey": {
+    "classification": "production-path evidence",
+    "test": "tests/test_professions_economy_v1_journeys.py::test_shared_production_history_covers_pev1_acceptance_matrix",
+    "command": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_professions_economy_v1_journeys.py::test_shared_production_history_covers_pev1_acceptance_matrix -x",
+    "result": "1 passed",
+    "exit_status": 0,
+    "duration_seconds": 361.08,
+    "executable_checks": [
+      "new_character_and_chapter",
+      "mining_smith_heavy",
+      "wood_fiber_arcane",
+      "herbalism_alchemy",
+      "fishing_cooking",
+      "hunting_claims_and_consumers",
+      "gear_integration",
+      "learning_authority",
+      "conservation_and_receipts",
+      "localized_complete_navigation",
+      "regional_source_coverage"
+    ],
+    "verified_counts": {
+      "materials_acquired_by_real_delivery": 28,
+      "recipes_crafted_from_earned_inputs": 63,
+      "professions_at_level_20": 12,
+      "locales_rendered": 3,
+      "new_recovery_outputs_consumed": 8
+    },
+    "chapter": "first_watch -> caravan -> outfitter -> homecoming accepted, completed and claimed through production authorities",
+    "geography": ["Westwild", "Frostspine", "Ashen Ruins", "Mireveil", "Sunscar"],
+    "gear": "crafted uncommon T5 sword with one roll; compared/equipped, enhanced and advanced to T10 using earned shards and the Homecoming exchange; instance ID, roll JSON and provenance JSON remained exact; real combat gear loot also observed",
+    "consumables": "all six mana-bearing/mixed new outputs consumed through active battle-use with positive mana recovery and positive HP for mixed food; both HP-only new outputs consumed through out-of-battle inventory-use with positive healing",
+    "localization": "overview -> source -> learning -> craft -> durable result -> recovery rendered in ru/en/es; actual pe_ callback navigation executes in all three languages; fixture-labelled UI checks separately cover missing inputs, locked resource and stale action",
+    "production_controls": ["deterministic gathering rolls", "fixed combat seed 901", "controlled respawn clock", "mocked Telegram transport", "selection among genuinely available encounters/actions", "healing reserve gathered and crafted through production authorities"],
+    "forbidden_shortcuts_used": false
+  },
+  "economic_invariants": {
+    "concurrent_craft_sale_gift_conservation": "passed: exactly one competing mutation consumed the shared three-herb stack",
+    "duplicate_gather_harvest_and_lost_response": "passed without duplicate item, XP or receipt",
+    "valid_business_rejections": "durable zero-mutation receipts passed for learn/craft/sale/crystal/inn/gift/use/gather/harvest cases",
+    "stale_or_foreign_authorization": "no receipt",
+    "legitimate_learning_funding": "250 ancient_bark sold through normal sale actions; chapter/combat rewards also retained; no direct gold grant"
+  },
+  "astra_findings": [
+    {"id": 1, "status": "RESOLVED", "evidence": "exact fail-closed migration structure plus rollback/restart fixture tests"},
+    {"id": 2, "status": "RESOLVED", "evidence": "gather receipt replay precedes mutable travel/battle checks; fresh requests bind location and travel revision"},
+    {"id": 3, "status": "RESOLVED", "evidence": "valid consumed business rejections commit durable zero-mutation results; stale/foreign tokens do not"},
+    {"id": 4, "status": "RESOLVED", "evidence": "receipt LIMIT 6/OFFSET page*5 with exactly five rendered rows, lookahead, and oversized-page clamping"},
+    {"id": 5, "status": "RESOLVED", "evidence": "eligible encounters paginate five per page before choices expand; output item dedup retains the first stable eligible unit ID"},
+    {"id": 6, "status": "RESOLVED", "evidence": "profession/recipe details and durable mutation result include costs, inputs, outputs, rolls, progression, recovery and Craft Again"},
+    {"id": 7, "status": "RESOLVED", "evidence": "strict ru/en/es parity and no known-content fallback/raw internal semantics"},
+    {"id": 8, "status": "RESOLVED", "evidence": "named executable production predicates plus separately labelled migration/adversarial fixtures and five-failure traceability"},
+    {"id": 9, "status": "RESOLVED", "evidence": "exact normal/elite/gap/pack/cap mastery assertions; production helper checks the frozen per-unit formula"},
+    {"id": 10, "status": "RESOLVED", "evidence": "PR232 recorded merged at base 27347ec; stale roadmap item removed; PR233 remains Draft/unmerged; merge is not deployment"},
+    {"id": 11, "status": "RESOLVED", "evidence": "environmental source row ordering frozen by exact regression test"}
+  ],
+  "astra_narrow_rereview": [
+    {"id": 1, "finding": "craft replay after preview replacement", "status": "RESOLVED", "evidence": "matching committed owner/action/request receipt is recovered before the old preview token is required; focused replay test proves no second grant"},
+    {"id": 2, "finding": "harvest pagination and dedup", "status": "RESOLVED", "evidence": "mixed forest_wolf/white_wolf choices deduplicate by output item using wolf-a; five eligible encounters paginate before six choices render"},
+    {"id": 3, "finding": "known-content localization", "status": "RESOLVED", "evidence": "all known PEV1 names/descriptions are explicit in ru/en/es; generic fallback is rejected; historical gather uses professions.historical_receipt_unavailable"},
+    {"id": 4, "finding": "acceptance evidence", "status": "RESOLVED", "evidence": "prepared settlement is preserved, survives restart, and applies through recovery; actual ru/en/es callback handlers execute; every historical rerun command is executable"},
+    {"id": 5, "finding": "receipt page clamping", "status": "RESOLVED", "evidence": "pe_h:999 renders the final two receipts and a direct pe_h:1 previous link"},
+    {"id": 6, "finding": "recipe XP preview", "status": "RESOLVED", "evidence": "progression authority renders a clipped positive +5 XP award near the ceiling and preserves zero-XP copy at the ceiling"},
+    {"id": 7, "finding": "current-state docs", "status": "RESOLVED", "evidence": "PEV1-1 is recorded as accepted/frozen, implemented in Draft PR #233, unmerged, and not deployed while PR232 remains authoritative"}
+  ],
+  "focused_tests": [
+    {
+      "scope": "narrow rereview transaction, harvest, UI/localization, and migration matrix",
+      "command": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_professions_economy_v1_transactions.py tests/test_professions_economy_v1_hunting.py tests/test_professions_economy_v1_ui.py tests/test_professions_economy_v1_migration.py",
+      "result": "23 passed",
+      "exit_status": 0,
+      "duration_seconds": 6.44,
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    },
+    {
+      "scope": "harvest UI and actual ru/en/es callback flow after final assertions",
+      "command": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_professions_economy_v1_hunting.py tests/test_professions_economy_v1_ui.py",
+      "result": "11 passed",
+      "exit_status": 0,
+      "duration_seconds": 3.24,
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    },
+    {
+      "scope": "affected existing crafting, gathering, PvP gate, and settlement regressions",
+      "command": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_crafting_runtime_phase7.py tests/test_alpha_transactions_v1.py::test_gather_transaction_rolls_back_item_xp_objective_and_receipt_then_retries_once tests/test_alpha_transactions_v1.py::test_craft_locked_missing_materials_rollback_restart_duplicate_and_travel_stale tests/test_alpha_transactions_v1.py::test_pending_live_pvp_blocks_crafting_even_without_pve_flag tests/test_itemization_regional_loot_v1.py::test_two_transaction_settlement_guarantee_receipt_and_restart_idempotency",
+      "result": "15 passed",
+      "exit_status": 0,
+      "duration_seconds": 3.91,
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    },
+    {
+      "scope": "migration and prepared-settlement recovery at committed code HEAD",
+      "command": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_professions_economy_v1_migration.py",
+      "result": "5 passed",
+      "exit_status": 0,
+      "duration_seconds": 1.34,
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    }
+  ],
+  "diagnostic_runs": [
+    {
+      "command": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_professions_economy_v1_journeys.py::test_shared_production_history_covers_pev1_acceptance_matrix -x",
+      "result": "1 failed in 353.56s",
+      "diagnosis": "the hunting 18-to-20 production path requires about 43 troll victories, but the fixture had only 20 healing potions and unfixed combat RNG",
+      "repair": "fix seed 901 and gather/craft a sufficient healing reserve through existing production authorities; no resources, gold, XP, knowledge, or levels are inserted directly"
+    }
+  ],
+  "original_broad_failures": [
+    {
+      "node_id": "tests/test_gathering_professions_foundation.py::GatheringProfessionsFoundationTests::test_location_gather_entries_are_normalized_into_foundation_profiles",
+      "original_reason": "the pre-PEV expectation omitted gem_common from the canonical old-mine mining profile",
+      "repair": "canonicalize legacy location aliases before source lookup and assert the frozen iron/coal/gem profile",
+      "focused_rerun": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_gathering_professions_foundation.py::GatheringProfessionsFoundationTests::test_location_gather_entries_are_normalized_into_foundation_profiles",
+      "result": "1 passed in 0.24s",
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    },
+    {
+      "node_id": "tests/test_gathering_professions_foundation.py::GatheringProfessionsFoundationTests::test_location_profiles_use_existing_region_and_tier_hooks",
+      "original_reason": "legacy route aliases did not read the canonical PEV source rows while retaining existing region/tier metadata",
+      "repair": "resolve the canonical location only at the source-authority boundary and preserve existing world hooks",
+      "focused_rerun": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_gathering_professions_foundation.py::GatheringProfessionsFoundationTests::test_location_profiles_use_existing_region_and_tier_hooks",
+      "result": "1 passed in 0.22s",
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    },
+    {
+      "node_id": "tests/test_itemization_regional_loot_v1.py::test_homecoming_shard_bridge_is_atomic_single_use_and_no_profession_xp",
+      "original_reason": "the old test expected a consumed exchange token to become stale instead of recovering its new durable result",
+      "repair": "assert the same exchanged result with recovered=true and unchanged single-charge/single-grant invariants",
+      "focused_rerun": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_itemization_regional_loot_v1.py::test_homecoming_shard_bridge_is_atomic_single_use_and_no_profession_xp",
+      "result": "1 passed in 0.60s",
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    },
+    {
+      "node_id": "tests/test_open_world_gameplay_rollout_phase1.py::OpenWorldGameplayRolloutPhase1Tests::test_gathering_phase1_route_constraints",
+      "original_reason": "the pre-PEV expectation classified salt_crystal as herbalism rather than the frozen mining authority",
+      "repair": "update the compatibility expectation to the PEV mining identity without changing route placement",
+      "focused_rerun": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_open_world_gameplay_rollout_phase1.py::OpenWorldGameplayRolloutPhase1Tests::test_gathering_phase1_route_constraints",
+      "result": "1 passed in 0.24s",
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    },
+    {
+      "node_id": "tests/test_professions_economy_v1_journeys.py::test_shared_production_history_covers_pev1_acceptance_matrix",
+      "original_reason": "the first shared history underfunded paid learning and did not execute the required consumable/geography/gear/localization behaviors",
+      "repair": "fund learning by legitimate 250-bark sales, replace enumerated journey IDs with named executable predicates, and make the long combat segment deterministic with sufficient legitimately gathered/crafted healing stock",
+      "focused_rerun": "..\\.venv\\Scripts\\python.exe -m pytest -q tests/test_professions_economy_v1_journeys.py::test_shared_production_history_covers_pev1_acceptance_matrix -x",
+      "result": "1 passed in 361.08s",
+      "tested_commit": "e29e4a368de625f6fb221871761f438f5a617f2c"
+    }
+  ],
+  "broad_final_suite": {
+    "tested_commit": "f3b3b429edce4d18f5b0c5866e741a1dccf99cbf",
+    "command": "python -m pytest tests",
+    "collected": 1755,
+    "passed": 1750,
+    "failed": 5,
+    "exit_status": 1,
+    "duration_seconds": 1131.51,
+    "rerun_after_repair": false,
+    "reason_not_rerun": "Astra explicitly allowed focused verification because the repairs are bounded and do not materially redesign shared infrastructure; every observed failure has an exact green rerun."
+  },
+  "known_limitations": [
+    "The recorded broad suite predates the repair commit and was not repeated; its five observed failures have exact green focused reruns.",
+    "Durable receipt retention is intentionally unpruned in V1.",
+    "Free repeated gathering throughput was not balance-measured in this stage."
+  ],
+  "deviations": []
+}

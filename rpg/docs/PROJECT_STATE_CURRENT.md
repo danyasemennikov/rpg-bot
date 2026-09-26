@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for confirmed merged state
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 - Full prior snapshot: [archive/status/PROJECT_STATE_CURRENT_AT_PR231.md](archive/status/PROJECT_STATE_CURRENT_AT_PR231.md)
 
 This current section is the only merged-state summary. Plans belong in
@@ -10,12 +10,20 @@ This current section is the only merged-state summary. Plans belong in
 measured artifacts retain their own commit provenance. Merge does not establish
 deployment.
 
+> **Active candidate note:** PEV1-1 Professions & Economy V1 is an accepted and
+> frozen implementation contract, implemented on `codex/professions-economy-v1`
+> as Draft [PR #233](https://github.com/danyasemennikov/rpg-bot/pull/233). The
+> candidate is still unmerged and is not deployed, so it is not part of the
+> confirmed merged state below. See
+> [the candidate report](epics/PROFESSIONS_ECONOMY_V1_REPORT.md).
+
 ## Verified baseline
 
 - [PR229 — Playable Alpha Vertical Slice V1](https://github.com/danyasemennikov/rpg-bot/pull/229): merged.
 - [PR230 — Itemization, Regional Loot & Reliable Gear Progression V1](https://github.com/danyasemennikov/rpg-bot/pull/230): merged.
 - [PR231 — Character Builds & Combat Identity V1](https://github.com/danyasemennikov/rpg-bot/pull/231): merged.
-- PR231 merge/current reconciled `main`: `ad5435e577e45e63da2ca57af2296203d88cedd5`.
+- [PR232 — Documentation Architecture & Consolidation V1](https://github.com/danyasemennikov/rpg-bot/pull/232): merged.
+- PR232 merge/current reconciled `main`: `27347ece2b17108a1aed1f6eb01f2a395480e6c9`.
 
 The repository establishes merge state only. Deployment, live-account smoke, and
 production operation require separate evidence.
@@ -71,7 +79,9 @@ production operation require separate evidence.
 - The currently implemented crafting subset is three live professions and four recipes
   connected to the playable chapter. Existing shops, material sales, starter supplies,
   and the bounded shard exchange are implemented.
-- A broader professions/economy architecture is only a proposed roadmap candidate.
+- The accepted/frozen PEV1-1 contract is implemented in Draft PR #233 as a candidate.
+  It remains unmerged and not deployed; the confirmed merged baseline therefore
+  remains the bounded PR229 subset described above.
 
 ## PvP
 

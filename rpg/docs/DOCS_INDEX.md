@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation entry
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 
 Start here.
 
@@ -55,6 +55,15 @@ It also catalogues compatibility-retained system and pass documents.
 [epics/README.md](epics/README.md) catalogues the PR229, PR230, and PR231 delivery
 reports and the historical open-world pass records. These reports preserve the
 validation and limitations that applied to their delivery baseline.
+
+## Active implementation contracts
+
+- [Professions & Economy V1 frozen contract](epics/PROFESSIONS_ECONOMY_V1_SPEC.md)
+- [Professions & Economy V1 candidate report](epics/PROFESSIONS_ECONOMY_V1_REPORT.md)
+- [Professions & Economy V1 evidence](evidence/professions_economy_v1.json)
+
+These describe an active Draft-PR candidate and do not alter merged-state authority
+until the candidate is accepted and merged.
 
 ## Evidence
 

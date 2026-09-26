@@ -27,11 +27,11 @@ from game.build_progression import build_migration_audit, migrate_character_buil
 from game.field_catalog import FIELD_ITEMS
 from game.gear_instances import get_equipped_gear_instances
 from game.pve_live import ensure_location_pve_spawn_instances, reset_solo_pve_runtime_store
-from game.pve_reward_settlement import get_settlement
+from game.pve_reward_settlement import _v1_mastery_awards, get_settlement
 from game.weapon_mastery import get_mastery
-from handlers.battle import handle_battle_buttons
+from handlers.battle import build_battle_message, handle_battle_buttons
 from handlers.build import build_skills_command, handle_build_buttons
-from handlers.inventory import build_item_detail, handle_inventory_buttons
+from handlers.inventory import build_item_detail, handle_inventory_buttons, use_battle_consumable
 from handlers.location import handle_combat_buttons, handle_location_buttons
 from handlers.start import handle_name_input, handle_stat_buttons, start_command
 
@@ -288,6 +288,34 @@ def test_defining_effect_helpers_reject_zero_wrong_lifetime_and_missing_conversi
     assert not _demonstrates_defining_skill_effect(zero_conversion, 'rupture_toxins')
 
 
+def test_mastery_award_policy_is_exact_for_profile_gap_units_and_cap():
+    battle = {'participant_states_v1': {'1': {
+        'family': 'sword_1h', 'manual_contribution': True, 'level': 10,
+    }}}
+
+    def award(units):
+        return _v1_mastery_awards(battle_state=battle, eligible=[1], units=units)[0]
+
+    normal = award([{'unit_id': 'n1', 'mob_level': 10, 'spawn_profile': 'normal'}])
+    elite = award([{'unit_id': 'e1', 'mob_level': 10, 'spawn_profile': 'elite'}])
+    low_normal = award([{'unit_id': 'n2', 'mob_level': 5, 'spawn_profile': 'normal'}])
+    low_elite = award([{'unit_id': 'e2', 'mob_level': 5, 'spawn_profile': 'elite'}])
+    pack = award([
+        {'unit_id': f'e{index}', 'mob_level': 10, 'spawn_profile': 'elite'}
+        for index in range(3, 6)
+    ])
+    capped = award([
+        {'unit_id': f'e{index}', 'mob_level': 10, 'spawn_profile': 'elite'}
+        for index in range(6, 11)
+    ])
+
+    assert normal['exp'] == 20 and normal['units'][0]['exp'] == 20
+    assert elite['exp'] == 40 and elite['units'][0]['exp'] == 40
+    assert low_normal['exp'] == 5 and low_elite['exp'] == 10
+    assert pack['exp'] == 80 and [row['exp'] for row in pack['units']] == [40, 40, 40]
+    assert capped['exp'] == 80
+
+
 class ProductionJourney:
     """Small fake Telegram transport around real command/callback handlers."""
 
@@ -441,8 +469,7 @@ class ProductionJourney:
             raise AssertionError(("unsupported recovery origin", origin))
         before = dict(get_player(self.player_id))
         assert before["gold"] >= 12
-        await self.callback("inn", handle_location_buttons)
-        await self.callback("inn_rest", handle_location_buttons)
+        await self.rest_at_current_inn()
         after = dict(get_player(self.player_id))
         assert after["hp"] == after["max_hp"]
         assert after["mana"] == after["max_mana"]
@@ -456,6 +483,14 @@ class ProductionJourney:
             await self.travel("westwild_n1", "westwild_n2")
         else:
             await self.travel("westwild_n1")
+
+    async def rest_at_current_inn(self) -> None:
+        await self.callback("inn", handle_location_buttons)
+        rest = next(
+            value for value in _callbacks(self.messages[-1][1])
+            if value.startswith("inn_rest_")
+        )
+        await self.callback(rest, handle_location_buttons)
 
     def _accelerate_respawn(self, mob_id: str) -> str:
         location_id = str(get_player(self.player_id)["location_id"])
@@ -512,7 +547,8 @@ class ProductionJourney:
                 return callback
         raise AssertionError((kind, skill_id, target_id, _callbacks(self.messages[-1][1])))
 
-    async def fight(self, mob_id: str, *, opening: tuple[tuple[str, str | None], ...] = ()) -> dict:
+    async def fight(self, mob_id: str, *, opening: tuple[tuple[str, str | None], ...] = (),
+                    use_potions: bool = False, potion_item_id: str | None = None) -> dict:
         spawn_id = self._accelerate_respawn(mob_id)
         await self.callback(f"fight_spawn_{spawn_id}", handle_combat_buttons)
         enter = next(
@@ -524,10 +560,86 @@ class ProductionJourney:
         assert self.context.user_data["battle"]["rules_version"] == "character_builds_combat_identity_v1"
         battle_state = self.context.user_data["battle"]
         selected_actions: list[dict] = []
+        battle_potions_used = 0
+        potion_items_used: list[str] = []
+        potion_results: list[dict] = []
 
         for turn in range(40):
             if "battle" not in self.context.user_data:
                 break
+            if use_potions:
+                actor = (self.context.user_data['battle'].get('participant_states_v1') or {}).get(str(self.player_id), {})
+                actor_hp = int(actor.get('hp', 0))
+                actor_max_hp = int(actor.get('max_hp', 1))
+                actor_mana = int(actor.get('mana', 0))
+                actor_max_mana = int(actor.get('max_mana', 0))
+                should_use_potion = (
+                    (
+                        battle_potions_used == 0
+                        and (actor_hp < actor_max_hp or actor_mana < actor_max_mana)
+                    )
+                    or actor_hp * 2 < actor_max_hp
+                )
+                if should_use_potion:
+                    await self.callback(f"battle_potions_{mob_id}", handle_battle_buttons)
+                    potion_callbacks = [
+                        value for value in _callbacks(self.messages[-1][1])
+                        if value.startswith('battle_use_potion_')
+                    ]
+                    potion = (
+                        potion_callbacks[0]
+                        if potion_callbacks and potion_item_id is None
+                        else None
+                    )
+                    conn = get_connection()
+                    try:
+                        for value in potion_callbacks:
+                            token = value.removeprefix('battle_use_potion_')
+                            row = conn.execute('SELECT payload FROM player_ui_actions WHERE token=?', (token,)).fetchone()
+                            values = str(row['payload']).split(':') if row else []
+                            item = conn.execute('''SELECT i.stat_bonus_json FROM inventory inv
+                                JOIN items i ON i.item_id=inv.item_id WHERE inv.id=?''',
+                                (int(values[1]),)).fetchone() if len(values) >= 3 else None
+                            if item:
+                                bonuses = json.loads(item['stat_bonus_json'])
+                                has_effect = (
+                                    int(bonuses.get('heal', 0)) > 0 and actor_hp < actor_max_hp
+                                ) or (
+                                    int(bonuses.get('mana', 0)) > 0 and actor_mana < actor_max_mana
+                                )
+                                inventory_item = conn.execute(
+                                    'SELECT item_id FROM inventory WHERE id=?',
+                                    (int(values[1]),),
+                                ).fetchone() if len(values) >= 3 else None
+                                if has_effect and (
+                                    potion_item_id is None
+                                    or (inventory_item and inventory_item['item_id'] == potion_item_id)
+                                ):
+                                    potion = value
+                                    break
+                    finally:
+                        conn.close()
+                    if potion:
+                        token = potion.removeprefix('battle_use_potion_')
+                        potion_result = use_battle_consumable(
+                            self.player_id, token, encounter_id,
+                        )
+                        if potion_result.get('status') == 'used':
+                            battle_potions_used += 1
+                            potion_items_used.append(str(potion_result['item_id']))
+                            potion_results.append({
+                                'item_id': str(potion_result['item_id']),
+                                'heal': int(potion_result['heal']),
+                                'mana': int(potion_result['mana']),
+                            })
+                            battle_state = potion_result['battle']
+                            self.context.user_data['battle'] = battle_state
+                        player = dict(get_player(self.player_id))
+                        mob = self.context.user_data.get('battle_mob')
+                        text, markup = build_battle_message(
+                            player, mob, self.context.user_data['battle'], [],
+                        )
+                        await self._output(text, reply_markup=markup)
             if turn < len(opening):
                 kind, skill_id = opening[turn]
             else:
@@ -562,13 +674,30 @@ class ProductionJourney:
             row for row in settlement["result"]["mastery_awards"]
             if row["player_id"] == self.player_id
         )
-        assert award["exp"] == 20
+        planned_award = next(
+            row for row in settlement['plan']['mastery_awards']
+            if row['player_id'] == self.player_id
+        )
+        actor_level = int(
+            (battle_state.get('participant_states_v1') or {})[str(self.player_id)]['level']
+        )
+        expected_units = []
+        for unit in planned_award['units']:
+            base = 40 if unit['spawn_profile'] in {'elite', 'rare'} else 20
+            expected = max(5, base // 4) if actor_level - int(unit['mob_level']) >= 5 else base
+            expected_units.append(expected)
+            assert int(unit['exp']) == expected
+        assert int(planned_award['exp']) == min(80, sum(expected_units))
+        assert int(award['exp']) == int(planned_award['exp'])
         return {
             "encounter_id": encounter_id,
             "spawn_instance_id": spawn_id,
             "mob_id": mob_id,
             "actions": selected_actions,
             "settlement": settlement,
+            "battle_potions_used": battle_potions_used,
+            "potion_items_used": potion_items_used,
+            "potion_results": potion_results,
         }
 
     async def earn_mastery(self, family: str, target_level: int) -> list[dict]:
