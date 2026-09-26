@@ -96,8 +96,8 @@ def test_progression_contract_and_multiple_level_application():
 @pytest.mark.parametrize(
     ('required_level', 'player_level', 'expected_xp'),
     [
-        (1, 1, 10), (1, 5, 10), (1, 6, 5), (1, 9, 5), (1, 10, 2),
-        (6, 6, 20), (6, 10, 20), (6, 11, 10), (6, 15, 5),
+        (1, 1, 10), (1, 5, 10), (1, 6, 5), (1, 9, 0), (1, 10, 0),
+        (6, 6, 20), (6, 10, 20), (6, 11, 10), (6, 15, 0),
     ],
 )
 def test_xp_scaling_boundaries(required_level, player_level, expected_xp):
@@ -209,7 +209,7 @@ def test_capped_profession_still_gathers_item_and_banks_no_xp():
     ).fetchone()['quantity']
     conn.close()
     assert quantity == 1
-    assert _profession('woodcutting')['exp'] == 0
+    assert _profession('woodcutting')['exp'] == 123
     feedback = message.reply_text.await_args.args[0]
     assert '+0 profession XP' in feedback
     assert 'maximum' in feedback
@@ -230,7 +230,7 @@ def test_starter_wood_identity_locations_access_and_handbook_ladder():
         identity.min_zone_tier_band,
         identity.max_zone_tier_band,
         identity.is_basic_resource,
-    ) == ('woodcutting', 'wood', 'gathering_material', 'open_world_tree_nodes', 1, 1, 4, True)
+    ) == ('woodcutting', 'wood', 'gathering_material', 'open_world_tree_nodes', 1, 1, 10, True)
 
     expected_chances = {
         'westwild_n2': 0.15, 'westwild_n3': 0.25,

@@ -105,8 +105,7 @@ async def _rest_at_capital(journey: ProductionJourney) -> None:
     if before["hp"] == before["max_hp"] and before["mana"] == before["max_mana"]:
         return
     assert before["gold"] >= 12
-    await journey.callback("inn", handle_location_buttons)
-    await journey.callback("inn_rest", handle_location_buttons)
+    await journey.rest_at_current_inn()
     after = dict(get_player(journey.player_id))
     assert after["hp"] == after["max_hp"]
     assert after["mana"] == after["max_mana"]

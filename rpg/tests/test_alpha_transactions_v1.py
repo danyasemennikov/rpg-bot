@@ -6,6 +6,7 @@ import pytest
 
 from database import create_player, get_connection, get_player, get_gathering_profession_state
 from game.action_receipts import issue_actions
+from game.profession_recipes import recipe_intent_payload
 from game.crafting_runtime import craft_recipe
 from game.gathering_runtime import gather_resource
 from game.gear_instances import grant_item_to_player, get_equipped_gear_instances
@@ -102,7 +103,8 @@ def test_gather_transaction_rolls_back_item_xp_objective_and_receipt_then_retrie
         assert snapshot() == before
         assert gather_resource(PID, 'herbalism', location_id='westwild_n1', request_id='gather:99')['status'] == 'gathered'
         before = snapshot()
-        assert gather_resource(PID, 'herbalism', location_id='westwild_n1', request_id='gather:99')['status'] == 'stale_action'
+        replay = gather_resource(PID, 'herbalism', location_id='westwild_n1', request_id='gather:99')
+        assert replay['status'] == 'gathered' and replay['recovered']
         assert snapshot() == before
     assert get_gathering_profession_state(PID, 'herbalism')['exp'] == 10
 
@@ -112,7 +114,8 @@ def test_craft_locked_missing_materials_rollback_restart_duplicate_and_travel_st
     grant_item_to_player(PID, 'herb_common', 20, source='test_fixture')
     assert craft_recipe(PID, 'field_mana', {'alchemy': 99}).status == 'profession_level_too_low'
     assert craft_recipe(PID, 'trail_vest').status == 'missing_materials'
-    token = issue_actions(PID, 'craft', ['field_tonic'])['field_tonic']
+    payload = recipe_intent_payload('field_tonic')
+    token = issue_actions(PID, 'craft', [payload])[payload]
     before = snapshot()
     with patch('game.crafting_runtime.grant_item_to_player', side_effect=grant_then_fail):
         assert craft_recipe(PID, '', action_token=token).status == 'craft_failed_atomic'
@@ -120,16 +123,18 @@ def test_craft_locked_missing_materials_rollback_restart_duplicate_and_travel_st
     # All APIs reopen the database; no process-local craft state can grant items.
     assert craft_recipe(PID, '', action_token=token).status == 'crafted'
     before = snapshot()
-    assert craft_recipe(PID, '', action_token=token).status == 'stale_action'
+    replay = craft_recipe(PID, '', action_token=token)
+    assert replay.status == 'crafted' and replay.recovered
     assert snapshot() == before
-    token = issue_actions(PID, 'craft', ['field_tonic'])['field_tonic']
+    payload = recipe_intent_payload('field_tonic')
+    token = issue_actions(PID, 'craft', [payload])[payload]
     move('westwild_n1')
     move('capital_city')
     assert craft_recipe(PID, '', action_token=token).status == 'stale_action'
     for _ in range(2):
         assert craft_recipe(PID, 'field_tonic').status == 'crafted'
     assert craft_recipe(PID, 'field_mana').status == 'crafted'
-    assert rows("SELECT level FROM player_crafting_professions WHERE player_id=? AND profession_key='alchemy'", (PID,))[0]['level'] == 2
+    assert rows("SELECT level FROM player_crafting_professions WHERE player_id=? AND profession_key='alchemy'", (PID,))[0]['level'] == 6
 
 
 def test_sale_and_consumable_are_owned_single_use_and_atomic():
@@ -145,7 +150,8 @@ def test_sale_and_consumable_are_owned_single_use_and_atomic():
     assert snapshot() == before
     assert try_sell_inventory_item(PID, token)['status'] == 'sold'
     before = snapshot()
-    assert try_sell_inventory_item(PID, token)['status'] == 'stale_action'
+    replay = try_sell_inventory_item(PID, token)
+    assert replay['status'] == 'sold' and replay['recovered']
     assert snapshot() == before
     grant_item_to_player(PID, 'health_potion_small', 1, source='test_fixture')
     inv = rows("SELECT id FROM inventory WHERE telegram_id=? AND item_id='health_potion_small'", (PID,))[0]['id']
@@ -153,7 +159,8 @@ def test_sale_and_consumable_are_owned_single_use_and_atomic():
     assert use_inventory_consumable(1, token)['status'] == 'stale_action'
     assert use_inventory_consumable(PID, token)['status'] == 'used'
     before = snapshot()
-    assert use_inventory_consumable(PID, token)['status'] == 'stale_action'
+    replay = use_inventory_consumable(PID, token)
+    assert replay['status'] == 'used' and replay['recovered']
     assert snapshot() == before
 
 

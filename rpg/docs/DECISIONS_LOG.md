@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for accepted decisions; not current state or roadmap
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 
 This log is used to track **accepted decisions only**. Loose ideas or theoretical discussions should not be recorded here.
 
@@ -18,6 +18,21 @@ becoming a competing status summary.
 - **Decision:** [Clearly state the finalized decision.]
 - **Impact:** [What parts of the project, codebase, or balance this affects.]
 - **Status:** [e.g., Pending Implementation, Implemented in PR #123]
+
+---
+
+### Decision: Freeze Professions & Economy V1
+- **Date:** 2026-09-24
+- **Context:** The post-PR232 baseline had persisted gathering and a four-recipe
+  chapter subset but no accepted full V1 economy boundary.
+- **Decision:** Implement PEV1-1 Stage 3 exactly: 12 professions, 63 active recipes,
+  28 mandatory materials, permanent knowledge, lossless migration, durable economic
+  receipts, and ru/en/es UX. All eight new recovery outputs use `item_type='potion'`;
+  heal/mana authority is `stat_bonus_json`, and environmental sources have one runtime
+  authority.
+- **Impact:** Professions, sources, crafting outputs, economy mutations, journal UX,
+  migrations, acceptance journeys, evidence, and documentation.
+- **Status:** Accepted contract; implementation is an unmerged Draft-PR candidate.
 
 ---
 

@@ -78,7 +78,7 @@ class OpenWorldGameplayRolloutPhase1Tests(unittest.TestCase):
         self.assertEqual(old_mine_professions, {'mining'})
 
         sunscar_salt = {profile.item_id: profile for profile in build_location_gather_source_profiles('sunscar_n7')}
-        self.assertEqual(sunscar_salt['salt_crystal'].profession_key, 'herbalism')
+        self.assertEqual(sunscar_salt['salt_crystal'].profession_key, 'mining')
 
         mireveil_fungal_items = {profile.item_id for profile in build_location_gather_source_profiles('mireveil_n8a1')}
         self.assertEqual(mireveil_fungal_items, {'marsh_mushroom'})

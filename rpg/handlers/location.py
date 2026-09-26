@@ -803,8 +803,10 @@ def build_inn_message(player: dict, location: dict) -> tuple[str, InlineKeyboard
         max_mana=player['max_mana'],
         cost=rest_cost,
     )
+    from game.action_receipts import issue_actions
+    token = issue_actions(int(player['telegram_id']), 'inn', ['rest:12']).get('rest:12')
     keyboard = [
-        [InlineKeyboardButton(t('location.inn_rest_btn', lang, cost=rest_cost), callback_data='inn_rest')],
+        [InlineKeyboardButton(t('location.inn_rest_btn', lang, cost=rest_cost), callback_data=f'inn_rest_{token}')],
         [InlineKeyboardButton(t('location.inn_back_btn', lang), callback_data='inn_back')],
     ]
     return text, InlineKeyboardMarkup(keyboard)
@@ -1375,72 +1377,89 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
         return True
     player = dict(player)
 
-    if has_active_live_pvp_engagement(int(player['telegram_id'])):
-        await update.message.reply_text(t('location.pvp_context_block', lang))
-        return True
-    if bool(player.get('in_battle')):
-        await update.message.reply_text(t('location.in_battle_block', lang))
-        return True
-    if is_in_battle(update.effective_user.id):
-        await update.message.reply_text(t('location.in_battle', lang))
-        return True
-
-    profession = resolve_lower_gather_profession_button(raw_text, dict(player), lang)
-    if profession is None:
-        return False
-    if profession == '':
-        await update.message.reply_text(t('location.lower_gather_stale', lang))
-        return True
-
-    from game.gathering_runtime import gather_resource
     message_id = getattr(update.message, 'message_id', None)
     if message_id is None:
         await update.message.reply_text(t('chapter.stale_action', lang))
         return True
-    result = gather_resource(int(player['telegram_id']), profession,
-                             location_id=player['location_id'],
-                             request_id=f"gather:{getattr(update.message, 'chat_id', player['telegram_id'])}:{message_id}")
+    request_id = f"gather:{getattr(update.message, 'chat_id', player['telegram_id'])}:{message_id}"
+    from game.gathering_runtime import gather_resource, recover_gather_result
+    result = recover_gather_result(int(player['telegram_id']), request_id)
+
+    if result is None and has_active_live_pvp_engagement(int(player['telegram_id'])):
+        await update.message.reply_text(t('location.pvp_context_block', lang))
+        return True
+    if result is None and bool(player.get('in_battle')):
+        await update.message.reply_text(t('location.in_battle_block', lang))
+        return True
+    if result is None and is_in_battle(update.effective_user.id):
+        await update.message.reply_text(t('location.in_battle', lang))
+        return True
+
+    if result is None:
+        profession = resolve_lower_gather_profession_button(raw_text, dict(player), lang)
+        if profession is None:
+            return False
+        if profession == '':
+            await update.message.reply_text(t('location.lower_gather_stale', lang))
+            return True
+        result = gather_resource(int(player['telegram_id']), profession,
+                                 location_id=player['location_id'],
+                                 travel_revision=int(player.get('travel_revision', 0)),
+                                 request_id=request_id)
     status = result['status']
     if status == 'empty':
         await update.message.reply_text(t('location.gather_fail', lang))
         return True
     if status == 'denied':
-        access = result.get('access')
-        if access and not access.level_allowed:
+        details = result.get('details') or {}
+        if not details.get('level_allowed', True):
             await update.message.reply_text(t('location.gather_profession_level_required', lang,
-                current_level=access.player_profession_level, required_level=access.required_profession_level))
+                current_level=details.get('current_level', 1), required_level=details.get('required_level', 1)))
         else:
             await update.message.reply_text(t('location.gather_zone_denied', lang))
+        return True
+    if status == 'historical_receipt_unavailable':
+        await update.message.reply_text(t('professions.historical_receipt_unavailable', lang))
         return True
     if status != 'gathered':
         await update.message.reply_text(t(f'chapter.{status}', lang))
         return True
     progression = result['progression']
+    if isinstance(progression, list):
+        progression = progression[0] if progression else {
+            'xp_awarded': 0, 'old_level': 1, 'new_level': 1, 'new_exp': 0,
+        }
+    p_at_cap = progression.at_cap if hasattr(progression, 'at_cap') else int(progression['new_level']) >= 20
+    p_leveled = progression.leveled_up if hasattr(progression, 'leveled_up') else int(progression['new_level']) > int(progression['old_level'])
+    p_xp = progression.xp_awarded if hasattr(progression, 'xp_awarded') else int(progression['xp_awarded'])
+    p_level = progression.new_level if hasattr(progression, 'new_level') else int(progression['new_level'])
+    p_exp = progression.new_exp if hasattr(progression, 'new_exp') else int(progression['new_exp'])
+    p_needed = progression.exp_needed if hasattr(progression, 'exp_needed') else (None if p_at_cap else p_level * 50)
     success_text = t('location.gather_success', lang, item=get_item_name(result['item_id'], lang))
-    if progression.at_cap:
+    if p_at_cap:
         progress_text = t(
             'location.gather_progress_cap',
             lang,
-            xp=progression.xp_awarded,
-            level=progression.new_level,
+            xp=p_xp,
+            level=p_level,
         )
-    elif progression.leveled_up:
+    elif p_leveled:
         progress_text = t(
             'location.gather_progress_level_up',
             lang,
-            xp=progression.xp_awarded,
-            level=progression.new_level,
-            exp=progression.new_exp,
-            exp_needed=progression.exp_needed,
+            xp=p_xp,
+            level=p_level,
+            exp=p_exp,
+            exp_needed=p_needed,
         )
     else:
         progress_text = t(
             'location.gather_progress',
             lang,
-            xp=progression.xp_awarded,
-            level=progression.new_level,
-            exp=progression.new_exp,
-            exp_needed=progression.exp_needed,
+            xp=p_xp,
+            level=p_level,
+            exp=p_exp,
+            exp_needed=p_needed,
         )
     await update.message.reply_text(f'{success_text}\n{progress_text}')
     return True
@@ -1523,7 +1542,7 @@ def build_craftsmen_guild_message(player: dict, location: dict) -> tuple[str, In
     text = t('location.craftsmen_guild_title', lang, place=get_location_name(str(location.get('id') or ''), lang))
     text += '\n' + t('location.craftsmen_guild_body', lang)
     rows = [
-        [InlineKeyboardButton(t('chapter.workshop', lang), callback_data='alpha_workshop')],
+        [InlineKeyboardButton(t('professions.title', lang).replace('<b>', '').replace('</b>', ''), callback_data='pe_o:0')],
         [InlineKeyboardButton(t('gear.advance_btn', lang), callback_data='craftsmen_advance_0')],
     ]
     conn = get_connection()
@@ -2097,7 +2116,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
-    if data == 'inn':
+    if data in {'inn', 'inn_rest'}:
         location = get_location(p['location_id'])
         if not location:
             await query.answer(t('location.not_found', lang), show_alert=True)
@@ -2125,40 +2144,18 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
-    if data == 'inn_rest':
-        location = get_location(p['location_id'])
-        if not location:
-            await query.answer(t('location.not_found', lang), show_alert=True)
+    if data.startswith('inn_rest_'):
+        from game.economy_actions import rest_at_inn
+        result = rest_at_inn(int(user.id), data.removeprefix('inn_rest_'))
+        if result['status'] != 'rested':
+            key = 'location.inn_rest_not_needed' if result['status'] == 'inn_rest_not_needed' else 'location.inn_no_gold' if result['status'] == 'inn_no_gold' else 'location.inn_not_available'
+            await query.answer(t(key, lang, cost=INN_REST_COST_GOLD), show_alert=True)
             return
-        if not _can_open_inn(location):
-            await query.answer(t('location.inn_not_available', lang), show_alert=True)
-            return
-
-        hp_now = int(p['hp'] or 0)
-        hp_max = int(p['max_hp'] or 0)
-        mana_now = int(p['mana'] or 0)
-        mana_max = int(p['max_mana'] or 0)
-        if hp_now >= hp_max and mana_now >= mana_max:
-            await query.answer(t('location.inn_rest_not_needed', lang), show_alert=True)
-            return
-
-        rest_cost = INN_REST_COST_GOLD
-        if int(p['gold'] or 0) < rest_cost:
-            await query.answer(t('location.inn_no_gold', lang, cost=rest_cost), show_alert=True)
-            return
-
-        conn = get_connection()
-        conn.execute(
-            'UPDATE players SET hp=max_hp, mana=max_mana, gold=gold-? WHERE telegram_id=?',
-            (rest_cost, user.id),
-        )
-        conn.commit()
-        conn.close()
-
+        location = get_location(get_player(user.id)['location_id'])
         player_after = dict(get_player(user.id))
         text, keyboard = build_inn_message(player_after, location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
-        await query.answer(t('location.inn_rest_ok', lang, cost=rest_cost))
+        await query.answer(t('location.inn_rest_ok', lang, cost=INN_REST_COST_GOLD))
         return
 
     if data == 'quest_board_back':

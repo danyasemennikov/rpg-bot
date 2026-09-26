@@ -42,11 +42,11 @@ def gathering_profession_xp_for_success(
     level_gap = current_level - required_level
     if level_gap <= 4:
         scaled_xp = base_xp
-    elif level_gap <= 8:
+    elif level_gap == 5:
         scaled_xp = base_xp // 2
     else:
-        scaled_xp = base_xp // 4
-    return max(1, scaled_xp)
+        scaled_xp = 0
+    return max(0, scaled_xp)
 
 
 def apply_gathering_profession_progression(
@@ -57,13 +57,17 @@ def apply_gathering_profession_progression(
     xp_awarded: int,
 ) -> GatheringProfessionProgressionResult:
     """Apply current-level XP, including multiple level-ups and cap handling."""
-    old_level = max(1, min(MAX_GATHERING_PROFESSION_LEVEL, int(current_level)))
-    old_exp = max(0, int(current_exp))
-    if old_level >= MAX_GATHERING_PROFESSION_LEVEL:
-        old_exp = 0
-        awarded = 0
-    else:
-        awarded = max(0, int(xp_awarded))
+    old_level = int(current_level)
+    old_exp = int(current_exp)
+    awarded = 0 if old_level >= MAX_GATHERING_PROFESSION_LEVEL else max(0, int(xp_awarded))
+    if awarded == 0:
+        return GatheringProfessionProgressionResult(
+            profession_key=profession_key, old_level=old_level, new_level=old_level,
+            old_exp=old_exp, new_exp=old_exp, xp_awarded=0, leveled_up=False,
+            levels_gained=0,
+            exp_needed=None if old_level >= MAX_GATHERING_PROFESSION_LEVEL else gathering_profession_exp_needed(old_level),
+            at_cap=old_level >= MAX_GATHERING_PROFESSION_LEVEL,
+        )
 
     new_level = old_level
     new_exp = old_exp + awarded

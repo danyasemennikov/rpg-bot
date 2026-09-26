@@ -2,11 +2,16 @@
 
 - Status: Active catalogue
 - Authority: Supporting measured evidence with exact provenance
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 
 Files in this directory are checked, compact acceptance artifacts. They identify the
 exact rules commit, inputs, seeds, production authorities, and failed/stalled runs.
 Human interpretation and rollout guidance live in the corresponding delivery report.
+
+`professions_economy_v1.json` records the PEV1-1 Stage 3 candidate's frozen base,
+catalogue counts, migration checks, production-journey result, focused checks, and
+single broad final-suite result. Its candidate head and Draft PR URL are populated
+only after the tested branch has been pushed.
 
 `character_builds_combat_identity_v1.json` is interpreted by
 `../CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md`. Its `head_sha` is the integrated runtime

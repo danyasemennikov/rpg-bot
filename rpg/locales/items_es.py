@@ -91,6 +91,15 @@ ITEM_NAMES.update({
     'field_prayer_amulet': '📿 Amuleto de oración de campo',
 })
 
+ITEM_NAMES.update({
+    'frostpine_wood': 'Madera de pino gélido', 'sunscar_ore': 'Mineral de Sunscar',
+    'deep_marsh_fish': 'Pez de las profundidades del pantano', 'bear_hide': 'Piel de oso', 'troll_sinew': 'Tendón de trol',
+    'pe_mana_potion_medium': 'Poción de maná mediana', 'pe_health_potion_large': 'Poción de salud grande',
+    'pe_mana_potion_large': 'Poción de maná grande', 'pe_shore_broth': 'Caldo de pescado costero',
+    'pe_marsh_stew': 'Guiso del pantano', 'pe_boar_feast': 'Asado de jabalí',
+    'pe_oasis_meal': 'Plato de pescado del oasis', 'pe_deep_marsh_meal': 'Comida sustanciosa del pantano',
+})
+
 ITEM_DESCRIPTIONS = {
     **{item_id: 'Arma de campo fiable que usa la familia de combate indicada en su ficha.' for item_id in (
         'field_sword_1h', 'field_sword_2h', 'field_axe_2h', 'field_daggers', 'field_bow',
@@ -109,3 +118,11 @@ ITEM_DESCRIPTIONS = {
     'field_mind_ring': 'Anillo que añade maná e intuición.',
     'field_prayer_amulet': 'Amuleto que añade sabiduría y poder de curación.',
 }
+ITEM_DESCRIPTIONS.update({
+    'health_potion_small':'Restaura 30 PV.','health_potion':'Restaura 80 PV.','mana_potion':'Restaura 50 de maná.','field_ration':'Carne cocinada con hierbas. Restaura 40 PV.','trail_vest':'Chaleco hecho con pieles locales en el taller de Elmor.',
+    'frostpine_wood':'Madera resistente al frío de Frostspine.','sunscar_ore':'Mineral templado por el calor de Sunscar.','deep_marsh_fish':'Un pez raro de las aguas profundas de Mireveil.','bear_hide':'Una resistente piel de oso recolectada.','troll_sinew':'Un fuerte tendón de trol recolectado.',
+    'pe_mana_potion_medium':'Restaura 100 de maná.','pe_health_potion_large':'Restaura 150 PV.','pe_mana_potion_large':'Restaura 160 de maná.','pe_shore_broth':'Restaura 25 PV y 15 de maná.','pe_marsh_stew':'Restaura 80 PV y 20 de maná.','pe_boar_feast':'Restaura 120 PV.','pe_oasis_meal':'Restaura 100 PV y 50 de maná.','pe_deep_marsh_meal':'Restaura 180 PV y 80 de maná.',
+})
+ITEM_DESCRIPTIONS.update({
+    'herb_common':'Hierba común usada por alquimistas, cocineros, artesanos de armadura ligera e ingenieros arcanos.','herb_magic':'Hierba mágica usada en alquimia avanzada, armadura ligera y obras arcanas.','shore_herbs':'Hierbas costeras usadas en cocina y obras arcanas sagradas.','marsh_herb':'Hierba de Mireveil usada en alquimia, cocina y armadura ligera.','desert_plant':'Planta de Sunscar usada en alquimia, cocina y obras arcanas.','toxic_herb':'Hierba peligrosa de nivel alto usada en alquimia, armadura ligera y obras arcanas.','forest_mushroom':'Seta comestible de Westwild usada en cocina.','reed_bundle':'Juncos flexibles de Mireveil usados como fibra y atadura arcana.','wood_common':'Madera común usada en armas, armaduras y herramientas arcanas.','wood_dark':'Madera densa de Westwild usada en artesanía regional.','ancient_bark':'Madera antigua usada en proyectos de equipo del alfa tardío.','iron_ore':'Mineral de hierro usado por armeros y herreros.','coal':'Combustible usado por armeros y herreros.','stone_chunk':'Piedra de artesanía usada en armaduras, herrería e ingeniería arcana.','salt_crystal':'Condimento mineral usado en cocina.','gem_common':'Gema común usada en armaduras avanzadas e ingeniería arcana.','shore_fish':'Pez costero usado en cocina inicial.','marsh_fish':'Pez de Mireveil usado en cocina regional.','oasis_fish':'Pez de oasis de Sunscar usado en cocina avanzada.','boar_meat':'Carne de jabalí recolectada usada en cocina.','wolf_pelt':'Piel de lobo recolectada usada en armadura media, herrería y obras arcanas.','wolf_fang':'Trofeo de lobo usado en herrería y armadura media.','spider_silk':'Seda recolectada usada en armaduras y obras arcanas.'
+})

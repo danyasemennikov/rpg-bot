@@ -341,6 +341,7 @@ def init_db():
         )
     ''')
 
+    conn.execute('BEGIN IMMEDIATE')
     from game.alpha_schema import ensure_alpha_schema
     ensure_alpha_schema(conn)
     from game.gear_progression import ensure_gear_progression_schema
@@ -397,6 +398,8 @@ def create_player(telegram_id: int, username: str, name: str, stats: dict, *, la
         conn.executemany('INSERT INTO player_gathering_professions(telegram_id, profession_key) VALUES (?, ?)',
                          ((telegram_id, key) for key in GATHERING_PROFESSION_KEYS))
         ensure_crafting_professions(conn, telegram_id)
+        from game.profession_schema import grant_new_player_starters
+        grant_new_player_starters(conn, telegram_id)
         conn.commit()
     except Exception:
         conn.rollback()

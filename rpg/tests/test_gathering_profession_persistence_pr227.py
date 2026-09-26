@@ -172,7 +172,7 @@ def test_locked_roll_grants_nothing_does_not_reroll_and_level_unlocks_same_resou
     assert _profession_snapshot('herbalism')['exp'] == 24
 
 
-def test_zone_denied_roll_grants_nothing():
+def test_zone_tier_does_not_override_explicit_resource_level_gate():
     _create_player()
     wood = next(
         profile for profile in build_location_gather_source_profiles('westwild_n6')
@@ -194,4 +194,4 @@ def test_zone_denied_roll_grants_nothing():
         (PLAYER_ID,),
     ).fetchone()['count']
     conn.close()
-    assert count == 0
+    assert count == 1

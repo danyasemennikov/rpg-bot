@@ -30,6 +30,7 @@ from handlers.battle   import handle_battle_buttons
 from handlers.inventory import inventory_command, handle_inventory_buttons, handle_transfer_input
 from handlers.settings import settings_command, handle_settings_buttons
 from handlers.chapter import journal_command, handle_chapter_buttons
+from handlers.professions import handle_profession_buttons
 from handlers.build import (
     build_attributes_command,
     build_command,
@@ -170,6 +171,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_build_buttons, pattern='^bv_'))
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
     app.add_handler(CallbackQueryHandler(handle_chapter_buttons, pattern='^alpha_'))
+    app.add_handler(CallbackQueryHandler(handle_profession_buttons, pattern='^pe_'))
 
     app.add_handler(MessageHandler(filters.COMMAND & filters.Regex(UNDERSCORE_NAV_COMMAND_PATTERN), handle_underscore_navigation_command))
 

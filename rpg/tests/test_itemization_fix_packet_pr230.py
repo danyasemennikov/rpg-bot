@@ -558,11 +558,11 @@ def test_r4_gear_longevity_and_guild_bridge_use_production_handlers():
     asyncio.run(_handler_callback(player_id, accept_callback, handle_location_buttons))
     assert get_player_hunt_contract_state(player_id)['contract_key'] == 'chapter_homecoming'
 
-    workshop = build_workshop(dict(get_player(player_id)))[1]
-    craft_callbacks = [
-        value for value in _callbacks(workshop) if value.startswith('alpha_craft_')]
-    craft_callback = craft_callbacks[LIVE_RECIPE_IDS.index('field_tonic')]
-    asyncio.run(_handler_callback(player_id, craft_callback, handle_chapter_buttons))
+    from handlers.professions import build_recipe, handle_profession_buttons
+    workshop = build_recipe(dict(get_player(player_id)), 'field_tonic')[1]
+    craft_callback = next(
+        value for value in _callbacks(workshop) if value.startswith('pe_a:'))
+    asyncio.run(_handler_callback(player_id, craft_callback, handle_profession_buttons))
 
     sellable_rows = _rows(
         """SELECT inv.item_id FROM inventory inv JOIN items i ON i.item_id=inv.item_id

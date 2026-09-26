@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for forward priorities; not an implementation contract
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 
 Statuses used here:
 
@@ -15,25 +15,25 @@ in this roadmap.
 
 ## CURRENT
 
-### Documentation Architecture & Consolidation V1
+### Professions & Economy V1
 
-- Status: **in progress** under the frozen Astra documentation contract.
-- Outcome: one navigation entrance, one merged-state authority, one forward roadmap,
-  explicit system/foundation/report/evidence/history boundaries, and preserved
-  compatibility paths.
-- Completion: a docs-only Draft PR passes the contract's static acceptance review.
+- Status: **in progress** under frozen contract PEV1-1 Stage 3.
+- Outcome: five gathering and seven crafting professions, 63 active recipes,
+  28 mandatory materials, permanent knowledge, durable economic receipts, and
+  complete ru/en/es professions journeys.
+- Candidate record: [epics/PROFESSIONS_ECONOMY_V1_REPORT.md](epics/PROFESSIONS_ECONOMY_V1_REPORT.md).
+- Completion: the single Draft PR has green focused and production-journey evidence.
+  One broad suite was recorded before the repair pass; its five failures have green
+  exact focused reruns, and a second broad run is not automatically required by the
+  frozen test budget. Merge remains a separate user decision.
 
 ## NEXT
 
-### Professions / Economy architecture and gap assessment
+### Professions / Economy follow-up assessment
 
-- Status: **proposed** design candidate.
-- Outcome: reconcile implemented gathering, bounded hunting, the current crafting
-  subset, shops/exchange, progression bands, and unresolved economy gaps.
-- Prerequisite: a fresh audit of current implementation and existing foundation text.
-- Contract: none yet. This is not an approved implementation Epic.
-- Completion: an accepted design decision and frozen implementation contract, if the
-  owner chooses to proceed.
+- Status: **proposed** only after PEV1-1 acceptance.
+- Outcome: assess operational behavior, receipt retention, balance, and explicitly
+  deferred economy expansion without reopening the frozen V1 contract.
 
 ## LATER
 

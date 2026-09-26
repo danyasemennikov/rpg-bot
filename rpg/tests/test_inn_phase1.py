@@ -46,6 +46,19 @@ class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
         context = SimpleNamespace(user_data={})
         return update, context
 
+    async def _confirm_rest(self):
+        preview, context = self._build_update('inn_rest')
+        await handle_location_buttons(preview, context)
+        markup = preview.callback_query.edit_message_text.await_args.kwargs['reply_markup']
+        token_callback = next(
+            button.callback_data
+            for row in markup.inline_keyboard for button in row
+            if button.callback_data.startswith('inn_rest_')
+        )
+        update, context = self._build_update(token_callback)
+        await handle_location_buttons(update, context)
+        return update
+
     async def test_safe_location_with_inn_service_opens_inn_screen(self):
         update, context = self._build_update('inn')
         await handle_location_buttons(update, context)
@@ -63,8 +76,7 @@ class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
         update.callback_query.edit_message_text.assert_not_awaited()
 
     async def test_rest_restores_hp_mana_and_charges_gold_once(self):
-        update, context = self._build_update('inn_rest')
-        await handle_location_buttons(update, context)
+        update = await self._confirm_rest()
 
         conn = get_connection()
         row = conn.execute('SELECT hp, mana, gold FROM players WHERE telegram_id=?', (9101,)).fetchone()
@@ -80,8 +92,7 @@ class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
         conn.commit()
         conn.close()
 
-        update, context = self._build_update('inn_rest')
-        await handle_location_buttons(update, context)
+        update = await self._confirm_rest()
 
         conn = get_connection()
         row = conn.execute('SELECT hp, mana, gold FROM players WHERE telegram_id=?', (9101,)).fetchone()
@@ -97,8 +108,7 @@ class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
         conn.commit()
         conn.close()
 
-        update, context = self._build_update('inn_rest')
-        await handle_location_buttons(update, context)
+        update = await self._confirm_rest()
 
         conn = get_connection()
         row = conn.execute('SELECT hp, mana, gold FROM players WHERE telegram_id=?', (9101,)).fetchone()

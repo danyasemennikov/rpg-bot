@@ -107,7 +107,9 @@ def get_item_name(item_id: str, lang: str) -> str:
             return name
     except ImportError:
         pass
-    # fallback — берём из items_data
+    if lang in {'en', 'es'}:
+        return t('professions.unknown_item', lang, id=item_id)
+    # Russian compatibility content retains its catalog identity.
     from game.items_data import get_item
     item = get_item(item_id)
     return item['name'] if item else item_id
@@ -129,6 +131,8 @@ def get_item_description(item_id: str, lang: str) -> str:
             return description
     except (ImportError, AttributeError):
         pass
+    if lang in {'en', 'es'}:
+        return t('professions.unknown_item_description', lang, id=item_id)
     from game.items_data import get_item
     item = get_item(item_id)
     return str(item.get('description') or '') if item else ''
@@ -182,7 +186,10 @@ def get_mob_name(mob_id: str, lang: str) -> str:
         elif lang == 'en': from locales.mobs_en import MOB_NAMES
         elif lang == 'es': from locales.mobs_es import MOB_NAMES
         else: from locales.mobs_ru import MOB_NAMES
-        return MOB_NAMES.get(mob_id) or _fallback_mob(mob_id)
+        return MOB_NAMES.get(mob_id) or (
+            t('professions.unknown_mob', lang, id=mob_id)
+            if lang in {'en', 'es'} else _fallback_mob(mob_id)
+        )
     except ImportError:
         return _fallback_mob(mob_id)
 

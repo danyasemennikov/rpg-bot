@@ -91,6 +91,15 @@ ITEM_NAMES.update({
     'field_prayer_amulet': '📿 Field Prayer Amulet',
 })
 
+ITEM_NAMES.update({
+    'frostpine_wood': 'Frostpine wood', 'sunscar_ore': 'Sunscar ore',
+    'deep_marsh_fish': 'Deep-marsh fish', 'bear_hide': 'Bear hide', 'troll_sinew': 'Troll sinew',
+    'pe_mana_potion_medium': 'Medium mana potion', 'pe_health_potion_large': 'Large health potion',
+    'pe_mana_potion_large': 'Large mana potion', 'pe_shore_broth': 'Coastal fish broth',
+    'pe_marsh_stew': 'Marsh stew', 'pe_boar_feast': 'Boar roast',
+    'pe_oasis_meal': 'Oasis fish meal', 'pe_deep_marsh_meal': 'Hearty marsh meal',
+})
+
 ITEM_DESCRIPTIONS = {
     **{item_id: 'Reliable field weapon using the existing combat family shown on its card.' for item_id in (
         'field_sword_1h', 'field_sword_2h', 'field_axe_2h', 'field_daggers', 'field_bow',
@@ -109,3 +118,11 @@ ITEM_DESCRIPTIONS = {
     'field_mind_ring': 'A ring that adds mana and intuition.',
     'field_prayer_amulet': 'An amulet that adds wisdom and healing power.',
 }
+ITEM_DESCRIPTIONS.update({
+    'health_potion_small':'Restores 30 HP.','health_potion':'Restores 80 HP.','mana_potion':'Restores 50 mana.','field_ration':'Cooked meat with herbs. Restores 40 HP.','trail_vest':'A vest made from local hides in Elmor’s workshop.',
+    'frostpine_wood':'Cold-resistant timber gathered in Frostspine.','sunscar_ore':'Heat-scarred ore gathered in Sunscar.','deep_marsh_fish':'A rare fish from Mireveil’s deepest water.','bear_hide':'A durable harvested bear hide.','troll_sinew':'A strong harvested troll sinew.',
+    'pe_mana_potion_medium':'Restores 100 mana.','pe_health_potion_large':'Restores 150 HP.','pe_mana_potion_large':'Restores 160 mana.','pe_shore_broth':'Restores 25 HP and 15 mana.','pe_marsh_stew':'Restores 80 HP and 20 mana.','pe_boar_feast':'Restores 120 HP.','pe_oasis_meal':'Restores 100 HP and 50 mana.','pe_deep_marsh_meal':'Restores 180 HP and 80 mana.',
+})
+ITEM_DESCRIPTIONS.update({
+    'herb_common':'A common herb used by alchemists, cooks, light armor crafters, and arcane engineers.','herb_magic':'A magic herb used in advanced alchemy, light armor, and arcane work.','shore_herbs':'Coastal herbs used in cooking and sacred arcane work.','marsh_herb':'A Mireveil herb used in alchemy, cooking, and light armor.','desert_plant':'A Sunscar plant used in alchemy, cooking, and arcane work.','toxic_herb':'A dangerous late-tier herb used in alchemy, light armor, and arcane work.','forest_mushroom':'An edible Westwild mushroom used in cooking.','reed_bundle':'Flexible Mireveil reeds used for fibers and arcane bindings.','wood_common':'Common timber used in weapons, armor, and arcane tools.','wood_dark':'Dense Westwild timber used in regional crafting.','ancient_bark':'Ancient timber used in late-alpha equipment projects.','iron_ore':'Iron ore used by armorers and blacksmiths.','coal':'Fuel used by armorers and blacksmiths.','stone_chunk':'Crafting stone used in armor, smithing, and arcane engineering.','salt_crystal':'Mineral seasoning used in cooking.','gem_common':'A common gem used in advanced armor and arcane engineering.','shore_fish':'A coastal fish used in entry cooking.','marsh_fish':'A Mireveil fish used in regional cooking.','oasis_fish':'A Sunscar oasis fish used in advanced cooking.','boar_meat':'Harvested boar meat used in cooking.','wolf_pelt':'A harvested wolf pelt used in medium armor, smithing, and arcane work.','wolf_fang':'A wolf trophy used in smithing and medium armor.','spider_silk':'Harvested silk used in armor and arcane work.'
+})

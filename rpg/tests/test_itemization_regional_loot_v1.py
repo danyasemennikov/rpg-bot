@@ -469,7 +469,8 @@ def test_homecoming_shard_bridge_is_atomic_single_use_and_no_profession_xp():
     token = issue_crystal_exchange_intent(PID)
     before_gold = get_player(PID)['gold']
     assert exchange_enhancement_crystal(PID, token)['status'] == 'exchanged'
-    assert exchange_enhancement_crystal(PID, token)['status'] == 'stale_action'
+    replay = exchange_enhancement_crystal(PID, token)
+    assert replay['status'] == 'exchanged' and replay['recovered']
     assert get_player(PID)['gold'] == before_gold - 25
     assert rows("SELECT quantity FROM inventory WHERE telegram_id=? AND item_id='enhancement_crystal'", (PID,))[0]['quantity'] == 1
     assert rows('SELECT * FROM player_crafting_professions WHERE player_id=?', (PID,)) == before_professions
