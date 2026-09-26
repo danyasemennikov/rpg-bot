@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation map for current implementation ownership
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 
 This map points to current code and the documents that explain it. Code remains the
 exact implementation authority. Foundations express intent; Epic and pass reports

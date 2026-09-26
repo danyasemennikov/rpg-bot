@@ -2,9 +2,9 @@
 
 - Status: Draft PR candidate; not merged and not deployed
 - Contract: PEV1-1 Stage 3
-- Frozen base: `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
+- Frozen base: `27347ece2b17108a1aed1f6eb01f2a395480e6c9` (merged PR #232)
 - Candidate branch: `codex/professions-economy-v1`
-- Tested code commit: `95f5d2159d31663cc36165af3ccd1caa28636e68`
+- Tested code commit: `2c552f8e8d5829b19b37fe50abffab2add2461c0`
 - Draft PR: [#233](https://github.com/danyasemennikov/rpg-bot/pull/233)
 
 ## Delivered candidate
@@ -13,55 +13,80 @@ The candidate expands the playable economy to five gathering and seven crafting
 professions, all capped at level 20. It defines one closed 63-recipe catalogue,
 28 mandatory materials, permanent recipe knowledge, explicit learning prices and
 crafting ceilings, and one runtime authority for environmental sources. The eight
-new recovery outputs are stackable `potion` items; heal/mana values live only in
-`stat_bonus_json`, while food metadata remains descriptive.
+new recovery outputs reuse the existing `potion` runtime: six mana-bearing or mixed
+outputs are proved through battle-use, while both HP-only outputs are proved through
+out-of-battle inventory-use.
 
-The migration `professions_economy_v1` rebuilds the crafting-profession constraint
-to exactly seven keys without changing retained rows, creates permanent knowledge
-and durable economic-result receipt tables, grants only the four frozen grandfathered
-recipes to existing players, and grants all 17 starters through normal new-player
-initialization. The marker is written only after row-preservation and foreign-key
-checks succeed.
+The `professions_economy_v1` migration now recognizes only the exact frozen three-key
+baseline or exact seven-key target structure. It verifies column order and constraints,
+the primary-key index, foreign key, absence of unexpected triggers/dependencies, and
+the marker/schema relationship. Incompatible structures and unexpected temp tables
+fail closed. Injected failure after the rebuild rolls back DDL, data, and marker state.
 
-Gather, settlement-authorized harvest, learning, crafting, stack sale, crystal
-exchange, inn rest, direct gift, and out-of-battle consumable use use locked mutation
-boundaries and durable language-neutral results. Valid consumed business rejections
-are durable; stale or foreign intents do not authorize receipts. Lost responses
-recover the committed result without repeating charges, grants, XP, objectives, or
-generated gear rolls.
+Gather recovery now precedes mutable location/battle checks, while fresh requests bind
+canonical location and travel revision. Valid consumed business rejections for the
+economy mutations commit durable zero-mutation results; stale or foreign authorization
+does not. Receipt and harvest history use true five-row pages with one-row lookahead;
+harvest eligibility is filtered before pagination and stable unit identity controls
+deduplication.
 
-The professions journal is available from the chapter journal and craftsmen guild,
-with six-row content pages, five-row harvest/receipt pages, eight-row inventory/sale
-pages, short server-side callbacks, and parallel Russian, English, and Spanish copy.
+The journal exposes localized profession milestones, recipe state and learning cost,
+owned/required ingredients, outputs, tier/rarity/secondary policy, recovery, sale and
+XP ceilings. Durable results show consumed/granted items, instance IDs, exact rolls,
+progression and recovery, with a Craft Again path. Known PEV1 content and errors have
+parallel Russian, English and Spanish copy without internal IDs, JSON, policy tokens,
+or Russian fallback in English/Spanish.
 
-## Acceptance boundary
+## Executable acceptance evidence
 
-Focused catalog, migration, progression, source, transaction, hunting, UI, and
-neighbor-compatibility tests accompany the candidate. The shared production history
-uses normal registration, travel, deterministic gathering rolls, real PvE reward
-settlements, owner harvesting, legitimate material sales, paid/free learning,
-crafting, equipping, enhancement, and receipt replay. Fixture-only migration and
-adversarial checks are labeled separately.
+The shared production history no longer claims completion through enumerated journey
+IDs. It asserts named outcomes derived from real actions: the Aster–Elmor chapter,
+each profession chain, hunting/consumers, learning, conservation/receipts, gear,
+localization, and regional acquisition. It passed in 361.41 seconds and proved:
 
-Machine-readable evidence is recorded in
+- all 28 mandatory inputs acquired through real delivering actions;
+- all 63 recipes crafted from earned inputs;
+- all 12 professions at level 20;
+- real source acquisition in Westwild, Frostspine, Ashen Ruins, Mireveil, and Sunscar;
+- a crafted uncommon T5 sword compared/equipped, enhanced and advanced to T10 while
+  preserving instance ID, its one secondary roll, and provenance;
+- all eight new recovery outputs consumed through the existing battle/inventory paths;
+- representative overview → source → learning → craft → result → recovery rendering
+  in ru/en/es.
+
+Migration and adversarial tests are explicitly fixture-labelled and are not presented
+as production acquisition. They cover the frozen baseline, rollback/restart, prepared
+settlement recovery, concurrent craft/sale/gift conservation, and localized missing,
+locked, and stale results.
+
+At tested code commit `2c552f8`, the consolidated repair matrix passed 30 tests in
+7.90 seconds. The exact four short nodes from the original broad failures passed in
+1.03 seconds; the fifth node is the green 361.41-second shared production history.
+Machine-readable commands, node IDs, original reasons, exact repairs, results, and
+tested commit are recorded in
 [`../evidence/professions_economy_v1.json`](../evidence/professions_economy_v1.json).
-The final production history passed in 350.49 seconds and covered all 11 journey IDs,
-28 mandatory materials, 63 recipes, and all 12 professions at level 20. The focused
-PEV1/neighbor matrix passed 138 tests; post-broad compatibility repairs passed 62
-tests plus 76 subtests, and the isolated real battle-consumable proof passed.
 
-The single broad run collected 1,755 tests at `f3b3b42`: 1,750 passed and five
-failed. The failures were repaired with narrow legacy-alias, frozen-policy expectation,
-and acceptance-harness changes, then rerun focused. Per the contract's test budget,
-the broad suite was not repeated because shared runtime infrastructure was not
-materially redesigned. Merge and deployment remain explicitly outside this delivery.
+## Astra repair disposition
 
-## Deferred and risks
+Findings 1–11 are resolved: fail-closed migration, gather replay/travel revision,
+durable business rejections, receipt pagination, harvest pagination/deduplication,
+profession UX/results, complete localization, executable acceptance/traceability,
+exact mastery regression assertions, PR232 documentation reconciliation, and frozen
+environmental row ordering.
+
+PR232 Documentation Architecture & Consolidation V1 is merged at the frozen base.
+Its stale in-progress roadmap entry was removed. PR233 remains an unmerged Draft.
+Repository merge state does not establish deployment or live operation.
+
+## Broad suite and remaining risks
+
+The single broad run at `f3b3b42` collected 1,755 tests: 1,750 passed and five failed
+in 1131.51 seconds. Every observed failure now has an exact green focused rerun.
+A second broad run was not performed because Astra explicitly allowed focused
+verification for this bounded repair packet and no shared infrastructure was
+materially redesigned.
 
 The contract's explicit deferred items remain deferred. Durable receipts intentionally
-grow without pruning. Long production-history coverage reflects the frozen profession
-curve and is materially slower than focused policy tests. No teleport, trade/escrow,
-gold transfer, broader structured PvP, or unrelated content expansion is introduced.
-The remaining validation risk is that the single local broad run predates the narrow
-repair commit; every observed failure has a green focused rerun, but a second local
-broad run was intentionally not performed.
+grow without pruning. Free repeated gathering throughput was not balance-measured.
+There are no contract deviations; merge, ready-for-review transition, and deployment
+remain outside this repair pass.

@@ -2,7 +2,7 @@
 
 - Status: Active catalogue
 - Authority: Supporting measured evidence with exact provenance
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 
 Files in this directory are checked, compact acceptance artifacts. They identify the
 exact rules commit, inputs, seeds, production authorities, and failed/stalled runs.

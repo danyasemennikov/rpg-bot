@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for confirmed merged state
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
 - Full prior snapshot: [archive/status/PROJECT_STATE_CURRENT_AT_PR231.md](archive/status/PROJECT_STATE_CURRENT_AT_PR231.md)
 
 This current section is the only merged-state summary. Plans belong in
@@ -11,7 +11,8 @@ measured artifacts retain their own commit provenance. Merge does not establish
 deployment.
 
 > **Active candidate note:** PEV1-1 Professions & Economy V1 is implemented on
-> `codex/professions-economy-v1` as a Draft-PR candidate. It is not part of the
+> `codex/professions-economy-v1` as Draft [PR #233](https://github.com/danyasemennikov/rpg-bot/pull/233).
+> It is not part of the
 > confirmed merged state below. See
 > [the candidate report](epics/PROFESSIONS_ECONOMY_V1_REPORT.md).
 
@@ -20,7 +21,8 @@ deployment.
 - [PR229 — Playable Alpha Vertical Slice V1](https://github.com/danyasemennikov/rpg-bot/pull/229): merged.
 - [PR230 — Itemization, Regional Loot & Reliable Gear Progression V1](https://github.com/danyasemennikov/rpg-bot/pull/230): merged.
 - [PR231 — Character Builds & Combat Identity V1](https://github.com/danyasemennikov/rpg-bot/pull/231): merged.
-- PR231 merge/current reconciled `main`: `ad5435e577e45e63da2ca57af2296203d88cedd5`.
+- [PR232 — Documentation Architecture & Consolidation V1](https://github.com/danyasemennikov/rpg-bot/pull/232): merged.
+- PR232 merge/current reconciled `main`: `27347ece2b17108a1aed1f6eb01f2a395480e6c9`.
 
 The repository establishes merge state only. Deployment, live-account smoke, and
 production operation require separate evidence.
