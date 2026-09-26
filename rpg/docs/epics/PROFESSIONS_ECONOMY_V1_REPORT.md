@@ -4,10 +4,11 @@
 - Contract: PEV1-1 Stage 3
 - Frozen base: `27347ece2b17108a1aed1f6eb01f2a395480e6c9` (merged PR #232)
 - Candidate branch: `codex/professions-economy-v1`
-- Tested code commit: `2c552f8e8d5829b19b37fe50abffab2add2461c0`
-- Post-tested-code commits: `52a854e` and the commit containing the final evidence
-  metadata update; both are documentation-only. The exact pushed final SHA is recorded
-  in the Draft PR body and final handoff because a Git commit cannot embed its own ID.
+- Tested code commit: `e29e4a368de625f6fb221871761f438f5a617f2c`
+- Earlier documentation-only commits: `52a854e` and `c9f6a4c`.
+- The commit containing this refreshed report/evidence is the only post-tested-code
+  commit and is documentation-only. Its exact pushed SHA is recorded in the Draft PR
+  body and final handoff because a Git commit cannot embed its own ID.
 - Draft PR: [#233](https://github.com/danyasemennikov/rpg-bot/pull/233)
 
 ## Delivered candidate
@@ -30,22 +31,30 @@ Gather recovery now precedes mutable location/battle checks, while fresh request
 canonical location and travel revision. Valid consumed business rejections for the
 economy mutations commit durable zero-mutation results; stale or foreign authorization
 does not. Receipt and harvest history use true five-row pages with one-row lookahead;
-harvest eligibility is filtered before pagination and stable unit identity controls
-deduplication.
+receipt requests beyond the end clamp to the last page. Harvest eligibility is filtered
+and paginated as five encounters before their choices are expanded. Choices deduplicate
+by output item and retain the first stable eligible unit identity across mixed species.
+
+Craft replay now recovers the matching committed owner/action/request receipt before
+requiring the old preview token to survive a later preview refresh. Recipe details show
+the exact positive XP award from the progression authority, including clipping near the
+training ceiling, while preserving ceiling and zero-XP feedback.
 
 The journal exposes localized profession milestones, recipe state and learning cost,
 owned/required ingredients, outputs, tier/rarity/secondary policy, recovery, sale and
 XP ceilings. Durable results show consumed/granted items, instance IDs, exact rolls,
 progression and recovery, with a Craft Again path. Known PEV1 content and errors have
 parallel Russian, English and Spanish copy without internal IDs, JSON, policy tokens,
-or Russian fallback in English/Spanish.
+generic known-content descriptions, or Russian fallback in English/Spanish. Historical
+gather recovery uses the profession localization namespace that owns its status key.
 
 ## Executable acceptance evidence
 
 The shared production history no longer claims completion through enumerated journey
 IDs. It asserts named outcomes derived from real actions: the Aster–Elmor chapter,
 each profession chain, hunting/consumers, learning, conservation/receipts, gear,
-localization, and regional acquisition. It passed in 361.41 seconds and proved:
+localization, and regional acquisition. Its final narrow-rereview run passed in
+361.08 seconds and proved:
 
 - all 28 mandatory inputs acquired through real delivering actions;
 - all 63 recipes crafted from earned inputs;
@@ -58,13 +67,19 @@ localization, and regional acquisition. It passed in 361.41 seconds and proved:
   in ru/en/es.
 
 Migration and adversarial tests are explicitly fixture-labelled and are not presented
-as production acquisition. They cover the frozen baseline, rollback/restart, prepared
-settlement recovery, concurrent craft/sale/gift conservation, and localized missing,
-locked, and stale results.
+as production acquisition. They cover the frozen baseline, rollback/restart, preservation
+of a prepared settlement and its successful recovery through the existing settlement
+path after restart, concurrent craft/sale/gift conservation, and localized missing,
+locked, and stale results. Representative ru/en/es navigation is also exercised through
+the actual profession callback handler rather than renderer functions alone.
 
-At tested code commit `2c552f8`, the consolidated repair matrix passed 30 tests in
-7.90 seconds. The exact four short nodes from the original broad failures passed in
-1.03 seconds; the fifth node is the green 361.41-second shared production history.
+At tested code commit `e29e4a3`, the narrow repair matrix passed 23 tests in 6.44
+seconds, the affected legacy regression matrix passed 15 tests in 3.91 seconds, and
+the migration module passed 5 tests in 1.34 seconds. The four short original broad
+failures each passed through their own executable command; the fifth is the green
+361.08-second shared production history. Its first repair-time rerun exposed a flaky
+underfunded troll-combat reserve; the evidence fixture now fixes the combat seed and
+earns/crafts sufficient healing stock through production paths before the green rerun.
 Machine-readable commands, node IDs, original reasons, exact repairs, results, and
 tested commit are recorded in
 [`../evidence/professions_economy_v1.json`](../evidence/professions_economy_v1.json).
@@ -76,6 +91,12 @@ durable business rejections, receipt pagination, harvest pagination/deduplicatio
 profession UX/results, complete localization, executable acceptance/traceability,
 exact mastery regression assertions, PR232 documentation reconciliation, and frozen
 environmental row ordering.
+
+The subsequent narrow Astra findings are also resolved: craft replay after preview
+replacement; encounter-first harvest pagination with output-level deduplication;
+explicit known-content descriptions and historical gather localization; executable
+prepared-settlement recovery and callback localization evidence; oversized receipt-page
+clamping; exact positive/clipped recipe XP preview; and accurate current-state wording.
 
 PR232 Documentation Architecture & Consolidation V1 is merged at the frozen base.
 Its stale in-progress roadmap entry was removed. PR233 remains an unmerged Draft.
