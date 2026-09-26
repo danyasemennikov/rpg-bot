@@ -5,6 +5,24 @@
   "base_commit": "27347ece2b17108a1aed1f6eb01f2a395480e6c9",
   "branch": "codex/professions-economy-v1",
   "tested_code_commit": "2c552f8e8d5829b19b37fe50abffab2add2461c0",
+  "final_pr_head": {
+    "reference": "refs/heads/codex/professions-economy-v1",
+    "identity": "the commit containing this evidence update",
+    "previous_pushed_docs_head": "52a854eaec36afb7945f62fe8e24b09bad43de92",
+    "exact_sha_location": "Draft PR body and final handoff after push; a Git commit cannot embed its own object ID"
+  },
+  "post_tested_code_commits": [
+    {
+      "commit": "52a854eaec36afb7945f62fe8e24b09bad43de92",
+      "classification": "documentation-only",
+      "purpose": "PR232 reconciliation and Astra repair evidence/report"
+    },
+    {
+      "commit": "HEAD",
+      "classification": "documentation-only",
+      "purpose": "explicit final-head and post-tested-code provenance metadata"
+    }
+  ],
   "pull_request": "https://github.com/danyasemennikov/rpg-bot/pull/233",
   "environment": {"platform": "win32", "python": "3.12.10", "pytest": "9.1.1"},
   "workstream_commits": [

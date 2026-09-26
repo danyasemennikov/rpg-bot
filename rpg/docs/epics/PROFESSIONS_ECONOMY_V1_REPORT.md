@@ -5,6 +5,9 @@
 - Frozen base: `27347ece2b17108a1aed1f6eb01f2a395480e6c9` (merged PR #232)
 - Candidate branch: `codex/professions-economy-v1`
 - Tested code commit: `2c552f8e8d5829b19b37fe50abffab2add2461c0`
+- Post-tested-code commits: `52a854e` and the commit containing the final evidence
+  metadata update; both are documentation-only. The exact pushed final SHA is recorded
+  in the Draft PR body and final handoff because a Git commit cannot embed its own ID.
 - Draft PR: [#233](https://github.com/danyasemennikov/rpg-bot/pull/233)
 
 ## Delivered candidate
