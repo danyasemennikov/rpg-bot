@@ -220,11 +220,13 @@ def craft_recipe(telegram_id: int, recipe_id: str,
     """
     from game.action_receipts import ActionRejected, peaceful_player, consume_action, require_item_delivery
     from game.alpha_schema import ensure_crafting_professions
-    from game.economy_actions import find_receipt, intent_hash, store_receipt
+    from game.economy_actions import find_receipt, intent_hash, store_business_rejection, store_receipt
     from game.profession_progression import apply_profession_xp, crafting_xp_for_success
 
     conn = get_connection()
     recipe = None
+    authorized = False
+    receipt_hash = ''
     try:
         conn.execute('BEGIN IMMEDIATE')
         if action_token is not None:
@@ -233,6 +235,8 @@ def craft_recipe(telegram_id: int, recipe_id: str,
                 WHERE token=? AND player_id=? AND kind='craft' ''', (action_token, telegram_id)).fetchone()
             if token_row:
                 recipe_id = parse_recipe_intent(str(token_row['payload'])) or ''
+            else:
+                consume_action(conn, telegram_id, 'craft', action_token)
         recipe = get_recipe(recipe_id)
         if recipe is None or recipe_id not in LIVE_RECIPE_IDS:
             return CraftResult(status='recipe_not_found', recipe_id=recipe_id)
@@ -254,6 +258,7 @@ def craft_recipe(telegram_id: int, recipe_id: str,
             raw_payload = consume_action(conn, telegram_id, 'craft', action_token)
             if parse_recipe_intent(raw_payload) != recipe_id:
                 raise ActionRejected('stale_action')
+            authorized = True
         if validate_recipe_contract(recipe):
             return CraftResult(status='invalid_recipe_contract', recipe_id=recipe_id)
         player = peaceful_player(conn, telegram_id, service='craftsmen_guild')
@@ -341,8 +346,20 @@ def craft_recipe(telegram_id: int, recipe_id: str,
             instance_ids=tuple(grant.get('instance_ids', ())),
         )
     except ActionRejected as exc:
+        status = str(exc)
+        if authorized and request_id and recipe is not None and status != 'stale_action':
+            player = conn.execute('SELECT location_id, gold FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
+            store_business_rejection(
+                conn, player_id=telegram_id, request_id=request_id, action_kind='craft',
+                request_hash=receipt_hash, status=status,
+                location_id=player['location_id'] if player else None, recipe_id=recipe_id,
+                gold_after=player['gold'] if player else 0, source={'catalog_version': 1},
+            )
+            conn.commit()
+            return CraftResult(status=status, recipe_id=recipe_id,
+                               profession_key=recipe.profession_key)
         conn.rollback()
-        return CraftResult(status=str(exc), recipe_id=recipe_id)
+        return CraftResult(status=status, recipe_id=recipe_id)
     except Exception:
         conn.rollback()
         return CraftResult(

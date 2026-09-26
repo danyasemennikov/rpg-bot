@@ -9,6 +9,19 @@ def test_single_source_authority_and_probabilities():
         assert [(p.item_id, p.chance) for p in build_location_gather_source_profiles(location_id)] == list(rows)
 
 
+def test_frozen_baseline_rows_precede_pev1_additions():
+    assert ENVIRONMENTAL_SOURCES['frostspine_n6'] == (
+        ('frostpine_wood', .55), ('stone_chunk', .40), ('gem_common', .35))
+    assert ENVIRONMENTAL_SOURCES['sunscar_n2'] == (
+        ('dry_reagent', .35), ('stone_chunk', .30))
+    assert ENVIRONMENTAL_SOURCES['sunscar_n3'] == (
+        ('dry_reagent', .30), ('stone_chunk', .35))
+    assert ENVIRONMENTAL_SOURCES['sunscar_n11'] == (
+        ('dry_reagent', .30), ('stone_chunk', .30), ('sunscar_ore', .30))
+    assert ENVIRONMENTAL_SOURCES['mireveil_n9'] == (
+        ('marsh_mushroom', .35), ('toxic_herb', .25))
+
+
 def test_all_resources_have_source_and_consumer():
     environmental = {item for rows in ENVIRONMENTAL_SOURCES.values() for item, _ in rows}
     hunting = set(MANDATORY_RESOURCE_IDS) - environmental

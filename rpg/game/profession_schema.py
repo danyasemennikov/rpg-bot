@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import re
 
 from game.profession_recipes import GRANDFATHERED_RECIPE_IDS, STARTER_RECIPE_IDS
 
@@ -32,12 +33,110 @@ def _table_sql(conn, table: str) -> str | None:
     return str(row['sql']) if row else None
 
 
-def _is_seven_key_schema(sql: str) -> bool:
-    return all(f"'{key}'" in sql for key in CRAFTING_PROFESSION_KEYS)
+def _quoted_members(sql: str, column: str) -> tuple[str, ...] | None:
+    match = re.search(
+        rf"check\s*\(\s*{re.escape(column)}\s+in\s*\((.*?)\)\s*\)",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if match is None:
+        return None
+    body = match.group(1)
+    if re.sub(r"\s*'(?:[^']|'')*'\s*(?:,|$)", '', body).strip():
+        return None
+    return tuple(value.replace("''", "'") for value in re.findall(r"'((?:[^']|'')*)'", body))
 
 
-def _is_frozen_schema(sql: str) -> bool:
-    return all(f"'{key}'" in sql for key in ('alchemy', 'cooking', 'medium_armor')) and not _is_seven_key_schema(sql)
+def _normalized_check_expressions(sql: str) -> tuple[str, ...]:
+    expressions: list[str] = []
+    lower = sql.lower()
+    cursor = 0
+    while True:
+        start = lower.find('check', cursor)
+        if start < 0:
+            break
+        opening = lower.find('(', start + 5)
+        if opening < 0:
+            return ()
+        depth = 0
+        quote = False
+        closing = -1
+        for index in range(opening, len(sql)):
+            char = sql[index]
+            if char == "'":
+                quote = not quote
+            elif not quote and char == '(':
+                depth += 1
+            elif not quote and char == ')':
+                depth -= 1
+                if depth == 0:
+                    closing = index
+                    break
+        if closing < 0:
+            return ()
+        expressions.append(re.sub(r'\s+', '', lower[opening + 1:closing]))
+        cursor = closing + 1
+    return tuple(expressions)
+
+
+def _schema_kind(conn: sqlite3.Connection, table: str) -> str | None:
+    """Return the one accepted table shape, or fail closed with ``None``."""
+    sql = _table_sql(conn, table)
+    if sql is None:
+        return None
+
+    columns = [
+        (str(row['name']), str(row['type']).upper(), int(row['notnull']), row['dflt_value'], int(row['pk']))
+        for row in conn.execute(f'PRAGMA table_info("{table}")')
+    ]
+    expected_columns = [
+        ('player_id', 'INTEGER', 1, None, 1),
+        ('profession_key', 'TEXT', 1, None, 2),
+        ('level', 'INTEGER', 1, '1', 0),
+        ('exp', 'INTEGER', 1, '0', 0),
+    ]
+    if columns != expected_columns:
+        return None
+
+    foreign_keys = [
+        (str(row['table']), str(row['from']), str(row['to']), str(row['on_update']),
+         str(row['on_delete']), str(row['match']))
+        for row in conn.execute(f'PRAGMA foreign_key_list("{table}")')
+    ]
+    if foreign_keys != [('players', 'player_id', 'telegram_id', 'NO ACTION', 'NO ACTION', 'NONE')]:
+        return None
+
+    indexes = list(conn.execute(f'PRAGMA index_list("{table}")'))
+    if len(indexes) != 1 or str(indexes[0]['origin']) != 'pk' or int(indexes[0]['unique']) != 1:
+        return None
+    index_columns = [str(row['name']) for row in conn.execute(
+        f'PRAGMA index_info("{indexes[0]["name"]}")'
+    )]
+    if index_columns != ['player_id', 'profession_key']:
+        return None
+
+    triggers = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name=?", (table,)
+    ).fetchall()
+    if triggers:
+        return None
+    for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+        other = str(row['name'])
+        if other == table:
+            continue
+        if any(str(fk['table']) == table for fk in conn.execute(f'PRAGMA foreign_key_list("{other}")')):
+            return None
+
+    members = _quoted_members(sql, 'profession_key')
+    checks = _normalized_check_expressions(sql)
+    non_membership_checks = tuple(check for check in checks if not check.startswith('profession_keyin('))
+    if non_membership_checks != ('levelbetween1and20', 'exp>=0') or len(checks) != 3:
+        return None
+    if members == ('alchemy', 'cooking', 'medium_armor'):
+        return 'baseline'
+    if members == CRAFTING_PROFESSION_KEYS:
+        return 'migrated'
+    return None
 
 
 def ensure_profession_schema(conn: sqlite3.Connection) -> None:
@@ -50,13 +149,19 @@ def ensure_profession_schema(conn: sqlite3.Connection) -> None:
     sql = _table_sql(conn, 'player_crafting_professions')
     if sql is None:
         _create_crafting_table(conn, 'player_crafting_professions')
-    elif not _is_seven_key_schema(sql):
-        if marker or not _is_frozen_schema(sql):
+        schema_kind = 'migrated'
+    else:
+        schema_kind = _schema_kind(conn, 'player_crafting_professions')
+        if schema_kind is None:
             raise RuntimeError('unexpected player_crafting_professions schema')
+    if schema_kind == 'baseline':
+        if marker:
+            raise RuntimeError('migration marker exists with frozen player_crafting_professions schema')
+        if _table_sql(conn, 'player_crafting_professions_pev1_new') is not None:
+            raise RuntimeError('unexpected pre-existing player_crafting_professions_pev1_new table')
         before = [tuple(row) for row in conn.execute(
             'SELECT player_id, profession_key, level, exp FROM player_crafting_professions ORDER BY 1,2'
         )]
-        conn.execute('DROP TABLE IF EXISTS player_crafting_professions_pev1_new')
         _create_crafting_table(conn, 'player_crafting_professions_pev1_new')
         conn.execute('''INSERT INTO player_crafting_professions_pev1_new
             (player_id, profession_key, level, exp)
@@ -68,6 +173,8 @@ def ensure_profession_schema(conn: sqlite3.Connection) -> None:
             raise RuntimeError('crafting profession preservation check failed')
         conn.execute('DROP TABLE player_crafting_professions')
         conn.execute('ALTER TABLE player_crafting_professions_pev1_new RENAME TO player_crafting_professions')
+        if _schema_kind(conn, 'player_crafting_professions') != 'migrated':
+            raise RuntimeError('migrated player_crafting_professions schema validation failed')
 
     conn.execute('''CREATE TABLE IF NOT EXISTS player_recipe_knowledge (
         player_id INTEGER NOT NULL REFERENCES players(telegram_id),

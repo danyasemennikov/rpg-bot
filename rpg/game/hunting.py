@@ -61,12 +61,13 @@ def _choices(plan: dict) -> list[dict]:
     return choices
 
 
-def list_harvestable_victories(player_id: int, *, page: int = 0, page_size: int = 5) -> list[dict]:
+def harvestable_victory_page(player_id: int, *, page: int = 0,
+                             page_size: int = 5) -> tuple[list[dict], int, int]:
     conn = get_connection()
     try:
         player = conn.execute('SELECT location_id FROM players WHERE telegram_id=?', (player_id,)).fetchone()
         if not player or not conn.execute("SELECT 1 FROM sqlite_master WHERE name='pve_reward_settlements'").fetchone():
-            return []
+            return [], 0, 1
         rows = conn.execute('''SELECT e.encounter_id, e.location_id FROM pve_encounters e
             JOIN pve_reward_settlements s ON s.encounter_id=e.encounter_id
             LEFT JOIN pve_harvest_claims h ON h.encounter_id=e.encounter_id AND h.player_id=?
@@ -83,10 +84,16 @@ def list_harvestable_victories(player_id: int, *, page: int = 0, page_size: int 
                 continue
             output.extend({'encounter_id': encounter['encounter_id'], 'location_id': encounter['location_id'], **choice}
                           for choice in _choices(plan))
-        start = max(0, int(page)) * page_size
-        return output[start:start + page_size]
+        pages = max(1, (len(output) + page_size - 1) // page_size)
+        page = min(max(0, int(page)), pages - 1)
+        start = page * page_size
+        return output[start:start + page_size], page, pages
     finally:
         conn.close()
+
+
+def list_harvestable_victories(player_id: int, *, page: int = 0, page_size: int = 5) -> list[dict]:
+    return harvestable_victory_page(player_id, page=page, page_size=page_size)[0]
 
 
 def harvest_victory(player_id: int, encounter_id: str, *, unit_id: str | None = None,

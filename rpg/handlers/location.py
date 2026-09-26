@@ -1377,40 +1377,44 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
         return True
     player = dict(player)
 
-    if has_active_live_pvp_engagement(int(player['telegram_id'])):
-        await update.message.reply_text(t('location.pvp_context_block', lang))
-        return True
-    if bool(player.get('in_battle')):
-        await update.message.reply_text(t('location.in_battle_block', lang))
-        return True
-    if is_in_battle(update.effective_user.id):
-        await update.message.reply_text(t('location.in_battle', lang))
-        return True
-
-    profession = resolve_lower_gather_profession_button(raw_text, dict(player), lang)
-    if profession is None:
-        return False
-    if profession == '':
-        await update.message.reply_text(t('location.lower_gather_stale', lang))
-        return True
-
-    from game.gathering_runtime import gather_resource
     message_id = getattr(update.message, 'message_id', None)
     if message_id is None:
         await update.message.reply_text(t('chapter.stale_action', lang))
         return True
-    result = gather_resource(int(player['telegram_id']), profession,
-                             location_id=player['location_id'],
-                             request_id=f"gather:{getattr(update.message, 'chat_id', player['telegram_id'])}:{message_id}")
+    request_id = f"gather:{getattr(update.message, 'chat_id', player['telegram_id'])}:{message_id}"
+    from game.gathering_runtime import gather_resource, recover_gather_result
+    result = recover_gather_result(int(player['telegram_id']), request_id)
+
+    if result is None and has_active_live_pvp_engagement(int(player['telegram_id'])):
+        await update.message.reply_text(t('location.pvp_context_block', lang))
+        return True
+    if result is None and bool(player.get('in_battle')):
+        await update.message.reply_text(t('location.in_battle_block', lang))
+        return True
+    if result is None and is_in_battle(update.effective_user.id):
+        await update.message.reply_text(t('location.in_battle', lang))
+        return True
+
+    if result is None:
+        profession = resolve_lower_gather_profession_button(raw_text, dict(player), lang)
+        if profession is None:
+            return False
+        if profession == '':
+            await update.message.reply_text(t('location.lower_gather_stale', lang))
+            return True
+        result = gather_resource(int(player['telegram_id']), profession,
+                                 location_id=player['location_id'],
+                                 travel_revision=int(player.get('travel_revision', 0)),
+                                 request_id=request_id)
     status = result['status']
     if status == 'empty':
         await update.message.reply_text(t('location.gather_fail', lang))
         return True
     if status == 'denied':
-        access = result.get('access')
-        if access and not access.level_allowed:
+        details = result.get('details') or {}
+        if not details.get('level_allowed', True):
             await update.message.reply_text(t('location.gather_profession_level_required', lang,
-                current_level=access.player_profession_level, required_level=access.required_profession_level))
+                current_level=details.get('current_level', 1), required_level=details.get('required_level', 1)))
         else:
             await update.message.reply_text(t('location.gather_zone_denied', lang))
         return True

@@ -6,7 +6,7 @@ from database import get_connection, get_player, list_gathering_profession_state
 from game.action_receipts import issue_actions
 from game.alpha_schema import ensure_crafting_professions
 from game.crafting_runtime import LIVE_RECIPE_IDS, get_recipe, craft_recipe
-from game.hunting import list_harvestable_victories, harvest_victory
+from game.hunting import harvestable_victory_page, list_harvestable_victories, harvest_victory
 from game.i18n import t, get_item_name, get_location_name, get_mob_name
 from game.locations import get_location
 from game.quest_board import (
@@ -86,15 +86,22 @@ def build_workshop(player: dict):
     return build_overview(player)
 
 
-def build_harvest_menu(player: dict):
+def build_harvest_menu(player: dict, page: int = 0):
     import json
     lang = player.get('lang', 'ru')
-    victories = list_harvestable_victories(player['telegram_id'])
+    victories, page, pages = harvestable_victory_page(player['telegram_id'], page=page)
     payloads = [json.dumps({'encounter_id':v['encounter_id'],'unit_id':v['unit_id'],'item_id':v['item_id']},
                            sort_keys=True,separators=(',',':')) for v in victories]
     tokens = issue_actions(player['telegram_id'], 'harvest', payloads) if payloads else {}
     rows = [_button(t('chapter.harvest_button', lang, name=get_item_name(v['item_id'], lang)),
                     f"pe_a:{tokens[payload]}") for v, payload in zip(victories, payloads)]
+    nav = []
+    if page:
+        nav.append(InlineKeyboardButton('◀️', callback_data=f'alpha_harvest:{page-1}'))
+    if page + 1 < pages:
+        nav.append(InlineKeyboardButton('▶️', callback_data=f'alpha_harvest:{page+1}'))
+    if nav:
+        rows.append(nav)
     rows.append(_button(t('chapter.journal', lang), 'alpha_home'))
     return t('chapter.harvest_intro' if victories else 'chapter.harvest_empty', lang), InlineKeyboardMarkup(rows)
 
@@ -177,8 +184,12 @@ async def handle_chapter_buttons(update, context):
     elif data.startswith('alpha_craft_'):
         result = craft_recipe(player_id, '', action_token=data.removeprefix('alpha_craft_'))
         status, view = result.status, build_workshop
-    elif data == 'alpha_harvest':
-        view = build_harvest_menu
+    elif data == 'alpha_harvest' or data.startswith('alpha_harvest:'):
+        page = int(data.split(':', 1)[1]) if ':' in data else 0
+        text, keyboard = build_harvest_menu(dict(get_player(player_id)), page)
+        await query.answer()
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
     elif data.startswith('alpha_extract_'):
         # Legacy victory buttons only refresh the explicit, token-bound choice
         # preview. They never mutate from the encounter ID alone.

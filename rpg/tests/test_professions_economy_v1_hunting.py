@@ -1,7 +1,7 @@
 import json
 
 import database
-from game.hunting import harvest_victory, list_harvestable_victories
+from game.hunting import _choices, harvest_victory, harvestable_victory_page, list_harvestable_victories
 from game.pve_live import _ensure_pve_encounter_table
 from game.seed import seed_items
 
@@ -36,3 +36,31 @@ def test_applied_eligible_owner_harvests_once_and_defeated_owner_is_rejected(tmp
     assert harvest_victory(10,'win',unit_id='unit-1',item_id='boar_meat')['status']=='stale_action'
     _player(11); _settlement(11,'defeat',eligible=False)
     assert harvest_victory(11,'defeat',unit_id='unit-1',item_id='boar_meat')['status']=='harvest_owner_defeated'
+
+
+def test_harvest_filters_before_five_row_pagination(tmp_path, monkeypatch):
+    monkeypatch.setattr(database,'DB_PATH',str(tmp_path/'game.db')); database.init_db(); seed_items(); _ensure_pve_encounter_table()
+    _player(20)
+    for index in range(7):
+        _settlement(20, f'eligible-{index}', eligible=True)
+    for index in range(9):
+        _settlement(20, f'ineligible-{index}', eligible=False)
+    first, page, pages = harvestable_victory_page(20, page=0)
+    second, second_page, _ = harvestable_victory_page(20, page=1)
+    clamped, clamped_page, _ = harvestable_victory_page(20, page=999)
+    assert (len(first), page, pages) == (5, 0, 2)
+    assert (len(second), second_page) == (2, 1)
+    assert [row['encounter_id'] for row in clamped] == [row['encounter_id'] for row in second]
+    assert clamped_page == 1
+    assert not ({row['encounter_id'] for row in first} & {row['encounter_id'] for row in second})
+
+
+def test_duplicate_units_offer_each_item_once_from_first_stable_unit():
+    plan = {'enemy_units': [
+        {'unit_id': 'wolf-b', 'mob_id': 'forest_wolf'},
+        {'unit_id': 'wolf-a', 'mob_id': 'forest_wolf'},
+    ]}
+    choices = _choices(plan)
+    assert [(choice['unit_id'], choice['item_id']) for choice in choices] == [
+        ('wolf-a', 'wolf_pelt'), ('wolf-a', 'wolf_fang')
+    ]

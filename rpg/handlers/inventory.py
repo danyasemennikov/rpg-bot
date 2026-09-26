@@ -290,10 +290,12 @@ def _calc_safe_restore_amount(current_value: int, effective_cap: int, restore_va
 def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
     """Sell one owned material at a shop with its receipt and objective atomically."""
     from game.action_receipts import ActionRejected, peaceful_player, consume_action
-    from game.economy_actions import find_receipt, intent_hash, store_receipt
+    from game.economy_actions import find_receipt, intent_hash, store_business_rejection, store_receipt
     from game.seed import PEV1_CONSUMABLE_IDS
     from game.quest_board import register_contract_objective
     conn = get_connection()
+    authorized = False
+    receipt_hash = intent_hash('sell', telegram_id, {'payload': ''})
     try:
         conn.execute('BEGIN IMMEDIATE')
         token_row = conn.execute("SELECT payload FROM player_ui_actions WHERE token=? AND player_id=? AND kind='sell'",
@@ -303,8 +305,9 @@ def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
         recovered = find_receipt(conn, telegram_id, f'ui:{action_token}', 'sell', receipt_hash)
         if recovered is not None:
             conn.commit(); return {**recovered, 'recovered': True}
-        player = peaceful_player(conn, telegram_id, service='shop')
         payload = consume_action(conn, telegram_id, 'sell', action_token, payload=payload)
+        authorized = True
+        player = peaceful_player(conn, telegram_id, service='shop')
         inv_id, expected_quantity = (int(value) for value in payload.split(':'))
         row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inv_id, telegram_id)).fetchone()
         if not row or row['quantity'] != expected_quantity or expected_quantity <= 0:
@@ -327,8 +330,18 @@ def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
         conn.commit()
         return {**result, 'gold': item['sell_price']}
     except ActionRejected as exc:
+        status = str(exc)
+        if authorized and status != 'stale_action':
+            player = conn.execute('SELECT location_id, gold FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
+            result = store_business_rejection(
+                conn, player_id=telegram_id, request_id=f'ui:{action_token}', action_kind='sell',
+                request_hash=receipt_hash, status=status,
+                location_id=player['location_id'] if player else None,
+                gold_after=player['gold'] if player else 0, source={},
+            )
+            conn.commit(); return result
         conn.rollback()
-        return {'status': str(exc)}
+        return {'status': status}
     except Exception:
         conn.rollback()
         raise
@@ -359,8 +372,10 @@ def consume_owned_potion(conn, telegram_id: int, inventory_id: int, *, hp: int, 
 
 def use_inventory_consumable(telegram_id: int, action_token: str) -> dict:
     from game.action_receipts import ActionRejected, peaceful_player, consume_action
-    from game.economy_actions import find_receipt, intent_hash, store_receipt
+    from game.economy_actions import find_receipt, intent_hash, store_business_rejection, store_receipt
     conn = get_connection()
+    authorized = False
+    receipt_hash = intent_hash('consume', telegram_id, {'payload': ''})
     try:
         conn.execute('BEGIN IMMEDIATE')
         token_row = conn.execute("SELECT payload FROM player_ui_actions WHERE token=? AND player_id=? AND kind='use'",
@@ -370,8 +385,9 @@ def use_inventory_consumable(telegram_id: int, action_token: str) -> dict:
         recovered = find_receipt(conn, telegram_id, f'ui:{action_token}', 'consume', receipt_hash)
         if recovered is not None:
             conn.commit(); return {**recovered, **(recovered.get('details') or {}), 'recovered': True}
-        player = peaceful_player(conn, telegram_id)
         payload = consume_action(conn, telegram_id, 'use', action_token, payload=payload)
+        authorized = True
+        player = peaceful_player(conn, telegram_id)
         inv_id, expected_quantity = (int(value) for value in payload.split(':'))
         effective = get_player_effective_stats(telegram_id, player)
         result = consume_owned_potion(conn, telegram_id, inv_id, hp=player['hp'], mana=player['mana'],
@@ -385,8 +401,18 @@ def use_inventory_consumable(telegram_id: int, action_token: str) -> dict:
         conn.commit()
         return {**receipt, **result}
     except ActionRejected as exc:
+        status = str(exc)
+        if authorized and status != 'stale_action':
+            player = conn.execute('SELECT location_id, gold FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
+            result = store_business_rejection(
+                conn, player_id=telegram_id, request_id=f'ui:{action_token}', action_kind='consume',
+                request_hash=receipt_hash, status=status,
+                location_id=player['location_id'] if player else None,
+                gold_after=player['gold'] if player else 0, source={},
+            )
+            conn.commit(); return result
         conn.rollback()
-        return {'status': str(exc)}
+        return {'status': status}
     except Exception:
         conn.rollback()
         raise

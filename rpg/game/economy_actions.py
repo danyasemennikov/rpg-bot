@@ -67,7 +67,7 @@ def list_receipts(player_id: int, *, page: int = 0, page_size: int = 5) -> list[
         rows = conn.execute('''SELECT request_id, action_kind, result_json, created_at
             FROM economy_action_receipts WHERE player_id=?
             ORDER BY created_at DESC, request_id DESC LIMIT ? OFFSET ?''',
-            (player_id, page_size, page * page_size)).fetchall()
+            (player_id, page_size + 1, page * page_size)).fetchall()
         return [{**json.loads(row['result_json']), 'request_id': row['request_id'],
                  'created_at': row['created_at']} for row in rows]
     finally:
@@ -158,7 +158,9 @@ def gift_inventory_item(sender_id: int, action_token: str) -> dict:
         payload = json.loads(raw)
         sender = peaceful_player(conn, sender_id)
         recipient_id = int(payload['recipient_id'])
-        if recipient_id == sender_id or not conn.execute('SELECT 1 FROM players WHERE telegram_id=?', (recipient_id,)).fetchone():
+        if recipient_id == sender_id:
+            raise ActionRejected('self_gift')
+        if not conn.execute('SELECT 1 FROM players WHERE telegram_id=?', (recipient_id,)).fetchone():
             raise ActionRejected('stale_action')
         row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?',
                            (int(payload['inventory_id']), sender_id)).fetchone()

@@ -489,16 +489,18 @@ def apply_gear_intent(player_id: int, action: str, token: str, *, rng_roll: floa
 def exchange_enhancement_crystal(player_id: int, action_token: str) -> dict:
     """10 shards + 25 gold -> one crystal, after the Homecoming chapter."""
     from game.gear_instances import grant_item_to_player
-    from game.economy_actions import find_receipt, intent_hash, store_receipt
+    from game.economy_actions import find_receipt, intent_hash, store_business_rejection, store_receipt
     conn = get_connection()
+    authorized = False
     try:
         conn.execute('BEGIN IMMEDIATE')
         receipt_hash = intent_hash('crystal_exchange', player_id, {'shards':10,'gold':25})
         recovered = find_receipt(conn, player_id, f'ui:{action_token}', 'crystal_exchange', receipt_hash)
         if recovered is not None:
             conn.commit(); return {**recovered, 'recovered':True}
-        player = peaceful_player(conn, player_id, service='craftsmen_guild')
         consume_action(conn, player_id, 'gear_crystal_exchange', action_token, payload='10:25')
+        authorized = True
+        player = peaceful_player(conn, player_id, service='craftsmen_guild')
         unlocked = conn.execute('''SELECT 1 FROM player_contract_history
             WHERE player_id=? AND contract_key='chapter_homecoming' ''', (player_id,)).fetchone()
         if not unlocked:
@@ -523,8 +525,19 @@ def exchange_enhancement_crystal(player_id: int, action_token: str) -> dict:
         conn.commit()
         return receipt
     except ActionRejected as exc:
+        status = str(exc)
+        if authorized and status != 'stale_action':
+            player = conn.execute('SELECT location_id, gold FROM players WHERE telegram_id=?', (player_id,)).fetchone()
+            result = store_business_rejection(
+                conn, player_id=player_id, request_id=f'ui:{action_token}',
+                action_kind='crystal_exchange', request_hash=receipt_hash, status=status,
+                location_id=player['location_id'] if player else None,
+                gold_after=player['gold'] if player else 0,
+                source={'chapter': 'chapter_homecoming'},
+            )
+            conn.commit(); return result
         conn.rollback()
-        return {'status': str(exc)}
+        return {'status': status}
     except Exception:
         conn.rollback()
         raise

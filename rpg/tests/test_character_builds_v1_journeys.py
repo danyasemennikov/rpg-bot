@@ -27,7 +27,7 @@ from game.build_progression import build_migration_audit, migrate_character_buil
 from game.field_catalog import FIELD_ITEMS
 from game.gear_instances import get_equipped_gear_instances
 from game.pve_live import ensure_location_pve_spawn_instances, reset_solo_pve_runtime_store
-from game.pve_reward_settlement import get_settlement
+from game.pve_reward_settlement import _v1_mastery_awards, get_settlement
 from game.weapon_mastery import get_mastery
 from handlers.battle import build_battle_message, handle_battle_buttons
 from handlers.build import build_skills_command, handle_build_buttons
@@ -288,6 +288,34 @@ def test_defining_effect_helpers_reject_zero_wrong_lifetime_and_missing_conversi
     assert not _demonstrates_defining_skill_effect(zero_conversion, 'rupture_toxins')
 
 
+def test_mastery_award_policy_is_exact_for_profile_gap_units_and_cap():
+    battle = {'participant_states_v1': {'1': {
+        'family': 'sword_1h', 'manual_contribution': True, 'level': 10,
+    }}}
+
+    def award(units):
+        return _v1_mastery_awards(battle_state=battle, eligible=[1], units=units)[0]
+
+    normal = award([{'unit_id': 'n1', 'mob_level': 10, 'spawn_profile': 'normal'}])
+    elite = award([{'unit_id': 'e1', 'mob_level': 10, 'spawn_profile': 'elite'}])
+    low_normal = award([{'unit_id': 'n2', 'mob_level': 5, 'spawn_profile': 'normal'}])
+    low_elite = award([{'unit_id': 'e2', 'mob_level': 5, 'spawn_profile': 'elite'}])
+    pack = award([
+        {'unit_id': f'e{index}', 'mob_level': 10, 'spawn_profile': 'elite'}
+        for index in range(3, 6)
+    ])
+    capped = award([
+        {'unit_id': f'e{index}', 'mob_level': 10, 'spawn_profile': 'elite'}
+        for index in range(6, 11)
+    ])
+
+    assert normal['exp'] == 20 and normal['units'][0]['exp'] == 20
+    assert elite['exp'] == 40 and elite['units'][0]['exp'] == 40
+    assert low_normal['exp'] == 5 and low_elite['exp'] == 10
+    assert pack['exp'] == 80 and [row['exp'] for row in pack['units']] == [40, 40, 40]
+    assert capped['exp'] == 80
+
+
 class ProductionJourney:
     """Small fake Telegram transport around real command/callback handlers."""
 
@@ -520,7 +548,7 @@ class ProductionJourney:
         raise AssertionError((kind, skill_id, target_id, _callbacks(self.messages[-1][1])))
 
     async def fight(self, mob_id: str, *, opening: tuple[tuple[str, str | None], ...] = (),
-                    use_potions: bool = False) -> dict:
+                    use_potions: bool = False, potion_item_id: str | None = None) -> dict:
         spawn_id = self._accelerate_respawn(mob_id)
         await self.callback(f"fight_spawn_{spawn_id}", handle_combat_buttons)
         enter = next(
@@ -533,6 +561,8 @@ class ProductionJourney:
         battle_state = self.context.user_data["battle"]
         selected_actions: list[dict] = []
         battle_potions_used = 0
+        potion_items_used: list[str] = []
+        potion_results: list[dict] = []
 
         for turn in range(40):
             if "battle" not in self.context.user_data:
@@ -556,7 +586,11 @@ class ProductionJourney:
                         value for value in _callbacks(self.messages[-1][1])
                         if value.startswith('battle_use_potion_')
                     ]
-                    potion = potion_callbacks[0] if potion_callbacks else None
+                    potion = (
+                        potion_callbacks[0]
+                        if potion_callbacks and potion_item_id is None
+                        else None
+                    )
                     conn = get_connection()
                     try:
                         for value in potion_callbacks:
@@ -573,7 +607,14 @@ class ProductionJourney:
                                 ) or (
                                     int(bonuses.get('mana', 0)) > 0 and actor_mana < actor_max_mana
                                 )
-                                if has_effect:
+                                inventory_item = conn.execute(
+                                    'SELECT item_id FROM inventory WHERE id=?',
+                                    (int(values[1]),),
+                                ).fetchone() if len(values) >= 3 else None
+                                if has_effect and (
+                                    potion_item_id is None
+                                    or (inventory_item and inventory_item['item_id'] == potion_item_id)
+                                ):
                                     potion = value
                                     break
                     finally:
@@ -585,6 +626,12 @@ class ProductionJourney:
                         )
                         if potion_result.get('status') == 'used':
                             battle_potions_used += 1
+                            potion_items_used.append(str(potion_result['item_id']))
+                            potion_results.append({
+                                'item_id': str(potion_result['item_id']),
+                                'heal': int(potion_result['heal']),
+                                'mana': int(potion_result['mana']),
+                            })
                             battle_state = potion_result['battle']
                             self.context.user_data['battle'] = battle_state
                         player = dict(get_player(self.player_id))
@@ -627,7 +674,21 @@ class ProductionJourney:
             row for row in settlement["result"]["mastery_awards"]
             if row["player_id"] == self.player_id
         )
-        assert int(award["exp"]) > 0
+        planned_award = next(
+            row for row in settlement['plan']['mastery_awards']
+            if row['player_id'] == self.player_id
+        )
+        actor_level = int(
+            (battle_state.get('participant_states_v1') or {})[str(self.player_id)]['level']
+        )
+        expected_units = []
+        for unit in planned_award['units']:
+            base = 40 if unit['spawn_profile'] in {'elite', 'rare'} else 20
+            expected = max(5, base // 4) if actor_level - int(unit['mob_level']) >= 5 else base
+            expected_units.append(expected)
+            assert int(unit['exp']) == expected
+        assert int(planned_award['exp']) == min(80, sum(expected_units))
+        assert int(award['exp']) == int(planned_award['exp'])
         return {
             "encounter_id": encounter_id,
             "spawn_instance_id": spawn_id,
@@ -635,6 +696,8 @@ class ProductionJourney:
             "actions": selected_actions,
             "settlement": settlement,
             "battle_potions_used": battle_potions_used,
+            "potion_items_used": potion_items_used,
+            "potion_results": potion_results,
         }
 
     async def earn_mastery(self, family: str, target_level: int) -> list[dict]:
