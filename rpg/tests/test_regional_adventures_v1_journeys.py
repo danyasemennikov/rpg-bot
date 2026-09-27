@@ -43,7 +43,7 @@ from game.regional_opportunities import nearby
 from game.regional_schema import MIGRATION_VERSION, TABLES, ensure_regional_schema
 from game.seed import seed_items
 from game.pve_live import _ensure_pve_encounter_table, _ensure_world_spawn_table
-from handlers.chapter import build_journal
+from handlers.chapter import build_journal, journal_command
 from handlers.location import handle_combat_buttons, handle_location_buttons
 from handlers.regional import (
     _list_screen, build_detail, build_regional_home, handle_regional_buttons,
@@ -310,18 +310,36 @@ def _state_snapshot(player_id: int) -> dict:
 
 
 def test_j01_fresh_onboarding(rav1_earned_checkpoint, earned):
-    assert rav1_earned_checkpoint['sha256'] and len(rav1_earned_checkpoint['sha256']) == 64
-    assert 'chapter_homecoming' in get_contract_history(earned.player_id)
-    assert not get_project_state(earned.player_id, 'ww_tool_roll')
-    text, markup = build_journal(dict(get_player(earned.player_id)))
-    assert len([value for value in _callbacks(markup) if value.startswith('rv:v:')][:6]) == 6
-    for code in ('ww', 'fs', 'ar', 'ss', 'mv'):
-        assert f'rv:v:r:0:all' in _callbacks(markup)
-    assert 'main quest' in text.lower()
+    async def run():
+        assert rav1_earned_checkpoint['sha256'] and len(rav1_earned_checkpoint['sha256']) == 64
+        assert 'chapter_homecoming' in get_contract_history(earned.player_id)
+        assert not any(get_project_state(earned.player_id, key) for key in PROJECTS_BY_ID)
+        await earned.text('/journal', journal_command)
+        text, markup = earned.messages[-1]
+        assert len([value for value in _callbacks(markup) if value.startswith('rv:v:')][:6]) == 6
+        assert {'pe_o:0', 'inv_catalog', 'rv:v:r:0:all'} <= set(_callbacks(markup))
+        assert 'main quest' in text.lower()
+        await earned.callback('rv:v:r:0:all', handle_regional_buttons)
+        region_text, region_markup = earned.messages[-1]
+        assert len([value for value in _callbacks(region_markup) if value.startswith('rv:d:r:')]) == 5
+        assert all(_title in region_text for _title in ('Westwild', 'Frostspine', 'Ashen Ruins', 'Sunscar', 'Mireveil'))
+    asyncio.run(run())
 
 
 def test_j02_five_way_choice_and_actual_entry_surfaces(earned):
     async def run():
+        facts_before = set(list_facts(earned.player_id))
+        await earned.text('/journal', journal_command)
+        await earned.callback('rv:v:r:0:all', handle_regional_buttons)
+        for region_id in ('region_westwild','region_frostspine','region_ashen_ruins','region_sunscar','region_mireveil'):
+            await earned.callback(f'rv:d:r:{region_id}', handle_regional_buttons)
+            assert earned.messages[-1][0]
+        assert list_facts(earned.player_id) == facts_before
+        west_text, west_markup = build_detail(dict(get_player(earned.player_id)), 'r', 'region_westwild')
+        assert west_text and 'rv:d:e:greyfang' not in _callbacks(west_markup)
+        sun_text, sun_markup = build_detail(dict(get_player(earned.player_id)), 'r', 'region_sunscar')
+        assert sun_text and 'rv:d:p:ss_camp_bearings' not in _callbacks(sun_markup)
+
         for location in ('hub_westwild', 'frostspine_n5', 'ashen_n3a2', 'mireveil_n5a1', 'hub_sunscar'):
             await _move(earned, location)
             if 'quest_board' in get_location(location).get('services', []):
@@ -330,6 +348,12 @@ def test_j02_five_way_choice_and_actual_entry_surfaces(earned):
                 for c in list_hunt_contracts_for_location(location)}
         assert {'hunt_frostspine_white_wolves','hunt_ashen_zombie_clusters','hunt_sunscar_scorpions',
                 'hunt_sunscar_air_elementals'} <= keys
+        await _move(earned, 'capital_city')
+        wrong_token = issue_regional_action(earned.player_id, 'mv_medic_table', 'deliver')
+        wrong_query = await earned.callback(f'rv:a:{wrong_token}', handle_regional_buttons)
+        assert wrong_query.answer.await_args.kwargs.get('show_alert') is True
+        assert _receipt(earned.player_id, wrong_token) is None
+        assert 'mv_medic_table' not in list_claims(earned.player_id)
         assert len(_list_screen(dict(get_player(earned.player_id)), 'r', 0, 'all')[1].inline_keyboard) <= 10
     asyncio.run(run())
 
