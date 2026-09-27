@@ -658,14 +658,17 @@ WORLD_LOCATIONS['hub_frostspine'].update({
     'region_flavor_tags': ['mine_waystation', 'hunter_lodge'],
 })
 WORLD_LOCATIONS['hub_ashen_ruins'].update({
-    'services': ['craftsmen_guild'],
+    'services': ['inn', 'craftsmen_guild'],
 })
 WORLD_LOCATIONS['hub_sunscar'].update({
-    'services': ['craftsmen_guild'],
+    'services': ['inn', 'quest_board', 'craftsmen_guild'],
 })
 WORLD_LOCATIONS['hub_mireveil'].update({
-    'services': ['craftsmen_guild'],
+    'services': ['inn', 'craftsmen_guild'],
 })
+WORLD_LOCATIONS['frostspine_n5']['services'].append('quest_board')
+WORLD_LOCATIONS['ashen_n3a2']['services'].append('quest_board')
+WORLD_LOCATIONS['mireveil_n5a1']['services'].append('quest_board')
 
 WORLD_LOCATIONS['westwild_n4'].update({
     'description': 'Светлая лиственная роща на переходе от лугов к лесу. Здесь уже встречаются волки и первые пауки.',
@@ -695,6 +698,14 @@ WORLD_LOCATIONS['old_mine_entrance'].update({
         ('coal', 0.30, '🪨 Уголь'),
     ],
 })
+
+# RAV1 named targets are additional canonical slots, not replacements.
+WORLD_LOCATIONS['westwild_n3']['world_special_spawns'] = [
+    {'mob_id': 'forest_wolf', 'key': 'greyfang', 'spawn_profile': 'normal', 'count': 1},
+]
+WORLD_LOCATIONS['sunscar_n8a2']['world_special_spawns'] = [
+    {'mob_id': 'air_elemental', 'key': 'salt_ridge_drifter', 'spawn_profile': 'elite', 'count': 1},
+]
 
 
 # Open World Gameplay Rollout Phase 1: baseline route-aware PvE and gathering.

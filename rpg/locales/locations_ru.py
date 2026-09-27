@@ -77,4 +77,6 @@ LOCATION_NAMES = {
 
 SPECIAL_SPAWN_NAMES = {
     'amber_colossus': '🟠 Янтарный колосс',
+    'greyfang': 'Серый Клык',
+    'salt_ridge_drifter': 'Скиталец соляной гряды',
 }

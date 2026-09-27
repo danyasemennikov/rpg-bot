@@ -31,6 +31,7 @@ from handlers.inventory import inventory_command, handle_inventory_buttons, hand
 from handlers.settings import settings_command, handle_settings_buttons
 from handlers.chapter import journal_command, handle_chapter_buttons
 from handlers.professions import handle_profession_buttons
+from handlers.regional import handle_regional_buttons
 from handlers.build import (
     build_attributes_command,
     build_command,
@@ -120,6 +121,13 @@ def initialize_runtime():
     from game.pvp_live import recover_terminal_pvp_settlements
     _ensure_pve_encounter_table()
     _ensure_world_spawn_table()
+    from database import get_connection
+    from game.regional_schema import ensure_regional_schema
+    regional_conn = get_connection()
+    try:
+        ensure_regional_schema(regional_conn)
+    finally:
+        regional_conn.close()
     review_ambiguous_legacy_victories()
     recover_prepared_settlements(limit=20)
     recover_terminal_pvp_settlements(limit=100)
@@ -172,6 +180,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
     app.add_handler(CallbackQueryHandler(handle_chapter_buttons, pattern='^alpha_'))
     app.add_handler(CallbackQueryHandler(handle_profession_buttons, pattern='^pe_'))
+    app.add_handler(CallbackQueryHandler(handle_regional_buttons, pattern='^rv:'))
 
     app.add_handler(MessageHandler(filters.COMMAND & filters.Regex(UNDERSCORE_NAV_COMMAND_PATTERN), handle_underscore_navigation_command))
 

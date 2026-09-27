@@ -77,4 +77,6 @@ LOCATION_NAMES = {
 
 SPECIAL_SPAWN_NAMES = {
     'amber_colossus': '🟠 Coloso Ámbar',
+    'greyfang': 'Colmillo Gris',
+    'salt_ridge_drifter': 'Errante de la cresta salina',
 }
