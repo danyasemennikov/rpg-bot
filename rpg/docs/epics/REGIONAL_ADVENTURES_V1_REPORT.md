@@ -97,9 +97,18 @@ No project, fact, claim, reward, material, level, combat outcome, or receipt was
 into the checkpoint.
 
 The affected existing crafting, progression, settlement, open-world PvE, Journal, and
-location regression matrix passed 156 tests except for one deliberately stale keyboard
-expectation; the exact corrected node then passed. The final broad suite result and
-log reference are populated in the machine evidence after the single candidate run.
+location regression matrix passed 156 tests except for one stale keyboard expectation;
+the exact corrected node then passed.
+
+The single final broad run at candidate snapshot `4cfce1d` collected 1,839 tests and
+276 subtests: 1,836 tests passed and three stale pre-RAV expectations failed in
+1247.09 seconds. Two old Craftsmen Guild assertions forbade inns at the three late
+hubs (and a board at Sunscar), while the frozen contract requires those services. One
+location-token assertion required an over-64-byte spawn callback, while RAV1 requires
+the short `fight_special_<key>` callback. Only those expectations changed; all three
+exact nodes passed in 1.07 seconds at `94f6fed`. No production or shared-infrastructure
+code changed, so the contract's broad-run budget did not require a second broad run.
+The retained log and exact node IDs are in the machine evidence.
 
 See [regional_adventures_v1.json](../evidence/regional_adventures_v1.json) for commands,
 case IDs, provenance, source identifiers, assertions, and result counts. Fixture-built

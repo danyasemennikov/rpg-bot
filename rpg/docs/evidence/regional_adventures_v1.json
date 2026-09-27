@@ -137,11 +137,50 @@
   ],
   "broad_suite": {
     "command": "python -m pytest -q",
-    "status": "pending final candidate run",
-    "result": null,
-    "exit_status": null,
-    "duration_seconds": null,
-    "log_reference": "external workspace artifact work/rav1_broad.log"
+    "environment_override": "RAV1_EARNED_CHECKPOINT pointed to the hash-verified legal history above",
+    "tested_candidate_snapshot": "4cfce1dd60d8f993c0051b1cf3700de9d0c8ef09",
+    "status": "completed; three stale expectations classified and resolved by exact reruns",
+    "result": "1836 passed, 3 failed, 276 subtests passed in 1247.09s",
+    "collected_tests": 1839,
+    "passed_tests": 1836,
+    "failed_tests": 3,
+    "passed_subtests": 276,
+    "exit_status": 1,
+    "duration_seconds": 1247.09,
+    "log_reference": "external workspace artifact work/rav1_broad.log",
+    "rerun_policy": "No second broad run: repairs changed assertions only and did not alter production code, database startup/transactions, common progression, combat settlement, inventory, i18n routing, or handler routing.",
+    "failures": [
+      {
+        "node_id": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hub_lower_menu_shows_guild_but_not_other_services",
+        "classification": "stale pre-RAV test expectation",
+        "reason": "The old assertion forbade inns and all boards at late hubs; RAV1 requires inns at Ashen, Sunscar and Mireveil plus the existing/new Sunscar board.",
+        "repair": "Rename the test and assert the exact frozen service additions while continuing to forbid shops.",
+        "focused_rerun_node": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hub_lower_menu_shows_guild_and_rav1_inn_but_not_shop",
+        "result": "passed"
+      },
+      {
+        "node_id": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hubs_are_guild_only_services",
+        "classification": "stale pre-RAV test expectation",
+        "reason": "The old assertion forbade the three inns and Sunscar board explicitly added by the frozen contract.",
+        "repair": "Assert inns at all three hubs, a board only at Sunscar, and no shop.",
+        "focused_rerun_node": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hubs_keep_guild_without_shop_and_add_rav1_inns",
+        "result": "passed"
+      },
+      {
+        "node_id": "tests/test_location_action_tokens.py::LocationActionTokenTests::test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable",
+        "classification": "stale pre-RAV test expectation",
+        "reason": "The old assertion required a full spawn-instance callback longer than Telegram's 64-byte budget; RAV1 resolves the same canonical special by stable key.",
+        "repair": "Expect fight_special_amber_colossus and assert every callback is at most 64 UTF-8 bytes.",
+        "focused_rerun_node": "tests/test_location_action_tokens.py::LocationActionTokenTests::test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable",
+        "result": "passed"
+      }
+    ],
+    "exact_rerun": {
+      "command": "python -m pytest -q tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hubs_keep_guild_without_shop_and_add_rav1_inns tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hub_lower_menu_shows_guild_and_rav1_inn_but_not_shop tests/test_location_action_tokens.py::LocationActionTokenTests::test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable",
+      "result": "3 passed in 1.07s",
+      "exit_status": 0,
+      "tested_commit": "94f6fed0e0d157fc3abf6a75862054aae51f092e"
+    }
   },
   "review": {
     "independent_candidate_review": "pending",
