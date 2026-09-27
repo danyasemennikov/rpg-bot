@@ -15,7 +15,7 @@ from game.regional_adventures import (
     issue_regional_action, list_claims, list_facts, list_pins,
 )
 from game.regional_catalog import (
-    FACTS_BY_ID, INTERACTIONS_BY_ID, PROJECTS_BY_ID, REGIONAL_SUMMARIES,
+    FACTS_BY_ID, INTERACTIONS, INTERACTIONS_BY_ID, PROJECTS_BY_ID, REGIONAL_SUMMARIES,
     REGIONAL_SUMMARIES_BY_CODE, SPECIAL_TARGETS, STANDING_DELIVERIES,
 )
 from game.regional_opportunities import (
@@ -285,15 +285,60 @@ def _work_detail(player: dict, content_id: str) -> tuple[str, list[list[InlineKe
 
 
 def _region_detail(player: dict, content_id: str) -> tuple[str, list[list[InlineKeyboardButton]]]:
-    lang = player.get("lang", "ru")
+    lang, player_id = player.get("lang", "ru"), int(player["telegram_id"])
     summary = next(row for row in REGIONAL_SUMMARIES if row["content_id"] == content_id)
     lines = [f"<b>{t(f'rav1.regions.{content_id}.title', lang)}</b>",
              t(f"rav1.regions.{content_id}.summary", lang), "",
              t(f"rav1.regions.{content_id}.risk", lang)]
-    rows = []
+    rows: list[list[InlineKeyboardButton]] = []
     for project in PROJECTS_BY_ID.values():
         if project.region_id == summary["region_id"] and project.public:
             rows.append(_button(_title("project", project.project_id, lang), f"rv:d:p:{project.project_id}"))
+
+    # Public work is always readable.  Private discoveries become region links
+    # only after this character has actually recorded the corresponding fact.
+    facts = list_facts(player_id)
+    for definition in INTERACTIONS:
+        if definition.region_id != summary["region_id"]:
+            continue
+        if definition.kind in {"request", "standing"} and definition.public:
+            kind = "w" if definition.kind == "standing" else "i"
+            rows.append(_button(_title(definition.kind, definition.content_id, lang),
+                                f"rv:d:{kind}:{definition.content_id}"))
+        elif definition.kind in {"discovery", "inspect", "cache"}:
+            revealed = definition.content_id in facts or (
+                definition.requires_fact_id and definition.requires_fact_id in facts
+            )
+            if revealed:
+                rows.append(_button(_title(definition.kind, definition.content_id, lang),
+                                    f"rv:d:i:{definition.content_id}"))
+
+    special_fact = {"greyfang": "ww_greyfang_tracks", "salt_ridge_drifter": "ss_pillar_shadow"}
+    for target in SPECIAL_TARGETS:
+        location = get_location(target["location_id"]) or {}
+        if location.get("route_id") == summary["region_id"] and special_fact[target["content_id"]] in facts:
+            rows.append(_button(_title("encounter", target["content_id"], lang),
+                                f"rv:d:e:{target['content_id']}"))
+
+    from game.enemy_profiles import MIXED_ENCOUNTERS
+    for recipe_id, recipe in MIXED_ENCOUNTERS.items():
+        location = get_location(recipe["location_id"]) or {}
+        if location.get("route_id") == summary["region_id"]:
+            rows.append(_button(_title("encounter", recipe_id, lang), f"rv:d:e:{recipe_id}"))
+
+    service_additions = {
+        "route_westwild": (("quest_board", "hub_westwild"),),
+        "route_frostspine": (("quest_board", "frostspine_n5"),),
+        "route_ashen_ruins": (("inn", "hub_ashen_ruins"), ("quest_board", "ashen_n3a2")),
+        "route_sunscar": (("inn", "hub_sunscar"), ("quest_board", "hub_sunscar")),
+        "route_mireveil": (("inn", "hub_mireveil"), ("quest_board", "mireveil_n5a1")),
+    }
+    additions = service_additions.get(summary["region_id"], ())
+    if additions:
+        lines.append("")
+        for service, location_id in additions:
+            label = t(f"rav1.services.{ 'board' if service == 'quest_board' else 'inn' }", lang)
+            lines.append(f"• {label} — {get_location_name(location_id, lang)}")
     return "\n".join(lines), rows
 
 

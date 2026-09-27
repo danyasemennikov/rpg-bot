@@ -6,6 +6,7 @@ from game.pve_live import (
     SPAWN_STATE_ACTIVE, SPAWN_STATE_RESPAWNING,
     ensure_location_pve_spawn_instances,
 )
+from game.regional_adventures import execute_regional_action, issue_regional_action
 from game.regional_opportunities import nearby, page
 from handlers.regional import _list_screen, build_detail, build_regional_home, handle_regional_buttons
 
@@ -82,6 +83,24 @@ def test_existing_mixed_and_named_targets_use_real_labels_and_short_actions():
         assert content_id not in text
         action = next(value for value in _callbacks(markup) if value.startswith(expected_prefix))
         assert len(action.encode('utf-8')) <= 64
+
+
+def test_region_detail_surfaces_public_work_services_and_revealed_sources():
+    player = _player('westwild_n3')
+    token = issue_regional_action(1, 'ww_greyfang_tracks', 'inspect')
+    assert execute_regional_action(1, token)['status'] == 'inspected'
+    text, markup = build_detail(player, 'r', 'region_westwild')
+    callbacks = _callbacks(markup)
+    assert 'rv:d:p:ww_tool_roll' in callbacks
+    assert 'rv:d:i:ww_woodcutter_provisions' in callbacks
+    assert 'rv:d:w:ww_ration_order' in callbacks
+    assert 'rv:d:i:ww_greyfang_tracks' in callbacks
+    assert 'rv:d:e:greyfang' in callbacks
+    assert 'contract board' in text.lower()
+
+    text, markup = build_detail(player, 'r', 'region_frostspine')
+    assert 'rv:d:e:rav1_frostspine_n6_pass' in _callbacks(markup)
+    assert 'paid inn' not in text.lower()
 
 
 def test_all_locale_surfaces_stay_within_message_budgets_and_hide_location_ids():
