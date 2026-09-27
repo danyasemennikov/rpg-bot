@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract": "RAV1-1",
-  "status": "draft_pr_candidate",
+  "status": "draft_pr_candidate_incomplete_acceptance",
   "base_commit": "ebd8f73ade53fcadb89942b703a947782276ea1c",
   "branch": "codex/regional-adventures-opportunities-v1",
   "tested_code_commit": "4f38f20",
@@ -193,7 +193,27 @@
   "review": {
     "independent_candidate_review": "pending",
     "self_review": "scope, frozen counts, declarations, migration boundaries, callbacks and stale baseline documentation inspected",
-    "frozen_contract_contradiction": null
+    "frozen_contract_contradiction": null,
+    "automated_acceptance": "not complete",
+    "mandatory_journey_case_gaps": [
+      "J03 additional earned physical and magic solo-build Storehouse/Ferry cases",
+      "J04 separate full Westwild and Mireveil local-session traces",
+      "J05 explicit unpin/re-pin plus runtime/database restart identity checks",
+      "J07 zero-reward snapshots and Camp final cache exactly-once assertion",
+      "J08 low-profession Names, Camp and Medic branches from a low-profession earned checkpoint",
+      "J09 pre-acceptance craft, premature hand-in and gifted-potion case",
+      "J10 another earned character's permitted gift plus complete replay assertions",
+      "J11 ordinary-wolf and Greyfang variants with report, hunt claim and settlement restart/replay",
+      "J12 two earned players: both alive, one defeated and one fled, including owner-only harvest",
+      "J13 pre-notice Greyfang, post-accept respawn/claim/replay and no-retro-bounty assertions",
+      "J14 forming expiry, completed-battle respawn and Greyfang contention",
+      "J15 fresh menu, restart, equal rewards/access and other-player/world isolation",
+      "J16 real prepared settlement preservation and single recovery after migration",
+      "J17 delivery, choice, cache, T2 and standing failure/response-loss/double-click/stale/race matrix",
+      "J18 all finite claims in two valid regional orders with exact 440 XP/201 gold/item totals",
+      "J19 full ru/en/es handler actions and required error/result cases",
+      "J20 reopen every finite record and resume another unfinished project after restart"
+    ]
   },
   "human_validation": {
     "status": "NOT YET RUN",

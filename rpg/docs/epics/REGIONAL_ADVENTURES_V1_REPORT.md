@@ -96,6 +96,20 @@ seconds. Its SHA-256 is
 No project, fact, claim, reward, material, level, combat outcome, or receipt was edited
 into the checkpoint.
 
+A final contract-to-test audit distinguishes green named definitions from complete
+section-W case coverage. J01/J02 were strengthened through actual Journal/region
+handlers and passed their exact rerun, but several mandatory subcases are not yet
+directly executed by the J01–J20 module: the additional physical/magic solo builds;
+the full Westwild/Mireveil stay-local traces; low-profession J08 branches; gifted-goods
+cases; both J11 hunt variants and claim/restart checks; the two-player alive,
+defeated, and fled J12 cases; full named-source lifecycle; forming-expiry/respawn
+contention; restart/world-isolation choice checks; prepared-settlement migration; the
+complete J17 atomic matrix; both all-finite J18 orders; the full per-locale J19 action
+and error matrix; and reopening every finite record in J20. Existing focused and broad
+tests cover many underlying authorities, but the frozen contract requires these cases
+inside earned production journeys. Therefore the 25 green runs are implementation
+evidence, not a claim that automated acceptance is complete.
+
 The affected existing crafting, progression, settlement, open-world PvE, Journal, and
 location regression matrix passed 156 tests except for one stale keyboard expectation;
 the exact corrected node then passed.
