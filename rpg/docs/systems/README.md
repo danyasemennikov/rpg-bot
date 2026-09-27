@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation map for current implementation ownership
-- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
+- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
 
 This map points to current code and the documents that explain it. Code remains the
 exact implementation authority. Foundations express intent; Epic and pass reports
@@ -47,8 +47,8 @@ record delivery history.
 ## Professions and economy
 
 - Design intent: [loot/crafting/progression foundation](../foundation/LOOT_CRAFT_PROGRESSION_FOUNDATION.md)
-- Active frozen contract: [Professions & Economy V1](../epics/PROFESSIONS_ECONOMY_V1_SPEC.md)
-- Draft candidate report: [PEV1-1 delivery record](../epics/PROFESSIONS_ECONOMY_V1_REPORT.md)
+- Merged frozen contract: [Professions & Economy V1](../epics/PROFESSIONS_ECONOMY_V1_SPEC.md)
+- Merged delivery report: [PEV1-1 delivery record](../epics/PROFESSIONS_ECONOMY_V1_REPORT.md)
 - Playable subset delivery: [PR229 vertical slice](../epics/PLAYABLE_ALPHA_VERTICAL_SLICE_V1.md)
 - Current owners: `game/gathering_foundation.py`, `game/gathering_runtime.py`,
   `game/gathering_progression.py`, `game/resource_handbook.py`, `game/hunting.py`,
@@ -56,8 +56,33 @@ record delivery history.
   `game/profession_resources.py`, `game/profession_recipes.py`,
   `game/profession_schema.py`, `game/recipe_knowledge.py`,
   `game/economy_actions.py`, `handlers/professions.py`, and `handlers/location.py`
-- The merged baseline remains the bounded PR229 subset. The active PEV1-1 candidate
-  expands this boundary but is not merged or deployed.
+- PR233 expands the merged baseline to the frozen PEV1-1 boundary. Merge does not
+  establish deployment or live operation.
+
+## Regional adventures and opportunities
+
+- Product authority: [RAV1-1 frozen contract](../epics/REGIONAL_ADVENTURES_V1_SPEC.md)
+- Observed candidate: [RAV1-1 implementation report](../epics/REGIONAL_ADVENTURES_V1_REPORT.md)
+- Evidence authority: [automated](../evidence/regional_adventures_v1.json) and
+  [human plan/status](../evidence/regional_adventures_v1_human.md)
+- Data/read layer: `game/regional_catalog.py` is the exact read-only 34-record
+  catalogue; `game/regional_opportunities.py` aggregates views without mutating
+  progress, facts, claims, inventory, travel, or encounter state.
+- State/mutation layer: `game/regional_schema.py` owns the exact five-table migration;
+  `game/regional_adventures.py` owns token-bound project, fact, claim, delivery, pin,
+  and receipt transactions.
+- Integration layer: `game/regional_objectives.py` observes committed personal craft
+  receipts and captures immutable combat bindings at roster lock. Combat progress is
+  applied only inside authoritative settlement T2; hunts, settlement, professions,
+  inventory, travel, equipment, and character XP remain owned by their existing
+  systems.
+- Presentation layer: `handlers/regional.py`, `handlers/chapter.py`, and
+  `handlers/location.py` expose the post-Chapter-I Journal and nearby surfaces through
+  ru/en/es localization. UI previews never grant progress.
+- Transaction boundaries: project/fact/finite/repeat mutations are single SQLite
+  transactions with request receipts; craft evidence joins the existing craft commit;
+  combat evidence is immutable at roster lock and joins settlement T2. No new event
+  bus, universal quest engine, or parallel reward authority is introduced.
 
 ## PvE and playable chapter
 

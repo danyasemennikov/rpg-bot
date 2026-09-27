@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for forward priorities; not an implementation contract
-- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
+- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
 
 Statuses used here:
 
@@ -15,33 +15,32 @@ in this roadmap.
 
 ## CURRENT
 
-### Professions & Economy V1
+### Regional Adventures & Opportunities V1
 
-- Status: **in progress** under frozen contract PEV1-1 Stage 3.
-- Outcome: five gathering and seven crafting professions, 63 active recipes,
-  28 mandatory materials, permanent knowledge, durable economic receipts, and
-  complete ru/en/es professions journeys.
-- Candidate record: [epics/PROFESSIONS_ECONOMY_V1_REPORT.md](epics/PROFESSIONS_ECONOMY_V1_REPORT.md).
-- Completion: the single Draft PR has green focused and production-journey evidence.
-  One broad suite was recorded before the repair pass; its five failures have green
-  exact focused reruns, and a second broad run is not automatically required by the
-  frozen test budget. Merge remains a separate user decision.
+- Status: **in progress** under frozen contract RAV1-1.
+- Outcome: independent post-Chapter-I regional opportunities: seven local projects,
+  bounded findings and finite claims, three repeatable local jobs, and surfaced
+  existing hunt/profession/equipment choices without a prescribed region order.
+- Candidate record: [epics/REGIONAL_ADVENTURES_V1_REPORT.md](epics/REGIONAL_ADVENTURES_V1_REPORT.md).
+- Excludes Chapter II, a global campaign/finale, regional completion gates,
+  reputation, dailies, teleport activation, expeditions, and new economy/combat
+  authority. Merge remains a separate owner decision.
 
 ## NEXT
 
-### Professions / Economy follow-up assessment
+### Regional candidate acceptance and human validation
 
-- Status: **proposed** only after PEV1-1 acceptance.
-- Outcome: assess operational behavior, receipt retention, balance, and explicitly
-  deferred economy expansion without reopening the frozen V1 contract.
+- Status: **accepted process**, separate from implementation.
+- Outcome: independent review of the exact candidate, then the three-session human
+  plan in the RAV1 evidence. Human validation does not create a Chapter II promise.
 
 ## LATER
 
-### Regional and content expansion
+### Professions / economy follow-up assessment
 
 - Status: **proposed**.
-- Prerequisite: explicit content scope and compatibility with the current Aster–Elmor
-  slice, world topology, progression, and economy.
+- Prerequisite: evaluate PR233 operational behavior and explicitly deferred economy
+  expansion without reopening its frozen V1 contract.
 
 ### Structured PvE / expeditions
 
