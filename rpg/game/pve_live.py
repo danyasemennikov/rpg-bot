@@ -580,6 +580,104 @@ def list_location_available_mixed_encounters(*, location_id: str) -> list[dict]:
     return result
 
 
+def list_location_mixed_encounter_availability(*, location_id: str) -> list[dict]:
+    """Describe every local mixed recipe without reserving any source.
+
+    This is a read surface for Journal/location rendering.  It deliberately
+    reports a recipe as one unit: callers never infer that a partial roster is
+    reservable.
+    """
+    from game.enemy_profiles import MIXED_ENCOUNTERS
+
+    recipes = [
+        (recipe_id, recipe)
+        for recipe_id, recipe in MIXED_ENCOUNTERS.items()
+        if str(recipe.get('location_id') or '') == str(location_id)
+    ]
+    if not recipes:
+        return []
+    ensure_location_pve_spawn_instances(location_id=location_id)
+    conn = get_connection()
+    rows = conn.execute(
+        '''
+        SELECT mob_id, state, COUNT(*) AS amount,
+               MAX(CASE WHEN respawn_available_at IS NULL THEN 0 ELSE
+                   MAX(0, CAST((julianday(respawn_available_at)-julianday('now'))*86400 AS INTEGER))
+               END) AS respawn_seconds
+        FROM pve_spawn_instances
+        WHERE location_id=?
+          AND spawn_profile=?
+          AND COALESCE(TRIM(special_spawn_key), '')=''
+          AND COALESCE(TRIM(special_spawn_name), '')=''
+        GROUP BY mob_id, state
+        ''',
+        (location_id, DEFAULT_WORLD_SPAWN_PROFILE),
+    ).fetchall()
+    conn.close()
+    by_mob: dict[str, dict[str, tuple[int, int]]] = {}
+    for row in rows:
+        by_mob.setdefault(str(row['mob_id']), {})[str(row['state'])] = (
+            int(row['amount']), int(row['respawn_seconds'] or 0),
+        )
+    result = []
+    for recipe_id, recipe in recipes:
+        required = Counter(str(mob_id) for mob_id, _formation in recipe.get('units', ()))
+        idle = all(by_mob.get(mob_id, {}).get(SPAWN_STATE_IDLE, (0, 0))[0] >= count
+                   for mob_id, count in required.items())
+        busy = any(
+            sum(by_mob.get(mob_id, {}).get(state, (0, 0))[0]
+                for state in (SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE)) > 0
+            for mob_id in required
+        )
+        waits = [
+            by_mob.get(mob_id, {}).get(SPAWN_STATE_RESPAWNING, (0, 0))[1]
+            for mob_id in required
+            if by_mob.get(mob_id, {}).get(SPAWN_STATE_RESPAWNING, (0, 0))[0]
+        ]
+        availability = 'available' if idle else 'busy' if busy else 'respawning' if waits else 'unavailable'
+        result.append({
+            'recipe_id': recipe_id,
+            **recipe,
+            'availability': availability,
+            'respawn_seconds': max(waits, default=0),
+        })
+    return result
+
+
+def list_location_special_target_availability(*, location_id: str) -> list[dict]:
+    """Read the canonical shared state of RAV1's two special target slots."""
+    from game.regional_catalog import SPECIAL_TARGETS
+
+    targets = [row for row in SPECIAL_TARGETS if row['location_id'] == str(location_id)]
+    if not targets:
+        return []
+    ensure_location_pve_spawn_instances(location_id=location_id)
+    conn = get_connection()
+    result = []
+    for target in targets:
+        row = conn.execute(
+            '''SELECT state, linked_encounter_id,
+                      CASE WHEN respawn_available_at IS NULL THEN 0 ELSE
+                        MAX(0, CAST((julianday(respawn_available_at)-julianday('now'))*86400 AS INTEGER))
+                      END AS respawn_seconds
+               FROM pve_spawn_instances
+               WHERE location_id=? AND mob_id=? AND special_spawn_key=?
+               ORDER BY spawn_instance_id LIMIT 1''',
+            (location_id, target['mob_id'], target['key']),
+        ).fetchone()
+        state = str(row['state']) if row else ''
+        availability = (
+            'available' if state == SPAWN_STATE_IDLE
+            else 'busy' if state in {SPAWN_STATE_FORMING, SPAWN_STATE_ACTIVE}
+            else 'respawning' if state == SPAWN_STATE_RESPAWNING
+            else 'unavailable'
+        )
+        result.append({**target, 'availability': availability,
+                       'respawn_seconds': int(row['respawn_seconds'] or 0) if row else 0})
+    conn.close()
+    return result
+
+
 def resolve_available_spawn_for_group_click(*, location_id: str, clicked_spawn_instance_id: str) -> dict | None:
     ensure_location_pve_spawn_instances(location_id=location_id)
     conn = get_connection()
@@ -1192,6 +1290,9 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
             (_serialize_payload({'player_ids': final_roster}), encounter_id),
         )
 
+        from game.regional_objectives import capture_combat_bindings
+        capture_combat_bindings(conn, encounter_id=encounter_id, player_ids=final_roster)
+
         conn.commit()
         return final_roster
     finally:
@@ -1703,6 +1804,12 @@ def create_pve_encounter(
         conn = get_connection()
         conn.execute('BEGIN IMMEDIATE')
     ensure_build_schema(conn)
+    from game.regional_objectives import mark_new_anchored_encounter
+    mark_new_anchored_encounter(
+        conn,
+        battle_state,
+        anchor_spawn_instance_id=resolved_anchor_id,
+    )
     # Real encounters always have durable player rows.  The legacy fallback is
     # retained only for replay/test envelopes that predate persisted actors.
     v1_cutover = conn.execute(
