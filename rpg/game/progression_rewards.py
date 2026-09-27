@@ -40,4 +40,3 @@ def apply_progression_reward(conn, player_id: int, exp_gain: int, gold_gain: int
         "gold_after": gold, "leveled_up": level > old_level,
         "stat_points_awarded": earned_points,
     }
-

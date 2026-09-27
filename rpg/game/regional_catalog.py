@@ -352,4 +352,3 @@ def validate_catalogue() -> None:
                 errors.append(f"{interaction.content_id}: invalid item")
     if errors:
         raise RuntimeError("invalid RAV1 catalogue: " + "; ".join(errors))
-
