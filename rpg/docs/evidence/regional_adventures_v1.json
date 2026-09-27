@@ -133,6 +133,14 @@
       "result":"11 passed in 2.45s",
       "exit_status":0,
       "tested_commit":"4f38f20"
+    },
+    {
+      "scope":"post-broad J01/J02 actual Journal handler, five region details, secret visibility, no-discovery-on-read and wrong-location assertions",
+      "command":"python -m pytest -q tests/test_regional_adventures_v1_journeys.py::test_j01_fresh_onboarding tests/test_regional_adventures_v1_journeys.py::test_j02_five_way_choice_and_actual_entry_surfaces",
+      "result":"2 passed in 2.64s",
+      "exit_status":0,
+      "tested_commit":"fa984b3d4efb30c5ad275e99526c1b022cd05861",
+      "classification":"test-strengthening only; production code unchanged"
     }
   ],
   "broad_suite": {
