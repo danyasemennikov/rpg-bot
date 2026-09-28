@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "contract": "RAV1-1",
-  "status": "draft_pr_candidate_incomplete_acceptance",
+  "status": "draft_pr_candidate_automated_acceptance_complete",
   "base_commit": "ebd8f73ade53fcadb89942b703a947782276ea1c",
   "branch": "codex/regional-adventures-opportunities-v1",
-  "tested_code_commit": "4f38f20",
+  "tested_code_commit": "7846598682596234a6c1255b4faeba8689ad9200",
   "final_pr_head": {
     "reference": "refs/heads/codex/regional-adventures-opportunities-v1",
     "identity": "the commit containing the final evidence refresh",
@@ -65,33 +65,41 @@
     ],
     "forbidden_shortcuts_used": false
   },
+  "earned_party_checkpoint": {
+    "classification": "production-path histories for three independently earned Chapter-I characters",
+    "sha256": "7510168ac9b5a03c06423ce9075906088e21cef2ca4a3716016eb5153d393a7b",
+    "player_ids": [989301, 989302, 989303],
+    "builds": ["advanced existing earned build", "physical strength/sword build", "magic intuition/staff build"],
+    "reuse": "whole SQLite checkpoint copied byte-for-byte and hash-verified before each multi-character branch",
+    "forbidden_shortcuts_used": false
+  },
   "production_journeys": {
     "definitions": 20,
-    "collected_parameter_runs": 25,
-    "command": "$env:RAV1_EARNED_CHECKPOINT='<verified checkpoint>'; python -m pytest -q tests/test_regional_adventures_v1_journeys.py",
-    "result": "25 passed in 41.38s",
+    "collected_parameter_runs": 39,
+    "command": "$env:RAV1_EARNED_CHECKPOINT='<verified base checkpoint>'; $env:RAV1_PARTY_CHECKPOINT='<verified party checkpoint>'; python -m pytest -q tests/test_regional_adventures_v1_journeys.py",
+    "result": "39 passed in 136.89s",
     "exit_status": 0,
     "cases": [
       {"id":"J01","node":"test_j01_fresh_onboarding","runs":1,"result":"passed","assertions":["earned Chapter I history","no automatic RAV project","five peer region summaries","no main-quest continuation"]},
       {"id":"J02","node":"test_j02_five_way_choice_and_actual_entry_surfaces","runs":1,"result":"passed","assertions":["legal travel","four activated boards","five reachable hunt definitions","bounded region list"]},
-      {"id":"J03","node":"test_j03_different_first_regions_and_solo_paths","runs":1,"result":"passed","assertions":["five first-region branches","independent claims","solo production combat"]},
-      {"id":"J04","node":"test_j04_stay_local","runs":1,"result":"passed","assertions":["finite project","local hunt","local work remains available"]},
-      {"id":"J05","node":"test_j05_concurrent_pursuits_pins_and_restart","runs":1,"result":"passed","assertions":["two projects plus hunt","three-pin maximum","fourth pin rejected","un-pinned progress retained"]},
+      {"id":"J03","node":"test_j03_different_first_regions_and_solo_paths","runs":1,"result":"passed","assertions":["five first-region branches","all seven projects solo-completed across required journeys","physical Storehouse build","magic Ferry build","independent claims and actual combat"]},
+      {"id":"J04","node":"test_j04_stay_local","runs":1,"result":"passed","assertions":["separate complete Westwild and Mireveil sessions","finite project","local hunt","optional activity","standing work","local links remain"]},
+      {"id":"J05","node":"test_j05_concurrent_pursuits_pins_and_restart","runs":1,"result":"passed","assertions":["two projects plus hunt","three-pin maximum","fourth pin rejected","unpin and repin","runtime/database restart identity"]},
       {"id":"J06","node":"test_j06_reverse_independent_order","runs":2,"result":"passed","assertions":["both Ashen orders","same finite claims","50 fixed regional gold"]},
-      {"id":"J07","node":"test_j07_explore_before_lead","runs":1,"result":"passed","assertions":["exact fact reconciliation","Names/Camp/Sled preinspection","no completion on inspection"]},
-      {"id":"J08","node":"test_j08_low_profession_route","runs":1,"result":"passed","assertions":["Sled combat alternative","no material charge"]},
-      {"id":"J09","node":"test_j09_personal_practice","runs":1,"result":"passed","assertions":["two post-activation crafts","craft replay ignored","final legal potion delivery"]},
-      {"id":"J10","node":"test_j10_ordinary_delivery","runs":1,"result":"passed","assertions":["two finite requests","three standing jobs","earned craft/gather/harvest goods","zero standing XP"]},
-      {"id":"J11","node":"test_j11_combat_overlap","runs":1,"result":"passed","assertions":["Tool and Greyfang binding overlap","authoritative settlement","hunt and project independently advanced"]},
-      {"id":"J12","node":"test_j12_optional_group_binding_contract","runs":1,"result":"passed","assertions":["exact Ferry mixed source","roster-lock binding","T2 application marker"]},
-      {"id":"J13","node":"test_j13_named_canonical_targets","runs":1,"result":"passed","assertions":["Greyfang special identity and normal profile","Drifter special identity and elite profile","ordinary settlement policy"]},
-      {"id":"J14","node":"test_j14_busy_shared_sources","runs":1,"result":"passed","assertions":["busy source visible","owner release","normal retry availability"]},
-      {"id":"J15","node":"test_j15_permanent_local_choices","runs":2,"result":"passed","assertions":["six opposite outcome records","stale alternate rejected","choice identities permanent"]},
-      {"id":"J16","node":"test_j16_returning_player_migration","runs":1,"result":"passed","assertions":["earned player/inventory/gear preserved","empty RAV state","migration twice idempotent"]},
-      {"id":"J17","node":"test_j17_atomic_boundaries","runs":1,"result":"passed","assertions":["pre-receipt rollback","fresh retry","post-commit receipt replay","single finite grant"]},
-      {"id":"J18","node":"test_j18_arbitrary_reward_order","runs":2,"result":"passed","assertions":["forward and reverse noncombat ledger","exact 68 gold","identical four claims"]},
-      {"id":"J19","node":"test_j19_localized_real_handlers","runs":3,"result":"passed","assertions":["ru/en/es surfaces","actual callback handler","message and callback budgets","malformed error answered"]},
-      {"id":"J20","node":"test_j20_after_resolution","runs":1,"result":"passed","assertions":["finite claim remains resolved","fresh finite token cannot repay","new standing batch succeeds","resolved record remains browsable"]}
+      {"id":"J07","node":"test_j07_explore_before_lead","runs":1,"result":"passed","assertions":["zero-reward preinspection snapshots","exact fact reconciliation","Names/Camp/Sled preinspection","Camp cache exactly once"]},
+      {"id":"J08","node":"test_j08_low_profession_route","runs":1,"result":"passed","assertions":["unchanged low profession levels","Sled combat alternative","Names and Camp without gathering","Medic delivery","no material charge"]},
+      {"id":"J09","node":"test_j09_personal_practice","runs":1,"result":"passed","assertions":["pre-acceptance craft excluded","premature hand-in rejected","gifted potion gives no process credit","two personal post-activation crafts","craft replay ignored","normal XP ceiling"]},
+      {"id":"J10","node":"test_j10_ordinary_delivery","runs":1,"result":"passed","assertions":["permitted gift from another earned character","two finite requests","three standing jobs","exact consumption/rewards","complete replay","zero standing XP"]},
+      {"id":"J11","node":"test_j11_combat_overlap plus test_j11_acceptance_after_roster_lock_has_no_credit","runs":3,"result":"passed","assertions":["ordinary-wolf and Greyfang variants","authoritative settlement restart/replay","Tool report and hunt claim/replay","post-lock acceptance receives no credit"]},
+      {"id":"J12","node":"test_j12_optional_group_binding_contract","runs":3,"result":"passed","assertions":["both alive","one defeated","one fled","independent Ferry acceptance","eligible per-player credit/loot","owner-only harvest","no shared facts or choices"]},
+      {"id":"J13","node":"test_j13_named_canonical_targets","runs":1,"result":"passed","assertions":["pre-notice Greyfang gives no retro bounty","ordinary wolf remains independent","post-accept respawn and claim/replay","Drifter canonical elite-air identity"]},
+      {"id":"J14","node":"test_j14_busy_shared_sources","runs":1,"result":"passed","assertions":["mixed and Greyfang contention","forming expiry","completed battle respawn","collapsed owner release","normal retry availability"]},
+      {"id":"J15","node":"test_j15_permanent_local_choices","runs":1,"result":"passed","assertions":["six opposite outcome records","stale alternates rejected","fresh menus","restart persistence","equal rewards/access","other-player and world isolation","Sled method-only record"]},
+      {"id":"J16","node":"test_j16_returning_player_migration","runs":1,"result":"passed","assertions":["earned pre-RAV boundary","active hunt preserved","real prepared settlement preserved and recovered once","migration twice idempotent","no fabricated RAV state"]},
+      {"id":"J17","node":"test_j17_atomic_boundaries plus combat/race nodes","runs":11,"result":"passed","assertions":["delivery/choice/cache/standing before-receipt rollback","response-loss exact recovery","double-click and stale tokens","combat T2 restart/replay","separate-connection sale/gift/hand-in races"]},
+      {"id":"J18","node":"test_j18_arbitrary_reward_order plus test_j18_all_finite_claims_in_two_regional_orders","runs":3,"result":"passed","assertions":["forward and reverse noncombat ledger","all finite claims in two regional orders","exact 440 XP/201 gold/two shards/three potions/one ration","identical final XP and attribute budget"]},
+      {"id":"J19","node":"test_j19_localized_real_handlers","runs":3,"result":"passed","assertions":["ru/en/es real handlers","Journal/Names/Medic/Camp/previews/standing/inn","stale/wrong-location/insufficient/busy errors","saved result after language change","message/callback budgets and no internal IDs"]},
+      {"id":"J20","node":"test_j20_after_resolution","runs":1,"result":"passed","assertions":["every finite record reopened","all recorded facts reinspected","fresh reward tokens cannot repay or consume","Local Work/gear/professions available","standing batch pays once","unfinished project resumes after restart","no global completion progression"]}
     ]
   },
   "source_and_receipt_evidence": {
@@ -117,103 +125,40 @@
     {
       "scope":"RAV contract, schema, transaction, objective, combat, world, UI, localization and economy matrix",
       "command":"python -m pytest -q tests/test_regional_adventures_contract.py tests/test_regional_adventures_schema.py tests/test_regional_adventures_transactions.py tests/test_regional_adventures_objectives.py tests/test_regional_adventures_combat.py tests/test_regional_adventures_world.py tests/test_regional_adventures_ui.py tests/test_regional_adventures_localization.py tests/test_regional_adventures_economy.py",
-      "result":"37 passed in 7.22s",
+      "result":"37 passed in 7.82s",
       "exit_status":0,
-      "tested_commit":"4f38f20"
+      "tested_commit":"7846598682596234a6c1255b4faeba8689ad9200"
     },
     {
-      "scope":"affected existing crafting, progression, settlement, open-world PvE, Journal and location regressions",
-      "result":"156 passed; one stale expected-keyboard failure; corrected exact node then 1 passed in 0.75s",
+      "scope":"affected settlement, open-world PvE, itemization, migration and durability regressions",
+      "command":"python -m pytest -q tests/test_world_pve_encounter_foundation.py tests/test_itemization_regional_loot_v1.py tests/test_itemization_fix_packet_pr230.py tests/test_character_builds_v1_migration.py tests/test_character_builds_v1_durability.py",
+      "result":"166 passed in 40.59s",
       "exit_status":0,
-      "classification":"the old assertion omitted the frozen Nearby button; production behavior was correct"
-    },
-    {
-      "scope":"final regional summary repair",
-      "command":"python -m pytest -q tests/test_regional_adventures_ui.py tests/test_regional_adventures_world.py",
-      "result":"11 passed in 2.45s",
-      "exit_status":0,
-      "tested_commit":"4f38f20"
-    },
-    {
-      "scope":"post-broad J01/J02 actual Journal handler, five region details, secret visibility, no-discovery-on-read and wrong-location assertions",
-      "command":"python -m pytest -q tests/test_regional_adventures_v1_journeys.py::test_j01_fresh_onboarding tests/test_regional_adventures_v1_journeys.py::test_j02_five_way_choice_and_actual_entry_surfaces",
-      "result":"2 passed in 2.64s",
-      "exit_status":0,
-      "tested_commit":"fa984b3d4efb30c5ad275e99526c1b022cd05861",
-      "classification":"test-strengthening only; production code unchanged"
+      "tested_commit":"7846598682596234a6c1255b4faeba8689ad9200"
     }
   ],
   "broad_suite": {
     "command": "python -m pytest -q",
-    "environment_override": "RAV1_EARNED_CHECKPOINT pointed to the hash-verified legal history above",
-    "tested_candidate_snapshot": "4cfce1dd60d8f993c0051b1cf3700de9d0c8ef09",
-    "status": "completed; three stale expectations classified and resolved by exact reruns",
-    "result": "1836 passed, 3 failed, 276 subtests passed in 1247.09s",
-    "collected_tests": 1839,
-    "passed_tests": 1836,
-    "failed_tests": 3,
+    "environment_override": "RAV1_EARNED_CHECKPOINT and RAV1_PARTY_CHECKPOINT pointed to the hash-verified legal histories above",
+    "tested_candidate_snapshot": "7846598682596234a6c1255b4faeba8689ad9200",
+    "status": "passed",
+    "result": "1853 passed, 276 subtests passed in 1403.28s",
+    "collected_tests": 1853,
+    "passed_tests": 1853,
+    "failed_tests": 0,
     "passed_subtests": 276,
-    "exit_status": 1,
-    "duration_seconds": 1247.09,
-    "log_reference": "external workspace artifact work/rav1_broad.log",
-    "rerun_policy": "No second broad run: repairs changed assertions only and did not alter production code, database startup/transactions, common progression, combat settlement, inventory, i18n routing, or handler routing.",
-    "failures": [
-      {
-        "node_id": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hub_lower_menu_shows_guild_but_not_other_services",
-        "classification": "stale pre-RAV test expectation",
-        "reason": "The old assertion forbade inns and all boards at late hubs; RAV1 requires inns at Ashen, Sunscar and Mireveil plus the existing/new Sunscar board.",
-        "repair": "Rename the test and assert the exact frozen service additions while continuing to forbid shops.",
-        "focused_rerun_node": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hub_lower_menu_shows_guild_and_rav1_inn_but_not_shop",
-        "result": "passed"
-      },
-      {
-        "node_id": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hubs_are_guild_only_services",
-        "classification": "stale pre-RAV test expectation",
-        "reason": "The old assertion forbade the three inns and Sunscar board explicitly added by the frozen contract.",
-        "repair": "Assert inns at all three hubs, a board only at Sunscar, and no shop.",
-        "focused_rerun_node": "tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hubs_keep_guild_without_shop_and_add_rav1_inns",
-        "result": "passed"
-      },
-      {
-        "node_id": "tests/test_location_action_tokens.py::LocationActionTokenTests::test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable",
-        "classification": "stale pre-RAV test expectation",
-        "reason": "The old assertion required a full spawn-instance callback longer than Telegram's 64-byte budget; RAV1 resolves the same canonical special by stable key.",
-        "repair": "Expect fight_special_amber_colossus and assert every callback is at most 64 UTF-8 bytes.",
-        "focused_rerun_node": "tests/test_location_action_tokens.py::LocationActionTokenTests::test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable",
-        "result": "passed"
-      }
-    ],
-    "exact_rerun": {
-      "command": "python -m pytest -q tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hubs_keep_guild_without_shop_and_add_rav1_inns tests/test_craftsmen_guild_pr1b2b.py::CraftsmenGuildPR1B2BTests::test_late_hub_lower_menu_shows_guild_and_rav1_inn_but_not_shop tests/test_location_action_tokens.py::LocationActionTokenTests::test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable",
-      "result": "3 passed in 1.07s",
-      "exit_status": 0,
-      "tested_commit": "94f6fed0e0d157fc3abf6a75862054aae51f092e"
-    }
+    "exit_status": 0,
+    "duration_seconds": 1403.28,
+    "log_reference": "external workspace artifact work/rav1_broad_final.log",
+    "rerun_policy": "A new final broad run was required because the stronger journeys exposed and repaired shared transaction and open-world availability defects.",
+    "failures": []
   },
   "review": {
     "independent_candidate_review": "pending",
     "self_review": "scope, frozen counts, declarations, migration boundaries, callbacks and stale baseline documentation inspected",
     "frozen_contract_contradiction": null,
-    "automated_acceptance": "not complete",
-    "mandatory_journey_case_gaps": [
-      "J03 additional earned physical and magic solo-build Storehouse/Ferry cases",
-      "J04 separate full Westwild and Mireveil local-session traces",
-      "J05 explicit unpin/re-pin plus runtime/database restart identity checks",
-      "J07 zero-reward snapshots and Camp final cache exactly-once assertion",
-      "J08 low-profession Names, Camp and Medic branches from a low-profession earned checkpoint",
-      "J09 pre-acceptance craft, premature hand-in and gifted-potion case",
-      "J10 another earned character's permitted gift plus complete replay assertions",
-      "J11 ordinary-wolf and Greyfang variants with report, hunt claim and settlement restart/replay",
-      "J12 two earned players: both alive, one defeated and one fled, including owner-only harvest",
-      "J13 pre-notice Greyfang, post-accept respawn/claim/replay and no-retro-bounty assertions",
-      "J14 forming expiry, completed-battle respawn and Greyfang contention",
-      "J15 fresh menu, restart, equal rewards/access and other-player/world isolation",
-      "J16 real prepared settlement preservation and single recovery after migration",
-      "J17 delivery, choice, cache, T2 and standing failure/response-loss/double-click/stale/race matrix",
-      "J18 all finite claims in two valid regional orders with exact 440 XP/201 gold/item totals",
-      "J19 full ru/en/es handler actions and required error/result cases",
-      "J20 reopen every finite record and resume another unfinished project after restart"
-    ]
+    "automated_acceptance": "complete",
+    "mandatory_journey_case_gaps": []
   },
   "human_validation": {
     "status": "NOT YET RUN",

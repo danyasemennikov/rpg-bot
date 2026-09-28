@@ -4,7 +4,7 @@
 - Contract: RAV1-1
 - Frozen base: `ebd8f73ade53fcadb89942b703a947782276ea1c` (merged PR #233)
 - Candidate branch: `codex/regional-adventures-opportunities-v1`
-- Tested code commit: `4f38f20`
+- Tested code commit: `7846598682596234a6c1255b4faeba8689ad9200`
 - Final Draft-PR head: the commit containing the final evidence refresh; its exact
   SHA is recorded in the Draft PR body and final handoff because a commit cannot
   embed its own object ID.
@@ -64,12 +64,20 @@ perform inventory/progression/state changes, write the durable economy receipt, 
 commit as one unit. Receipt-first replay recovers a committed result even after
 location or travel revision changes. Failure before receipt rolls back entitlement,
 goods, progress, and reward; response loss after commit recovers the exact result.
+The completed J17 matrix exposed and repaired one rollback-order defect: a repeated
+finite delivery could tentatively debit its basket before the one-time claim check.
+Business rejections now roll back all attempted work before their durable rejection
+receipt is stored.
 
 Craft progress is recorded in the existing successful craft transaction and ignores
 pre-acceptance crafts and receipt replay. Combat bindings are frozen from the active
 project step and exact roster at runtime start. Settlement T2 consumes those bindings
 once; late acceptance, defeated/fled participants, corrupt/missing bindings, or an
 unknown catalogue version cannot manufacture credit.
+
+Shared-source expiry journeys also exposed a stale availability projection. Mixed and
+named availability reads now prune and commit expired forming encounters before
+reporting source state, so abandoned reservations cannot remain permanently busy.
 
 The migration and focused regression matrices preserve existing player, inventory,
 gear, Chapter I, hunt, profession, recipe, travel, build, mastery, receipt, and PvE
@@ -86,43 +94,31 @@ tests also reject a vendor or alternate-recipe cycle.
 
 ## Executable evidence
 
-The focused RAV invariant matrix passed 37 tests in 7.22 seconds at `4f38f20`.
-The earned production journey module defines exactly J01–J20 and passed all 25
-collected parameter runs in 41.38 seconds when cloning the recorded legal checkpoint.
+The focused RAV invariant matrix passed 37 tests in 7.82 seconds at
+`7846598682596234a6c1255b4faeba8689ad9200`. The affected settlement, open-world PvE,
+itemization, migration, and durability regression matrix passed 166 tests in 40.59
+seconds at the same commit.
+
+The earned production journey module defines exactly J01–J20 and passed all 39
+collected parameter runs in 136.89 seconds. Those runs directly execute every mandatory
+Section-W case, including the complete J17 boundary/race matrix, both all-finite J18
+orders, all three J19 locale matrices, and every J20 post-resolution record.
 The source checkpoint was first produced by the full PEV1 registration, Chapter I,
 travel, gathering, crafting, hunt, combat, gear, and profession history in 369.39
 seconds. Its SHA-256 is
 `7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C`.
+The independently earned three-character party checkpoint used by the physical,
+magic, group, gift, race, and isolation cases has SHA-256
+`7510168ac9b5a03c06423ce9075906088e21cef2ca4a3716016eb5153d393a7b`.
 No project, fact, claim, reward, material, level, combat outcome, or receipt was edited
 into the checkpoint.
 
-A final contract-to-test audit distinguishes green named definitions from complete
-section-W case coverage. J01/J02 were strengthened through actual Journal/region
-handlers and passed their exact rerun, but several mandatory subcases are not yet
-directly executed by the J01–J20 module: the additional physical/magic solo builds;
-the full Westwild/Mireveil stay-local traces; low-profession J08 branches; gifted-goods
-cases; both J11 hunt variants and claim/restart checks; the two-player alive,
-defeated, and fled J12 cases; full named-source lifecycle; forming-expiry/respawn
-contention; restart/world-isolation choice checks; prepared-settlement migration; the
-complete J17 atomic matrix; both all-finite J18 orders; the full per-locale J19 action
-and error matrix; and reopening every finite record in J20. Existing focused and broad
-tests cover many underlying authorities, but the frozen contract requires these cases
-inside earned production journeys. Therefore the 25 green runs are implementation
-evidence, not a claim that automated acceptance is complete.
-
-The affected existing crafting, progression, settlement, open-world PvE, Journal, and
-location regression matrix passed 156 tests except for one stale keyboard expectation;
-the exact corrected node then passed.
-
-The single final broad run at candidate snapshot `4cfce1d` collected 1,839 tests and
-276 subtests: 1,836 tests passed and three stale pre-RAV expectations failed in
-1247.09 seconds. Two old Craftsmen Guild assertions forbade inns at the three late
-hubs (and a board at Sunscar), while the frozen contract requires those services. One
-location-token assertion required an over-64-byte spawn callback, while RAV1 requires
-the short `fight_special_<key>` callback. Only those expectations changed; all three
-exact nodes passed in 1.07 seconds at `94f6fed`. No production or shared-infrastructure
-code changed, so the contract's broad-run budget did not require a second broad run.
-The retained log and exact node IDs are in the machine evidence.
+The mandatory journey-gap list is empty and automated RAV1-1 acceptance is complete.
+The stronger journeys changed shared transaction and open-world availability code, so
+the frozen test policy required a new final broad run. At candidate snapshot
+`7846598682596234a6c1255b4faeba8689ad9200`, the suite passed all 1,853 tests and 276
+subtests in 1403.28 seconds. There were no failures or repair reruns. The retained log,
+exact commands, case matrix, and provenance are in the machine evidence.
 
 See [regional_adventures_v1.json](../evidence/regional_adventures_v1.json) for commands,
 case IDs, provenance, source identifiers, assertions, and result counts. Fixture-built
@@ -137,9 +133,9 @@ have no pruning in V1. Shared named/mixed sources can be busy or respawning by d
 the UI exposes that state and alternate activity links.
 
 Independent review of the exact final candidate remains a separate required workflow
-step and is not self-certified by this implementation report. Human validation has
-not run; the three-session plan is recorded separately and the candidate is not
-described as fully playtested or alpha validated.
+step and was not started in this implementation continuation. Automated acceptance is
+complete, but human validation has not run; the three-session plan is recorded
+separately and the candidate is not described as fully playtested or alpha validated.
 
 Merge, deployment, live-account operation, independent approval, and human validation
 are distinct. This report records an unmerged Draft candidate only.
