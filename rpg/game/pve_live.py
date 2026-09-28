@@ -598,6 +598,9 @@ def list_location_mixed_encounter_availability(*, location_id: str) -> list[dict
         return []
     ensure_location_pve_spawn_instances(location_id=location_id)
     conn = get_connection()
+    expired_ids = _prune_expired_forming_encounters(conn, location_id=location_id)
+    if expired_ids:
+        conn.commit()
     rows = conn.execute(
         '''
         SELECT mob_id, state, COUNT(*) AS amount,
@@ -653,6 +656,9 @@ def list_location_special_target_availability(*, location_id: str) -> list[dict]
         return []
     ensure_location_pve_spawn_instances(location_id=location_id)
     conn = get_connection()
+    expired_ids = _prune_expired_forming_encounters(conn, location_id=location_id)
+    if expired_ids:
+        conn.commit()
     result = []
     for target in targets:
         row = conn.execute(

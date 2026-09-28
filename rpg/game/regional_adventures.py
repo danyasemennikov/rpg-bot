@@ -598,6 +598,12 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
     except ActionRejected as exc:
         status = str(exc)
         if authorized and status not in {"stale_action", "wrong_location", "malformed_action", "incompatible_version"}:
+            # Business rejections are durable receipts, but none of the work
+            # attempted before the rejection may escape.  In particular, a
+            # repeated finite delivery can reach the one-time claim check only
+            # after tentatively debiting its basket.  Roll that transaction
+            # back before recording the rejection receipt.
+            conn.rollback()
             player = conn.execute("SELECT location_id, gold FROM players WHERE telegram_id=?", (int(player_id),)).fetchone()
             result = store_business_rejection(
                 conn, player_id=int(player_id), request_id=request_id, action_kind=action_kind,
