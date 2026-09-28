@@ -1,141 +1,95 @@
 # Regional Adventures & Opportunities V1
 
-- Status: Draft PR candidate; unmerged and not deployed
+- Status: Draft PR repair implemented; validation not run
 - Contract: RAV1-1
-- Frozen base: `ebd8f73ade53fcadb89942b703a947782276ea1c` (merged PR #233)
+- Frozen base: `ebd8f73ade53fcadb89942b703a947782276ea1c`
+- Previous reviewed HEAD: `15d189e9d9ebe91186488312899b9121a100e632`
+- Repair code commit: `cbb258e0a759d3d93d4385fe8482d9e6b7e87960`
 - Candidate branch: `codex/regional-adventures-opportunities-v1`
-- Tested code commit: `7846598682596234a6c1255b4faeba8689ad9200`
-- Final Draft-PR head: the commit containing the final evidence refresh; its exact
-  SHA is recorded in the Draft PR body and final handoff because a commit cannot
-  embed its own object ID.
-- Human validation: not yet run
+- Pull request: #234, open Draft, unmerged, not deployed
+- New tested code commit: NONE — tests were expressly prohibited in this repair pass
+- Human validation: NOT RUN
 
-## Delivered candidate
+## Frozen scope
 
-RAV1 adds a post-Chapter-I nonlinear Journal without creating Chapter II, a global
-campaign, a region order, a finale, or a completion percentage. Five peer regional
-summaries lead to seven independent local projects, twelve inspectable facts, two
-finite delivery requests, one independent cache, three repeatable local jobs, two
-named targets, and two new mixed encounter recipes. Existing hunts, combat,
-professions, equipment, travel, inventory, and character progression remain separate
-authorities and remain available after finite records are resolved.
+The catalogue remains unchanged: 34 top-level records; seven projects; 18 steps;
+22 objectives using exactly seven objective kinds; five short finite opportunities;
+ten discoveries plus two auxiliary inspections; ten one-time claims; three standing
+deliveries; six activated/repaired hunts and zero new hunt definitions; two named
+targets; two new and two retained mixed encounters; seven service additions; three
+permanent two-outcome choices plus the non-branching Sled method; and ru/en/es copy.
 
-The exact frozen counts are enforced at startup and in tests: 34 top-level catalogue
-records; seven projects; 18 steps; 22 objectives using exactly seven kinds; five short
-finite opportunities; ten discoveries plus two auxiliary inspections; ten one-time
-claims; three standing deliveries; six activated/repaired hunts and zero new hunt
-definitions; two named targets; two new and two retained mixed encounters; seven
-service additions; three permanent two-outcome choices plus the non-branching Sled
-method; and ru/en/es copy with identical key and placeholder structure.
+Finite rewards remain exactly 440 XP, 201 gold, two enhancement shards, three small
+health potions, and one field ration. Standing batches remain 10/20/12 gold and zero
+XP. The exact five RAV tables and the single migration marker are unchanged; only
+startup semantic validation was strengthened.
 
-## Authority and implementation map
+## Independent-review repair packet
 
-- `game/regional_catalog.py` is data-only and freezes the complete catalogue and
-  reference validation. `game/regional_opportunities.py` is a read-only aggregator.
-- `game/regional_schema.py` owns the exact five-table schema and marker. It accepts
-  only the missing schema or exact target, fails closed on incompatible structures,
-  rolls back injected migration failure, and is restart-idempotent.
-- `game/regional_adventures.py` owns project, fact, claim, delivery, pin, token, and
-  replay transactions. One-time claims use stable content identity; standing work
-  consumes one fresh basket per receipt and never creates a finite claim.
-- `game/regional_objectives.py` observes successful personal craft commits and
-  captures immutable project bindings when the existing open-world roster locks.
-  Combat progress is applied once inside authoritative settlement T2 and only to
-  eligible recipients in the settlement plan.
-- `game/progression_rewards.py` extracts the existing threshold and attribute-budget
-  semantics used by settlement and regional claims; it does not define a second XP
-  curve.
-- `game/pve_live.py`, `game/pve_reward_settlement.py`, `game/enemy_profiles.py`, and
-  `game/locations.py` add the exact special/mixed/service rows while retaining normal
-  spawn slots and existing reservation, recovery, reward, hunt, and harvest rules.
-- `handlers/regional.py`, `handlers/chapter.py`, and `handlers/location.py` expose six
-  peer Journal views, complete regional summaries, nearby actions, bounded pages,
-  token-bound previews, source state, and existing map/profession/equipment routes.
-- `locales/rav1_{ru,en,es}.py` and location locale maps own all new player-facing copy.
+| Finding | Static repair | Test coverage authored | Execution |
+|---|---|---|---|
+| F1 | Combat marker and bindings now distinguish genuine legacy from corrupt/incompatible RAV encounters; all state-save paths preserve the immutable marker and settlement fails closed. | Marker loss/change/version, missing/corrupt bindings, legacy, solo/group/order/consumable/flee/T1 persistence and rollback cases. | NOT RUN |
+| F2 | Expiry selection and guarded release now occur under one owning write transaction; activation and expiry are mutually serialized and active sources cannot survive an expiry mutation. | Two-connection expiry-first, activation-first, named/mixed, repeat pruning, active survival and exact-once release cases. | NOT RUN |
+| F3 | Tentative business mutation now uses a savepoint under an outer `BEGIN IMMEDIATE`; rejection rolls back only the savepoint, consumes the authorized token, writes one durable receipt and commits while retaining serialization. | Rejection/rejection and rejection/replenishment races, full rollback, one receipt, identical replay and no-integrity-error cases. | NOT RUN |
+| F4 | Startup validates completed-step evidence, ALL/ANY winners, future progress, choices and completed-state consistency without synthesizing repairs. | Corrupt semantic rows, valid intermediate/completed rows and unchanged-DB startup failure cases. | NOT RUN |
+| F5 | Receipt recovery verifies owner, scoped operation, content, catalogue version, intent hash, token identity when present, and catalogue-derived immutable result/economic consistency. | Owner/operation/content/hash/version/result tampering and valid replay after token loss, move, revisions, restart and locale change. | NOT RUN |
+| F6 | Choice option callbacks are read-only previews; only explicit Confirm uses the mutation token, and Back/Cancel mutates nothing. | All three choices, both outcomes and ru/en/es selection/cancel/confirm/stale/replay/restart/equal-reward paths. | NOT RUN |
+| F7 | Pin token kinds are scoped by owner kind and ID, so concurrently visible project/hunt/gear actions do not invalidate one another. | Emitted hunt/gear/project controls, unpin, repin, refresh, fourth-pin rejection and restart. | NOT RUN |
+| F8 | Journal Map uses map authority; details add exact destinations, useful navigation, hand-in quantities, named standing items, encounter risk, Sled method, cache reveal gating and resolved lead status. | Actual emitted controls, navigation, risk, hidden cache and presentation checks. | NOT RUN |
+| F9 | Action/replay UI renders immutable receipt data in the current locale; player-visible raw recipe IDs were removed. | Success/rejection/restart/move/language/standing/choice/finite replay and raw-ID checks. | NOT RUN |
+| F10 | J02/J04/J05/J12/J13/J14/J15/J17/J19 and economy/provenance assertions were repaired to exercise production UI and authorities. | J01–J20 remains 20 journey definitions / 39 planned parameter runs. | NOT RUN |
 
-The migration adds exactly `rav1_projects`, `rav1_facts`, `rav1_claims`,
-`rav1_combat_bindings`, and `rav1_pins`, plus the existing shared migration marker.
-No RAV table replaces hunt, profession, settlement, inventory, travel, or build data.
+Static inspection found no frozen-contract contradiction and no scope expansion.
+`git diff --check` completed without errors before the repair commit. This is not a
+test result and does not establish runtime correctness.
 
-## Transaction and compatibility guarantees
+## Tests added or modified
 
-Finite and repeat mutations consume versioned UI actions under `BEGIN IMMEDIATE`,
-perform inventory/progression/state changes, write the durable economy receipt, and
-commit as one unit. Receipt-first replay recovers a committed result even after
-location or travel revision changes. Failure before receipt rolls back entitlement,
-goods, progress, and reward; response loss after commit recovers the exact result.
-The completed J17 matrix exposed and repaired one rollback-order defect: a repeated
-finite delivery could tentatively debit its basket before the one-time claim check.
-Business rejections now roll back all attempted work before their durable rejection
-receipt is stored.
+- Added `tests/test_regional_adventures_review_repairs.py` for the focused F1–F9
+  repair matrix, including controlled concurrency and emitted-callback paths.
+- Modified `tests/test_regional_adventures_economy.py` so protected values and
+  vendor/recipe availability are derived from live authorities.
+- Modified `tests/test_regional_adventures_v1_journeys.py` for F10, production UI
+  operation, recorded checkpoint hashes, local-session traces, matching combat
+  bindings, production respawn lifecycle, contention/race cases and T2 rollback.
 
-Craft progress is recorded in the existing successful craft transaction and ignores
-pre-acceptance crafts and receipt replay. Combat bindings are frozen from the active
-project step and exact roster at runtime start. Settlement T2 consumes those bindings
-once; late acceptance, defeated/fled participants, corrupt/missing bindings, or an
-unknown catalogue version cannot manufacture credit.
+No test, pytest collection, Python import, compile, journey, regression or broad-suite
+command was run during this repair pass.
 
-Shared-source expiry journeys also exposed a stale availability projection. Mixed and
-named availability reads now prune and commit expired forming encounters before
-reporting source state, so abandoned reservations cannot remain permanently busy.
+## Commands required in the next validation stage
 
-The migration and focused regression matrices preserve existing player, inventory,
-gear, Chapter I, hunt, profession, recipe, travel, build, mastery, receipt, and PvE
-state. The RAV startup path does not backfill facts, projects, claims, or kill credit.
+All commands below are recorded as **NOT RUN**:
 
-## Rewards and economy
+```powershell
+python -m pytest -q tests/test_regional_adventures_review_repairs.py
 
-All ten finite entitlements total exactly 440 XP, 201 gold, two enhancement shards,
-three small health potions, and one field ration. Choice outcomes have identical
-numeric rewards. Findings grant nothing. The three standing batches pay exactly
-10/20/12 gold and zero character, mastery, profession, or hunter XP. Their payouts
-remain no greater than submitted-output resale and recursively expanded raw resale;
-tests also reject a vendor or alternate-recipe cycle.
+python -m pytest -q tests/test_regional_adventures_contract.py tests/test_regional_adventures_schema.py tests/test_regional_adventures_transactions.py tests/test_regional_adventures_objectives.py tests/test_regional_adventures_combat.py tests/test_regional_adventures_world.py tests/test_regional_adventures_ui.py tests/test_regional_adventures_localization.py tests/test_regional_adventures_economy.py
 
-## Executable evidence
+python -m pytest -q tests/test_world_pve_encounter_foundation.py tests/test_itemization_regional_loot_v1.py tests/test_itemization_fix_packet_pr230.py tests/test_character_builds_v1_migration.py tests/test_character_builds_v1_durability.py tests/test_alpha_transactions_v1.py
 
-The focused RAV invariant matrix passed 37 tests in 7.82 seconds at
-`7846598682596234a6c1255b4faeba8689ad9200`. The affected settlement, open-world PvE,
-itemization, migration, and durability regression matrix passed 166 tests in 40.59
-seconds at the same commit.
+$env:RAV1_EARNED_CHECKPOINT='<hash-verified earned checkpoint>'
+$env:RAV1_PARTY_CHECKPOINT='<hash-verified party checkpoint>'
+python -m pytest -q tests/test_regional_adventures_v1_journeys.py
 
-The earned production journey module defines exactly J01–J20 and passed all 39
-collected parameter runs in 136.89 seconds. Those runs directly execute every mandatory
-Section-W case, including the complete J17 boundary/race matrix, both all-finite J18
-orders, all three J19 locale matrices, and every J20 post-resolution record.
-The source checkpoint was first produced by the full PEV1 registration, Chapter I,
-travel, gathering, crafting, hunt, combat, gear, and profession history in 369.39
-seconds. Its SHA-256 is
-`7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C`.
-The independently earned three-character party checkpoint used by the physical,
-magic, group, gift, race, and isolation cases has SHA-256
-`7510168ac9b5a03c06423ce9075906088e21cef2ca4a3716016eb5153d393a7b`.
-No project, fact, claim, reward, material, level, combat outcome, or receipt was edited
-into the checkpoint.
+python -m pytest -q
+```
 
-The mandatory journey-gap list is empty and automated RAV1-1 acceptance is complete.
-The stronger journeys changed shared transaction and open-world availability code, so
-the frozen test policy required a new final broad run. At candidate snapshot
-`7846598682596234a6c1255b4faeba8689ad9200`, the suite passed all 1,853 tests and 276
-subtests in 1403.28 seconds. There were no failures or repair reruns. The retained log,
-exact commands, case matrix, and provenance are in the machine evidence.
+Expected recorded checkpoint SHA-256 values are:
 
-See [regional_adventures_v1.json](../evidence/regional_adventures_v1.json) for commands,
-case IDs, provenance, source identifiers, assertions, and result counts. Fixture-built
-schema/corruption tests are labelled unit/integration evidence and are not represented
-as production acquisition.
+- earned: `7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C`
+- party: `7510168AC9B5A03C06423CE9075906088E21CEF2CA4A3716016EB5153D393A7B`
 
-## Review, limitations, and state
+The repaired journeys compare supplied checkpoints to those expected recorded hashes.
+Checkpoint provenance verification for this repair candidate is NOT RUN.
 
-No frozen-contract contradiction or product redesign was introduced. Contract
-non-goals remain excluded. Durable receipts and permanent facts/claims intentionally
-have no pruning in V1. Shared named/mixed sources can be busy or respawning by design;
-the UI exposes that state and alternate activity links.
+## Review and limitations
 
-Independent review of the exact final candidate remains a separate required workflow
-step and was not started in this implementation continuation. Automated acceptance is
-complete, but human validation has not run; the three-session plan is recorded
-separately and the candidate is not described as fully playtested or alpha validated.
+The former `automated_acceptance: complete` claim is invalidated by the independent
+FIX verdict and has been withdrawn. Automated acceptance is **PENDING VALIDATION**.
+The historical results at `7846598682596234a6c1255b4faeba8689ad9200` do not validate
+this repair commit. A new final broad suite is required only after focused and affected
+regression validation stabilizes.
 
-Merge, deployment, live-account operation, independent approval, and human validation
-are distinct. This report records an unmerged Draft candidate only.
+No merge, deployment, human Telegram validation, ready-for-review transition or new
+independent review was performed. The remaining risk is entirely unexecuted runtime,
+concurrency, callback, localization and acceptance validation of the authored repair.
