@@ -98,21 +98,32 @@ def nearby(player: dict, *, conn=None) -> list[dict]:
             conn.close()
 
 
-def leads(player_id: int, region_code: str = "all") -> list[dict]:
-    rows: list[dict] = []
-    summaries = REGIONAL_SUMMARIES if region_code == "all" else (
-        (REGIONAL_SUMMARIES_BY_CODE[region_code],) if region_code in REGIONAL_SUMMARIES_BY_CODE else ()
-    )
-    for summary in summaries:
-        rows.append(_record("region", summary["content_id"], "available", data=summary))
-        region_id = summary["region_id"]
-        for project in PROJECTS:
-            if project.public and project.region_id == region_id:
-                rows.append(_record("project", project.project_id, "available"))
-        for definition in DIRECT_REQUESTS:
-            if definition.region_id == region_id:
-                rows.append(_record("interaction", definition.content_id, "available"))
-    return rows
+def leads(player_id: int, region_code: str = "all", *, conn=None) -> list[dict]:
+    owns = conn is None
+    conn = conn or get_connection()
+    try:
+        rows: list[dict] = []
+        states = {state["project_id"]: state for state in list_project_states(player_id, conn=conn)}
+        claims = list_claims(player_id, conn=conn)
+        summaries = REGIONAL_SUMMARIES if region_code == "all" else (
+            (REGIONAL_SUMMARIES_BY_CODE[region_code],) if region_code in REGIONAL_SUMMARIES_BY_CODE else ()
+        )
+        for summary in summaries:
+            rows.append(_record("region", summary["content_id"], "available", data=summary))
+            region_id = summary["region_id"]
+            for project in PROJECTS:
+                if project.public and project.region_id == region_id:
+                    state = states.get(project.project_id)
+                    status = "resolved" if project.project_id in claims else "active" if state else "available"
+                    rows.append(_record("project", project.project_id, status))
+            for definition in DIRECT_REQUESTS:
+                if definition.region_id == region_id:
+                    status = "resolved" if definition.content_id in claims else "available"
+                    rows.append(_record("interaction", definition.content_id, status))
+        return rows
+    finally:
+        if owns:
+            conn.close()
 
 
 def pursuits(player_id: int, *, conn=None) -> list[dict]:

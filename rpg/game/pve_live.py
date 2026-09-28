@@ -736,67 +736,98 @@ def _prune_expired_forming_encounters(
     if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
         return []
 
-    filters = [
-        "e.status='active'",
-        "e.anchor_spawn_instance_id IS NOT NULL",
-        "s.linked_encounter_id = e.encounter_id",
-        "s.state=?",
-        "e.created_at <= datetime('now', ?)",
-    ]
-    params: list[object] = [
-        SPAWN_STATE_FORMING,
-        f'-{FORMING_ENCOUNTER_TTL_SECONDS} seconds',
-    ]
-    if location_id:
-        filters.append('e.location_id=?')
-        params.append(str(location_id))
-    if encounter_id:
-        filters.append('e.encounter_id=?')
-        params.append(str(encounter_id))
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.execute('BEGIN IMMEDIATE')
 
-    rows = conn.execute(
-        f'''
-        SELECT e.encounter_id
-        FROM pve_encounters e
-        JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
-        WHERE {' AND '.join(filters)}
-        ''',
-        tuple(params),
-    ).fetchall()
-    expired_ids = [str(row['encounter_id']) for row in rows]
-    if not expired_ids:
-        return []
+    try:
+        filters = [
+            "e.status='active'",
+            "e.anchor_spawn_instance_id IS NOT NULL",
+            "s.linked_encounter_id = e.encounter_id",
+            "s.state=?",
+            "e.created_at <= datetime('now', ?)",
+        ]
+        params: list[object] = [
+            SPAWN_STATE_FORMING,
+            f'-{FORMING_ENCOUNTER_TTL_SECONDS} seconds',
+        ]
+        if location_id:
+            filters.append('e.location_id=?')
+            params.append(str(location_id))
+        if encounter_id:
+            filters.append('e.encounter_id=?')
+            params.append(str(encounter_id))
 
-    placeholders = ','.join('?' for _ in expired_ids)
-    conn.execute(
-        f'''
-        UPDATE pve_encounters
-        SET status='expired', updated_at=CURRENT_TIMESTAMP, finished_at=CURRENT_TIMESTAMP
-        WHERE encounter_id IN ({placeholders})
-          AND status='active'
-        ''',
-        tuple(expired_ids),
-    )
-    if _table_exists(conn, 'pve_encounter_participants'):
+        rows = conn.execute(
+            f'''
+            SELECT e.encounter_id
+            FROM pve_encounters e
+            JOIN pve_spawn_instances s ON s.spawn_instance_id = e.anchor_spawn_instance_id
+            WHERE {' AND '.join(filters)}
+            ''',
+            tuple(params),
+        ).fetchall()
+        candidates = [str(row['encounter_id']) for row in rows]
+        if not candidates:
+            if owns_transaction:
+                conn.commit()
+            return []
+
+        expired_ids: list[str] = []
+        for candidate in candidates:
+            changed = conn.execute(
+                '''UPDATE pve_encounters
+                   SET status='expired', updated_at=CURRENT_TIMESTAMP, finished_at=CURRENT_TIMESTAMP
+                   WHERE encounter_id=? AND status='active'
+                     AND EXISTS (
+                       SELECT 1 FROM pve_spawn_instances s
+                       WHERE s.spawn_instance_id=pve_encounters.anchor_spawn_instance_id
+                         AND s.linked_encounter_id=pve_encounters.encounter_id
+                         AND s.state=?
+                     )''',
+                (candidate, SPAWN_STATE_FORMING),
+            )
+            if changed.rowcount == 1:
+                expired_ids.append(candidate)
+        if not expired_ids:
+            if owns_transaction:
+                conn.commit()
+            return []
+
+        placeholders = ','.join('?' for _ in expired_ids)
+        if _table_exists(conn, 'pve_encounter_participants'):
+            conn.execute(
+                f'''
+                UPDATE pve_encounter_participants
+                SET status='expired', updated_at=CURRENT_TIMESTAMP
+                WHERE encounter_id IN ({placeholders})
+                  AND status='active'
+                ''',
+                tuple(expired_ids),
+            )
         conn.execute(
             f'''
-            UPDATE pve_encounter_participants
-            SET status='expired', updated_at=CURRENT_TIMESTAMP
-            WHERE encounter_id IN ({placeholders})
-              AND status='active'
+            UPDATE pve_spawn_instances
+            SET state=?, linked_encounter_id=NULL, respawn_available_at=NULL, updated_at=CURRENT_TIMESTAMP
+            WHERE linked_encounter_id IN ({placeholders})
+              AND state=?
             ''',
-            tuple(expired_ids),
+            (SPAWN_STATE_IDLE, *expired_ids, SPAWN_STATE_FORMING),
         )
-    conn.execute(
-        f'''
-        UPDATE pve_spawn_instances
-        SET state=?, linked_encounter_id=NULL, respawn_available_at=NULL, updated_at=CURRENT_TIMESTAMP
-        WHERE linked_encounter_id IN ({placeholders})
-          AND state=?
-        ''',
-        (SPAWN_STATE_IDLE, *expired_ids, SPAWN_STATE_FORMING),
-    )
-    return expired_ids
+        if conn.execute(
+            f'''SELECT 1 FROM pve_spawn_instances
+                WHERE linked_encounter_id IN ({placeholders}) AND state=? LIMIT 1''',
+            (*expired_ids, SPAWN_STATE_ACTIVE),
+        ).fetchone():
+            raise RuntimeError('active_spawn_survived_forming_expiry')
+        if owns_transaction:
+            conn.commit()
+        return expired_ids
+    except Exception:
+        if owns_transaction:
+            conn.rollback()
+        raise
 
 
 def list_location_active_pve_encounters(*, location_id: str) -> list[dict]:
@@ -2388,6 +2419,14 @@ def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, m
     conn = get_connection()
     try:
         ensure_build_schema(conn)
+        from game.regional_objectives import preserve_combat_credit_marker
+        persisted = conn.execute(
+            'SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?', (encounter_id,)
+        ).fetchone()
+        if not persisted:
+            return False
+        persisted_state = _deserialize_payload(persisted['battle_state_json'])
+        preserve_combat_credit_marker(persisted_state, battle_state)
         if battle_state.get('rules_version') == RULES_VERSION:
             expected_turn = int(battle_state.get('turn_revision', 0) or 0)
             expected_state = int(battle_state.get('state_revision', 0) or 0)
@@ -2672,6 +2711,8 @@ def resolve_pve_flee_intent(
         if not row or int(row['turn_revision']) not in {revision, revision - 1}:
             raise ActionRejected('stale_action')
         state = json.loads(str(row['battle_state_json']))
+        from game.regional_objectives import preserve_combat_credit_marker
+        preserve_combat_credit_marker(json.loads(str(row['battle_state_json'])), state)
         result = {
             'accepted': True, 'success': bool(success), 'fled': bool(success),
             'encounter_id': encounter_id, 'player_id': int(player_id),

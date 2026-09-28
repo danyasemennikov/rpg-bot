@@ -226,6 +226,53 @@ def _validate_project_row(row: sqlite3.Row) -> None:
     if step_index < 0 or step_index > len(project.steps) or completed != (step_index == len(project.steps)):
         raise RuntimeError("incompatible RAV1 project state")
 
+    expected_result_steps = {step.step_id for step in project.steps[:step_index]}
+    if set(results) != expected_result_steps:
+        raise RuntimeError("incompatible RAV1 project result sequence")
+
+    choice_steps: dict[str, tuple[int, object]] = {}
+    for index, step in enumerate(project.steps):
+        objective_ids = [objective.objective_id for objective in step.objectives]
+        values = results.get(step.step_id)
+        if index < step_index:
+            if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+                raise RuntimeError("incompatible RAV1 project result shape")
+            if len(values) != len(set(values)) or set(values) - set(objective_ids):
+                raise RuntimeError("incompatible RAV1 project result IDs")
+            if step.mode == "all" and set(values) != set(objective_ids):
+                raise RuntimeError("incomplete RAV1 ALL step result")
+            if step.mode == "any" and len(values) != 1:
+                raise RuntimeError("incompatible RAV1 ANY step result")
+            winners = set(values)
+            for objective in step.objectives:
+                amount = progress[f"{step.step_id}.{objective.objective_id}"]
+                if objective.objective_id in winners and amount != objective.required:
+                    raise RuntimeError("unsatisfied RAV1 completed objective")
+                if step.mode == "any" and objective.objective_id not in winners and amount != 0:
+                    raise RuntimeError("multiple RAV1 ANY winners")
+        else:
+            amounts = [progress[f"{step.step_id}.{objective.objective_id}"] for objective in step.objectives]
+            if index > step_index and any(amount != 0 for amount in amounts):
+                raise RuntimeError("premature RAV1 future progress")
+            if index == step_index and not completed:
+                ready = all(amount == objective.required for amount, objective in zip(amounts, step.objectives))
+                if step.mode == "any":
+                    ready = any(amount == objective.required for amount, objective in zip(amounts, step.objectives))
+                if ready:
+                    raise RuntimeError("unreconciled RAV1 current step")
+        for objective in step.objectives:
+            if objective.kind == "choose":
+                choice_steps[str(objective.target["choice_id"])] = (index, objective)
+
+    for choice_id, (index, objective) in choice_steps.items():
+        committed = choice_id in choices
+        if committed != (index < step_index):
+            raise RuntimeError("incompatible RAV1 choice timing")
+        if committed:
+            key = f"{project.steps[index].step_id}.{objective.objective_id}"
+            if progress[key] != objective.required:
+                raise RuntimeError("inconsistent RAV1 committed choice")
+
 
 def _validate_rows(conn: sqlite3.Connection) -> None:
     from game.quest_board import HUNT_CONTRACTS_BY_KEY

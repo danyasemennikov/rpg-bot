@@ -562,6 +562,8 @@ def prepare_victory_settlement(*, encounter_id: str, battle_state: dict, mob: di
         except ValueError as exc:
             conn.rollback()
             return {'status': 'invalid_outcome', 'reason': str(exc)}
+        from game.regional_objectives import preserve_combat_credit_marker
+        preserve_combat_credit_marker(_load_json(encounter.get('battle_state_json')), authoritative_state)
         plan = build_reward_plan(
             conn=conn,
             encounter=encounter,

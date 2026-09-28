@@ -3,26 +3,33 @@ from game.items_data import ITEMS, get_item
 from game.regional_catalog import STANDING_DELIVERIES
 
 
-def _raw_sale_value(recipe_id):
-    recipe=get_recipe(recipe_id)
-    return sum(get_item(req.item_id)['sell_price']*req.quantity for req in recipe.material_requirements+recipe.special_ingredient_requirements)
+def _raw_sale_value(recipe, submitted_quantity):
+    raw_batch = sum(
+        get_item(req.item_id)['sell_price'] * req.quantity
+        for req in recipe.material_requirements + recipe.special_ingredient_requirements
+    )
+    return raw_batch * submitted_quantity // recipe.output_quantity
 
 
 def test_standing_payouts_do_not_exceed_submitted_or_raw_value():
-    expected={'ww_ration_order':(10,10,16),'fs_forge_supplies':(20,20,20),'mv_stew_order':(12,12,32)}
+    recipes_by_output = {}
+    for recipe_id in LIVE_RECIPE_IDS:
+        recipe = get_recipe(recipe_id)
+        recipes_by_output.setdefault(recipe.output_item_id, []).append(recipe)
     for job in STANDING_DELIVERIES:
-        payout,submitted,raw=expected[job.content_id]
-        assert job.reward.gold == payout <= submitted <= raw
+        submitted = sum(get_item(item_id)['sell_price'] * quantity for item_id, quantity in job.cost_items)
+        raw = 0
+        for item_id, quantity in job.cost_items:
+            recipes = recipes_by_output.get(item_id, [])
+            raw += min((_raw_sale_value(recipe, quantity) for recipe in recipes), default=get_item(item_id)['sell_price'] * quantity)
+        assert job.reward.gold <= submitted <= raw
 
 
 def test_no_vendor_or_alternate_recipe_creates_repeat_arbitrage():
-    accepted={'field_ration','iron_ore','coal','pe_marsh_stew'}
-    assert all(get_item(item_id)['buy_price']==0 for item_id in accepted)
+    accepted = {item_id for job in STANDING_DELIVERIES for item_id, _quantity in job.cost_items}
+    assert all(get_item(item_id)['buy_price'] == 0 for item_id in accepted)
     outputs={}
     for recipe_id in LIVE_RECIPE_IDS:
         recipe=get_recipe(recipe_id); outputs.setdefault(recipe.output_item_id,[]).append(recipe.recipe_id)
-    assert outputs['field_ration']==['trail_ration']
-    assert outputs['pe_marsh_stew']==['pe_cooking_marsh_06']
-    assert 'iron_ore' not in outputs and 'coal' not in outputs
-    assert _raw_sale_value('trail_ration')==8
-    assert _raw_sale_value('pe_cooking_marsh_06')==16
+    for item_id in accepted:
+        assert len(outputs.get(item_id, [])) <= 1

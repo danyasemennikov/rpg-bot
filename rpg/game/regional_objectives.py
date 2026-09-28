@@ -72,6 +72,35 @@ def mark_new_anchored_encounter(conn, battle_state: dict, *, anchor_spawn_instan
         battle_state["rav1_credit_version"] = 1
 
 
+def preserve_combat_credit_marker(persisted_state: dict, next_state: dict) -> dict:
+    """Carry the immutable creation marker across every combat payload save.
+
+    A missing marker in an update payload is repaired from the authoritative
+    persisted snapshot.  An attempted change is corruption and must never be
+    written.  Encounters created before RAV1 remain genuinely marker-free.
+    """
+    if "rav1_credit_version" not in persisted_state:
+        if "rav1_credit_version" in next_state:
+            raise RuntimeError("rav1_combat_marker_immutable")
+        return next_state
+    marker = persisted_state["rav1_credit_version"]
+    if "rav1_credit_version" in next_state and next_state["rav1_credit_version"] != marker:
+        raise RuntimeError("rav1_combat_marker_immutable")
+    next_state["rav1_credit_version"] = marker
+    return next_state
+
+
+def _credit_marker_state(battle: dict, binding_count: int) -> str:
+    if "rav1_credit_version" not in battle:
+        if binding_count:
+            raise RuntimeError("rav1_combat_marker_missing")
+        return "legacy"
+    marker = battle["rav1_credit_version"]
+    if isinstance(marker, bool) or not isinstance(marker, int) or marker != 1:
+        raise RuntimeError("rav1_combat_marker_unsupported")
+    return "rav1"
+
+
 def _kill_source_ids(objective, units: list[dict], location_id: str) -> list[str]:
     if location_id not in objective.locations:
         return []
@@ -108,7 +137,10 @@ def capture_combat_bindings(conn, *, encounter_id: str, player_ids: list[int]) -
     if not encounter:
         raise RuntimeError("rav1_encounter_missing")
     battle, source = _source_snapshot(encounter)
-    if int(battle.get("rav1_credit_version", 0) or 0) != 1:
+    binding_count = int(conn.execute(
+        "SELECT COUNT(*) AS total FROM rav1_combat_bindings WHERE encounter_id=?", (encounter_id,)
+    ).fetchone()["total"])
+    if _credit_marker_state(battle, binding_count) == "legacy":
         return
     location_id = str(encounter["location_id"] or "")
     units = list(source["units"])
@@ -168,12 +200,12 @@ def apply_combat_bindings(conn, *, encounter_id: str, plan: dict) -> dict[int, l
         roster_payload = json.loads(str(encounter["locked_roster_json"] or "{}"))
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise RuntimeError("rav1_combat_binding_invalid") from exc
-    if int(battle.get("rav1_credit_version", 0) or 0) != 1:
-        return {}
-    roster = sorted(int(value) for value in roster_payload.get("player_ids", []))
     rows = conn.execute(
         "SELECT * FROM rav1_combat_bindings WHERE encounter_id=? ORDER BY player_id", (encounter_id,)
     ).fetchall()
+    if _credit_marker_state(battle, len(rows)) == "legacy":
+        return {}
+    roster = sorted(int(value) for value in roster_payload.get("player_ids", []))
     if [int(row["player_id"]) for row in rows] != roster:
         raise RuntimeError("rav1_combat_binding_missing")
     eligible = {int(value) for value in plan.get("eligible_recipient_ids") or []}

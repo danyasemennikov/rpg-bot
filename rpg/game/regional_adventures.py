@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict
 
 from database import get_connection
@@ -362,7 +363,10 @@ def issue_regional_action(player_id: int, content_id: str, operation: str, *,
             payload.update({"revision": int(state["revision"]), "step_id": step.step_id})
     finally:
         conn.close()
-    kind = "rav1:journal:pin" if operation == "pin" else f"rav1:{content_id}:{operation}"
+    if operation == "pin" and pin:
+        kind = f"rav1:pin:{pin.get('owner_kind')}:{pin.get('owner_id')}"
+    else:
+        kind = f"rav1:{content_id}:{operation}"
     raw = _canonical(payload)
     return issue_actions(int(player_id), kind, [raw]).get(raw)
 
@@ -388,6 +392,203 @@ def issue_project_choice_actions(player_id: int, project_id: str, objective_id: 
         return {json.loads(raw)["choice"]: token for raw, token in tokens.items()}
     finally:
         conn.close()
+
+
+def preview_regional_choice(player_id: int, token: str) -> dict | None:
+    """Read a current choice intent without consuming or mutating it."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT kind, payload, expires_at FROM player_ui_actions WHERE token=? AND player_id=? AND used=0",
+            (str(token), int(player_id)),
+        ).fetchone()
+        if (
+            not row
+            or not str(row["kind"]).endswith(":choose")
+            or float(row["expires_at"]) < time.time()
+        ):
+            return None
+        payload = json.loads(str(row["payload"]))
+        if not isinstance(payload, dict) or int(payload.get("catalog_version", 0)) != CATALOG_VERSION:
+            return None
+        project_id = str(payload.get("content_id") or "")
+        state = get_project_state(player_id, project_id, conn=conn)
+        if not state or state["state"] != "active":
+            return None
+        objective = _project_objective_from_payload(state, payload, "choose")
+        if str(payload.get("choice") or "") not in tuple(objective.target.get("values", ())):
+            return None
+        return payload
+    except (ActionRejected, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    finally:
+        conn.close()
+
+
+def _expected_rav1_action_kind(intent: dict) -> str:
+    operation = str(intent.get("operation") or "")
+    content_id = str(intent.get("content_id") or "")
+    if operation == "pin":
+        pin = intent.get("pin") if isinstance(intent.get("pin"), dict) else {}
+        return f"rav1:pin:{pin.get('owner_kind')}:{pin.get('owner_id')}"
+    return f"rav1:{content_id}:{operation}"
+
+
+def _receipt_item_totals(value: list) -> tuple[tuple[str, int], ...]:
+    totals: dict[str, int] = {}
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise ActionRejected("stale_action")
+        item_id = entry.get("item_id")
+        quantity = entry.get("quantity")
+        if not isinstance(item_id, str) or not item_id or isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+            raise ActionRejected("stale_action")
+        totals[item_id] = totals.get(item_id, 0) + quantity
+    return tuple(sorted(totals.items()))
+
+
+def _receipt_int(value) -> int:
+    if isinstance(value, bool):
+        raise ActionRejected("stale_action")
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ActionRejected("stale_action") from exc
+
+
+def _expected_receipt_effect(intent: dict, status: str) -> tuple[tuple[tuple[str, int], ...], Reward]:
+    """Derive the immutable economic effect from frozen catalogue identity."""
+    content_id = str(intent.get("content_id") or "")
+    operation = str(intent.get("operation") or "")
+    consumed: tuple[tuple[str, int], ...] = ()
+    reward = Reward()
+    if content_id in PROJECTS_BY_ID:
+        project = PROJECTS_BY_ID[content_id]
+        if operation in {"deliver", "respond", "choose"}:
+            matching = [
+                objective
+                for step in project.steps
+                for objective in step.objectives
+                if step.step_id == intent.get("step_id")
+                and objective.objective_id == intent.get("objective_id")
+                and objective.kind == operation
+            ]
+            if len(matching) != 1:
+                raise ActionRejected("stale_action")
+            if operation == "deliver":
+                consumed = tuple(matching[0].target["items"])
+        if status == "completed":
+            reward = project.reward
+    elif content_id in INTERACTIONS_BY_ID:
+        definition = INTERACTIONS_BY_ID[content_id]
+        if operation == "deliver":
+            consumed = definition.cost_items
+        if status in {"completed", "delivered"}:
+            reward = definition.reward
+    return tuple(sorted(consumed)), reward
+
+
+def _validate_recovered_receipt(player_id: int, receipt, token_row) -> dict:
+    """Fail closed unless stored immutable intent and result agree exactly."""
+    if _receipt_int(receipt["schema_version"]) != 1 or _receipt_int(receipt["catalog_version"]) != CATALOG_VERSION:
+        raise ActionRejected("incompatible_version")
+    try:
+        result = json.loads(str(receipt["result_json"]))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ActionRejected("stale_action") from exc
+    if not isinstance(result, dict):
+        raise ActionRejected("stale_action")
+    intent = result.get("intent")
+    source = result.get("source")
+    details = result.get("details")
+    if not isinstance(intent, dict) or not isinstance(source, dict) or not isinstance(details, dict):
+        raise ActionRejected("stale_action")
+    action_kind = str(receipt["action_kind"])
+    if (
+        _receipt_int(result.get("schema_version", 0)) != 1
+        or _receipt_int(result.get("player_id", 0)) != int(player_id)
+        or str(result.get("action_kind") or "") != action_kind
+        or _receipt_int(intent.get("catalog_version", 0)) != CATALOG_VERSION
+        or _receipt_int(source.get("catalog_version", 0)) != CATALOG_VERSION
+        or str(source.get("content_id") or "") != str(intent.get("content_id") or "")
+        or str(source.get("operation") or "") != str(intent.get("operation") or "")
+        or action_kind != _expected_rav1_action_kind(intent)
+        or str(receipt["request_hash"]) != intent_hash(action_kind, int(player_id), intent)
+    ):
+        raise ActionRejected("stale_action")
+    content_id = str(intent.get("content_id") or "")
+    operation = str(intent.get("operation") or "")
+    if operation == "pin":
+        pin = intent.get("pin") if isinstance(intent.get("pin"), dict) else {}
+        if pin.get("owner_kind") not in {"project", "hunt", "gear"} or not str(pin.get("owner_id") or ""):
+            raise ActionRejected("stale_action")
+    elif content_id not in PROJECTS_BY_ID and content_id not in INTERACTIONS_BY_ID:
+        raise ActionRejected("stale_action")
+    elif content_id in PROJECTS_BY_ID and operation not in {"start", "deliver", "respond", "choose"}:
+        raise ActionRejected("stale_action")
+    elif content_id in INTERACTIONS_BY_ID:
+        definition = INTERACTIONS_BY_ID[content_id]
+        expected_operation = (
+            "inspect" if definition.kind in {"discovery", "inspect"}
+            else "claim" if definition.kind == "cache" else "deliver"
+        )
+        if operation != expected_operation:
+            raise ActionRejected("stale_action")
+    if token_row:
+        try:
+            pending = json.loads(str(token_row["payload"]))
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ActionRejected("stale_action") from exc
+        if _receipt_int(token_row["player_id"]) != int(player_id) or str(token_row["kind"]) != action_kind or pending != intent:
+            raise ActionRejected("stale_action")
+    for key in ("consumed", "granted", "progression"):
+        if not isinstance(result.get(key), list):
+            raise ActionRejected("stale_action")
+    status = str(result.get("status") or "")
+    allowed = {
+        "start": {"started"}, "inspect": {"inspected"},
+        "deliver": {"advanced", "completed", "delivered"},
+        "respond": {"advanced", "completed"}, "choose": {"advanced", "completed"},
+        "claim": {"completed"}, "pin": {"pinned", "unpinned"},
+    }
+    rejection = str(details.get("reason") or "")
+    if rejection:
+        if (
+            rejection != status
+            or result.get("consumed")
+            or result.get("granted")
+            or result.get("progression")
+            or _receipt_int(result.get("xp_delta", 0)) != 0
+            or _receipt_int(result.get("gold_delta", 0)) != 0
+        ):
+            raise ActionRejected("stale_action")
+    elif status not in allowed.get(operation, set()):
+        raise ActionRejected("stale_action")
+    if not rejection:
+        expected_consumed, expected_reward = _expected_receipt_effect(intent, status)
+        if (
+            _receipt_item_totals(result["consumed"]) != expected_consumed
+            or _receipt_item_totals(result["granted"]) != tuple(sorted(expected_reward.items))
+            or _receipt_int(result.get("xp_delta", 0)) != expected_reward.xp
+            or _receipt_int(result.get("gold_delta", 0)) != expected_reward.gold
+            or len(result["progression"]) != (1 if expected_reward.xp or expected_reward.gold else 0)
+        ):
+            raise ActionRejected("stale_action")
+    if not rejection and operation == "choose":
+        choice_id = ""
+        selected = str(intent.get("choice") or "")
+        project = PROJECTS_BY_ID[content_id]
+        for step in project.steps:
+            for objective in step.objectives:
+                if objective.objective_id == intent.get("objective_id") and objective.kind == "choose":
+                    choice_id = str(objective.target["choice_id"])
+        if not choice_id or (details.get("choices") or {}).get(choice_id) != selected:
+            raise ActionRejected("stale_action")
+    if not rejection and operation == "pin":
+        pin = intent["pin"]
+        if details.get("owner_kind") != pin.get("owner_kind") or details.get("owner_id") != pin.get("owner_id"):
+            raise ActionRejected("stale_action")
+    return result
 
 
 def _pin_owner_valid(conn, player_id: int, owner_kind: str, owner_id: str) -> bool:
@@ -476,16 +677,19 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
     action_kind = "rav1:unknown"
     request_hash = ""
     payload: dict = {}
+    savepoint_open = False
     try:
         conn.execute("BEGIN IMMEDIATE")
         receipt = conn.execute(
-            "SELECT action_kind, result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?",
+            """SELECT action_kind, request_hash, schema_version, catalog_version, result_json
+               FROM economy_action_receipts WHERE player_id=? AND request_id=?""",
             (int(player_id), request_id),
         ).fetchone()
         if receipt:
-            if not str(receipt["action_kind"]).startswith("rav1:"):
-                raise ActionRejected("stale_action")
-            result = json.loads(str(receipt["result_json"]))
+            token_row = conn.execute(
+                "SELECT player_id, kind, payload FROM player_ui_actions WHERE token=?", (token,)
+            ).fetchone()
+            result = _validate_recovered_receipt(player_id, receipt, token_row)
             conn.commit()
             return {**result, "recovered": True}
 
@@ -502,6 +706,8 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
         if not isinstance(payload, dict) or int(payload.get("catalog_version", 0)) != CATALOG_VERSION:
             raise ActionRejected("incompatible_version")
         request_hash = intent_hash(action_kind, int(player_id), payload)
+        conn.execute("SAVEPOINT rav1_business_mutation")
+        savepoint_open = True
         raw = consume_action(conn, int(player_id), action_kind, token, payload=_canonical(payload))
         if json.loads(raw) != payload:
             raise ActionRejected("malformed_action")
@@ -584,12 +790,15 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
             "player_id": int(player_id), "location_id": str(player["location_id"]),
             "recipe_id": None, "consumed": consumed,
             "granted": (reward_result or {}).get("items", []),
+            "xp_delta": int((reward_result or {}).get("xp", 0)),
             "gold_delta": int((reward_result or {}).get("gold", 0)),
             "gold_after": int(((reward_result or {}).get("progression") or {}).get("gold_after", player["gold"])),
             "progression": [((reward_result or {}).get("progression") or {})] if reward_result else [],
             "source": {"catalog_version": 1, "content_id": content_id, "operation": operation},
-            "details": details,
+            "details": details, "intent": payload,
         }
+        conn.execute("RELEASE SAVEPOINT rav1_business_mutation")
+        savepoint_open = False
         store_receipt(conn, int(player_id), request_id, action_kind, request_hash, result)
         conn.commit()
         if failure_hook:
@@ -598,12 +807,19 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
     except ActionRejected as exc:
         status = str(exc)
         if authorized and status not in {"stale_action", "wrong_location", "malformed_action", "incompatible_version"}:
-            # Business rejections are durable receipts, but none of the work
-            # attempted before the rejection may escape.  In particular, a
-            # repeated finite delivery can reach the one-time claim check only
-            # after tentatively debiting its basket.  Roll that transaction
-            # back before recording the rejection receipt.
-            conn.rollback()
+            if savepoint_open:
+                conn.execute("ROLLBACK TO SAVEPOINT rav1_business_mutation")
+                conn.execute("RELEASE SAVEPOINT rav1_business_mutation")
+                savepoint_open = False
+            # Keep the outer IMMEDIATE transaction and its serialization lock.
+            # The rejected authorized intent is terminal and its receipt is
+            # committed atomically with token consumption.
+            conn.execute(
+                "UPDATE player_ui_actions SET used=1 WHERE token=? AND player_id=? AND kind=?",
+                (token, int(player_id), action_kind),
+            )
+            if failure_hook:
+                failure_hook("before_rejection_receipt")
             player = conn.execute("SELECT location_id, gold FROM players WHERE telegram_id=?", (int(player_id),)).fetchone()
             result = store_business_rejection(
                 conn, player_id=int(player_id), request_id=request_id, action_kind=action_kind,
@@ -612,6 +828,7 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
                 gold_after=int(player["gold"]) if player else 0,
                 source={"catalog_version": 1, "content_id": payload.get("content_id"),
                         "operation": payload.get("operation")},
+                intent=payload,
             )
             conn.commit()
             return result
