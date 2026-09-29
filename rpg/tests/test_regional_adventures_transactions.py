@@ -3,7 +3,7 @@ import json
 from database import get_connection, get_player
 from game.regional_adventures import (
     execute_regional_action, get_project_state, issue_project_choice_actions,
-    issue_regional_action, list_claims, list_facts,
+    issue_regional_action, list_claims, list_facts, preview_regional_choice,
 )
 
 
@@ -41,7 +41,10 @@ def test_preinspection_reconciles_names_then_choice_is_immutable_and_atomic():
     state = get_project_state(1, 'ar_two_names')
     assert state['step_index'] == 1 and state['revision'] == 1
     tokens = issue_project_choice_actions(1, 'ar_two_names', 'attribution')
-    result = execute_regional_action(1, tokens['shared_credit'])
+    selection = tokens['shared_credit']
+    assert execute_regional_action(1, selection)['status'] == 'stale_action'
+    preview = preview_regional_choice(1, selection)
+    result = execute_regional_action(1, preview['confirm_token'])
     assert result['status'] == 'completed'
     state = get_project_state(1, 'ar_two_names')
     assert state['state'] == 'completed' and state['choices'] == {'attribution':'shared_credit'}

@@ -372,30 +372,47 @@ def issue_regional_action(player_id: int, content_id: str, operation: str, *,
 
 
 def issue_project_choice_actions(player_id: int, project_id: str, objective_id: str) -> dict[str, str]:
+    """Issue non-mutating selection intents for a choice menu."""
     conn = get_connection()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         state = get_project_state(player_id, project_id, conn=conn)
         if not state or state["state"] != "active":
+            conn.rollback()
             return {}
         step = _active_step(state["definition"], state)
         objective = next((o for o in step.objectives if o.objective_id == objective_id and o.kind == "choose"), None)
         if not objective:
+            conn.rollback()
             return {}
+        # Rebuilding or leaving the option menu invalidates every previously
+        # issued Confirm authority for this project.
+        conn.execute(
+            "DELETE FROM player_ui_actions WHERE player_id=? AND kind=?",
+            (int(player_id), f"rav1:{project_id}:choose"),
+        )
+        conn.commit()
         payloads = []
         for choice in objective.target["values"]:
             payloads.append(_canonical({
-                "catalog_version": 1, "content_id": project_id, "operation": "choose",
+                "catalog_version": 1, "content_id": project_id, "operation": "preview_choice",
                 "objective_id": objective_id, "choice": choice,
                 "revision": int(state["revision"]), "step_id": step.step_id,
             }))
-        tokens = issue_actions(int(player_id), f"rav1:{project_id}:choose", payloads)
+        tokens = issue_actions(
+            int(player_id), f"rav1:choice-preview:{project_id}:{objective_id}", payloads,
+        )
         return {json.loads(raw)["choice"]: token for raw, token in tokens.items()}
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
     finally:
         conn.close()
 
 
 def preview_regional_choice(player_id: int, token: str) -> dict | None:
-    """Read a current choice intent without consuming or mutating it."""
+    """Validate a selection intent and mint the only executable Confirm token."""
     conn = get_connection()
     try:
         row = conn.execute(
@@ -404,12 +421,16 @@ def preview_regional_choice(player_id: int, token: str) -> dict | None:
         ).fetchone()
         if (
             not row
-            or not str(row["kind"]).endswith(":choose")
+            or not str(row["kind"]).startswith("rav1:choice-preview:")
             or float(row["expires_at"]) < time.time()
         ):
             return None
         payload = json.loads(str(row["payload"]))
-        if not isinstance(payload, dict) or int(payload.get("catalog_version", 0)) != CATALOG_VERSION:
+        if (
+            not isinstance(payload, dict)
+            or int(payload.get("catalog_version", 0)) != CATALOG_VERSION
+            or payload.get("operation") != "preview_choice"
+        ):
             return None
         project_id = str(payload.get("content_id") or "")
         state = get_project_state(player_id, project_id, conn=conn)
@@ -418,7 +439,11 @@ def preview_regional_choice(player_id: int, token: str) -> dict | None:
         objective = _project_objective_from_payload(state, payload, "choose")
         if str(payload.get("choice") or "") not in tuple(objective.target.get("values", ())):
             return None
-        return payload
+        confirm_token = issue_regional_action(
+            int(player_id), project_id, "choose",
+            objective_id=str(payload["objective_id"]), choice=str(payload["choice"]),
+        )
+        return {**payload, "confirm_token": confirm_token} if confirm_token else None
     except (ActionRejected, TypeError, ValueError, json.JSONDecodeError):
         return None
     finally:
@@ -700,6 +725,8 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
         if not token_row:
             raise ActionRejected("stale_action")
         action_kind = str(token_row["kind"])
+        if action_kind.startswith("rav1:choice-preview:"):
+            raise ActionRejected("stale_action")
         if not action_kind.startswith("rav1:"):
             raise ActionRejected("malformed_action")
         payload = json.loads(str(token_row["payload"]))
@@ -793,7 +820,9 @@ def execute_regional_action(player_id: int, token: str, *, failure_hook=None) ->
             "xp_delta": int((reward_result or {}).get("xp", 0)),
             "gold_delta": int((reward_result or {}).get("gold", 0)),
             "gold_after": int(((reward_result or {}).get("progression") or {}).get("gold_after", player["gold"])),
-            "progression": [((reward_result or {}).get("progression") or {})] if reward_result else [],
+            "progression": [((reward_result or {}).get("progression") or {})]
+            if reward_result and (int(reward_result.get("xp", 0)) or int(reward_result.get("gold", 0)))
+            else [],
             "source": {"catalog_version": 1, "content_id": content_id, "operation": operation},
             "details": details, "intent": payload,
         }

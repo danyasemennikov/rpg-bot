@@ -1,6 +1,9 @@
+from math import ceil
+
 from game.crafting_runtime import LIVE_RECIPE_IDS, get_recipe
 from game.items_data import ITEMS, get_item
 from game.regional_catalog import STANDING_DELIVERIES
+from handlers.location import CURATED_EQUIPMENT_VENDOR_STOCK
 
 
 def _raw_sale_value(recipe, submitted_quantity):
@@ -27,9 +30,31 @@ def test_standing_payouts_do_not_exceed_submitted_or_raw_value():
 
 def test_no_vendor_or_alternate_recipe_creates_repeat_arbitrage():
     accepted = {item_id for job in STANDING_DELIVERIES for item_id, _quantity in job.cost_items}
+    vendor_stock = {
+        row['item_id']
+        for rows in CURATED_EQUIPMENT_VENDOR_STOCK.values()
+        for row in rows
+    }
+    assert accepted.isdisjoint(vendor_stock)
     assert all(get_item(item_id)['buy_price'] == 0 for item_id in accepted)
     outputs={}
     for recipe_id in LIVE_RECIPE_IDS:
         recipe=get_recipe(recipe_id); outputs.setdefault(recipe.output_item_id,[]).append(recipe.recipe_id)
     for item_id in accepted:
         assert len(outputs.get(item_id, [])) <= 1
+    for job in STANDING_DELIVERIES:
+        for output_item_id, submitted_quantity in job.cost_items:
+            for recipe_id in outputs.get(output_item_id, []):
+                recipe = get_recipe(recipe_id)
+                requirements = tuple(recipe.material_requirements) + tuple(recipe.special_ingredient_requirements)
+                if requirements and all(
+                    requirement.item_id in vendor_stock
+                    and get_item(requirement.item_id)['buy_price'] > 0
+                    for requirement in requirements
+                ):
+                    vendor_batch_cost = sum(
+                        get_item(requirement.item_id)['buy_price'] * requirement.quantity
+                        for requirement in requirements
+                    )
+                    vendor_route_cost = ceil(submitted_quantity / recipe.output_quantity) * vendor_batch_cost
+                    assert job.reward.gold <= vendor_route_cost

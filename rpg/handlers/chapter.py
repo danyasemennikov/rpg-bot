@@ -21,10 +21,10 @@ def _button(text, data):
     return [InlineKeyboardButton(text, callback_data=data)]
 
 
-def build_journal(player: dict):
+def build_journal(player: dict, *, show_completed_history: bool = False):
     player_id, lang = player['telegram_id'], player.get('lang', 'ru')
     history = get_contract_history(player_id)
-    if 'chapter_homecoming' in history:
+    if 'chapter_homecoming' in history and not show_completed_history:
         from handlers.regional import build_regional_home
         return build_regional_home(player)
     contracts = get_chapter_contracts()
@@ -181,6 +181,8 @@ async def handle_chapter_buttons(update, context):
         elif recovery['pending']:
             await query.answer(t('gear.settlement_pending', lang), show_alert=True)
             answered = True
+    if data == 'alpha_history':
+        view = lambda current: build_journal(current, show_completed_history=True)
     if data.startswith('alpha_kit_'):
         status = claim_starter_kit(player_id, data.removeprefix('alpha_kit_'))['status']
     elif data == 'alpha_workshop':

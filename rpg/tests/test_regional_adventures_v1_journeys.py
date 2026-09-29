@@ -44,12 +44,14 @@ from game.pve_reward_settlement import (
 )
 from game.profession_recipes import recipe_intent_payload
 from game.quest_board import (
-    HUNT_CONTRACTS_BY_KEY, accept_hunt_contract, claim_completed_hunt_contract, get_contract_history,
-    list_hunt_contracts_for_location,
+    HUNT_CONTRACTS_BY_KEY, accept_hunt_contract, build_contract_row,
+    claim_completed_hunt_contract, get_contract_history,
+    get_player_hunter_progress, list_hunt_contracts_for_location,
 )
 from game.regional_adventures import (
     execute_regional_action, get_project_state, issue_project_choice_actions,
     issue_regional_action, list_claims, list_facts, list_pins,
+    preview_regional_choice,
 )
 from game.regional_catalog import FACTS_BY_ID, PROJECTS_BY_ID
 from game.regional_opportunities import nearby
@@ -57,6 +59,7 @@ from game.regional_schema import MIGRATION_VERSION, TABLES, ensure_regional_sche
 from game.seed import seed_items
 from game.pve_live import _ensure_pve_encounter_table, _ensure_world_spawn_table
 from handlers.chapter import build_journal, handle_chapter_buttons, journal_command
+from handlers.build import handle_build_buttons
 from handlers.location import handle_combat_buttons, handle_location_buttons
 from handlers.inventory import handle_inventory_buttons, try_sell_inventory_item
 from handlers.professions import handle_profession_buttons
@@ -78,6 +81,7 @@ from tests.test_professions_economy_v1_journeys import (
 _RAV_GATHER_SEQUENCE = itertools.count(1)
 PHYSICAL_PLAYER_ID = EARNED_PLAYER_ID + 1
 MAGIC_PLAYER_ID = EARNED_PLAYER_ID + 2
+BELOW_RANK_PLAYER_ID = EARNED_PLAYER_ID + 99
 EXPECTED_EARNED_CHECKPOINT_SHA256 = "7ee968b9861312799d743faf87d6afc3f9d099640b06e68e7e94f8cafdac9e6c"
 EXPECTED_PARTY_CHECKPOINT_SHA256 = "7510168ac9b5a03c06423ce9075906088e21cef2ca4a3716016eb5153d393a7b"
 
@@ -636,19 +640,47 @@ def test_j02_five_way_choice_and_actual_entry_surfaces(earned):
         sun_text, sun_markup = build_detail(dict(get_player(earned.player_id)), 'r', 'region_sunscar')
         assert sun_text and 'rv:d:p:ss_camp_bearings' not in _callbacks(sun_markup)
 
+        presented_hunts = set()
         emitted_hunts = set()
-        for location in ('hub_westwild', 'frostspine_n5', 'ashen_n3a2', 'mireveil_n5a1', 'hub_sunscar'):
+        for location in ('capital_city', 'frostspine_n5', 'ashen_n3a2', 'mireveil_n5a1', 'hub_sunscar'):
             await _move(earned, location)
             if 'quest_board' in get_location(location).get('services', []):
                 await earned.callback('quest_board', handle_location_buttons)
                 board_text, board_markup = earned.messages[-1]
                 assert 'rank' in board_text.lower()
+                for contract in list_hunt_contracts_for_location(location):
+                    if contract.chapter_order:
+                        continue
+                    if build_contract_row(contract, 'en') in board_text:
+                        presented_hunts.add(contract.contract_key)
                 emitted_hunts.update(
                     value.removeprefix('quest_board_accept_')
                     for value in _callbacks(board_markup) if value.startswith('quest_board_accept_')
                 )
-        assert {'hunt_greyfang', 'hunt_frostspine_white_wolves', 'hunt_ashen_zombie_clusters',
-                'hunt_sunscar_scorpions', 'hunt_sunscar_air_elementals'} <= emitted_hunts
+        required = {
+            'hunt_greyfang', 'hunt_frostspine_white_wolves', 'hunt_ashen_zombie_clusters',
+            'hunt_mireveil_leech_swarms', 'hunt_sunscar_scorpions',
+            'hunt_sunscar_air_elementals',
+        }
+        assert required <= presented_hunts
+        assert required <= emitted_hunts
+
+        # A separately and legitimately registered novice reaches the same
+        # production board and receives the real rank denial for the elite
+        # Air Elemental contract.
+        novice = ProductionJourney(BELOW_RANK_PLAYER_ID, lang='en')
+        await novice.register(primary='agility', name='RAV1 Novice')
+        assert get_player_hunter_progress(novice.player_id)['current_rank'] == 'novice'
+        await _move(novice, 'hub_sunscar')
+        board_control = next(value for value in _callbacks(novice.messages[-1][1])
+                             if value == 'quest_board')
+        await novice.callback(board_control, handle_location_buttons)
+        novice_text, novice_markup = novice.messages[-1]
+        air = HUNT_CONTRACTS_BY_KEY['hunt_sunscar_air_elementals']
+        assert build_contract_row(air, 'en') in novice_text
+        assert t('location.quest_board_locked_reason_rank', 'en',
+                 rank=t('location.hunter_rank_tracker', 'en')) in novice_text
+        assert 'quest_board_accept_hunt_sunscar_air_elementals' not in _callbacks(novice_markup)
         await _move(earned, 'capital_city')
         wrong_token = issue_regional_action(earned.player_id, 'mv_medic_table', 'deliver')
         wrong_query = await earned.callback(f'rv:a:{wrong_token}', handle_regional_buttons)
@@ -1345,32 +1377,42 @@ def test_j14_busy_shared_sources(earned_party):
         await _move(pursuer, 'hub_mireveil')
         await _rav_action(pursuer, 'mv_ferry_crew', 'start')
         await _move(pursuer, 'mireveil_n6')
+        mixed_control = next(value for value in _callbacks(pursuer.messages[-1][1])
+                             if value == 'fight_mixed_rav1_mireveil_n6_crosscurrent')
         await _move(holder, 'mireveil_n6')
 
-        # Holding one ordinary source independently makes the exact mixed
-        # recipe unavailable without reserving its other source.
+        # Hold one ordinary source through its emitted production combat
+        # control. The exact mixed recipe must reject without reserving the
+        # independently idle companion source.
         ensure_location_pve_spawn_instances(location_id='mireveil_n6')
+        emitted_spawns = [value for value in _callbacks(holder.messages[-1][1])
+                          if value.startswith('fight_spawn_')]
         conn = get_connection()
-        source = conn.execute(
-            """SELECT spawn_instance_id FROM pve_spawn_instances
-               WHERE location_id='mireveil_n6' AND mob_id='giant_leech'
-                 AND state='idle' AND linked_encounter_id IS NULL
-               ORDER BY spawn_instance_id LIMIT 1"""
-        ).fetchone()
-        conn.close(); assert source
-        held_id, held_status = create_or_load_open_world_pve_encounter(
-            owner_player_id=holder.player_id, location_id='mireveil_n6', mob_id='giant_leech',
-            battle_state={'mob_id':'giant_leech','mob_hp':1,'mob_max_hp':1,
-                          'player_hp':1,'player_max_hp':1,'player_mana':0,'player_max_mana':0,'log':[]},
-            mob=get_mob('giant_leech'), spawn_instance_id=source['spawn_instance_id'],
-        )
-        assert held_status == 'created'
+        source_by_callback = {
+            f"fight_spawn_{row['spawn_instance_id']}": dict(row)
+            for row in conn.execute(
+                "SELECT spawn_instance_id,mob_id FROM pve_spawn_instances "
+                "WHERE location_id='mireveil_n6' AND state='idle' AND linked_encounter_id IS NULL"
+            )
+        }
+        conn.close()
+        source_callback = next(value for value in emitted_spawns
+                               if source_by_callback.get(value, {}).get('mob_id') == 'giant_leech')
+        await holder.callback(source_callback, handle_combat_buttons)
+        held_enter = next(value for value in _callbacks(holder.messages[-1][1])
+                          if value.startswith('pve_enter_'))
+        held_id = held_enter.removeprefix('pve_enter_')
         held_projection = next(row for row in nearby(dict(get_player(pursuer.player_id)))
                                if row['content_id']=='rav1_mireveil_n6_crosscurrent')
         assert held_projection['status'] == 'busy'
+        mixed_attempt = await pursuer.callback(mixed_control, handle_combat_buttons)
+        assert any(call.kwargs.get('show_alert') for call in mixed_attempt.answer.await_args_list)
+        assert not any(value.startswith('pve_enter_') for value in _callbacks(pursuer.messages[-1][1]))
         conn = get_connection()
         assert conn.execute(
-            "SELECT COUNT(*) AS total FROM pve_spawn_instances WHERE location_id='mireveil_n6' AND linked_encounter_id IS NULL AND state='idle'"
+            "SELECT COUNT(*) AS total FROM pve_spawn_instances "
+            "WHERE location_id='mireveil_n6' AND mob_id='water_snake' "
+            "AND linked_encounter_id IS NULL AND state='idle'"
         ).fetchone()['total'] > 0
         conn.close()
         assert leave_open_world_pve_encounter(
@@ -1693,7 +1735,9 @@ async def _prepare_atomic_surface(journey: ProductionJourney, surface: str) -> t
         await _rav_action(journey, 'ar_two_names', 'start')
         tokens = issue_project_choice_actions(
             journey.player_id, 'ar_two_names', 'attribution')
-        return tokens['shared_credit'], tokens['leave_unattributed']
+        preview = preview_regional_choice(journey.player_id, tokens['shared_credit'])
+        assert preview and preview['confirm_token']
+        return preview['confirm_token'], tokens['leave_unattributed']
     raise AssertionError(surface)
 
 
@@ -1957,7 +2001,42 @@ def test_j19_localized_real_handlers(earned_party, lang):
 
         # Post-onboarding Journal and real Names evidence/choice handlers.
         await earned.text('/journal', journal_command)
-        assert 'rv:v:r:0:all' in _callbacks(earned.messages[-1][1])
+        journal_callbacks = _callbacks(earned.messages[-1][1])
+        assert {'rv:v:r:0:all', 'inv_catalog', 'bv_main'} <= set(journal_callbacks)
+        map_callback = next(value for value in journal_callbacks if value.startswith('map_route_'))
+        await earned.callback(map_callback, handle_location_buttons)
+        assert all(value.startswith('map_route_') for value in _callbacks(earned.messages[-1][1]))
+        await earned.callback('inv_catalog', handle_inventory_buttons)
+        assert earned.messages[-1][0]
+        await earned.callback('bv_main', handle_build_buttons)
+        assert earned.messages[-1][0]
+
+        # Follow source and recipe guidance only from controls emitted by the
+        # regional Journal and their destination handlers.
+        await _inspect(earned, 'fs_survey_stone', 'frostspine_n4')
+        await earned.text('/journal', journal_command)
+        leads_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                              if value.startswith('rv:v:l:'))
+        await earned.callback(leads_callback, handle_regional_buttons)
+        survey_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                               if value.endswith(':fs_survey_stone'))
+        await earned.callback(survey_callback, handle_regional_buttons)
+        source_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                               if value.startswith('pe_m:'))
+        await earned.callback(source_callback, handle_profession_buttons)
+        assert earned.messages[-1][0]
+
+        await earned.text('/journal', journal_command)
+        work_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                             if value.startswith('rv:v:w:'))
+        await earned.callback(work_callback, handle_regional_buttons)
+        ration_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                               if value.endswith(':ww_ration_order'))
+        await earned.callback(ration_callback, handle_regional_buttons)
+        recipe_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                               if value.startswith('pe_r:'))
+        await earned.callback(recipe_callback, handle_profession_buttons)
+        assert earned.messages[-1][0]
         await _complete_names(earned)
 
         # A wrong-location action produces the locale-specific handler error.
@@ -1976,6 +2055,13 @@ def test_j19_localized_real_handlers(earned_party, lang):
         await earned.callback(f'rv:a:{medic_token}', handle_regional_buttons)
         medic_result = _receipt(earned.player_id, medic_token)
         assert medic_result and medic_result['status'] == 'completed'
+        result_callbacks = _callbacks(earned.messages[-1][1])
+        assert {'inv_tab_all', 'pe_h:0'} <= set(result_callbacks)
+        await earned.callback('pe_h:0', handle_profession_buttons)
+        receipt_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                                if value.startswith('pe_x:'))
+        await earned.callback(receipt_callback, handle_profession_buttons)
+        assert 'mv_medic_table' not in earned.messages[-1][0]
 
         # Camp exploration/cache and both canonical preview types use their
         # actual regional callback routes.

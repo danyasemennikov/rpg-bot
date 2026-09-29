@@ -38,8 +38,21 @@ def _button(text: str, data: str):
 
 def _map_callback(player: dict, locations: tuple[str, ...] = ()) -> str:
     location_id = locations[0] if locations else str(player.get("location_id") or "")
-    route_id = str((get_location(location_id) or {}).get("route_id") or "route_westwild")
-    return f"map_route_{route_id.removeprefix('route_')}"
+    route_id = str((get_location(location_id) or {}).get("route_id") or "")
+    route_key = route_id.removeprefix("route_")
+    if route_key == "old_mine_stub" or location_id == "old_mine_entrance":
+        route_key = "frostspine"
+    if route_key not in {"westwild", "frostspine", "ashen_ruins", "sunscar", "mireveil"}:
+        # Capital belongs to every displayed route.  Westwild is a valid
+        # existing view and its route keyboard still exposes all five maps.
+        route_key = "westwild"
+    return f"map_route_{route_key}"
+
+
+def _journal_markup(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
+    if len(rows) > 10 or sum(len(row) for row in rows) > 12 or any(len(row) > 2 for row in rows):
+        raise RuntimeError("rav1_button_budget_exceeded")
+    return InlineKeyboardMarkup(rows)
 
 
 def _title(kind: str, content_id: str, lang: str) -> str:
@@ -104,9 +117,11 @@ def build_regional_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
          InlineKeyboardButton(t("rav1.nav.work", lang), callback_data="rv:v:w:0:all")],
         [InlineKeyboardButton(t("rav1.nav.map", lang), callback_data=_map_callback(player)),
          InlineKeyboardButton(t("rav1.nav.professions", lang), callback_data="pe_o:0")],
-        [InlineKeyboardButton(t("rav1.nav.equipment", lang), callback_data="inv_catalog")],
+        [InlineKeyboardButton(t("rav1.nav.equipment", lang), callback_data="inv_catalog"),
+         InlineKeyboardButton(t("rav1.nav.build", lang), callback_data="bv_main")],
+        [InlineKeyboardButton(t("rav1.nav.history", lang), callback_data="alpha_history")],
     ]
-    return "\n".join(lines), InlineKeyboardMarkup(rows)
+    return "\n".join(lines), _journal_markup(rows)
 
 
 def _list_screen(player: dict, view: str, requested_page: int, region: str) -> tuple[str, InlineKeyboardMarkup]:
@@ -128,7 +143,7 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
         title, rows = t("rav1.nav.work", lang), local_work(player_id)
     else:
         return build_regional_home(player)
-    visible, current, pages = paginate(rows, requested_page)
+    visible, current, pages = paginate(rows, requested_page, page_size=4 if view == "p" else 6)
     lines = [f"<b>{html.escape(str(title))}</b>"]
     buttons = []
     if not visible:
@@ -186,17 +201,26 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
             InlineKeyboardButton(t("rav1.status.found", lang), callback_data="rv:v:s:0:ww"),
         ])
     buttons.append(_button(t("rav1.nav.home", lang), "rv:v:h:0:all"))
-    return "\n".join(lines)[:3000], InlineKeyboardMarkup(buttons[:10])
+    return "\n".join(lines)[:3000], _journal_markup(buttons)
 
 
 def _project_detail(player: dict, project_id: str) -> tuple[str, list[list[InlineKeyboardButton]]]:
     lang, player_id = player.get("lang", "ru"), int(player["telegram_id"])
     project = PROJECTS_BY_ID[project_id]
     state, claims = get_project_state(player_id, project_id), list_claims(player_id)
+    reward_revealed = (
+        project_id != "ss_camp_bearings"
+        or project_id in claims
+        or bool(state and int(state["step_index"]) >= 1)
+    )
     lines = [f"<b>{html.escape(str(_title('project', project_id, lang)))}</b>",
-             t(f"rav1.content.{project_id}.summary", lang), "",
-             t("rav1.rewards.line", lang, xp=project.reward.xp, gold=project.reward.gold,
-               items=", ".join(f"{get_item_name(item, lang)} ×{qty}" for item, qty in project.reward.items) or t("rav1.rewards.none", lang))]
+             t(f"rav1.content.{project_id}.summary", lang), ""]
+    if reward_revealed:
+        lines.append(t("rav1.rewards.line", lang, xp=project.reward.xp, gold=project.reward.gold,
+                       items=", ".join(f"{get_item_name(item, lang)} ×{qty}" for item, qty in project.reward.items)
+                       or t("rav1.rewards.none", lang)))
+    else:
+        lines.append(t("rav1.rewards.hidden", lang))
     rows: list[list[InlineKeyboardButton]] = []
     current_location = str(player["location_id"])
     if project_id in claims:
@@ -234,6 +258,14 @@ def _project_detail(player: dict, project_id: str) -> tuple[str, list[list[Inlin
                 rows.append([InlineKeyboardButton(t("rav1.actions.recipe", lang), callback_data=f"pe_r:{recipe_id}"),
                              InlineKeyboardButton(t("rav1.nav.professions", lang), callback_data="pe_p:alchemy")])
                 continue
+            if objective.kind == "deliver" and current < objective.required:
+                from game.regional_opportunities import inventory_counts
+                counts = inventory_counts(player_id)
+                for item_id, required in objective.target["items"]:
+                    lines.append(t("rav1.work.item_owned", lang, item=get_item_name(item_id, lang),
+                                   owned=int(counts.get(item_id, 0)), required=required))
+                lines += [t("rav1.work.exact_consumption", lang), t("rav1.status.one_time", lang)]
+                rows.append([InlineKeyboardButton(t("rav1.nav.inventory", lang), callback_data="inv_tab_all")])
             if current >= objective.required or current_location not in objective.locations:
                 continue
             if objective.kind == "choose":
@@ -243,13 +275,6 @@ def _project_detail(player: dict, project_id: str) -> tuple[str, list[list[Inlin
                     if value in tokens:
                         rows.append(_button(t(f"rav1.choices.{value}", lang), f"rv:c:{tokens[value]}"))
             elif objective.kind in {"deliver", "respond"}:
-                if objective.kind == "deliver":
-                    from game.regional_opportunities import inventory_counts
-                    counts = inventory_counts(player_id)
-                    for item_id, required in objective.target["items"]:
-                        lines.append(t("rav1.work.item_owned", lang, item=get_item_name(item_id, lang),
-                                       owned=int(counts.get(item_id, 0)), required=required))
-                    lines += [t("rav1.work.exact_consumption", lang), t("rav1.status.one_time", lang)]
                 token = issue_regional_action(player_id, project_id, objective.kind, objective_id=objective.objective_id)
                 if token:
                     rows.append(_button(t(f"rav1.actions.{objective.kind}", lang), f"rv:a:{token}"))
@@ -278,6 +303,13 @@ def _interaction_detail(player: dict, content_id: str) -> tuple[str, list[list[I
             if token:
                 rows.append(_button(t("rav1.actions.inspect", lang), f"rv:a:{token}"))
         lines += ["", t("rav1.facts.no_reward", lang)]
+        guidance = {
+            "ww_greyfang_tracks": (t("rav1.actions.source", lang), _map_callback(player, ("hub_westwild",))),
+            "fs_survey_stone": (t("rav1.actions.source", lang), "pe_m:frostpine_wood:0"),
+            "mv_fungal_observation": (t("rav1.actions.source", lang), "pe_m:marsh_mushroom:0"),
+        }.get(content_id)
+        if guidance and content_id in facts:
+            rows.append([InlineKeyboardButton(guidance[0], callback_data=guidance[1])])
     elif definition.kind in {"request", "cache"}:
         revealed = definition.kind != "cache" or definition.requires_fact_id in facts or content_id in claims
         if not revealed:
@@ -319,6 +351,7 @@ def _work_detail(player: dict, content_id: str) -> tuple[str, list[list[InlineKe
         lines.append(t("rav1.work.item_owned", lang, item=get_item_name(item_id, lang), owned=owned, required=required))
         if owned < required:
             lines.append(t("rav1.work.shortage", lang, missing=required-owned))
+    lines.append(t("rav1.work.exact_consumption", lang))
     rows = []
     if str(player["location_id"]) == definition.location_id:
         token = issue_regional_action(player_id, content_id, "deliver")
@@ -326,10 +359,17 @@ def _work_detail(player: dict, content_id: str) -> tuple[str, list[list[InlineKe
             rows.append(_button(t("rav1.actions.deliver", lang), f"rv:a:{token}"))
     else:
         lines.append(t("rav1.work.remote", lang, place=get_location_name(definition.location_id, lang)))
-    rows.append([
-        InlineKeyboardButton(t("rav1.nav.inventory", lang)[:32], callback_data="inv_tab_all"),
-        InlineKeyboardButton(t("rav1.nav.professions", lang)[:32], callback_data="pe_o:0"),
-    ])
+    guidance = {
+        "ww_ration_order": ("pe_r:trail_ration",),
+        "fs_forge_supplies": ("pe_m:iron_ore:0", "pe_m:coal:0"),
+        "mv_stew_order": ("pe_r:pe_cooking_marsh_06",),
+    }[content_id]
+    rows.append([InlineKeyboardButton(
+        t("rav1.actions.recipe" if callback.startswith("pe_r:") else "rav1.actions.source", lang),
+        callback_data=callback,
+    ) for callback in guidance])
+    rows.append([InlineKeyboardButton(t("rav1.nav.inventory", lang)[:32], callback_data="inv_tab_all"),
+                 InlineKeyboardButton(t("rav1.nav.professions", lang)[:32], callback_data="pe_o:0")])
     rows.append([InlineKeyboardButton(t("rav1.nav.map", lang), callback_data=_map_callback(player, (definition.location_id,))),
                  InlineKeyboardButton(t("rav1.nav.history", lang), callback_data="pe_h:0")])
     return "\n".join(lines), rows
@@ -462,10 +502,12 @@ def build_detail(player: dict, kind: str, content_id: str) -> tuple[str, InlineK
             ])
         encounter_location = str(special["location_id"] if special else recipe["location_id"])
         rows.append([InlineKeyboardButton(t("rav1.nav.map", lang), callback_data=_map_callback(player, (encounter_location,)))])
+        rows.append([InlineKeyboardButton(t("rav1.nav.equipment", lang), callback_data="inv_catalog"),
+                     InlineKeyboardButton(t("rav1.nav.build", lang), callback_data="bv_main")])
     else:
         return build_regional_home(player)
     rows.append(_button(t("rav1.nav.home", player.get("lang", "ru")), "rv:v:h:0:all"))
-    return text[:3000], InlineKeyboardMarkup(rows[:10])
+    return text[:3000], _journal_markup(rows[:10])
 
 
 def build_choice_preview(player: dict, token: str) -> tuple[str, InlineKeyboardMarkup] | None:
@@ -482,9 +524,23 @@ def build_choice_preview(player: dict, token: str) -> tuple[str, InlineKeyboardM
         t(f"rav1.choices.{choice}_after", lang),
         t("rav1.choices.permanent", lang),
     ])
-    rows = [[InlineKeyboardButton(t("rav1.actions.confirm", lang), callback_data=f"rv:a:{token}"),
+    confirm_token = str(payload["confirm_token"])
+    rows = [[InlineKeyboardButton(t("rav1.actions.confirm", lang), callback_data=f"rv:a:{confirm_token}"),
              InlineKeyboardButton(t("rav1.actions.cancel", lang), callback_data=f"rv:d:p:{project_id}")]]
     return text, InlineKeyboardMarkup(rows)
+
+
+def build_receipt_history_label(result: dict, lang: str) -> str:
+    source = result.get("source") if isinstance(result.get("source"), dict) else {}
+    content_id = str(source.get("content_id") or "")
+    operation = str(source.get("operation") or "")
+    title = (t("rav1.nav.pursuits", lang) if operation == "pin" else
+             _title("project" if content_id in PROJECTS_BY_ID else "interaction", content_id, lang)
+             if content_id else t("rav1.nav.pursuits", lang))
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    reason = str(details.get("reason") or "")
+    outcome = t(f"rav1.errors.{reason}", lang) if reason else t(f"rav1.actions.{operation}", lang)
+    return f"{title} · {outcome}"
 
 
 def build_action_result(player: dict, result: dict) -> tuple[str, InlineKeyboardMarkup]:
