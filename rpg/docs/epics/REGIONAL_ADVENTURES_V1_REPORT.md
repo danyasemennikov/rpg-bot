@@ -3,8 +3,9 @@
 - Status: Draft PR repair implemented; validation not run
 - Contract: RAV1-1
 - Frozen base: `ebd8f73ade53fcadb89942b703a947782276ea1c`
-- Previous reviewed HEAD: `15d189e9d9ebe91186488312899b9121a100e632`
-- Repair code commit: `cbb258e0a759d3d93d4385fe8482d9e6b7e87960`
+- Second-pass starting HEAD: `021dcdd8b3b125c1fc49ef3995594c515334b193`
+- Previous repair code commit: `cbb258e0a759d3d93d4385fe8482d9e6b7e87960`
+- Second static repair code commit: `4569226e5d41408e0711b6631509f3f2197d93a4`
 - Candidate branch: `codex/regional-adventures-opportunities-v1`
 - Pull request: #234, open Draft, unmerged, not deployed
 - New tested code commit: NONE — tests were expressly prohibited in this repair pass
@@ -39,6 +40,19 @@ startup semantic validation was strengthened.
 | F9 | Action/replay UI renders immutable receipt data in the current locale; player-visible raw recipe IDs were removed. | Success/rejection/restart/move/language/standing/choice/finite replay and raw-ID checks. | NOT RUN |
 | F10 | J02/J04/J05/J12/J13/J14/J15/J17/J19 and economy/provenance assertions were repaired to exercise production UI and authorities. | J01–J20 remains 20 journey definitions / 39 planned parameter runs. | NOT RUN |
 
+## Second narrow static repair (R1–R8)
+
+| Repair | Static implementation | Test source authored/updated | Execution |
+|---|---|---|---|
+| R1 | Items-only Root Cache receipts now omit character progression exactly as the strict recovery validator requires, without weakening receipt identity checks. | Claim, post-commit response loss, original-token replay, deleted token, move, restart, locale switch, stored-result identity and exact-once item grant. | NOT RUN |
+| R2 | Visible choice buttons now carry selection-only intents. A valid preview mints a separate Confirm mutation token; selection execution is rejected and rebuilding/Back invalidates pending Confirm authority. | Three choice projects, both options, ru/en/es, direct selection rejection, preview/Back nonmutation, stale Confirm, fresh Confirm, permanent replay/restart. | NOT RUN |
+| R3 | Journal map callbacks canonicalize Capital and Old Mine into supported map authorities and emit only the five existing route keys. | Emitted buttons are passed to the production location/map handler for Capital, Old Mine and all five route contexts. | NOT RUN |
+| R4 | Camp rewards stay hidden until bearings resolve; remote finite previews show owned/required/consumption/reward; source/recipe, Build/Equipment and Chapter I history controls route to existing authorities. | Camp secrecy, remote preview, source/recipe handler traversal, Build/Equipment navigation and completed Chapter I history. | NOT RUN |
+| R5 | Pursuit pagination uses a bounded page size and a shared hard budget guard: at most 12 buttons, 10 rows and two buttons per row, with no silent list truncation. | Six/seven-project and hunt/gear/project combinations across first/middle/last pages and ru/en/es. | NOT RUN |
+| R6 | RAV receipt list labels and details dispatch to the RAV current-locale renderer; non-RAV receipts retain the existing profession renderer. | Actual History button/list/detail traversal after restart and locale change, without raw IDs, missing keys or profession progression assumptions. | NOT RUN |
+| R7 | The semantic-corruption INSERT now has correct arity, and the choice test reacquires selection/Confirm after Back while proving the old Confirm cannot commit. | Full F4 corruption matrix and all F6 project/option/locale combinations. | NOT RUN |
+| R8 | Acceptance source now opens every board through production UI, includes Mireveil and a real novice rank denial, reserves the J14 ordinary source through emitted combat entry, authors event-controlled two-writer races, traverses J19 emitted navigation/receipt controls, covers the full replay matrix, and derives vendor/recipe arbitrage checks from authorities. Supplied checkpoints remain checked against recorded constants. | J02, J14, J19, synchronized named/mixed expiry races, finite/standing/choice/rejection replay, economy and checkpoint provenance. | NOT RUN |
+
 Static inspection found no frozen-contract contradiction and no scope expansion.
 `git diff --check` completed without errors before the repair commit. This is not a
 test result and does not establish runtime correctness.
@@ -52,6 +66,8 @@ test result and does not establish runtime correctness.
 - Modified `tests/test_regional_adventures_v1_journeys.py` for F10, production UI
   operation, recorded checkpoint hashes, local-session traces, matching combat
   bindings, production respawn lifecycle, contention/race cases and T2 rollback.
+- Modified `tests/test_regional_adventures_transactions.py` so permanent choices
+  use selection → preview → fresh Confirm.
 
 No test, pytest collection, Python import, compile, journey, regression or broad-suite
 command was run during this repair pass.
@@ -85,7 +101,8 @@ Checkpoint provenance verification for this repair candidate is NOT RUN.
 ## Review and limitations
 
 The former `automated_acceptance: complete` claim is invalidated by the independent
-FIX verdict and has been withdrawn. Automated acceptance is **PENDING VALIDATION**.
+FIX verdict and the later Astra `FIX BEFORE VALIDATION` static verdict; it remains
+withdrawn. Automated acceptance is **PENDING VALIDATION**.
 The historical results at `7846598682596234a6c1255b4faeba8689ad9200` do not validate
 this repair commit. A new final broad suite is required only after focused and affected
 regression validation stabilizes.
