@@ -1,17 +1,20 @@
 {
   "schema_version": 1,
   "contract": "RAV1-1",
-  "status": "draft_pr_repair_implemented_validation_not_run",
+  "status": "draft_pr_third_repair_implemented_validation_not_run",
+  "merge_ready": false,
   "base_commit": "ebd8f73ade53fcadb89942b703a947782276ea1c",
   "second_pass_starting_head": "021dcdd8b3b125c1fc49ef3995594c515334b193",
+  "third_pass_starting_head": "173102a67d59ec65eac93935155e7a794e0a468a",
   "previous_repair_code_commit": "cbb258e0a759d3d93d4385fe8482d9e6b7e87960",
   "branch": "codex/regional-adventures-opportunities-v1",
   "pull_request": 234,
   "repair_code_commit": "4569226e5d41408e0711b6631509f3f2197d93a4",
+  "third_repair_code_commit": "c9516298f5d7fa73251abd149ad943d3674f1bc1",
   "new_tested_code_commit": null,
   "final_pr_head": {
     "reference": "refs/heads/codex/regional-adventures-opportunities-v1",
-    "identity": "docs-only successor to repair_code_commit",
+    "identity": "docs-only successor to third_repair_code_commit",
     "exact_sha_location": "Draft PR body and final handoff after push"
   },
   "validation_policy": {
@@ -82,13 +85,21 @@
     {"id":"R7","implemented_statically":true,"production_change":"test fixture SQL arity and post-Cancel fresh choice flow corrected","tests_authored":"F4 semantic matrix and F6 full parameter matrix","result":"NOT RUN"},
     {"id":"R8","implemented_statically":true,"production_change":"remaining acceptance source gaps closed without changing frozen content","tests_authored":"J02 boards/novice rank, J14 production hold, synchronized named/mixed races, J19 controls, replay matrix, vendor/recipe economy and recorded hashes","result":"NOT RUN"}
   ],
+  "third_static_review_repairs": [
+    {"id":"S1","implemented_statically":true,"production_change":"restored frozen six-row paging and moved project pin controls to project detail while retaining reachable hunt/gear pins and hard Telegram budgets","tests_authored":"six/seven active projects, project/hunt/gear content and pins, and 13-entry Leads first/middle/last pages in ru/en/es","result":"NOT RUN"},
+    {"id":"S2","implemented_statically":true,"production_change":"none; J19 now follows the emitted Nearby, survey-detail and source controls","tests_authored":"ru/en/es J19 emitted discovery/source route corrected","result":"NOT RUN"},
+    {"id":"S3","implemented_statically":true,"production_change":"none; tests align with selection-only non-executable authority and separate Confirm receipt replay","tests_authored":"choice transaction and J17 selection nonmutation, durable choice/reward/claim invariants, Confirm replay and atomic failure paths","result":"NOT RUN"},
+    {"id":"S4","implemented_statically":true,"production_change":"removed repair-only synchronization hooks; production serialization remains BEGIN IMMEDIATE based","tests_authored":"test-only BEGIN IMMEDIATE boundary synchronization with separate thread-owned SQLite connections for named/mixed expiry-first and activation-first outcomes","result":"NOT RUN"},
+    {"id":"S5","implemented_statically":true,"production_change":"none; replay coverage now includes a finite insufficient-goods receipt","tests_authored":"finite rejection persistence, restart, locale switch, exact recovery, zero mutation/reward/claim and localized raw-ID-free rendering","result":"NOT RUN"}
+  ],
   "tests_added_or_modified": [
-    {"path":"tests/test_regional_adventures_review_repairs.py","change":"added focused F1-F9 repair matrix","result":"NOT RUN"},
+    {"path":"tests/test_regional_adventures_review_repairs.py","change":"focused repair matrix extended for six-row budgets, detail pins, real writer-lock attempt boundaries and finite rejection replay","result":"NOT RUN"},
     {"path":"tests/test_regional_adventures_economy.py","change":"derive submitted/raw values and vendor/recipe availability from authorities","result":"NOT RUN"},
-    {"path":"tests/test_regional_adventures_v1_journeys.py","change":"repair F10/R8 acceptance journeys and expected checkpoint provenance","result":"NOT RUN"},
-    {"path":"tests/test_regional_adventures_transactions.py","change":"use nonmutating selection preview and separate Confirm token","result":"NOT RUN"}
+    {"path":"tests/test_regional_adventures_v1_journeys.py","change":"repair F10/R8 acceptance journeys, expected checkpoint provenance, emitted Nearby discovery path and selection-only stale behavior","result":"NOT RUN"},
+    {"path":"tests/test_regional_adventures_transactions.py","change":"prove nonmutating selection preview, separate Confirm authority and committed Confirm receipt replay","result":"NOT RUN"}
   ],
   "commands_to_run_later": [
+    {"scope":"third narrow S1-S5 repair nodes","command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py::test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once tests/test_regional_adventures_review_repairs.py::test_r2_roster_writer_wins_real_lock_interleaving_and_active_sources_survive tests/test_regional_adventures_review_repairs.py::test_f7_every_visible_hunt_gear_and_project_pin_token_has_distinct_scope_and_works tests/test_regional_adventures_review_repairs.py::test_r5_project_pagination_never_truncates_and_every_page_respects_button_budget tests/test_regional_adventures_review_repairs.py::test_s1_leads_first_middle_last_pages_keep_six_rows_and_every_detail_reachable tests/test_regional_adventures_review_repairs.py::test_f9_finite_standing_choice_and_rejection_replay_exact_results_without_mutation tests/test_regional_adventures_transactions.py::test_preinspection_reconciles_names_then_choice_is_immutable_and_atomic tests/test_regional_adventures_v1_journeys.py::test_j17_atomic_boundaries tests/test_regional_adventures_v1_journeys.py::test_j19_localized_real_handlers","result":"NOT RUN"},
     {"scope":"focused independent-review repair matrix","command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py","result":"NOT RUN"},
     {"scope":"direct RAV regressions","command":"python -m pytest -q tests/test_regional_adventures_contract.py tests/test_regional_adventures_schema.py tests/test_regional_adventures_transactions.py tests/test_regional_adventures_objectives.py tests/test_regional_adventures_combat.py tests/test_regional_adventures_world.py tests/test_regional_adventures_ui.py tests/test_regional_adventures_localization.py tests/test_regional_adventures_economy.py","result":"NOT RUN"},
     {"scope":"affected shared regressions","command":"python -m pytest -q tests/test_world_pve_encounter_foundation.py tests/test_itemization_regional_loot_v1.py tests/test_itemization_fix_packet_pr230.py tests/test_character_builds_v1_migration.py tests/test_character_builds_v1_durability.py tests/test_alpha_transactions_v1.py","result":"NOT RUN"},
@@ -142,7 +153,7 @@
   },
   "review": {
     "independent_candidate_review": "FIX BEFORE VALIDATION",
-    "repair_packet": "F1-F10 and second narrow R1-R8 implemented statically; validation pending",
+    "repair_packet": "F1-F10, R1-R8 and third narrow S1-S5 implemented statically; validation pending",
     "frozen_contract_contradiction": null,
     "contract_deviations": [],
     "scope_expansion": false,
@@ -155,6 +166,7 @@
   "state_boundaries": {
     "pull_request_open": true,
     "pull_request_draft": true,
+    "merge_ready": false,
     "merged": false,
     "deployed": false,
     "human_validated": false
