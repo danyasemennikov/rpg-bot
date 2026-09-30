@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import json
 import threading
+from unittest.mock import patch
 
 import pytest
 
@@ -44,6 +45,7 @@ from game.regional_adventures import (
 )
 from game.regional_catalog import PROJECTS_BY_ID
 from game.regional_objectives import apply_combat_bindings
+from game.regional_opportunities import leads, pursuits
 from game.regional_schema import ensure_regional_schema
 from handlers.regional import (
     _map_callback,
@@ -170,6 +172,62 @@ def _backdate(encounter_id: str) -> None:
         (encounter_id,),
     )
     conn.commit(); conn.close()
+
+
+class _RaceConnection:
+    """Test-only connection proxy exposing deterministic writer-lock boundaries."""
+
+    def __init__(
+        self,
+        inner,
+        *,
+        begin_attempted: threading.Event | None = None,
+        begin_acquired: threading.Event | None = None,
+        owner_held: threading.Event | None = None,
+        hold_after_begin: threading.Event | None = None,
+        transition_encounter_id: str | None = None,
+        transition_ready: threading.Event | None = None,
+        hold_at_transition: threading.Event | None = None,
+    ):
+        self._inner = inner
+        self._begin_attempted = begin_attempted
+        self._begin_acquired = begin_acquired
+        self._owner_held = owner_held
+        self._hold_after_begin = hold_after_begin
+        self._transition_encounter_id = transition_encounter_id
+        self._transition_ready = transition_ready
+        self._hold_at_transition = hold_at_transition
+
+    def execute(self, sql, *args):
+        normalized = " ".join(str(sql).split())
+        if normalized == "BEGIN IMMEDIATE":
+            if self._owner_held is not None:
+                assert self._owner_held.is_set()
+            if self._begin_attempted is not None:
+                self._begin_attempted.set()
+            result = self._inner.execute(sql, *args)
+            if self._begin_acquired is not None:
+                self._begin_acquired.set()
+            if self._hold_after_begin is not None:
+                assert self._hold_after_begin.wait(5)
+            return result
+        if (
+            self._transition_encounter_id is not None
+            and "SELECT s.spawn_instance_id" in normalized
+            and "JOIN pve_spawn_instances" in normalized
+        ):
+            self._inner.execute(
+                "UPDATE pve_encounters SET created_at=datetime('now','-10 minutes') WHERE encounter_id=?",
+                (self._transition_encounter_id,),
+            )
+            assert self._transition_ready is not None
+            self._transition_ready.set()
+            assert self._hold_at_transition is not None
+            assert self._hold_at_transition.wait(5)
+        return self._inner.execute(sql, *args)
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
 
 
 @pytest.mark.parametrize("marker", [None, 2, "1"])
@@ -408,31 +466,33 @@ def test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once(
     encounter_id, _source_count = _forming_source(source_kind)
     _backdate(encounter_id)
     owner_acquired = threading.Event()
-    allow_owner = threading.Event()
-    contender_started = threading.Event()
+    release_owner = threading.Event()
+    contender_attempted = threading.Event()
 
     def prune_first():
-        conn = get_connection()
+        owner_conn = _RaceConnection(
+            get_connection(), begin_acquired=owner_acquired, hold_after_begin=release_owner,
+        )
         try:
-            return _prune_expired_forming_encounters(
-                conn, encounter_id=encounter_id,
-                ownership_hook=lambda: (owner_acquired.set(), allow_owner.wait(5)),
-            )
+            return _prune_expired_forming_encounters(owner_conn, encounter_id=encounter_id)
         finally:
-            conn.close()
+            owner_conn.close()
 
     def activate_second():
-        contender_started.set()
-        return lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
+        contender_conn = _RaceConnection(
+            get_connection(), begin_attempted=contender_attempted, owner_held=owner_acquired,
+        )
+        with patch("game.pve_live.get_connection", return_value=contender_conn):
+            return lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         expiry = pool.submit(prune_first)
         assert owner_acquired.wait(5)
         activation = pool.submit(activate_second)
-        assert contender_started.wait(5)
-        allow_owner.set()
-        assert expiry.result() == [encounter_id]
-        assert activation.result() is None
+        assert contender_attempted.wait(5)
+        release_owner.set()
+        assert expiry.result(timeout=10) == [encounter_id]
+        assert activation.result(timeout=10) is None
     conn = get_connection()
     assert conn.execute(
         "SELECT status FROM pve_encounters WHERE encounter_id=?", (encounter_id,)
@@ -452,39 +512,37 @@ def test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once(
 @pytest.mark.parametrize("source_kind", ["named", "mixed"])
 def test_r2_roster_writer_wins_real_lock_interleaving_and_active_sources_survive(source_kind):
     encounter_id, source_count = _forming_source(source_kind)
-    owner_acquired = threading.Event()
-    allow_owner = threading.Event()
-    contender_started = threading.Event()
-
-    def hold_transition(conn):
-        conn.execute(
-            "UPDATE pve_encounters SET created_at=datetime('now','-10 minutes') WHERE encounter_id=?",
-            (encounter_id,),
-        )
-        owner_acquired.set()
-        assert allow_owner.wait(5)
+    transition_ready = threading.Event()
+    release_owner = threading.Event()
+    contender_attempted = threading.Event()
 
     def activate_first():
-        return lock_open_world_pve_roster_for_runtime_start(
-            encounter_id=encounter_id, transition_hook=hold_transition,
+        owner_conn = _RaceConnection(
+            get_connection(),
+            transition_encounter_id=encounter_id,
+            transition_ready=transition_ready,
+            hold_at_transition=release_owner,
         )
+        with patch("game.pve_live.get_connection", return_value=owner_conn):
+            return lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
 
     def prune_second():
-        contender_started.set()
-        conn = get_connection()
+        contender_conn = _RaceConnection(
+            get_connection(), begin_attempted=contender_attempted, owner_held=transition_ready,
+        )
         try:
-            return _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
+            return _prune_expired_forming_encounters(contender_conn, encounter_id=encounter_id)
         finally:
-            conn.close()
+            contender_conn.close()
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         activation = pool.submit(activate_first)
-        assert owner_acquired.wait(5)
+        assert transition_ready.wait(5)
         expiry = pool.submit(prune_second)
-        assert contender_started.wait(5)
-        allow_owner.set()
-        assert activation.result() == [1]
-        assert expiry.result() == []
+        assert contender_attempted.wait(5)
+        release_owner.set()
+        assert activation.result(timeout=10) == [1]
+        assert expiry.result(timeout=10) == []
     conn = get_connection()
     assert conn.execute(
         "SELECT status FROM pve_encounters WHERE encounter_id=?", (encounter_id,)
@@ -795,26 +853,39 @@ def test_f7_every_visible_hunt_gear_and_project_pin_token_has_distinct_scope_and
         player_id INTEGER PRIMARY KEY, base_item_id TEXT)""")
     conn.execute("INSERT INTO player_gear_goals(player_id,base_item_id) VALUES (1,'field_sword_1h')")
     conn.commit(); conn.close()
-    _text, markup = _list_screen(dict(get_player(1)), "p", 0, "all")
-    tokens = [value.removeprefix("rv:a:") for value in _callbacks(markup) if value.startswith("rv:a:")]
+    player = dict(get_player(1))
+    _text, pursuit_markup = _list_screen(player, "p", 1, "all")
+    _text, project_markup = build_detail(player, "p", "ww_tool_roll")
+    tokens = [
+        value.removeprefix("rv:a:")
+        for markup in (pursuit_markup, project_markup)
+        for value in _callbacks(markup)
+        if value.startswith("rv:a:")
+    ]
     conn = get_connection()
     kinds = [conn.execute("SELECT kind FROM player_ui_actions WHERE token=?", (token,)).fetchone()["kind"] for token in tokens]
     conn.close()
     assert len(tokens) == len(kinds) == 3 and len(set(kinds)) == 3
     assert all(execute_regional_action(1, token)["status"] == "pinned" for token in tokens)
-    _text, refreshed = _list_screen(dict(get_player(1)), "p", 0, "all")
-    assert len([value for value in _callbacks(refreshed) if value.startswith("rv:a:")]) >= 3
-    project_unpin = issue_regional_action(
-        1, "ww_tool_roll", "pin", pin={"owner_kind":"project", "owner_id":"ww_tool_roll", "remove":True},
+    _text, refreshed = _list_screen(dict(get_player(1)), "p", 1, "all")
+    assert len([value for value in _callbacks(refreshed) if value.startswith("rv:a:")]) == 2
+    _text, project_refreshed = build_detail(dict(get_player(1)), "p", "ww_tool_roll")
+    project_unpin = next(
+        value.removeprefix("rv:a:") for value in _callbacks(project_refreshed)
+        if value.startswith("rv:a:")
     )
     assert execute_regional_action(1, project_unpin)["status"] == "unpinned"
-    project_repin = issue_regional_action(
-        1, "ww_tool_roll", "pin", pin={"owner_kind":"project", "owner_id":"ww_tool_roll", "remove":False},
+    _text, project_refreshed = build_detail(dict(get_player(1)), "p", "ww_tool_roll")
+    project_repin = next(
+        value.removeprefix("rv:a:") for value in _callbacks(project_refreshed)
+        if value.startswith("rv:a:")
     )
     assert execute_regional_action(1, project_repin)["status"] == "pinned"
     _insert_project("ar_two_names", 0)
-    fourth = issue_regional_action(
-        1, "ar_two_names", "pin", pin={"owner_kind":"project", "owner_id":"ar_two_names", "remove":False},
+    _text, fourth_markup = build_detail(dict(get_player(1)), "p", "ar_two_names")
+    fourth = next(
+        value.removeprefix("rv:a:") for value in _callbacks(fourth_markup)
+        if value.startswith("rv:a:")
     )
     assert execute_regional_action(1, fourth)["status"] == "pins_full"
     database.init_db(); conn = get_connection(); ensure_regional_schema(conn); conn.close()
@@ -917,9 +988,11 @@ def test_r4_emitted_recipe_and_material_source_links_open_production_profession_
 
 
 @pytest.mark.parametrize("lang", ["ru", "en", "es"])
-def test_r5_project_pagination_never_truncates_and_every_page_respects_button_budget(lang):
+@pytest.mark.parametrize("project_count", [6, 7])
+def test_r5_project_pagination_never_truncates_and_every_page_respects_button_budget(lang, project_count):
     _move(1, "hub_westwild", lang=lang)
-    for project_id in PROJECTS_BY_ID:
+    expected_projects = set(list(PROJECTS_BY_ID)[:project_count])
+    for project_id in expected_projects:
         _insert_project(project_id, 0)
     conn = get_connection()
     conn.execute("""CREATE TABLE IF NOT EXISTS player_hunt_contracts (
@@ -930,7 +1003,9 @@ def test_r5_project_pagination_never_truncates_and_every_page_respects_button_bu
     conn.execute("INSERT INTO player_gear_goals(player_id,base_item_id) VALUES (1,'field_sword_1h')")
     conn.commit(); conn.close()
     seen: set[str] = set()
+    seen_destinations: set[str] = set()
     page_index = 0
+    expected_total = len(pursuits(1))
     while True:
         _text, markup = _list_screen(dict(get_player(1)), "p", page_index, "all")
         rows = markup.inline_keyboard
@@ -938,13 +1013,59 @@ def test_r5_project_pagination_never_truncates_and_every_page_respects_button_bu
         assert sum(len(row) for row in rows) <= 12
         assert all(len(row) <= 2 for row in rows)
         callbacks = _callbacks(markup)
-        seen.update(value.removeprefix("rv:d:p:") for value in callbacks if value.startswith("rv:d:p:"))
+        content_callbacks = [
+            value for value in callbacks
+            if value.startswith("rv:d:p:") or value in {"quest_board", "inv_catalog", "pe_o:0"}
+        ]
+        assert len(content_callbacks) == min(6, expected_total - page_index * 6)
+        seen.update(value.removeprefix("rv:d:p:") for value in content_callbacks if value.startswith("rv:d:p:"))
+        seen_destinations.update(value for value in content_callbacks if not value.startswith("rv:d:p:"))
         next_pages = [value for value in callbacks if value == f"rv:v:p:{page_index + 1}:all"]
         if not next_pages:
             break
         page_index += 1
-    assert seen == set(PROJECTS_BY_ID)
-    assert page_index >= 2
+    assert seen == expected_projects
+    assert seen_destinations == {"quest_board", "inv_catalog", "pe_o:0"}
+    assert page_index == 1
+    for project_id in seen:
+        _text, detail = build_detail(dict(get_player(1)), "p", project_id)
+        assert any(value.startswith("rv:a:") for value in _callbacks(detail))
+
+
+@pytest.mark.parametrize("lang", ["ru", "en", "es"])
+def test_s1_leads_first_middle_last_pages_keep_six_rows_and_every_detail_reachable(lang):
+    player = _move(1, "capital_city", lang=lang)
+    expected_rows = leads(1, "all")
+    assert len(expected_rows) == 13
+    seen: set[str] = set()
+    page_index = 0
+    while True:
+        _text, markup = _list_screen(player, "l", page_index, "all")
+        rows = markup.inline_keyboard
+        callbacks = _callbacks(markup)
+        content_callbacks = [value for value in callbacks if value.startswith("rv:d:")]
+        assert len(content_callbacks) == min(6, len(expected_rows) - page_index * 6)
+        assert len(rows) <= 10
+        assert sum(len(row) for row in rows) <= 12
+        assert all(len(row) <= 2 for row in rows)
+        assert "rv:v:h:0:all" in callbacks
+        if page_index == 0:
+            assert "rv:v:l:1:all" in callbacks and "rv:v:l:-1:all" not in callbacks
+        elif page_index == 1:
+            assert {"rv:v:l:0:all", "rv:v:l:2:all"} <= set(callbacks)
+        else:
+            assert "rv:v:l:1:all" in callbacks and "rv:v:l:3:all" not in callbacks
+        seen.update(content_callbacks)
+        for callback in content_callbacks:
+            _prefix, _detail, kind, content_id = callback.split(":", 3)
+            detail_text, _detail_markup = build_detail(player, kind, content_id)
+            assert detail_text
+        next_callback = f"rv:v:l:{page_index + 1}:all"
+        if next_callback not in callbacks:
+            break
+        page_index += 1
+    assert page_index == 2
+    assert len(seen) == len(expected_rows)
 
 
 def test_f9_finite_standing_choice_and_rejection_replay_exact_results_without_mutation():
@@ -966,20 +1087,42 @@ def test_f9_finite_standing_choice_and_rejection_replay_exact_results_without_mu
     _move(1, "hub_mireveil", lang="en")
     rejected_token = issue_regional_action(1, "mv_stew_order", "deliver")
     rejected = execute_regional_action(1, rejected_token)
-    assert [finite["status"], standing["status"], choice["status"], rejected["status"]] == [
-        "completed", "delivered", "completed", "insufficient_goods",
+    finite_rejected_token = issue_regional_action(1, "mv_medic_table", "deliver")
+    finite_rejection_before = _durable_snapshot(1)
+    finite_rejected = execute_regional_action(1, finite_rejected_token)
+    assert _durable_snapshot(1) == finite_rejection_before
+    assert [finite["status"], standing["status"], choice["status"], rejected["status"],
+            finite_rejected["status"]] == [
+        "completed", "delivered", "completed", "insufficient_goods", "insufficient_goods",
     ]
+    assert finite_rejected["consumed"] == finite_rejected["granted"] == []
+    assert finite_rejected["progression"] == []
+    assert finite_rejected["xp_delta"] == finite_rejected["gold_delta"] == 0
+    assert "mv_medic_table" not in list_claims(1)
+    conn = get_connection()
+    finite_rejected_stored = json.loads(conn.execute(
+        "SELECT result_json FROM economy_action_receipts WHERE player_id=1 AND request_id=?",
+        (f"ui:{finite_rejected_token}",),
+    ).fetchone()["result_json"])
+    conn.close()
 
     _move(1, "capital_city", lang="es")
     database.init_db()
     before_replays = _durable_snapshot(1)
     replays = [execute_regional_action(1, token) for token in (
-        finite_token, standing_token, choice_token, rejected_token,
+        finite_token, standing_token, choice_token, rejected_token, finite_rejected_token,
     )]
     assert _durable_snapshot(1) == before_replays
     assert all(result["recovered"] is True for result in replays)
-    for original, replay in zip((finite, standing, choice, rejected), replays):
+    for original, replay in zip((finite, standing, choice, rejected, finite_rejected), replays):
         assert {key: value for key, value in replay.items() if key != "recovered"} == original
+    conn = get_connection()
+    assert json.loads(conn.execute(
+        "SELECT result_json FROM economy_action_receipts WHERE player_id=1 AND request_id=?",
+        (f"ui:{finite_rejected_token}",),
+    ).fetchone()["result_json"]) == finite_rejected_stored
+    conn.close()
+    assert "mv_medic_table" not in list_claims(1)
 
     rendered = [build_action_result(dict(get_player(1)), replay)[0] for replay in replays]
     assert "ración" in rendered[0].lower() and "18" in rendered[0]
@@ -988,9 +1131,10 @@ def test_f9_finite_standing_choice_and_rejection_replay_exact_results_without_mu
         "ambos nombres" in rendered[2].lower() or "mérito queda abierto" in rendered[2].lower()
     )
     assert "lote" in rendered[3].lower() or "completo" in rendered[3].lower()
+    assert "lote" in rendered[4].lower() or "completo" in rendered[4].lower()
     assert not any(raw_id in text for text in rendered for raw_id in (
-        "field_ration", "field_tonic", "ww_woodcutter_provisions", "ww_ration_order",
-        "ar_two_names", "mv_stew_order", "rav1:", "[rav1.",
+        "field_ration", "field_tonic", "herb_common", "ww_woodcutter_provisions", "ww_ration_order",
+        "ar_two_names", "mv_stew_order", "mv_medic_table", "rav1:", "[rav1.", "[professions.",
     ))
 
 

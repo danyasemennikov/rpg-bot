@@ -732,7 +732,6 @@ def _prune_expired_forming_encounters(
     *,
     location_id: str | None = None,
     encounter_id: str | None = None,
-    ownership_hook=None,
 ) -> list[str]:
     if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
         return []
@@ -742,8 +741,6 @@ def _prune_expired_forming_encounters(
         conn.execute('BEGIN IMMEDIATE')
 
     try:
-        if ownership_hook:
-            ownership_hook()
         filters = [
             "e.status='active'",
             "e.anchor_spawn_instance_id IS NOT NULL",
@@ -1257,9 +1254,7 @@ def leave_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tupl
         conn.close()
 
 
-def lock_open_world_pve_roster_for_runtime_start(
-    *, encounter_id: str, ownership_hook=None, transition_hook=None,
-) -> list[int] | None:
+def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[int] | None:
     """
     Atomically finalize forming open-world encounter roster and lock spawn state.
     Returns locked final roster when FORMING->ACTIVE transition is performed.
@@ -1275,14 +1270,10 @@ def lock_open_world_pve_roster_for_runtime_start(
         if not _table_exists(conn, 'pve_encounter_participants'):
             conn.rollback()
             return None
-        expired_ids = _prune_expired_forming_encounters(
-            conn, encounter_id=encounter_id, ownership_hook=ownership_hook,
-        )
+        expired_ids = _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
         if expired_ids:
             conn.commit()
             return None
-        if transition_hook:
-            transition_hook(conn)
         anchor_row = conn.execute(
             '''
             SELECT s.spawn_instance_id

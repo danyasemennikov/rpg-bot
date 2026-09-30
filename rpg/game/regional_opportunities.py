@@ -202,8 +202,7 @@ def local_work(player_id: int, *, conn=None) -> list[dict]:
             conn.close()
 
 
-def page(rows: list[dict], requested: int, *, page_size: int = PAGE_SIZE) -> tuple[list[dict], int, int]:
-    page_size = max(1, int(page_size))
-    pages = max(1, (len(rows) + page_size - 1) // page_size)
+def page(rows: list[dict], requested: int) -> tuple[list[dict], int, int]:
+    pages = max(1, (len(rows) + PAGE_SIZE - 1) // PAGE_SIZE)
     current = min(max(0, int(requested)), pages - 1)
-    return rows[current * page_size:(current + 1) * page_size], current, pages
+    return rows[current * PAGE_SIZE:(current + 1) * PAGE_SIZE], current, pages

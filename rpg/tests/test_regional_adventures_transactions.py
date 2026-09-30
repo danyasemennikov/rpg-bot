@@ -42,19 +42,25 @@ def test_preinspection_reconciles_names_then_choice_is_immutable_and_atomic():
     assert state['step_index'] == 1 and state['revision'] == 1
     tokens = issue_project_choice_actions(1, 'ar_two_names', 'attribution')
     selection = tokens['shared_credit']
+    before_selection = (get_project_state(1, 'ar_two_names'), dict(get_player(1)), dict(list_claims(1)))
     assert execute_regional_action(1, selection)['status'] == 'stale_action'
+    after_selection = (get_project_state(1, 'ar_two_names'), dict(get_player(1)), dict(list_claims(1)))
+    assert after_selection == before_selection
     preview = preview_regional_choice(1, selection)
-    result = execute_regional_action(1, preview['confirm_token'])
+    confirm_token = preview['confirm_token']
+    result = execute_regional_action(1, confirm_token)
     assert result['status'] == 'completed'
     state = get_project_state(1, 'ar_two_names')
     assert state['state'] == 'completed' and state['choices'] == {'attribution':'shared_credit'}
     assert state['step_results']['evidence'] == ['garden', 'temple']
-    before = dict(get_player(1))
+    committed = (state, dict(get_player(1)), dict(list_claims(1)))
+    replay = execute_regional_action(1, confirm_token)
+    assert replay['status'] == 'completed' and replay['recovered'] is True
+    assert (get_project_state(1, 'ar_two_names'), dict(get_player(1)), dict(list_claims(1))) == committed
     stale = execute_regional_action(1, tokens['leave_unattributed'])
-    after = dict(get_player(1))
-    assert stale['status'] in {'already_resolved', 'incompatible_step'}
+    assert stale['status'] == 'stale_action'
     assert get_project_state(1, 'ar_two_names')['choices'] == {'attribution':'shared_credit'}
-    assert (after['exp'], after['gold']) == (before['exp'], before['gold'])
+    assert (get_project_state(1, 'ar_two_names'), dict(get_player(1)), dict(list_claims(1))) == committed
 
 
 def test_receipt_first_recovery_precedes_location_and_travel_validation():

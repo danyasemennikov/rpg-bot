@@ -143,7 +143,7 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
         title, rows = t("rav1.nav.work", lang), local_work(player_id)
     else:
         return build_regional_home(player)
-    visible, current, pages = paginate(rows, requested_page, page_size=4 if view == "p" else 6)
+    visible, current, pages = paginate(rows, requested_page)
     lines = [f"<b>{html.escape(str(title))}</b>"]
     buttons = []
     if not visible:
@@ -176,7 +176,10 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
             if seconds:
                 lines.append(t("rav1.encounters.respawn_in", lang, seconds=seconds))
         button_row = [InlineKeyboardButton(str(label)[:32], callback_data=data)]
-        if row["kind"] in {"project", "hunt", "gear"} and row["status"] == "active":
+        # Project pin controls live on project detail so six content rows still
+        # fit with paging and Home. Hunt and gear have no RAV detail surface,
+        # so their pin controls remain beside their destination links.
+        if row["kind"] in {"hunt", "gear"} and row["status"] == "active":
             owner_kind = row["kind"]
             token = issue_regional_action(
                 player_id, "journal", "pin",

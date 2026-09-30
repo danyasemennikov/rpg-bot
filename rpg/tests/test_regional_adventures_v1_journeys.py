@@ -1759,9 +1759,8 @@ def test_j17_atomic_boundaries(rav1_earned_checkpoint, surface, failure_point):
     async def run():
         token, stale = await _prepare_atomic_surface(journey, surface)
         before = _atomic_snapshot(journey.player_id)
-        if surface != 'choice':
-            assert execute_regional_action(journey.player_id, stale)['status'] == 'stale_action'
-            assert _atomic_snapshot(journey.player_id) == before
+        assert execute_regional_action(journey.player_id, stale)['status'] == 'stale_action'
+        assert _atomic_snapshot(journey.player_id) == before
         with pytest.raises(RuntimeError):
             execute_regional_action(
                 journey.player_id, token,
@@ -1784,7 +1783,7 @@ def test_j17_atomic_boundaries(rav1_earned_checkpoint, surface, failure_point):
 
         if surface == 'choice':
             rejected = execute_regional_action(journey.player_id, stale)
-            assert rejected['status'] in {'already_resolved', 'incompatible_step'}
+            assert rejected['status'] == 'stale_action'
         else:
             content_id = {
                 'delivery': 'ww_woodcutter_provisions',
@@ -2015,9 +2014,9 @@ def test_j19_localized_real_handlers(earned_party, lang):
         # regional Journal and their destination handlers.
         await _inspect(earned, 'fs_survey_stone', 'frostspine_n4')
         await earned.text('/journal', journal_command)
-        leads_callback = next(value for value in _callbacks(earned.messages[-1][1])
-                              if value.startswith('rv:v:l:'))
-        await earned.callback(leads_callback, handle_regional_buttons)
+        nearby_callback = next(value for value in _callbacks(earned.messages[-1][1])
+                               if value.startswith('rv:v:n:'))
+        await earned.callback(nearby_callback, handle_regional_buttons)
         survey_callback = next(value for value in _callbacks(earned.messages[-1][1])
                                if value.endswith(':fs_survey_stone'))
         await earned.callback(survey_callback, handle_regional_buttons)
