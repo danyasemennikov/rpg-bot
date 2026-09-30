@@ -1,20 +1,22 @@
 {
   "schema_version": 1,
   "contract": "RAV1-1",
-  "status": "draft_pr_third_repair_implemented_validation_not_run",
+  "status": "draft_pr_micro_repair_implemented_validation_not_run",
   "merge_ready": false,
   "base_commit": "ebd8f73ade53fcadb89942b703a947782276ea1c",
   "second_pass_starting_head": "021dcdd8b3b125c1fc49ef3995594c515334b193",
   "third_pass_starting_head": "173102a67d59ec65eac93935155e7a794e0a468a",
+  "micro_repair_starting_head": "80e65dc6e4dada1662e75aa877c26d9ce7708fe4",
   "previous_repair_code_commit": "cbb258e0a759d3d93d4385fe8482d9e6b7e87960",
   "branch": "codex/regional-adventures-opportunities-v1",
   "pull_request": 234,
   "repair_code_commit": "4569226e5d41408e0711b6631509f3f2197d93a4",
   "third_repair_code_commit": "c9516298f5d7fa73251abd149ad943d3674f1bc1",
+  "micro_repair_commit": "81d87ab4aed51af0110d723a9691235424353297",
   "new_tested_code_commit": null,
   "final_pr_head": {
     "reference": "refs/heads/codex/regional-adventures-opportunities-v1",
-    "identity": "docs-only successor to third_repair_code_commit",
+    "identity": "docs-only successor to micro_repair_commit",
     "exact_sha_location": "Draft PR body and final handoff after push"
   },
   "validation_policy": {
@@ -89,11 +91,15 @@
     {"id":"S1","implemented_statically":true,"production_change":"restored frozen six-row paging and moved project pin controls to project detail while retaining reachable hunt/gear pins and hard Telegram budgets","tests_authored":"six/seven active projects, project/hunt/gear content and pins, and 13-entry Leads first/middle/last pages in ru/en/es","result":"NOT RUN"},
     {"id":"S2","implemented_statically":true,"production_change":"none; J19 now follows the emitted Nearby, survey-detail and source controls","tests_authored":"ru/en/es J19 emitted discovery/source route corrected","result":"NOT RUN"},
     {"id":"S3","implemented_statically":true,"production_change":"none; tests align with selection-only non-executable authority and separate Confirm receipt replay","tests_authored":"choice transaction and J17 selection nonmutation, durable choice/reward/claim invariants, Confirm replay and atomic failure paths","result":"NOT RUN"},
-    {"id":"S4","implemented_statically":true,"production_change":"removed repair-only synchronization hooks; production serialization remains BEGIN IMMEDIATE based","tests_authored":"test-only BEGIN IMMEDIATE boundary synchronization with separate thread-owned SQLite connections for named/mixed expiry-first and activation-first outcomes","result":"NOT RUN"},
+    {"id":"S4","implemented_statically":true,"production_change":"removed repair-only synchronization hooks; production serialization remains BEGIN IMMEDIATE based","tests_authored":"separate thread-owned contenders must observe zero-timeout SQLite BUSY/LOCKED before owner release, restore normal timeout, and retry named/mixed expiry-first and activation-first production operations","result":"NOT RUN"},
     {"id":"S5","implemented_statically":true,"production_change":"none; replay coverage now includes a finite insufficient-goods receipt","tests_authored":"finite rejection persistence, restart, locale switch, exact recovery, zero mutation/reward/claim and localized raw-ID-free rendering","result":"NOT RUN"}
   ],
+  "micro_static_review_repairs": [
+    {"id":"D1","implemented_statically":true,"production_change":"none","tests_authored":"owner release is gated on an actual zero-timeout BEGIN IMMEDIATE SQLite BUSY/LOCKED failure; prior timeout is restored before production retry in all four named/mixed race cases","result":"NOT RUN"},
+    {"id":"D2","implemented_statically":true,"production_change":"none","tests_authored":"finite rejection accepts omitted xp_delta as zero while retaining persistence, zero-effect, restart, locale, exact-recovery and rendering assertions","result":"NOT RUN"}
+  ],
   "tests_added_or_modified": [
-    {"path":"tests/test_regional_adventures_review_repairs.py","change":"focused repair matrix extended for six-row budgets, detail pins, real writer-lock attempt boundaries and finite rejection replay","result":"NOT RUN"},
+    {"path":"tests/test_regional_adventures_review_repairs.py","change":"focused repair matrix now gates release on observed SQLite BUSY/LOCKED contention and uses the established optional-xp rejection schema","result":"NOT RUN"},
     {"path":"tests/test_regional_adventures_economy.py","change":"derive submitted/raw values and vendor/recipe availability from authorities","result":"NOT RUN"},
     {"path":"tests/test_regional_adventures_v1_journeys.py","change":"repair F10/R8 acceptance journeys, expected checkpoint provenance, emitted Nearby discovery path and selection-only stale behavior","result":"NOT RUN"},
     {"path":"tests/test_regional_adventures_transactions.py","change":"prove nonmutating selection preview, separate Confirm authority and committed Confirm receipt replay","result":"NOT RUN"}
@@ -153,7 +159,7 @@
   },
   "review": {
     "independent_candidate_review": "FIX BEFORE VALIDATION",
-    "repair_packet": "F1-F10, R1-R8 and third narrow S1-S5 implemented statically; validation pending",
+    "repair_packet": "F1-F10, R1-R8, S1-S5 and D1-D2 implemented statically; validation pending",
     "frozen_contract_contradiction": null,
     "contract_deviations": [],
     "scope_expansion": false,

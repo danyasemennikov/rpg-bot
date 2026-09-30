@@ -5,9 +5,11 @@
 - Frozen base: `ebd8f73ade53fcadb89942b703a947782276ea1c`
 - Second-pass starting HEAD: `021dcdd8b3b125c1fc49ef3995594c515334b193`
 - Third-pass starting HEAD: `173102a67d59ec65eac93935155e7a794e0a468a`
+- Micro-repair starting HEAD: `80e65dc6e4dada1662e75aa877c26d9ce7708fe4`
 - Previous repair code commit: `cbb258e0a759d3d93d4385fe8482d9e6b7e87960`
 - Second static repair code commit: `4569226e5d41408e0711b6631509f3f2197d93a4`
 - Third static repair code commit: `c9516298f5d7fa73251abd149ad943d3674f1bc1`
+- D1/D2 test-source repair commit: `81d87ab4aed51af0110d723a9691235424353297`
 - Candidate branch: `codex/regional-adventures-opportunities-v1`
 - Pull request: #234, open Draft, unmerged, not deployed
 - Merge ready: false
@@ -67,11 +69,20 @@ test result and does not establish runtime correctness.
 | S1 | Restored the frozen six-content-row page size. Project pin/unpin moved to existing project details; hunt/gear pins remain on their only RAV list surface, keeping Leads and Pursuits within 12 buttons, 10 rows and two buttons per row without truncation. | Six/seven active projects, project/hunt/gear destinations and pins, and 13-entry Leads first/middle/last pagination in ru/en/es. | NOT RUN |
 | S2 | J19 now follows the emitted Nearby control at Frostspine, then the emitted inspected-survey detail and material-source controls. Production routing was not changed. | Existing ru/en/es J19 parameter runs updated to traverse the actual handler path. | NOT RUN |
 | S3 | Choice tests now treat selection tokens as non-executable preview authority and independently verify Confirm receipt replay, permanent outcome, reward/claim immutability and rollback/response-loss behavior. | Transaction choice test and J17 atomic surface matrix updated. | NOT RUN |
-| S4 | Removed repair-only production synchronization hooks. Named/mixed expiry-first and activation-first tests now use separate thread-owned SQLite connections and test-only proxies that hold the owner transaction until the contender reaches `BEGIN IMMEDIATE`; every synchronization wait is asserted. | Four named/mixed writer-order cases retain exact encounter, participant, source, retry and one-winner assertions. | NOT RUN |
+| S4 | Removed repair-only production synchronization hooks. The D1 follow-up now makes each separate thread-owned contender perform a zero-timeout `BEGIN IMMEDIATE`, requires an observed SQLite BUSY/LOCKED result while the owner transaction is held, restores the normal timeout, and only then permits owner release and production retry. | Four named/mixed writer-order cases retain exact encounter, participant, source, retry and one-winner assertions. | NOT RUN |
 | S5 | Added a finite `mv_medic_table` insufficient-goods receipt to the replay matrix alongside the standing rejection, including persisted-result identity across restart and locale change with zero mutation/reward/claim and localized raw-ID-free rendering. | Focused receipt replay matrix extended. | NOT RUN |
 
 S1–S5 are implemented by static inspection only. They are not validated, accepted or
 merge-ready until the commands below run in the next stage.
+
+## D1/D2 micro repair
+
+| Repair | Static test-source change | Execution |
+|---|---|---|
+| D1 | The race handshake no longer signals before SQLite acquisition. With the owner transaction held, the contender temporarily sets `busy_timeout=0`, attempts `BEGIN IMMEDIATE`, requires an actual BUSY/LOCKED `OperationalError`, restores the prior timeout, signals observed contention, then retries through the unchanged production operation. No production hook or production behavior was added. | NOT RUN |
+| D2 | Finite rejection now reads optional XP through `finite_rejected.get("xp_delta", 0)` while retaining the required zero `gold_delta`, empty consumed/granted/progression lists, unchanged durable state, absent finite claim, restart/current-locale replay, exact stored result and raw-ID/fallback checks. | NOT RUN |
+
+D1/D2 are implemented in test source only. Runtime validation remains pending.
 
 ## Tests added or modified
 
