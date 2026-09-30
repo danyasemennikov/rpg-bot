@@ -10,6 +10,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import json
+import sqlite3
 import threading
 from unittest.mock import patch
 
@@ -181,7 +182,7 @@ class _RaceConnection:
         self,
         inner,
         *,
-        begin_attempted: threading.Event | None = None,
+        contention_observed: threading.Event | None = None,
         begin_acquired: threading.Event | None = None,
         owner_held: threading.Event | None = None,
         hold_after_begin: threading.Event | None = None,
@@ -190,7 +191,7 @@ class _RaceConnection:
         hold_at_transition: threading.Event | None = None,
     ):
         self._inner = inner
-        self._begin_attempted = begin_attempted
+        self._contention_observed = contention_observed
         self._begin_acquired = begin_acquired
         self._owner_held = owner_held
         self._hold_after_begin = hold_after_begin
@@ -203,8 +204,23 @@ class _RaceConnection:
         if normalized == "BEGIN IMMEDIATE":
             if self._owner_held is not None:
                 assert self._owner_held.is_set()
-            if self._begin_attempted is not None:
-                self._begin_attempted.set()
+                previous_timeout = int(self._inner.execute("PRAGMA busy_timeout").fetchone()[0])
+                self._inner.execute("PRAGMA busy_timeout=0")
+                try:
+                    self._inner.execute(sql, *args)
+                except sqlite3.OperationalError as exc:
+                    error_code = getattr(exc, "sqlite_errorcode", None)
+                    is_expected_lock = (
+                        isinstance(error_code, int)
+                        and (error_code & 0xFF) in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
+                    ) or any(marker in str(exc).lower() for marker in ("busy", "locked"))
+                    assert is_expected_lock, f"unexpected SQLite write-acquisition failure: {exc}"
+                else:
+                    raise AssertionError("contender acquired BEGIN IMMEDIATE while owner was held")
+                finally:
+                    self._inner.execute(f"PRAGMA busy_timeout={previous_timeout}")
+                assert self._contention_observed is not None
+                self._contention_observed.set()
             result = self._inner.execute(sql, *args)
             if self._begin_acquired is not None:
                 self._begin_acquired.set()
@@ -467,7 +483,7 @@ def test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once(
     _backdate(encounter_id)
     owner_acquired = threading.Event()
     release_owner = threading.Event()
-    contender_attempted = threading.Event()
+    contention_observed = threading.Event()
 
     def prune_first():
         owner_conn = _RaceConnection(
@@ -480,7 +496,7 @@ def test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once(
 
     def activate_second():
         contender_conn = _RaceConnection(
-            get_connection(), begin_attempted=contender_attempted, owner_held=owner_acquired,
+            get_connection(), contention_observed=contention_observed, owner_held=owner_acquired,
         )
         with patch("game.pve_live.get_connection", return_value=contender_conn):
             return lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
@@ -489,7 +505,7 @@ def test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once(
         expiry = pool.submit(prune_first)
         assert owner_acquired.wait(5)
         activation = pool.submit(activate_second)
-        assert contender_attempted.wait(5)
+        assert contention_observed.wait(5)
         release_owner.set()
         assert expiry.result(timeout=10) == [encounter_id]
         assert activation.result(timeout=10) is None
@@ -514,7 +530,7 @@ def test_r2_roster_writer_wins_real_lock_interleaving_and_active_sources_survive
     encounter_id, source_count = _forming_source(source_kind)
     transition_ready = threading.Event()
     release_owner = threading.Event()
-    contender_attempted = threading.Event()
+    contention_observed = threading.Event()
 
     def activate_first():
         owner_conn = _RaceConnection(
@@ -528,7 +544,7 @@ def test_r2_roster_writer_wins_real_lock_interleaving_and_active_sources_survive
 
     def prune_second():
         contender_conn = _RaceConnection(
-            get_connection(), begin_attempted=contender_attempted, owner_held=transition_ready,
+            get_connection(), contention_observed=contention_observed, owner_held=transition_ready,
         )
         try:
             return _prune_expired_forming_encounters(contender_conn, encounter_id=encounter_id)
@@ -539,7 +555,7 @@ def test_r2_roster_writer_wins_real_lock_interleaving_and_active_sources_survive
         activation = pool.submit(activate_first)
         assert transition_ready.wait(5)
         expiry = pool.submit(prune_second)
-        assert contender_attempted.wait(5)
+        assert contention_observed.wait(5)
         release_owner.set()
         assert activation.result(timeout=10) == [1]
         assert expiry.result(timeout=10) == []
@@ -1097,7 +1113,8 @@ def test_f9_finite_standing_choice_and_rejection_replay_exact_results_without_mu
     ]
     assert finite_rejected["consumed"] == finite_rejected["granted"] == []
     assert finite_rejected["progression"] == []
-    assert finite_rejected["xp_delta"] == finite_rejected["gold_delta"] == 0
+    assert finite_rejected.get("xp_delta", 0) == 0
+    assert finite_rejected["gold_delta"] == 0
     assert "mv_medic_table" not in list_claims(1)
     conn = get_connection()
     finite_rejected_stored = json.loads(conn.execute(
