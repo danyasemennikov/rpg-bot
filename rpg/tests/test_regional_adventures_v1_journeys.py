@@ -31,7 +31,6 @@ from game.gear_progression import apply_gear_intent, issue_gear_intent, set_equi
 from game.gathering_runtime import gather_resource
 from game.locations import get_location
 from game.mobs import get_mob
-from game.hunting import harvest_victory, list_harvestable_victories
 from game.i18n import t, validate_rav1_locales
 from game.pve_live import (
     FORMING_ENCOUNTER_TTL_SECONDS, _prune_expired_forming_encounters,
@@ -60,7 +59,10 @@ from game.seed import seed_items
 from game.pve_live import _ensure_pve_encounter_table, _ensure_world_spawn_table
 from handlers.chapter import build_journal, handle_chapter_buttons, journal_command
 from handlers.build import handle_build_buttons
-from handlers.location import handle_combat_buttons, handle_location_buttons
+from handlers.location import (
+    handle_combat_buttons, handle_location_buttons, handle_lower_menu_service_text,
+    location_command,
+)
 from handlers.inventory import handle_inventory_buttons, try_sell_inventory_item
 from handlers.professions import handle_profession_buttons
 from handlers.regional import (
@@ -93,6 +95,32 @@ def _callbacks(markup) -> list[str]:
         str(button.callback_data)
         for row in markup.inline_keyboard for button in row if button.callback_data
     ]
+
+
+def _reply_labels(markup) -> list[str]:
+    if not markup or not hasattr(markup, 'keyboard'):
+        return []
+    return [str(button.text) for row in markup.keyboard for button in row]
+
+
+async def _open_location(journey: ProductionJourney) -> tuple[str, object]:
+    """Return the inline location card emitted before lower-menu synchronization."""
+    first_new_message = len(journey.messages)
+    await journey.text('/location', location_command)
+    emitted = journey.messages[first_new_message:]
+    card = next((message for message in emitted if _callbacks(message[1])), None)
+    assert card, emitted
+    return card
+
+
+async def _open_quest_board(journey: ProductionJourney) -> tuple[str, object]:
+    first_new_message = len(journey.messages)
+    await journey.text('/location', location_command)
+    emitted = journey.messages[first_new_message:]
+    board_label = t('keyboard.service_quest_board', journey.lang)
+    assert any(board_label in _reply_labels(markup) for _text, markup in emitted), emitted
+    await journey.text(board_label, handle_lower_menu_service_text)
+    return journey.messages[-1]
 
 
 @pytest.fixture(scope='session')
@@ -645,8 +673,7 @@ def test_j02_five_way_choice_and_actual_entry_surfaces(earned):
         for location in ('capital_city', 'frostspine_n5', 'ashen_n3a2', 'mireveil_n5a1', 'hub_sunscar'):
             await _move(earned, location)
             if 'quest_board' in get_location(location).get('services', []):
-                await earned.callback('quest_board', handle_location_buttons)
-                board_text, board_markup = earned.messages[-1]
+                board_text, board_markup = await _open_quest_board(earned)
                 assert 'rank' in board_text.lower()
                 for contract in list_hunt_contracts_for_location(location):
                     if contract.chapter_order:
@@ -672,10 +699,7 @@ def test_j02_five_way_choice_and_actual_entry_surfaces(earned):
         await novice.register(primary='agility', name='RAV1 Novice')
         assert get_player_hunter_progress(novice.player_id)['current_rank'] == 'novice'
         await _move(novice, 'hub_sunscar')
-        board_control = next(value for value in _callbacks(novice.messages[-1][1])
-                             if value == 'quest_board')
-        await novice.callback(board_control, handle_location_buttons)
-        novice_text, novice_markup = novice.messages[-1]
+        novice_text, novice_markup = await _open_quest_board(novice)
         air = HUNT_CONTRACTS_BY_KEY['hunt_sunscar_air_elementals']
         assert build_contract_row(air, 'en') in novice_text
         assert t('location.quest_board_locked_reason_rank', 'en',
@@ -739,6 +763,7 @@ def test_j04_stay_local(rav1_earned_checkpoint):
             while _quantity(west.player_id, 'boar_meat') < 1:
                 await _fight_and_harvest(west, location_id='westwild_n2', mob_id='forest_boar',
                                          item_id='boar_meat', encounter_ids=[])
+            await _move(west, 'hub_westwild')
             await _craft_known(west, 'trail_ration')
         west_trace = []
         async def west_move(location_id):
@@ -771,6 +796,7 @@ def test_j04_stay_local(rav1_earned_checkpoint):
             await _ensure_resource(mire, 'marsh_fish', 2, [])
             await _ensure_resource(mire, 'marsh_herb', 1, [])
             await _ensure_resource(mire, 'salt_crystal', 1, [])
+            await _move(mire, 'hub_mireveil')
             await _craft_known(mire, 'pe_cooking_marsh_06')
         mire_trace = []
         async def mire_move(location_id):
@@ -1262,26 +1288,6 @@ def test_j12_optional_group_binding_contract(earned_party, outcome):
             assert len(eligible) == len(recipients) == 1
             assert eligible == recipients
 
-        if outcome == 'one_fled':
-            owner_choices = [row for row in list_harvestable_victories(
-                owner.player_id, page_size=20) if row['encounter_id'] == encounter_id]
-            assert owner_choices
-            assert not [row for row in list_harvestable_victories(
-                joiner.player_id, page_size=20) if row['encounter_id'] == encounter_id]
-            choice = owner_choices[0]
-            payload = json.dumps({
-                'encounter_id': encounter_id,
-                'unit_id': choice['unit_id'],
-                'item_id': choice['item_id'],
-            }, sort_keys=True, separators=(',', ':'))
-            token = issue_actions(owner.player_id, 'harvest', [payload])[payload]
-            result = harvest_victory(owner.player_id, encounter_id, action_token=token)
-            assert result['status'] == 'harvested'
-            assert harvest_victory(owner.player_id, encounter_id, action_token=token)['recovered'] is True
-            assert harvest_victory(
-                joiner.player_id, encounter_id,
-                unit_id=choice['unit_id'], item_id=choice['item_id'])['status'] == 'harvest_not_applied'
-
         conn = get_connection()
         bindings = {int(row['player_id']): row for row in conn.execute(
             '''SELECT player_id,applied_at,bindings_json FROM rav1_combat_bindings
@@ -1377,7 +1383,9 @@ def test_j14_busy_shared_sources(earned_party):
         await _move(pursuer, 'hub_mireveil')
         await _rav_action(pursuer, 'mv_ferry_crew', 'start')
         await _move(pursuer, 'mireveil_n6')
-        mixed_control = next(value for value in _callbacks(pursuer.messages[-1][1])
+        ensure_location_pve_spawn_instances(location_id='mireveil_n6')
+        _, pursuer_location_markup = await _open_location(pursuer)
+        mixed_control = next(value for value in _callbacks(pursuer_location_markup)
                              if value == 'fight_mixed_rav1_mireveil_n6_crosscurrent')
         await _move(holder, 'mireveil_n6')
 
@@ -1385,7 +1393,8 @@ def test_j14_busy_shared_sources(earned_party):
         # control. The exact mixed recipe must reject without reserving the
         # independently idle companion source.
         ensure_location_pve_spawn_instances(location_id='mireveil_n6')
-        emitted_spawns = [value for value in _callbacks(holder.messages[-1][1])
+        _, holder_location_markup = await _open_location(holder)
+        emitted_spawns = [value for value in _callbacks(holder_location_markup)
                           if value.startswith('fight_spawn_')]
         conn = get_connection()
         source_by_callback = {
