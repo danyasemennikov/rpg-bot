@@ -21,6 +21,7 @@ from database import get_connection, get_player
 from game.action_receipts import issue_actions
 from game.build_progression import migrate_character_builds_v1
 from game.combat_orders import issue_combat_intents, persist_turn_result
+from game.i18n import get_item_name
 from game.mobs import get_mob
 from game.pve_live import (
     _prune_expired_forming_encounters,
@@ -28,6 +29,7 @@ from game.pve_live import (
     create_or_load_open_world_pve_encounter,
     create_solo_pve_encounter,
     ensure_location_pve_spawn_instances,
+    ensure_runtime_for_battle,
     finish_solo_pve_encounter,
     leave_open_world_pve_encounter,
     list_location_mixed_encounter_availability,
@@ -288,6 +290,7 @@ def test_f1_genuine_legacy_has_no_marker_and_no_bindings_but_unsupported_never_d
 
 
 def test_f1_marker_is_preserved_by_solo_and_combat_order_state_saves():
+    migrate_character_builds_v1()
     encounter_id = _forming_mixed()
     assert lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id) == [1]
     conn = get_connection()
@@ -390,6 +393,7 @@ def test_f1_marker_is_preserved_in_t1_terminal_snapshot():
         "SELECT battle_state_json,mob_json FROM pve_encounters WHERE encounter_id=?", (encounter_id,)
     ).fetchone()
     state, mob = json.loads(row["battle_state_json"]), json.loads(row["mob_json"])
+    ensure_runtime_for_battle(player_id=1, battle_state=state, mob=mob)
     for unit in state["enemy_units"]:
         unit.update(hp=0, dead=True)
     for enemy in state["enemy_states_v1"]:
@@ -398,7 +402,7 @@ def test_f1_marker_is_preserved_in_t1_terminal_snapshot():
     conn.close()
     assert persist_solo_pve_encounter_state(encounter_id=encounter_id, battle_state=state, mob=mob)
     prepared = prepare_victory_settlement(encounter_id=encounter_id, battle_state=state, mob=mob)
-    assert prepared["status"] == "prepared"
+    assert prepared["status"] == "prepared", prepared
     conn = get_connection()
     persisted = json.loads(conn.execute(
         "SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?", (encounter_id,)
@@ -761,7 +765,8 @@ def test_f5_committed_receipt_recovers_after_token_loss_move_revisions_restart_a
     assert replay["recovered"] is True
     assert {key: replay[key] for key in committed} == committed
     text, _markup = build_action_result(dict(get_player(1)), replay)
-    assert "raciones" in text.lower() and "field_ration" not in text
+    assert get_item_name("field_ration", "es").lower() in text.lower()
+    assert "field_ration" not in text
 
 
 class _User:
@@ -957,7 +962,7 @@ def test_r4_camp_reward_secrecy_and_remote_finite_delivery_preview():
 
     _inventory(1, "field_ration", 1)
     remote_text, remote_markup = build_detail(_move(1, "capital_city"), "i", "ww_woodcutter_provisions")
-    assert "Field Ration: owned 1/2" in remote_text
+    assert f"{get_item_name('field_ration', 'en')}: owned 1/2" in remote_text
     assert "consumes exactly" in remote_text and "One time" in remote_text
     assert "20 XP" in remote_text and "18 gold" in remote_text
     assert not any(value.startswith("rv:a:") for value in _callbacks(remote_markup))
