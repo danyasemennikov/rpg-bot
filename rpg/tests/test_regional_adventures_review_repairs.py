@@ -289,6 +289,30 @@ def test_f1_genuine_legacy_has_no_marker_and_no_bindings_but_unsupported_never_d
     conn.rollback(); conn.close()
 
 
+def test_f1_genuine_legacy_without_rav_table_settles_but_marked_encounter_fails_closed():
+    encounter_id = create_solo_pve_encounter(
+        player_id=1, battle_state=_battle_state("forest_wolf"), mob=get_mob("forest_wolf")
+    )
+    conn = get_connection()
+    conn.execute("DROP TABLE rav1_combat_bindings")
+    conn.commit(); conn.execute("BEGIN IMMEDIATE")
+    assert apply_combat_bindings(conn, encounter_id=encounter_id, plan={}) == {}
+    conn.rollback()
+
+    state = json.loads(conn.execute(
+        "SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?", (encounter_id,)
+    ).fetchone()["battle_state_json"])
+    state["rav1_credit_version"] = 1
+    conn.execute(
+        "UPDATE pve_encounters SET battle_state_json=? WHERE encounter_id=?",
+        (json.dumps(state), encounter_id),
+    )
+    conn.commit(); conn.execute("BEGIN IMMEDIATE")
+    with pytest.raises(RuntimeError, match="rav1_combat_binding_missing"):
+        apply_combat_bindings(conn, encounter_id=encounter_id, plan={})
+    conn.rollback(); conn.close()
+
+
 def test_f1_marker_is_preserved_by_solo_and_combat_order_state_saves():
     migrate_character_builds_v1()
     encounter_id = _forming_mixed()

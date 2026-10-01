@@ -200,11 +200,16 @@ def apply_combat_bindings(conn, *, encounter_id: str, plan: dict) -> dict[int, l
         roster_payload = json.loads(str(encounter["locked_roster_json"] or "{}"))
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise RuntimeError("rav1_combat_binding_invalid") from exc
+    bindings_table_exists = bool(conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='rav1_combat_bindings'"
+    ).fetchone())
     rows = conn.execute(
         "SELECT * FROM rav1_combat_bindings WHERE encounter_id=? ORDER BY player_id", (encounter_id,)
-    ).fetchall()
+    ).fetchall() if bindings_table_exists else []
     if _credit_marker_state(battle, len(rows)) == "legacy":
         return {}
+    if not bindings_table_exists:
+        raise RuntimeError("rav1_combat_binding_missing")
     roster = sorted(int(value) for value in roster_payload.get("player_ids", []))
     if [int(row["player_id"]) for row in rows] != roster:
         raise RuntimeError("rav1_combat_binding_missing")
