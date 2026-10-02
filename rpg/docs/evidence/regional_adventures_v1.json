@@ -1,32 +1,23 @@
 {
   "schema_version": 1,
   "contract": "RAV1-1",
-  "status": "draft_pr_micro_repair_implemented_validation_not_run",
+  "status": "draft_pr_automated_acceptance_complete",
   "merge_ready": false,
   "base_commit": "ebd8f73ade53fcadb89942b703a947782276ea1c",
-  "second_pass_starting_head": "021dcdd8b3b125c1fc49ef3995594c515334b193",
-  "third_pass_starting_head": "173102a67d59ec65eac93935155e7a794e0a468a",
-  "micro_repair_starting_head": "80e65dc6e4dada1662e75aa877c26d9ce7708fe4",
-  "previous_repair_code_commit": "cbb258e0a759d3d93d4385fe8482d9e6b7e87960",
+  "validation_starting_head": "8057b26bbc0b10deb1a4d30ea260d9b0cf82cad2",
+  "tested_code_sha": "ce88335267c6dbc05bef289e88deebd1fa28ea60",
   "branch": "codex/regional-adventures-opportunities-v1",
   "pull_request": 234,
-  "repair_code_commit": "4569226e5d41408e0711b6631509f3f2197d93a4",
-  "third_repair_code_commit": "c9516298f5d7fa73251abd149ad943d3674f1bc1",
-  "micro_repair_commit": "81d87ab4aed51af0110d723a9691235424353297",
-  "new_tested_code_commit": null,
-  "final_pr_head": {
-    "reference": "refs/heads/codex/regional-adventures-opportunities-v1",
-    "identity": "docs-only successor to micro_repair_commit",
-    "exact_sha_location": "Draft PR body and final handoff after push"
+  "environment": {
+    "operating_system": "Windows",
+    "python": "3.12.10",
+    "pytest": "9.1.1"
   },
-  "validation_policy": {
-    "repair_method": "static inspection and code reasoning only",
-    "tests_executed": false,
-    "pytest_collection_executed": false,
-    "imports_or_compile_checks_executed": false,
-    "all_authored_validation_status": "NOT RUN",
-    "reason": "The focused repair prompt expressly prohibited every test during this pass."
-  },
+  "commits_added": [
+    {"sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","summary":"align validation fixtures with authorities"},
+    {"sha":"1b165c37887a529939e19ba08725c423a8ebff4e","summary":"repair acceptance journey controls"},
+    {"sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","summary":"recover genuine legacy settlements"}
+  ],
   "catalogue_counts": {
     "top_level_records": 34,
     "projects": 7,
@@ -49,7 +40,7 @@
     "locales": 3,
     "tables": 5,
     "migration_markers": 1,
-    "changed_by_repair": false
+    "changed_by_validation_repairs": false
   },
   "reward_totals": {
     "finite_xp": 440,
@@ -63,112 +54,58 @@
       "mv_stew_order": 12
     },
     "standing_xp": 0,
-    "changed_by_repair": false
+    "changed_by_validation_repairs": false
   },
   "repair_findings": [
-    {"id":"F1","fixed_statically":true,"production_change":"fail-closed marker/binding integrity and immutable marker preservation on all combat persistence paths","tests_authored":"marker loss/change/version, missing/corrupt B, legacy, solo/group/order/consumable/flee/T1, rollback","result":"NOT RUN"},
-    {"id":"F2","fixed_statically":true,"production_change":"expiry selection and exact-once release serialized under one write transaction with guarded active-spawn invariant","tests_authored":"two-connection expiry-first/activation-first, named/mixed, repeat prune, active survival","result":"NOT RUN"},
-    {"id":"F3","fixed_statically":true,"production_change":"business mutation savepoint retains outer write serialization while durable rejection receipt commits","tests_authored":"rejection/rejection and replenishment races, full rollback, one receipt and replay","result":"NOT RUN"},
-    {"id":"F4","fixed_statically":true,"production_change":"semantic project-state validation across steps, progress, results and choices","tests_authored":"invalid and valid semantic state matrix plus unchanged startup failure","result":"NOT RUN"},
-    {"id":"F5","fixed_statically":true,"production_change":"receipt owner/scope/content/version/hash/intent/result/economic consistency verification","tests_authored":"tampering matrix and valid recovery after mutable-world changes","result":"NOT RUN"},
-    {"id":"F6","fixed_statically":true,"production_change":"read-only localized choice preview followed by explicit mutation confirmation","tests_authored":"three choices, two outcomes, three locales, cancel/confirm/stale/replay/restart/equality","result":"NOT RUN"},
-    {"id":"F7","fixed_statically":true,"production_change":"pin token scope includes owner kind and owner ID","tests_authored":"same-page hunt/gear/project, unpin/repin/refresh/fourth/restart","result":"NOT RUN"},
-    {"id":"F8","fixed_statically":true,"production_change":"map authority, destinations, navigation, previews, risk, repair method, hidden cache and resolved status presentation","tests_authored":"actual emitted control and localized presentation checks","result":"NOT RUN"},
-    {"id":"F9","fixed_statically":true,"production_change":"immutable committed receipt rendering in current locale and removal of player-visible raw IDs","tests_authored":"success/rejection/restart/move/language/standing/choice/finite and raw-ID checks","result":"NOT RUN"},
-    {"id":"F10","fixed_statically":true,"production_change":"acceptance journeys/economy/provenance assertions strengthened to use production authorities and emitted controls","tests_authored":"J02/J04/J05/J12/J13/J14/J15/J17/J19 plus economy and checkpoint provenance","result":"NOT RUN"}
+    {"id":"F1","fixed":true,"result":"PASS","note":"fail-closed marker/binding integrity plus genuine pre-RAV no-marker/no-binding/no-table recovery"},
+    {"id":"F2","fixed":true,"result":"PASS"},
+    {"id":"F3","fixed":true,"result":"PASS"},
+    {"id":"F4","fixed":true,"result":"PASS"},
+    {"id":"F5","fixed":true,"result":"PASS"},
+    {"id":"F6","fixed":true,"result":"PASS"},
+    {"id":"F7","fixed":true,"result":"PASS"},
+    {"id":"F8","fixed":true,"result":"PASS"},
+    {"id":"F9","fixed":true,"result":"PASS"},
+    {"id":"F10","fixed":true,"result":"PASS"}
   ],
-  "second_static_review_repairs": [
-    {"id":"R1","implemented_statically":true,"production_change":"items-only Root Cache receipts and strict recovery validation now agree on an empty progression list","tests_authored":"claim, response loss, original/deleted token, move, restart, locale switch, identical storage, exact-once grant","result":"NOT RUN"},
-    {"id":"R2","implemented_statically":true,"production_change":"selection-only choice intents are non-executable; preview issues the separate Confirm mutation authority","tests_authored":"three projects, two outcomes, ru/en/es, direct rejection, preview/Back nonmutation, stale and fresh Confirm, replay","result":"NOT RUN"},
-    {"id":"R3","implemented_statically":true,"production_change":"all Journal map callbacks resolve to supported existing route map authorities","tests_authored":"Capital, Old Mine and five route contexts followed through the location handler","result":"NOT RUN"},
-    {"id":"R4","implemented_statically":true,"production_change":"Camp reveal gating, remote finite previews, useful source/recipe/build links and reachable Chapter I history","tests_authored":"secrecy, remote quantities/reward, emitted destination handlers, Build/Equipment and history","result":"NOT RUN"},
-    {"id":"R5","implemented_statically":true,"production_change":"bounded pursuit pagination plus hard 12-button/10-row/2-per-row enforcement without truncation","tests_authored":"six/seven projects, hunt/gear/project mixes, first/middle/last pages, three locales","result":"NOT RUN"},
-    {"id":"R6","implemented_statically":true,"production_change":"RAV history list/detail dispatches to current-locale immutable RAV receipt rendering","tests_authored":"actual History/list/detail after restart and language change, non-RAV behavior preserved","result":"NOT RUN"},
-    {"id":"R7","implemented_statically":true,"production_change":"test fixture SQL arity and post-Cancel fresh choice flow corrected","tests_authored":"F4 semantic matrix and F6 full parameter matrix","result":"NOT RUN"},
-    {"id":"R8","implemented_statically":true,"production_change":"remaining acceptance source gaps closed without changing frozen content","tests_authored":"J02 boards/novice rank, J14 production hold, synchronized named/mixed races, J19 controls, replay matrix, vendor/recipe economy and recorded hashes","result":"NOT RUN"}
+  "astra_repairs": [
+    {"id":"R1","fixed":true,"result":"PASS"},
+    {"id":"R2","fixed":true,"result":"PASS"},
+    {"id":"R3","fixed":true,"result":"PASS"},
+    {"id":"R4","fixed":true,"result":"PASS"},
+    {"id":"R5","fixed":true,"result":"PASS"},
+    {"id":"R6","fixed":true,"result":"PASS"},
+    {"id":"R7","fixed":true,"result":"PASS"},
+    {"id":"R8","fixed":true,"result":"PASS"}
   ],
-  "third_static_review_repairs": [
-    {"id":"S1","implemented_statically":true,"production_change":"restored frozen six-row paging and moved project pin controls to project detail while retaining reachable hunt/gear pins and hard Telegram budgets","tests_authored":"six/seven active projects, project/hunt/gear content and pins, and 13-entry Leads first/middle/last pages in ru/en/es","result":"NOT RUN"},
-    {"id":"S2","implemented_statically":true,"production_change":"none; J19 now follows the emitted Nearby, survey-detail and source controls","tests_authored":"ru/en/es J19 emitted discovery/source route corrected","result":"NOT RUN"},
-    {"id":"S3","implemented_statically":true,"production_change":"none; tests align with selection-only non-executable authority and separate Confirm receipt replay","tests_authored":"choice transaction and J17 selection nonmutation, durable choice/reward/claim invariants, Confirm replay and atomic failure paths","result":"NOT RUN"},
-    {"id":"S4","implemented_statically":true,"production_change":"removed repair-only synchronization hooks; production serialization remains BEGIN IMMEDIATE based","tests_authored":"separate thread-owned contenders must observe zero-timeout SQLite BUSY/LOCKED before owner release, restore normal timeout, and retry named/mixed expiry-first and activation-first production operations","result":"NOT RUN"},
-    {"id":"S5","implemented_statically":true,"production_change":"none; replay coverage now includes a finite insufficient-goods receipt","tests_authored":"finite rejection persistence, restart, locale switch, exact recovery, zero mutation/reward/claim and localized raw-ID-free rendering","result":"NOT RUN"}
+  "validation": [
+    {"stage":"micro_repair_nodes","command":"python -m pytest -q <nine prescribed nodes>","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":27,"failed":0,"duration_seconds":406.15,"result":"PASS"},
+    {"stage":"full_repair_file","command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":81,"failed":0,"duration_seconds":18.49,"result":"PASS"},
+    {"stage":"direct_rav_regressions","command":"python -m pytest -q <nine prescribed direct RAV files>","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":37,"failed":0,"duration_seconds":7.79,"result":"PASS"},
+    {"stage":"shared_regressions","command":"python -m pytest -q <eight prescribed shared files>","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":199,"failed":0,"duration_seconds":47.06,"result":"PASS"},
+    {"stage":"journeys_final","command":"python -m pytest -q tests/test_regional_adventures_v1_journeys.py","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","collected":39,"passed":39,"failed":0,"duration_seconds":138.29,"result":"PASS"},
+    {"stage":"post_f1_exact_and_focused","command":"python -m pytest -q tests/test_professions_economy_v1_migration.py::test_real_frozen_schema_migrates_losslessly_and_survives_restart tests/test_regional_adventures_review_repairs.py -k f1","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","passed":11,"failed":0,"deselected":72,"duration_seconds":2.91,"result":"PASS"},
+    {"stage":"post_f1_affected_groups","command":"python -m pytest -q tests/test_professions_economy_v1_migration.py tests/test_regional_adventures_review_repairs.py","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","passed":87,"failed":0,"duration_seconds":18.81,"result":"PASS"},
+    {"stage":"final_broad","command":"python -m pytest -q","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","passed":1935,"failed":0,"subtests_passed":276,"duration_seconds":1440.32,"result":"PASS","log_path":"C:\\Users\\masha\\Documents\\Codex\\2026-09-27\\files-mentioned-by-the-user-rav1\\work\\validation-logs\\rav1-final-broad-ce88335267c6dbc05bef289e88deebd1fa28ea60-rerun.log"}
   ],
-  "micro_static_review_repairs": [
-    {"id":"D1","implemented_statically":true,"production_change":"none","tests_authored":"owner release is gated on an actual zero-timeout BEGIN IMMEDIATE SQLite BUSY/LOCKED failure; prior timeout is restored before production retry in all four named/mixed race cases","result":"NOT RUN"},
-    {"id":"D2","implemented_statically":true,"production_change":"none","tests_authored":"finite rejection accepts omitted xp_delta as zero while retaining persistence, zero-effect, restart, locale, exact-recovery and rendering assertions","result":"NOT RUN"}
+  "classified_failures": [
+    {"stage":"initial repair file","classification":"TEST BUG / STALE EXPECTATION","resolution":"four affected nodes and complete file passed after correction"},
+    {"stage":"initial journeys","classification":"TEST BUG","resolution":"actual emitted controls and production service locations corrected; complete journeys passed"},
+    {"stage":"broad at 1b165c37887a529939e19ba08725c423a8ebff4e","classification":"REAL PRODUCTION DEFECT","resolution":"F1 legacy table-absence handling fixed in ce88335267c6dbc05bef289e88deebd1fa28ea60"},
+    {"stage":"suspended broad at ce88335267c6dbc05bef289e88deebd1fa28ea60","classification":"ENVIRONMENT / FIXTURE ISSUE","resolution":"expired short-lived J03 token after 6h32m suspension; exact node, whole journey group and fresh broad passed"}
   ],
-  "tests_added_or_modified": [
-    {"path":"tests/test_regional_adventures_review_repairs.py","change":"focused repair matrix now gates release on observed SQLite BUSY/LOCKED contention and uses the established optional-xp rejection schema","result":"NOT RUN"},
-    {"path":"tests/test_regional_adventures_economy.py","change":"derive submitted/raw values and vendor/recipe availability from authorities","result":"NOT RUN"},
-    {"path":"tests/test_regional_adventures_v1_journeys.py","change":"repair F10/R8 acceptance journeys, expected checkpoint provenance, emitted Nearby discovery path and selection-only stale behavior","result":"NOT RUN"},
-    {"path":"tests/test_regional_adventures_transactions.py","change":"prove nonmutating selection preview, separate Confirm authority and committed Confirm receipt replay","result":"NOT RUN"}
-  ],
-  "commands_to_run_later": [
-    {"scope":"third narrow S1-S5 repair nodes","command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py::test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once tests/test_regional_adventures_review_repairs.py::test_r2_roster_writer_wins_real_lock_interleaving_and_active_sources_survive tests/test_regional_adventures_review_repairs.py::test_f7_every_visible_hunt_gear_and_project_pin_token_has_distinct_scope_and_works tests/test_regional_adventures_review_repairs.py::test_r5_project_pagination_never_truncates_and_every_page_respects_button_budget tests/test_regional_adventures_review_repairs.py::test_s1_leads_first_middle_last_pages_keep_six_rows_and_every_detail_reachable tests/test_regional_adventures_review_repairs.py::test_f9_finite_standing_choice_and_rejection_replay_exact_results_without_mutation tests/test_regional_adventures_transactions.py::test_preinspection_reconciles_names_then_choice_is_immutable_and_atomic tests/test_regional_adventures_v1_journeys.py::test_j17_atomic_boundaries tests/test_regional_adventures_v1_journeys.py::test_j19_localized_real_handlers","result":"NOT RUN"},
-    {"scope":"focused independent-review repair matrix","command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py","result":"NOT RUN"},
-    {"scope":"direct RAV regressions","command":"python -m pytest -q tests/test_regional_adventures_contract.py tests/test_regional_adventures_schema.py tests/test_regional_adventures_transactions.py tests/test_regional_adventures_objectives.py tests/test_regional_adventures_combat.py tests/test_regional_adventures_world.py tests/test_regional_adventures_ui.py tests/test_regional_adventures_localization.py tests/test_regional_adventures_economy.py","result":"NOT RUN"},
-    {"scope":"affected shared regressions","command":"python -m pytest -q tests/test_world_pve_encounter_foundation.py tests/test_itemization_regional_loot_v1.py tests/test_itemization_fix_packet_pr230.py tests/test_character_builds_v1_migration.py tests/test_character_builds_v1_durability.py tests/test_alpha_transactions_v1.py","result":"NOT RUN"},
-    {"scope":"J01-J20 production journeys","command":"$env:RAV1_EARNED_CHECKPOINT='<hash-verified earned checkpoint>'; $env:RAV1_PARTY_CHECKPOINT='<hash-verified party checkpoint>'; python -m pytest -q tests/test_regional_adventures_v1_journeys.py","result":"NOT RUN"},
-    {"scope":"required final broad suite after stabilization","command":"python -m pytest -q","result":"NOT RUN"}
-  ],
-  "production_journeys": {
-    "definitions": 20,
-    "planned_parameter_runs": 39,
-    "passed": 0,
-    "failed": 0,
-    "not_run": 39,
-    "result": "NOT RUN",
-    "cases": [
-      "J01","J02","J03","J04","J05","J06","J07","J08","J09","J10",
-      "J11","J12","J13","J14","J15","J16","J17","J18","J19","J20"
-    ]
-  },
   "checkpoints": {
-    "earned": {
-      "expected_recorded_sha256": "7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C",
-      "provenance": "production-path PEV1 registration, Chapter I, travel, gathering, crafting, hunts, combat, gear and professions; no injected RAV state",
-      "verification_for_repair_candidate": "NOT RUN"
-    },
-    "party": {
-      "expected_recorded_sha256": "7510168AC9B5A03C06423CE9075906088E21CEF2CA4A3716016EB5153D393A7B",
-      "provenance": "three independently earned Chapter-I characters used by physical, magic, group, gift, race and isolation journeys",
-      "verification_for_repair_candidate": "NOT RUN"
-    },
-    "test_rule": "Supplied checkpoint hashes are compared with expected recorded constants; a supplied file is not treated as its own provenance authority."
-  },
-  "accelerators": [
-    "mocked Telegram transport",
-    "zero sleep while preserving travel adjacency and revision changes",
-    "controlled legal RNG selections",
-    "respawn clock advancement through production lifecycle"
-  ],
-  "historical_validation": {
-    "tested_commit": "7846598682596234a6c1255b4faeba8689ad9200",
-    "status": "invalidated_for_current_candidate_by_independent_FIX_review",
-    "note": "Historical focused, journey and broad results are not evidence for the repair code commit."
-  },
-  "final_broad_suite": {
-    "tested_sha": null,
-    "command": "python -m pytest -q",
-    "result": "NOT RUN",
-    "duration_seconds": null,
-    "passed": null,
-    "failed": null,
-    "subtests": null
+    "earned": {"sha256":"7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C","verified_against_recorded_constant":true},
+    "party": {"sha256":"7510168AC9B5A03C06423CE9075906088E21CEF2CA4A3716016EB5153D393A7B","verified_against_recorded_constant":true},
+    "rebuilt": false
   },
   "review": {
-    "independent_candidate_review": "FIX BEFORE VALIDATION",
-    "repair_packet": "F1-F10, R1-R8, S1-S5 and D1-D2 implemented statically; validation pending",
     "frozen_contract_contradiction": null,
     "contract_deviations": [],
     "scope_expansion": false,
-    "automated_acceptance": "PENDING VALIDATION"
+    "automated_acceptance": "COMPLETE"
   },
-  "human_validation": {
-    "status": "NOT RUN",
-    "plan": "regional_adventures_v1_human.md"
-  },
+  "human_validation": {"status":"NOT RUN","plan":"regional_adventures_v1_human.md"},
   "state_boundaries": {
     "pull_request_open": true,
     "pull_request_draft": true,
