@@ -5,7 +5,8 @@
   "merge_ready": false,
   "base_commit": "ebd8f73ade53fcadb89942b703a947782276ea1c",
   "validation_starting_head": "8057b26bbc0b10deb1a4d30ea260d9b0cf82cad2",
-  "tested_code_sha": "ce88335267c6dbc05bef289e88deebd1fa28ea60",
+  "historical_runtime_broad_sha": "ce88335267c6dbc05bef289e88deebd1fa28ea60",
+  "final_repaired_test_sha": "43b5fb7a62f0265a89e20aeb9c3613f4605c56fc",
   "branch": "codex/regional-adventures-opportunities-v1",
   "pull_request": 234,
   "environment": {
@@ -13,11 +14,14 @@
     "python": "3.12.10",
     "pytest": "9.1.1"
   },
-  "commits_added": [
-    {"sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","summary":"align validation fixtures with authorities"},
-    {"sha":"1b165c37887a529939e19ba08725c423a8ebff4e","summary":"repair acceptance journey controls"},
-    {"sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","summary":"recover genuine legacy settlements"}
+  "commits_after_validation_start": [
+    {"sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","summary":"align validation fixtures with authorities","kind":"test"},
+    {"sha":"1b165c37887a529939e19ba08725c423a8ebff4e","summary":"repair acceptance journey controls","kind":"test"},
+    {"sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","summary":"recover genuine legacy settlements","kind":"production_and_test"},
+    {"sha":"603cd657f02ae0c412f3f01f847ca76a00f3e68c","summary":"record completed validation","kind":"docs"},
+    {"sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","summary":"restore J12 owner-only harvest coverage","kind":"test"}
   ],
+  "production_files_changed_after_historical_broad": [],
   "catalogue_counts": {
     "top_level_records": 34,
     "projects": 7,
@@ -40,7 +44,7 @@
     "locales": 3,
     "tables": 5,
     "migration_markers": 1,
-    "changed_by_validation_repairs": false
+    "changed_by_final_acceptance_repair": false
   },
   "reward_totals": {
     "finite_xp": 440,
@@ -54,10 +58,10 @@
       "mv_stew_order": 12
     },
     "standing_xp": 0,
-    "changed_by_validation_repairs": false
+    "changed_by_final_acceptance_repair": false
   },
   "repair_findings": [
-    {"id":"F1","fixed":true,"result":"PASS","note":"fail-closed marker/binding integrity plus genuine pre-RAV no-marker/no-binding/no-table recovery"},
+    {"id":"F1","fixed":true,"result":"PASS"},
     {"id":"F2","fixed":true,"result":"PASS"},
     {"id":"F3","fixed":true,"result":"PASS"},
     {"id":"F4","fixed":true,"result":"PASS"},
@@ -78,40 +82,180 @@
     {"id":"R7","fixed":true,"result":"PASS"},
     {"id":"R8","fixed":true,"result":"PASS"}
   ],
-  "validation": [
-    {"stage":"micro_repair_nodes","command":"python -m pytest -q <nine prescribed nodes>","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":27,"failed":0,"duration_seconds":406.15,"result":"PASS"},
-    {"stage":"full_repair_file","command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":81,"failed":0,"duration_seconds":18.49,"result":"PASS"},
-    {"stage":"direct_rav_regressions","command":"python -m pytest -q <nine prescribed direct RAV files>","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":37,"failed":0,"duration_seconds":7.79,"result":"PASS"},
-    {"stage":"shared_regressions","command":"python -m pytest -q <eight prescribed shared files>","tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c","passed":199,"failed":0,"duration_seconds":47.06,"result":"PASS"},
-    {"stage":"journeys_final","command":"python -m pytest -q tests/test_regional_adventures_v1_journeys.py","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","collected":39,"passed":39,"failed":0,"duration_seconds":138.29,"result":"PASS"},
-    {"stage":"post_f1_exact_and_focused","command":"python -m pytest -q tests/test_professions_economy_v1_migration.py::test_real_frozen_schema_migrates_losslessly_and_survives_restart tests/test_regional_adventures_review_repairs.py -k f1","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","passed":11,"failed":0,"deselected":72,"duration_seconds":2.91,"result":"PASS"},
-    {"stage":"post_f1_affected_groups","command":"python -m pytest -q tests/test_professions_economy_v1_migration.py tests/test_regional_adventures_review_repairs.py","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","passed":87,"failed":0,"duration_seconds":18.81,"result":"PASS"},
-    {"stage":"final_broad","command":"python -m pytest -q","tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60","passed":1935,"failed":0,"subtests_passed":276,"duration_seconds":1440.32,"result":"PASS","log_path":"C:\\Users\\masha\\Documents\\Codex\\2026-09-27\\files-mentioned-by-the-user-rav1\\work\\validation-logs\\rav1-final-broad-ce88335267c6dbc05bef289e88deebd1fa28ea60-rerun.log"}
+  "execution_records": {
+    "micro": {
+      "command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py::test_r2_expiry_writer_wins_real_lock_interleaving_and_releases_exactly_once tests/test_regional_adventures_review_repairs.py::test_r2_roster_writer_wins_real_lock_interleaving_and_active_sources_survive tests/test_regional_adventures_review_repairs.py::test_f7_every_visible_hunt_gear_and_project_pin_token_has_distinct_scope_and_works tests/test_regional_adventures_review_repairs.py::test_r5_project_pagination_never_truncates_and_every_page_respects_button_budget tests/test_regional_adventures_review_repairs.py::test_s1_leads_first_middle_last_pages_keep_six_rows_and_every_detail_reachable tests/test_regional_adventures_review_repairs.py::test_f9_finite_standing_choice_and_rejection_replay_exact_results_without_mutation tests/test_regional_adventures_transactions.py::test_preinspection_reconciles_names_then_choice_is_immutable_and_atomic tests/test_regional_adventures_v1_journeys.py::test_j17_atomic_boundaries tests/test_regional_adventures_v1_journeys.py::test_j19_localized_real_handlers",
+      "tested_sha":"8057b26bbc0b10deb1a4d30ea260d9b0cf82cad2",
+      "passed":27,
+      "failed":0,
+      "duration_seconds":406.15,
+      "result":"PASS"
+    },
+    "repair_file": {
+      "command":"python -m pytest -q tests/test_regional_adventures_review_repairs.py",
+      "tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c",
+      "passed":81,
+      "failed":0,
+      "duration_seconds":18.49,
+      "result":"PASS"
+    },
+    "direct_rav": {
+      "command":"python -m pytest -q tests/test_regional_adventures_contract.py tests/test_regional_adventures_schema.py tests/test_regional_adventures_transactions.py tests/test_regional_adventures_objectives.py tests/test_regional_adventures_combat.py tests/test_regional_adventures_world.py tests/test_regional_adventures_ui.py tests/test_regional_adventures_localization.py tests/test_regional_adventures_economy.py",
+      "tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c",
+      "passed":37,
+      "failed":0,
+      "duration_seconds":7.79,
+      "result":"PASS"
+    },
+    "shared_regressions": {
+      "command":"python -m pytest -q tests/test_world_pve_encounter_foundation.py tests/test_map_and_long_route_phase1_5.py tests/test_professions_economy_v1_ui.py tests/test_itemization_regional_loot_v1.py tests/test_itemization_fix_packet_pr230.py tests/test_character_builds_v1_migration.py tests/test_character_builds_v1_durability.py tests/test_alpha_transactions_v1.py",
+      "tested_sha":"05e66d5330d875982f4340dc764ee55a3e20fe6c",
+      "passed":199,
+      "failed":0,
+      "duration_seconds":47.06,
+      "result":"PASS"
+    },
+    "f1_selected": {
+      "command":"python -m pytest -q tests/test_professions_economy_v1_migration.py::test_real_frozen_schema_migrates_losslessly_and_survives_restart tests/test_regional_adventures_review_repairs.py -k f1",
+      "tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60",
+      "passed":11,
+      "failed":0,
+      "deselected":72,
+      "duration_seconds":2.91,
+      "result":"PASS",
+      "audit_note":"The -k f1 filter deselected the migration node; this record is F1-selected coverage only."
+    },
+    "affected_files_after_f1": {
+      "command":"python -m pytest -q tests/test_professions_economy_v1_migration.py tests/test_regional_adventures_review_repairs.py",
+      "tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60",
+      "passed":87,
+      "failed":0,
+      "duration_seconds":18.81,
+      "result":"PASS",
+      "audit_note":"This run, together with the broad run, is the migration-recovery evidence."
+    },
+    "journeys_historical": {
+      "command":"python -m pytest -q tests/test_regional_adventures_v1_journeys.py",
+      "tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60",
+      "collected":39,
+      "passed":39,
+      "failed":0,
+      "duration_seconds":138.29,
+      "result":"PASS"
+    },
+    "broad_historical_authoritative": {
+      "command":"python -m pytest -q",
+      "tested_sha":"ce88335267c6dbc05bef289e88deebd1fa28ea60",
+      "passed":1935,
+      "failed":0,
+      "subtests_passed":276,
+      "duration_seconds":1440.32,
+      "result":"PASS",
+      "rerun_for_v1":false,
+      "log_path":"C:\\Users\\masha\\Documents\\Codex\\2026-09-27\\files-mentioned-by-the-user-rav1\\work\\validation-logs\\rav1-final-broad-ce88335267c6dbc05bef289e88deebd1fa28ea60-rerun.log"
+    },
+    "j12_v1_narrow": {
+      "command":"python -m pytest -q 'tests/test_regional_adventures_v1_journeys.py::test_j12_optional_group_binding_contract[both_alive]'",
+      "tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc",
+      "collected":1,
+      "passed":1,
+      "failed":0,
+      "duration_seconds":6.22,
+      "result":"PASS"
+    },
+    "j12_v1_group": {
+      "command":"python -m pytest -q tests/test_regional_adventures_v1_journeys.py::test_j12_optional_group_binding_contract",
+      "tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc",
+      "collected":3,
+      "passed":3,
+      "failed":0,
+      "duration_seconds":19.90,
+      "result":"PASS"
+    },
+    "journeys_after_v1": {
+      "command":"python -m pytest -q tests/test_regional_adventures_v1_journeys.py",
+      "tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc",
+      "collected":39,
+      "passed":39,
+      "failed":0,
+      "duration_seconds":156.70,
+      "result":"PASS"
+    }
+  },
+  "acceptance_journeys": [
+    {"id":"J01","case_count":1,"purpose":"Fresh post-Chapter-I onboarding and five-region Journal entry.","production_authority":"journal command and regional callbacks","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J02","case_count":1,"purpose":"Five region boards, all relevant hunts and novice rank denial.","production_authority":"emitted lower-menu board controls and quest-board handlers","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J03","case_count":1,"purpose":"Different first-region solo completions and independently earned build paths.","production_authority":"regional actions, combat, choices and checkpoint-restored earned characters","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J04","case_count":1,"purpose":"Stay-local Westwild and Mireveil completion traces.","production_authority":"travel, gathering, crafting, hunts and regional actions","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J05","case_count":1,"purpose":"Concurrent pursuits, three-pin capacity and restart persistence.","production_authority":"emitted project, hunt and gear pin controls","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J06","case_count":2,"purpose":"Independent Ashen projects completed in both orders.","production_authority":"project start, inspection, combat, choice and claim services","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J07","case_count":1,"purpose":"Explore-before-lead reconciliation, delayed starts and cache reveal.","production_authority":"inspection and regional action receipts","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J08","case_count":1,"purpose":"Low-profession route without illicit profession uplift.","production_authority":"Sled alternative, choices, gathering and finite delivery services","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J09","case_count":1,"purpose":"Personal-practice evidence excludes pre-acceptance and gifted goods.","production_authority":"craft, gift and project-delivery services","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J10","case_count":1,"purpose":"Ordinary earned and gifted finite/standing delivery goods.","production_authority":"gathering, crafting, gift, delivery and receipt replay services","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J11","case_count":3,"purpose":"Ordinary/named hunt overlap and roster-lock credit boundary.","production_authority":"quest board, open-world combat and settlement bindings","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J12","case_count":3,"purpose":"Optional-group bindings for alive/defeated/fled outcomes plus legal owner-only group harvest.","production_authority":"production mixed Ferry combat, forest-boar spawn/group combat, settlement and harvest services","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_refs":["j12_v1_group","journeys_after_v1"],"v1_guarantee":"Both characters participate; owner receives exactly one boar_meat and replay does not duplicate; participating non-owner receives harvest_not_applied with inventory, harvest claims, regional claims, settlement and encounter ownership unchanged."},
+    {"id":"J13","case_count":1,"purpose":"Named target lifecycle, ordinary-target separation and Drifter exclusion.","production_authority":"special-spawn combat, respawn lifecycle and hunt counters","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J14","case_count":1,"purpose":"Named/mixed source contention and expiry/activation serialization.","production_authority":"emitted combat controls, world spawn reservations and pruning lifecycle","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J15","case_count":1,"purpose":"Permanent local choices, equal rewards and outsider isolation.","production_authority":"selection, preview, Confirm and receipt replay handlers","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J16","case_count":1,"purpose":"Returning-player migration and semantic state preservation.","production_authority":"startup schema migration and validation","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J17","case_count":11,"purpose":"Atomic delivery/choice/cache/standing failures, combat T2 recovery and delivery races.","production_authority":"transaction savepoints, settlement recovery and separate SQLite writers","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J18","case_count":3,"purpose":"Arbitrary reward ordering and both complete regional orders with exact totals.","production_authority":"all finite production completion helpers and claims","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J19","case_count":3,"purpose":"ru/en/es emitted navigation, history, receipt replay and presentation limits.","production_authority":"actual Journal, inventory, build, profession, location and regional handlers","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"},
+    {"id":"J20","case_count":1,"purpose":"Resume after other resolutions, complete all finite records and preserve resolved state.","production_authority":"production combat, project, delivery, restart and Journal paths","result":"PASS","tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc","execution_ref":"journeys_after_v1"}
   ],
+  "acceptance_journey_totals": {
+    "definitions":20,
+    "parameterized_cases":39,
+    "passed":39,
+    "failed":0,
+    "tested_sha":"43b5fb7a62f0265a89e20aeb9c3613f4605c56fc",
+    "execution_ref":"journeys_after_v1"
+  },
   "classified_failures": [
-    {"stage":"initial repair file","classification":"TEST BUG / STALE EXPECTATION","resolution":"four affected nodes and complete file passed after correction"},
+    {"stage":"initial repair file","classification":"TEST BUG / STALE EXPECTATION","resolution":"affected nodes and complete file passed after correction"},
     {"stage":"initial journeys","classification":"TEST BUG","resolution":"actual emitted controls and production service locations corrected; complete journeys passed"},
     {"stage":"broad at 1b165c37887a529939e19ba08725c423a8ebff4e","classification":"REAL PRODUCTION DEFECT","resolution":"F1 legacy table-absence handling fixed in ce88335267c6dbc05bef289e88deebd1fa28ea60"},
-    {"stage":"suspended broad at ce88335267c6dbc05bef289e88deebd1fa28ea60","classification":"ENVIRONMENT / FIXTURE ISSUE","resolution":"expired short-lived J03 token after 6h32m suspension; exact node, whole journey group and fresh broad passed"}
+    {"stage":"prolonged broad at ce88335267c6dbc05bef289e88deebd1fa28ea60","classification":"ENVIRONMENT / FIXTURE ISSUE","explanation_confidence":"inferred","explanation":"Computer suspension or equivalent timing delay causing short-lived token expiry is an inference, not directly proven by the captured output.","resolution":"The prolonged run is not authoritative; the exact J03 node, full journeys and a fresh uninterrupted broad subsequently passed."}
   ],
   "checkpoints": {
-    "earned": {"sha256":"7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C","verified_against_recorded_constant":true},
-    "party": {"sha256":"7510168AC9B5A03C06423CE9075906088E21CEF2CA4A3716016EB5153D393A7B","verified_against_recorded_constant":true},
-    "rebuilt": false
+    "earned": {
+      "path":"C:\\Users\\masha\\Documents\\Codex\\2026-09-27\\files-mentioned-by-the-user-rav1\\work\\earned-rav1.sqlite3",
+      "expected_recorded_sha256":"7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C",
+      "current_verified_sha256":"7EE968B9861312799D743FAF87D6AFC3F9D099640B06E68E7E94F8CAFDAC9E6C",
+      "provenance":"Production-path PEV1 registration, Chapter I, travel, gathering, crafting, hunts, combat, gear and professions; no injected RAV state."
+    },
+    "party": {
+      "path":"C:\\Users\\masha\\Documents\\Codex\\2026-09-27\\files-mentioned-by-the-user-rav1\\work\\earned-rav1-party.sqlite3",
+      "expected_recorded_sha256":"7510168AC9B5A03C06423CE9075906088E21CEF2CA4A3716016EB5153D393A7B",
+      "current_verified_sha256":"7510168AC9B5A03C06423CE9075906088E21CEF2CA4A3716016EB5153D393A7B",
+      "provenance":"Three independently earned Chapter-I characters used by physical, magic, group, gift, race and isolation journeys."
+    },
+    "supplied_files_hashed":true,
+    "compared_against_independently_recorded_constants":true,
+    "rebuilt":false,
+    "calculated_current_hashes_treated_as_own_provenance_authority":false
   },
+  "accelerators": [
+    "mocked Telegram transport",
+    "zero sleep while preserving travel adjacency and revision changes",
+    "controlled legal RNG selections",
+    "respawn clock advancement through production lifecycle"
+  ],
   "review": {
-    "frozen_contract_contradiction": null,
-    "contract_deviations": [],
-    "scope_expansion": false,
-    "automated_acceptance": "COMPLETE"
+    "frozen_contract_contradiction":null,
+    "contract_deviations":[],
+    "scope_expansion":false,
+    "automated_acceptance":"COMPLETE",
+    "broad_scope_note":"Runtime production state was broad-tested at ce88335267c6dbc05bef289e88deebd1fa28ea60. The later test-only J12 coverage was validated separately at 43b5fb7a62f0265a89e20aeb9c3613f4605c56fc; the historical broad did not execute the new assertion."
   },
   "human_validation": {"status":"NOT RUN","plan":"regional_adventures_v1_human.md"},
   "state_boundaries": {
-    "pull_request_open": true,
-    "pull_request_draft": true,
-    "merge_ready": false,
-    "merged": false,
-    "deployed": false,
-    "human_validated": false
+    "pull_request_open":true,
+    "pull_request_draft":true,
+    "merge_ready":false,
+    "merged":false,
+    "deployed":false,
+    "human_validated":false
   }
 }
