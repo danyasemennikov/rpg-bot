@@ -12,6 +12,17 @@
 - Human validation: NOT RUN
 - Merge ready: false
 
+## Post-merge status — 2026-10-03
+
+PR [#234](https://github.com/danyasemennikov/rpg-bot/pull/234) subsequently merged at
+`adcc0baeee96c03852ed75c09e379b0c49be01d1`, from approved candidate
+`436a0c1015766c38215f74ddb7ccd844a6c5a669`. Automated acceptance is COMPLETE;
+human Telegram validation remains NOT RUN and outstanding after merge. Deployment
+is not established. The original header and validation narrative below record the
+historical candidate state, not current PR disposition. Broad/runtime and repaired
+acceptance-test provenance remain at their original SHAs; no run is attributed to
+the merge commit. The three-session human plan remains unchanged.
+
 ## Frozen scope confirmation
 
 The catalogue remains unchanged: 34 top-level records; seven projects; 18 steps;
