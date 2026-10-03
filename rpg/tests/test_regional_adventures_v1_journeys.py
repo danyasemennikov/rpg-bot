@@ -31,6 +31,7 @@ from game.gear_progression import apply_gear_intent, issue_gear_intent, set_equi
 from game.gathering_runtime import gather_resource
 from game.locations import get_location
 from game.mobs import get_mob
+from game.hunting import harvest_victory, list_harvestable_victories
 from game.i18n import t, validate_rav1_locales
 from game.pve_live import (
     FORMING_ENCOUNTER_TTL_SECONDS, _prune_expired_forming_encounters,
@@ -71,7 +72,7 @@ from handlers.regional import (
 from tests.test_character_builds_v1_journeys import ProductionJourney
 from tests.test_character_builds_v1_group_journeys import (
     _commit_round, _encounter_state, _finish_group, _frozen_combat_clock,
-    _set_encounter_combat_seed, _start_mixed_group,
+    _set_encounter_combat_seed, _start_group, _start_mixed_group,
 )
 from tests.test_professions_economy_v1_journeys import (
     PLAYER_ID as EARNED_PLAYER_ID,
@@ -1299,6 +1300,97 @@ def test_j12_optional_group_binding_contract(earned_party, outcome):
             assert all(json.loads(row['bindings_json']) for row in bindings.values())
             excluded = ({owner.player_id, joiner.player_id} - eligible).pop()
             assert get_project_state(excluded, 'mv_ferry_crew')['step_index'] == 1
+
+        # Ferry's leech/snake units intentionally have no harvest outputs. Use
+        # a separate legal production group encounter to prove that harvesting
+        # remains owner-only even when both earned characters participated in
+        # and received ordinary combat settlement from the same victory.
+        for member in (owner, joiner):
+            await _recover(member, force=True)
+            await _move(member, 'westwild_n2')
+        with _frozen_combat_clock():
+            harvest_encounter_id, harvest_members, harvest_mastery_before = await _start_group(
+                owner, [joiner], mob_id='forest_boar')
+            _set_encounter_combat_seed(
+                harvest_encounter_id, f'rav1-j12-owner-harvest-{outcome}')
+            conn = get_connection()
+            participant_ids = {
+                int(row['player_id']) for row in conn.execute(
+                    'SELECT player_id FROM pve_encounter_participants WHERE encounter_id=?',
+                    (harvest_encounter_id,),
+                )
+            }
+            conn.close()
+            assert participant_ids == {owner.player_id, joiner.player_id}
+            harvest_settlement = await _finish_group(
+                harvest_encounter_id, harvest_members, harvest_mastery_before,
+                expected_unit_count=1,
+            )
+        assert set(harvest_settlement['plan']['eligible_recipient_ids']) == {
+            owner.player_id, joiner.player_id}
+
+        owner_choices = [
+            row for row in list_harvestable_victories(owner.player_id, page_size=20)
+            if row['encounter_id'] == harvest_encounter_id and row['item_id'] == 'boar_meat'
+        ]
+        assert len(owner_choices) == 1
+        choice = owner_choices[0]
+        payload = json.dumps({
+            'encounter_id': harvest_encounter_id,
+            'unit_id': choice['unit_id'],
+            'item_id': choice['item_id'],
+        }, sort_keys=True, separators=(',', ':'))
+        token = issue_actions(owner.player_id, 'harvest', [payload])[payload]
+        owner_before = _quantity(owner.player_id, 'boar_meat')
+        harvested = harvest_victory(owner.player_id, harvest_encounter_id, action_token=token)
+        assert harvested['status'] == 'harvested'
+        assert harvested['item_id'] == 'boar_meat'
+        assert harvested['granted'] == [{
+            'item_id': 'boar_meat', 'quantity': 1,
+            'instance_ids': [], 'gear_specs': [],
+        }]
+        assert _quantity(owner.player_id, 'boar_meat') == owner_before + 1
+        replay = harvest_victory(owner.player_id, harvest_encounter_id, action_token=token)
+        assert replay['status'] == 'harvested' and replay['recovered'] is True
+        assert _quantity(owner.player_id, 'boar_meat') == owner_before + 1
+
+        conn = get_connection()
+        non_owner_before = {
+            'inventory': _inventory_snapshot(joiner.player_id),
+            'claims': sorted(list_claims(joiner.player_id)),
+            'harvest_claims': [tuple(row) for row in conn.execute(
+                '''SELECT encounter_id,player_id,item_id,claimed_at
+                   FROM pve_harvest_claims WHERE encounter_id=? ORDER BY player_id,item_id''',
+                (harvest_encounter_id,),
+            )],
+            'settlement': get_settlement(harvest_encounter_id),
+            'owner_player_id': int(conn.execute(
+                'SELECT owner_player_id FROM pve_encounters WHERE encounter_id=?',
+                (harvest_encounter_id,),
+            ).fetchone()['owner_player_id']),
+        }
+        conn.close()
+        rejected = harvest_victory(
+            joiner.player_id, harvest_encounter_id,
+            unit_id=choice['unit_id'], item_id=choice['item_id'])
+        assert rejected['status'] == 'harvest_not_applied'
+        conn = get_connection()
+        non_owner_after = {
+            'inventory': _inventory_snapshot(joiner.player_id),
+            'claims': sorted(list_claims(joiner.player_id)),
+            'harvest_claims': [tuple(row) for row in conn.execute(
+                '''SELECT encounter_id,player_id,item_id,claimed_at
+                   FROM pve_harvest_claims WHERE encounter_id=? ORDER BY player_id,item_id''',
+                (harvest_encounter_id,),
+            )],
+            'settlement': get_settlement(harvest_encounter_id),
+            'owner_player_id': int(conn.execute(
+                'SELECT owner_player_id FROM pve_encounters WHERE encounter_id=?',
+                (harvest_encounter_id,),
+            ).fetchone()['owner_player_id']),
+        }
+        conn.close()
+        assert non_owner_after == non_owner_before
     asyncio.run(run())
 
 
