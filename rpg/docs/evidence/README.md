@@ -2,7 +2,7 @@
 
 - Status: Active catalogue
 - Authority: Supporting measured evidence with exact provenance
-- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
+- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
 
 Files in this directory are checked, compact acceptance artifacts. They identify the
 exact rules commit, inputs, seeds, production authorities, and failed/stalled runs.
@@ -12,7 +12,12 @@ Human interpretation and rollout guidance live in the corresponding delivery rep
 migration and transaction checks, earned J01–J20 production-history provenance,
 focused and broad test results, and separate review/human/merge/deployment states.
 `regional_adventures_v1_human.md` is the required human-session plan and remains
-explicitly NOT YET RUN until observations are actually collected.
+explicitly NOT YET RUN (human validation: NOT RUN) until observations are collected.
+PR234 subsequently merged at `adcc0baeee96c03852ed75c09e379b0c49be01d1`, from
+approved candidate `436a0c1015766c38215f74ddb7ccd844a6c5a669`. The JSON retains
+historical candidate/test provenance and its then-current state boundaries; these
+are not current merge status. Human sessions are outstanding post-merge validation,
+not a merge blocker. Merge does not establish deployment.
 
 `professions_economy_v1.json` preserves the PEV1-1 Stage 3 candidate's frozen base,
 catalogue counts, migration checks, production-journey result, focused checks, and

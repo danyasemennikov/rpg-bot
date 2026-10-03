@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for forward priorities; not an implementation contract
-- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
+- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
 
 Statuses used here:
 
@@ -15,26 +15,18 @@ in this roadmap.
 
 ## CURRENT
 
-### Regional Adventures & Opportunities V1
+### RAV1 post-merge human validation
 
-- Status: **in progress** under frozen contract RAV1-1.
-- Outcome: independent post-Chapter-I regional opportunities: seven local projects,
-  bounded findings and finite claims, three repeatable local jobs, and surfaced
-  existing hunt/profession/equipment choices without a prescribed region order.
-- Candidate record: [epics/REGIONAL_ADVENTURES_V1_REPORT.md](epics/REGIONAL_ADVENTURES_V1_REPORT.md).
-- Excludes Chapter II, a global campaign/finale, regional completion gates,
-  reputation, dailies, teleport activation, expeditions, and new economy/combat
-  authority. Merge remains a separate owner decision.
+- Status: **accepted process**, outstanding after PR234 merged; implementation is
+  complete and no longer an active candidate.
+- Human Telegram validation: **NOT RUN**. Execute the existing
+  [Fresh solo, Returning solo, and Two-player plan](evidence/regional_adventures_v1_human.md)
+  and record observations against an exact build.
+- This is post-merge validation, not an implementation or merge blocker. Automated
+  acceptance is COMPLETE; merge does not establish deployment or full playtesting.
+- Human validation does not create a Chapter II or global campaign/finale promise.
 
-## NEXT
-
-### Regional candidate acceptance and human validation
-
-- Status: **accepted process**, separate from implementation.
-- Outcome: independent review of the exact candidate, then the three-session human
-  plan in the RAV1 evidence. Human validation does not create a Chapter II promise.
-
-## LATER
+## NEXT / LATER
 
 ### Professions / economy follow-up assessment
 

@@ -2,7 +2,7 @@
 
 - Status: Active catalogue
 - Authority: Navigation for merged delivery history
-- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
+- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
 
 Epic reports record what a candidate delivered, how it was migrated and validated,
 and which limitations applied at that baseline. They do not replace current code,
@@ -10,9 +10,7 @@ and which limitations applied at that baseline. They do not replace current code
 
 ## Active Draft candidates
 
-| Delivery record | Contract | Disposition |
-|---|---|---|
-| [Regional Adventures & Opportunities V1](REGIONAL_ADVENTURES_V1_REPORT.md) | [RAV1-1 frozen contract](REGIONAL_ADVENTURES_V1_SPEC.md) | Draft PR candidate; automated evidence and human validation are reported separately; not merged or deployed |
+None. RAV1 subsequently merged as PR234.
 
 ## Merged Epics
 
@@ -22,6 +20,7 @@ and which limitations applied at that baseline. They do not replace current code
 | [Field Loot & Gear Progression V1](FIELD_LOOT_AND_GEAR_PROGRESSION_V1.md) | [#230](https://github.com/danyasemennikov/rpg-bot/pull/230) | Merged | PR231 preserved its item/settlement guarantees while changing combat/build authorities and normalizing mastery through canonical families. |
 | [Character Builds & Combat Identity V1](../CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md) | [#231](https://github.com/danyasemennikov/rpg-bot/pull/231) | Merged | Current report remains at a compatibility-retained path because tests consume it. |
 | [Professions & Economy V1](PROFESSIONS_ECONOMY_V1_REPORT.md) | [#233](https://github.com/danyasemennikov/rpg-bot/pull/233) | Merged | Historical candidate test provenance is retained; merge does not establish deployment. |
+| [Regional Adventures & Opportunities V1](REGIONAL_ADVENTURES_V1_REPORT.md) | [#234](https://github.com/danyasemennikov/rpg-bot/pull/234) | Merged | [RAV1-1 frozen merged contract](REGIONAL_ADVENTURES_V1_SPEC.md); exact candidate/test provenance retained; human validation NOT RUN; deployment not established. |
 
 Merge does not establish deployment. Validation recorded inside each report applies to
 the stated candidate and evidence baseline.

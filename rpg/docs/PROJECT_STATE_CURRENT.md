@@ -2,20 +2,13 @@
 
 - Status: Active
 - Authority: Canonical for confirmed merged state
-- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
+- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
 - Full prior snapshot: [archive/status/PROJECT_STATE_CURRENT_AT_PR231.md](archive/status/PROJECT_STATE_CURRENT_AT_PR231.md)
 
 This current section is the only merged-state summary. Plans belong in
 [ROADMAP_CURRENT.md](ROADMAP_CURRENT.md); delivery detail belongs in Epic reports;
 measured artifacts retain their own commit provenance. Merge does not establish
 deployment.
-
-> **Active candidate note:** RAV1-1 Regional Adventures & Opportunities V1 is an
-> accepted and frozen implementation contract. The candidate on
-> `codex/regional-adventures-opportunities-v1` is unmerged and not deployed, so
-> it is not part of the confirmed merged state below. Automated evidence and
-> human-validation status are recorded separately in
-> [the candidate report](epics/REGIONAL_ADVENTURES_V1_REPORT.md).
 
 ## Verified baseline
 
@@ -24,7 +17,8 @@ deployment.
 - [PR231 — Character Builds & Combat Identity V1](https://github.com/danyasemennikov/rpg-bot/pull/231): merged.
 - [PR232 — Documentation Architecture & Consolidation V1](https://github.com/danyasemennikov/rpg-bot/pull/232): merged.
 - [PR233 — Professions & Economy V1](https://github.com/danyasemennikov/rpg-bot/pull/233): merged.
-- PR233 merge/current reconciled `main`: `ebd8f73ade53fcadb89942b703a947782276ea1c`.
+- [PR234 — Regional Adventures & Opportunities V1](https://github.com/danyasemennikov/rpg-bot/pull/234): merged.
+- PR234 merge/current reconciled `main`: `adcc0baeee96c03852ed75c09e379b0c49be01d1`.
 
 The repository establishes merge state only. Deployment, live-account smoke, and
 production operation require separate evidence.
@@ -81,17 +75,22 @@ production operation require separate evidence.
   28 mandatory materials, permanent recipe knowledge, durable economy receipts,
   and the bounded recovery and sale paths recorded in its delivery report.
 
-## Regional adventures candidate boundary
+## Regional adventures
 
-- RAV1-1 is an unmerged candidate that adds seven independent local projects,
-  discoveries, finite requests, repeatable local work, named and mixed encounters,
-  and a post-Chapter-I Journal without adding Chapter II or a global campaign.
-- The candidate preserves hunt, combat settlement, profession, inventory, travel,
-  equipment, and progression authorities instead of replacing them.
-- Its tested-code commit is `4f38f20`; the exact final Draft-PR head is recorded in
-  the Draft PR and final handoff because a commit cannot embed its own object ID.
-- Automated acceptance, independent review, merge, deployment, and human playtesting
-  are separate states. Human sessions have not yet run.
+- PR234 implements seven independent regional projects, discoveries and finite
+  regional opportunities, three standing local jobs, surfaced/repaired existing
+  hunts, named and mixed encounters, and three permanent local choices.
+- The post-Chapter-I regional Journal adds no Chapter II or global campaign/finale.
+- Existing combat settlement, hunt, profession, inventory, travel, equipment, and
+  progression authorities remain canonical.
+- Automated acceptance: COMPLETE. Historical broad-tested runtime:
+  `ce88335267c6dbc05bef289e88deebd1fa28ea60`; repaired acceptance-test SHA:
+  `43b5fb7a62f0265a89e20aeb9c3613f4605c56fc`; approved candidate:
+  `436a0c1015766c38215f74ddb7ccd844a6c5a669`.
+- Human Telegram validation: NOT RUN; the Fresh solo, Returning solo, and Two-player
+  sessions remain outstanding post-merge validation. RAV1 is not fully playtested.
+- Deployment is not established by merge. Exact validation results remain in
+  [the delivery report](epics/REGIONAL_ADVENTURES_V1_REPORT.md) and historical evidence.
 
 ## PvP
 

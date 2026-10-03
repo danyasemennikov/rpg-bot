@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation entry
-- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
+- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
 
 Start here.
 
@@ -52,20 +52,21 @@ It also catalogues compatibility-retained system and pass documents.
 
 ## Merged Epic delivery records
 
-[epics/README.md](epics/README.md) catalogues the PR229, PR230, and PR231 delivery
+[epics/README.md](epics/README.md) catalogues the PR229, PR230, PR231, PR233, and PR234 delivery
 reports and the historical open-world pass records. These reports preserve the
 validation and limitations that applied to their delivery baseline.
 
-## Active implementation contract
+## Regional Adventures merged Epic
 
-- Product authority: [Regional Adventures & Opportunities V1 frozen contract](epics/REGIONAL_ADVENTURES_V1_SPEC.md)
-- Observed candidate state: [Regional Adventures & Opportunities V1 report](epics/REGIONAL_ADVENTURES_V1_REPORT.md)
-- Automated evidence: [regional_adventures_v1.json](evidence/regional_adventures_v1.json)
-- Human plan/status: [regional_adventures_v1_human.md](evidence/regional_adventures_v1_human.md)
+- Frozen merged Epic contract: [Regional Adventures & Opportunities V1 spec](epics/REGIONAL_ADVENTURES_V1_SPEC.md)
+- Merged delivery record: [Regional Adventures & Opportunities V1 report](epics/REGIONAL_ADVENTURES_V1_REPORT.md)
+- Exact historical acceptance evidence: [regional_adventures_v1.json](evidence/regional_adventures_v1.json)
+- Outstanding post-merge human validation (NOT RUN): [regional_adventures_v1_human.md](evidence/regional_adventures_v1_human.md)
 
-These describe an unmerged candidate and do not alter merged-state authority until
-the candidate is accepted and merged. The PEV1 contract, report, and evidence remain
-the historical delivery record for merged PR233.
+PR234 merged at `adcc0baeee96c03852ed75c09e379b0c49be01d1`. Current merged-state
+claims belong to PROJECT_STATE_CURRENT.md; the report and JSON retain exact historical
+candidate/test provenance. Merge does not establish deployment. The PEV1 contract,
+report, and evidence remain the historical delivery record for merged PR233.
 
 ## Evidence
 
