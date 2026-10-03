@@ -760,6 +760,8 @@ STRINGS = {
 }
 from locales.professions import STRINGS as _PROFESSION_STRINGS
 STRINGS['professions'] = _PROFESSION_STRINGS['ru']
+from locales.rav1_ru import STRINGS as _RAV1_STRINGS
+STRINGS['rav1'] = _RAV1_STRINGS
 
 
 from locales.chapter import CHAPTER_STRINGS

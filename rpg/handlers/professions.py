@@ -93,6 +93,13 @@ def _receipt_status_label(receipt: dict, lang: str) -> str:
     return t('professions.' + str(receipt.get('status') or 'unknown'), lang)
 
 
+def _receipt_list_label(receipt: dict, lang: str) -> str:
+    if str(receipt.get('action_kind') or '').startswith('rav1:'):
+        from handlers.regional import build_receipt_history_label
+        return build_receipt_history_label(receipt, lang)
+    return f"{_receipt_action_label(receipt, lang)} · {_receipt_status_label(receipt, lang)}"
+
+
 def build_overview(player: dict, page: int = 0):
     lang, player_id = player.get('lang', 'ru'), int(player['telegram_id'])
     gathering, crafting, _ = _state(player_id)
@@ -316,7 +323,7 @@ def build_receipts(player: dict, page: int = 0):
     tokens = issue_actions(player_id, 'receipt', payloads) if payloads else {}
     lines = [t('professions.receipts', lang)]
     rows = [[InlineKeyboardButton(
-        f"{receipt.get('created_at','')} · {_receipt_action_label(receipt, lang)} · {_receipt_status_label(receipt, lang)}",
+        f"{receipt.get('created_at','')} · {_receipt_list_label(receipt, lang)}",
         callback_data=f"pe_x:{tokens[receipt['request_id']]}",
     )] for receipt in receipts]
     nav = []
@@ -381,6 +388,9 @@ def build_receipt(player: dict, token: str):
     receipt = get_receipt(player_id, str(row['payload'])) if row else None
     if not receipt:
         return build_receipts(player)
+    if str(receipt.get('action_kind') or '').startswith('rav1:'):
+        from handlers.regional import build_action_result
+        return build_action_result(player, receipt)
     lines = _receipt_lines(receipt, lang)
     return '\n'.join(lines), _kb([[InlineKeyboardButton(t('professions.back', lang), callback_data='pe_h:0')]])
 

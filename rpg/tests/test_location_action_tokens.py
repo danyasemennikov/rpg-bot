@@ -635,7 +635,8 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Stone Golem', text)
         callbacks = [button.callback_data for row in _keyboard.inline_keyboard for button in row]
         self.assertIn('fight_spawn_spawn-old_mines-stone_golem', callbacks)
-        self.assertIn('fight_spawn_spawn-old_mines-stone_golem-special-amber_colossus', callbacks)
+        self.assertIn('fight_special_amber_colossus', callbacks)
+        self.assertTrue(all(len(callback.encode('utf-8')) <= 64 for callback in callbacks))
 
 
 if __name__ == '__main__':

@@ -74,6 +74,17 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
     def tearDown(self):
         finish_solo_pve_encounter(player_id=self.player_id, status='test_cleanup')
         conn = get_connection()
+        # RAV1 bindings intentionally reference their authoritative encounter
+        # without cascading.  This test's direct fixture cleanup therefore
+        # removes observer rows before deleting the synthetic encounters.
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='rav1_combat_bindings'"
+        ).fetchone():
+            conn.execute(
+                'DELETE FROM rav1_combat_bindings WHERE encounter_id IN '
+                '(SELECT encounter_id FROM pve_encounters WHERE owner_player_id IN (?,?,?))',
+                (self.player_id, self.player2_id, self.player3_id),
+            )
         conn.execute('DELETE FROM pve_encounter_participants WHERE player_id=?', (self.player_id,))
         conn.execute('DELETE FROM pve_encounter_participants WHERE player_id=?', (self.player2_id,))
         conn.execute('DELETE FROM pve_encounter_participants WHERE player_id=?', (self.player3_id,))
@@ -602,7 +613,11 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             _text, keyboard = build_location_message(player, location, pvp_only_view=False)
 
         callbacks = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
-        self.assertTrue(all(callback.startswith('fight_spawn_') for callback in callbacks))
+        self.assertIn('rv:v:n:0:all', callbacks)
+        self.assertTrue(all(
+            callback == 'rv:v:n:0:all' or callback.startswith('fight_spawn_')
+            for callback in callbacks
+        ))
 
     def test_same_player_cannot_join_twice(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(

@@ -46,7 +46,8 @@ def store_business_rejection(conn, *, player_id: int, request_id: str,
                              recipe_id: str | None = None,
                              gold_after: int = 0,
                              source: dict | None = None,
-                             details: dict | None = None) -> dict:
+                             details: dict | None = None,
+                             intent: dict | None = None) -> dict:
     """Commit a consumed, valid intent's language-neutral rejection result."""
     result = {
         'schema_version': 1, 'action_kind': action_kind, 'status': status,
@@ -55,6 +56,8 @@ def store_business_rejection(conn, *, player_id: int, request_id: str,
         'progression': [], 'source': source or {},
         'details': {'reason': status, **(details or {})},
     }
+    if intent is not None:
+        result['intent'] = intent
     store_receipt(conn, player_id, request_id, action_kind, request_hash, result)
     return result
 

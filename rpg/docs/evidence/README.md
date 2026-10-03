@@ -2,16 +2,23 @@
 
 - Status: Active catalogue
 - Authority: Supporting measured evidence with exact provenance
-- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
+- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
 
 Files in this directory are checked, compact acceptance artifacts. They identify the
 exact rules commit, inputs, seeds, production authorities, and failed/stalled runs.
 Human interpretation and rollout guidance live in the corresponding delivery report.
 
-`professions_economy_v1.json` records the PEV1-1 Stage 3 candidate's frozen base,
+`regional_adventures_v1.json` records the RAV1-1 candidate's exact catalogue,
+migration and transaction checks, earned J01–J20 production-history provenance,
+focused and broad test results, and separate review/human/merge/deployment states.
+`regional_adventures_v1_human.md` is the required human-session plan and remains
+explicitly NOT YET RUN until observations are actually collected.
+
+`professions_economy_v1.json` preserves the PEV1-1 Stage 3 candidate's frozen base,
 catalogue counts, migration checks, production-journey result, focused checks, and
-single broad final-suite result. Its candidate head and Draft PR URL are populated
-only after the tested branch has been pushed.
+single broad final-suite result. PR233 later merged at
+`ebd8f73ade53fcadb89942b703a947782276ea1c`; the JSON remains historical candidate
+evidence and is not rewritten as though it knew that outcome.
 
 `character_builds_combat_identity_v1.json` is interpreted by
 `../CHARACTER_BUILDS_COMBAT_IDENTITY_V1.md`. Its `head_sha` is the integrated runtime
