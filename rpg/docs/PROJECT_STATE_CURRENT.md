@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for confirmed merged state
-- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
+- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
 - Full prior snapshot: [archive/status/PROJECT_STATE_CURRENT_AT_PR231.md](archive/status/PROJECT_STATE_CURRENT_AT_PR231.md)
 
 This current section is the only merged-state summary. Plans belong in
@@ -10,12 +10,12 @@ This current section is the only merged-state summary. Plans belong in
 measured artifacts retain their own commit provenance. Merge does not establish
 deployment.
 
-> **Active candidate note:** PEV1-1 Professions & Economy V1 is an accepted and
-> frozen implementation contract, implemented on `codex/professions-economy-v1`
-> as Draft [PR #233](https://github.com/danyasemennikov/rpg-bot/pull/233). The
-> candidate is still unmerged and is not deployed, so it is not part of the
-> confirmed merged state below. See
-> [the candidate report](epics/PROFESSIONS_ECONOMY_V1_REPORT.md).
+> **Active candidate note:** RAV1-1 Regional Adventures & Opportunities V1 is an
+> accepted and frozen implementation contract. The candidate on
+> `codex/regional-adventures-opportunities-v1` is unmerged and not deployed, so
+> it is not part of the confirmed merged state below. Automated evidence and
+> human-validation status are recorded separately in
+> [the candidate report](epics/REGIONAL_ADVENTURES_V1_REPORT.md).
 
 ## Verified baseline
 
@@ -23,7 +23,8 @@ deployment.
 - [PR230 — Itemization, Regional Loot & Reliable Gear Progression V1](https://github.com/danyasemennikov/rpg-bot/pull/230): merged.
 - [PR231 — Character Builds & Combat Identity V1](https://github.com/danyasemennikov/rpg-bot/pull/231): merged.
 - [PR232 — Documentation Architecture & Consolidation V1](https://github.com/danyasemennikov/rpg-bot/pull/232): merged.
-- PR232 merge/current reconciled `main`: `27347ece2b17108a1aed1f6eb01f2a395480e6c9`.
+- [PR233 — Professions & Economy V1](https://github.com/danyasemennikov/rpg-bot/pull/233): merged.
+- PR233 merge/current reconciled `main`: `ebd8f73ade53fcadb89942b703a947782276ea1c`.
 
 The repository establishes merge state only. Deployment, live-account smoke, and
 production operation require separate evidence.
@@ -76,12 +77,21 @@ production operation require separate evidence.
   level/XP/access rules represented by current runtime data.
 - Hunting is bounded to implemented access, locations, eligible victories, extraction,
   and profession progression.
-- The currently implemented crafting subset is three live professions and four recipes
-  connected to the playable chapter. Existing shops, material sales, starter supplies,
-  and the bounded shard exchange are implemented.
-- The accepted/frozen PEV1-1 contract is implemented in Draft PR #233 as a candidate.
-  It remains unmerged and not deployed; the confirmed merged baseline therefore
-  remains the bounded PR229 subset described above.
+- PR233 supplies five gathering and seven crafting professions, 63 active recipes,
+  28 mandatory materials, permanent recipe knowledge, durable economy receipts,
+  and the bounded recovery and sale paths recorded in its delivery report.
+
+## Regional adventures candidate boundary
+
+- RAV1-1 is an unmerged candidate that adds seven independent local projects,
+  discoveries, finite requests, repeatable local work, named and mixed encounters,
+  and a post-Chapter-I Journal without adding Chapter II or a global campaign.
+- The candidate preserves hunt, combat settlement, profession, inventory, travel,
+  equipment, and progression authorities instead of replacing them.
+- Its tested-code commit is `4f38f20`; the exact final Draft-PR head is recorded in
+  the Draft PR and final handoff because a commit cannot embed its own object ID.
+- Automated acceptance, independent review, merge, deployment, and human playtesting
+  are separate states. Human sessions have not yet run.
 
 ## PvP
 

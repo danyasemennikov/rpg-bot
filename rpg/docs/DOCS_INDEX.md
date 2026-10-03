@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation entry
-- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
+- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
 
 Start here.
 
@@ -56,14 +56,16 @@ It also catalogues compatibility-retained system and pass documents.
 reports and the historical open-world pass records. These reports preserve the
 validation and limitations that applied to their delivery baseline.
 
-## Active implementation contracts
+## Active implementation contract
 
-- [Professions & Economy V1 frozen contract](epics/PROFESSIONS_ECONOMY_V1_SPEC.md)
-- [Professions & Economy V1 candidate report](epics/PROFESSIONS_ECONOMY_V1_REPORT.md)
-- [Professions & Economy V1 evidence](evidence/professions_economy_v1.json)
+- Product authority: [Regional Adventures & Opportunities V1 frozen contract](epics/REGIONAL_ADVENTURES_V1_SPEC.md)
+- Observed candidate state: [Regional Adventures & Opportunities V1 report](epics/REGIONAL_ADVENTURES_V1_REPORT.md)
+- Automated evidence: [regional_adventures_v1.json](evidence/regional_adventures_v1.json)
+- Human plan/status: [regional_adventures_v1_human.md](evidence/regional_adventures_v1_human.md)
 
-These describe an active Draft-PR candidate and do not alter merged-state authority
-until the candidate is accepted and merged.
+These describe an unmerged candidate and do not alter merged-state authority until
+the candidate is accepted and merged. The PEV1 contract, report, and evidence remain
+the historical delivery record for merged PR233.
 
 ## Evidence
 

@@ -852,6 +852,10 @@ def build_location_message(
         text += '\n'
 
     keyboard = []
+    if not pvp_only_view:
+        keyboard.append([InlineKeyboardButton(
+            t('rav1.nav.nearby', lang), callback_data='rv:v:n:0:all'
+        )])
     token_actions: dict[str, str] = {}
     players_nearby_lines: list[str] = []
     players_nearby_cmds: list[str] = []
@@ -1102,7 +1106,11 @@ def build_location_message(
                 )
                 keyboard.append([InlineKeyboardButton(
                     t('location.attack_mob_group_btn', lang, name=mob_label, count=int(grouped['count'])),
-                    callback_data=f"fight_spawn_{grouped['representative_spawn_id']}",
+                    callback_data=(
+                        f"fight_special_{grouped['special_spawn_key']}"
+                        if grouped['special_spawn_key']
+                        else f"fight_spawn_{grouped['representative_spawn_id']}"
+                    ),
                 )])
 
     if players_nearby_lines:
@@ -2545,6 +2553,31 @@ async def handle_combat_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         mob_id = data.replace('fight_first_', '')
         from handlers.battle import start_battle
         await start_battle(update, context, mob_id, mob_first=True)
+
+    elif data.startswith('fight_special_'):
+        special_key = data.replace('fight_special_', '', 1)
+        from game.regional_catalog import SPECIAL_TARGETS
+        target = next((row for row in SPECIAL_TARGETS if row['key'] == special_key), None)
+        if not target or not p or resolve_location_id(p['location_id']) != target['location_id']:
+            await query.answer(t('rav1.errors.wrong_location', lang), show_alert=True)
+            return
+        from game.pve_live import ensure_location_pve_spawn_instances
+        ensure_location_pve_spawn_instances(location_id=target['location_id'])
+        conn = get_connection()
+        row = conn.execute(
+            '''SELECT spawn_instance_id FROM pve_spawn_instances
+               WHERE location_id=? AND mob_id=? AND special_spawn_key=? LIMIT 1''',
+            (target['location_id'], target['mob_id'], special_key),
+        ).fetchone()
+        conn.close()
+        if not row:
+            await query.answer(t('rav1.errors.unknown_content', lang), show_alert=True)
+            return
+        from handlers.battle import start_battle
+        await start_battle(
+            update, context, mob_id='', mob_first=False,
+            spawn_instance_id=str(row['spawn_instance_id']), open_runtime_now=False,
+        )
 
     elif data.startswith('fight_spawn_'):
         spawn_instance_id = data.replace('fight_spawn_', '')

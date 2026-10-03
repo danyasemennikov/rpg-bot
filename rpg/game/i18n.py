@@ -3,6 +3,7 @@
 # ============================================================
 
 import os, sys
+import string
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 SUPPORTED_LANGS = {
@@ -67,6 +68,44 @@ def t(key: str, lang: str = 'ru', **kwargs) -> str:
             pass
 
     return value
+
+
+def validate_rav1_locales() -> None:
+    """Require exact known-key and placeholder parity; no RAV1 fallback is valid."""
+    from locales.rav1_en import STRINGS as en
+    from locales.rav1_es import STRINGS as es
+    from locales.rav1_ru import STRINGS as ru
+
+    expected_families = {
+        'nav','status','actions','errors','rewards','readiness','people','landmarks',
+        'regions','content','facts','choices','work','encounters','services','replay','help','progress',
+    }
+    if set(en) != expected_families or set(ru) != expected_families or set(es) != expected_families:
+        raise RuntimeError('invalid RAV1 localization families')
+
+    def flatten(value, prefix=''):
+        result = {}
+        for key, item in value.items():
+            path = f'{prefix}.{key}' if prefix else str(key)
+            if isinstance(item, dict):
+                result.update(flatten(item, path))
+            else:
+                result[path] = item
+        return result
+
+    flattened = {language: flatten(values) for language, values in {'ru':ru,'en':en,'es':es}.items()}
+    if not (set(flattened['ru']) == set(flattened['en']) == set(flattened['es'])):
+        raise RuntimeError('RAV1 localization key parity failure')
+    formatter = string.Formatter()
+    for key in flattened['en']:
+        placeholders = []
+        for language in ('ru', 'en', 'es'):
+            value = flattened[language][key]
+            if not isinstance(value, str) or not value.strip():
+                raise RuntimeError(f'empty RAV1 localization: {language}.{key}')
+            placeholders.append({name for _literal, name, _spec, _conversion in formatter.parse(value) if name})
+        if placeholders[0] != placeholders[1] or placeholders[1] != placeholders[2]:
+            raise RuntimeError(f'RAV1 placeholder parity failure: {key}')
 
 def get_player_lang(telegram_id: int) -> str:
     """Получить язык игрока из БД."""

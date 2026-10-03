@@ -335,6 +335,13 @@ def craft_recipe(telegram_id: int, recipe_id: str,
         from game.quest_board import register_contract_objective
         register_contract_objective(conn, telegram_id, 'craft', recipe.output_item_id,
                                     crafted_quantity, player['location_id'])
+        from game.regional_objectives import observe_successful_craft
+        observe_successful_craft(
+            conn,
+            player_id=telegram_id,
+            recipe_id=recipe.recipe_id,
+            output_item_id=recipe.output_item_id,
+        )
         if request_id:
             receipt = {
                 'schema_version': 1, 'action_kind': 'craft', 'status': 'crafted',

@@ -30,21 +30,27 @@ class CraftsmenGuildPR1B2BTests(unittest.IsolatedAsyncioTestCase):
         stale = resolve_lower_service_button('🛠️ Craftsmen Guild', {'location_id': 'westwild_n7'}, 'en')
         self.assertEqual(stale, '')
 
-    def test_late_hubs_are_guild_only_services(self):
+    def test_late_hubs_keep_guild_without_shop_and_add_rav1_inns(self):
         for hub_id in ('hub_ashen_ruins', 'hub_sunscar', 'hub_mireveil'):
             services = list((get_location(hub_id) or {}).get('services', []))
             self.assertIn('craftsmen_guild', services)
             self.assertNotIn('shop', services)
-            self.assertNotIn('inn', services)
-            self.assertNotIn('quest_board', services)
+            self.assertIn('inn', services)
+            if hub_id == 'hub_sunscar':
+                self.assertIn('quest_board', services)
+            else:
+                self.assertNotIn('quest_board', services)
 
-    def test_late_hub_lower_menu_shows_guild_but_not_other_services(self):
+    def test_late_hub_lower_menu_shows_guild_and_rav1_inn_but_not_shop(self):
         for hub_id in ('hub_ashen_ruins', 'hub_sunscar', 'hub_mireveil'):
             flat = _flat_rows(build_contextual_main_keyboard({'location_id': hub_id}, 'en'))
             self.assertIn('🛠️ Craftsmen Guild', flat)
             self.assertNotIn('🏪 Shop', flat)
-            self.assertNotIn('🏨 Inn', flat)
-            self.assertNotIn('📋 Quest Board', flat)
+            self.assertIn('🏨 Inn', flat)
+            if hub_id == 'hub_sunscar':
+                self.assertIn('📋 Quest Board', flat)
+            else:
+                self.assertNotIn('📋 Quest Board', flat)
 
     def test_handbook_home_buttons(self):
         _text, kb = build_craftsmen_handbook_home({'lang': 'en'})

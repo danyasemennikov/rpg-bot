@@ -1,6 +1,6 @@
 # Professions & Economy V1
 
-- Status: Draft PR candidate; not merged and not deployed
+- Status: Merged in [PR #233](https://github.com/danyasemennikov/rpg-bot/pull/233) at `ebd8f73ade53fcadb89942b703a947782276ea1c`; deployment not established
 - Contract: PEV1-1 Stage 3
 - Frozen base: `27347ece2b17108a1aed1f6eb01f2a395480e6c9` (merged PR #232)
 - Candidate branch: `codex/professions-economy-v1`
@@ -99,7 +99,8 @@ prepared-settlement recovery and callback localization evidence; oversized recei
 clamping; exact positive/clipped recipe XP preview; and accurate current-state wording.
 
 PR232 Documentation Architecture & Consolidation V1 is merged at the frozen base.
-Its stale in-progress roadmap entry was removed. PR233 remains an unmerged Draft.
+PR233 was subsequently verified merged at `ebd8f73ade53fcadb89942b703a947782276ea1c`.
+The historical candidate provenance and test results above remain unchanged.
 Repository merge state does not establish deployment or live operation.
 
 ## Broad suite and remaining risks

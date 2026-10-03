@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from database import get_connection
-from game.balance import exp_to_next_level
 from game.build_contract import FAMILIES, MAX_MASTERY, RULES_VERSION, normalize_family
 from game.field_catalog import (
     DRY_STREAK_INCREMENT_BY_SPAWN_PROFILE,
@@ -563,6 +562,8 @@ def prepare_victory_settlement(*, encounter_id: str, battle_state: dict, mob: di
         except ValueError as exc:
             conn.rollback()
             return {'status': 'invalid_outcome', 'reason': str(exc)}
+        from game.regional_objectives import preserve_combat_credit_marker
+        preserve_combat_credit_marker(_load_json(encounter.get('battle_state_json')), authoritative_state)
         plan = build_reward_plan(
             conn=conn,
             encounter=encounter,
@@ -591,39 +592,11 @@ def prepare_victory_settlement(*, encounter_id: str, battle_state: dict, mob: di
 
 def _apply_progression(conn, player_id: int, exp_gain: int, gold_gain: int,
                        failure_hook: FailureHook | None = None) -> dict:
-    row = conn.execute(
-        '''SELECT level, exp, gold, stat_points, attribute_budget, build_revision
-           FROM players WHERE telegram_id=?''',
-        (player_id,),
-    ).fetchone()
-    if not row:
-        raise RuntimeError(f'settlement_player_missing:{player_id}')
-    old_level = int(row['level'])
-    level = old_level
-    exp_value = int(row['exp']) + exp_gain
-    while exp_value >= exp_to_next_level(level):
-        exp_value -= exp_to_next_level(level)
-        level += 1
-    levels_gained = level - old_level
-    earned_points = levels_gained * 3
-    stat_points = int(row['stat_points']) + earned_points
-    attribute_budget = (
-        None if row['attribute_budget'] is None
-        else int(row['attribute_budget']) + earned_points
+    from game.progression_rewards import apply_progression_reward
+
+    return apply_progression_reward(
+        conn, player_id, exp_gain, gold_gain, failure_hook=failure_hook,
     )
-    gold = int(row['gold']) + gold_gain
-    conn.execute(
-        '''UPDATE players SET level=?, exp=?, stat_points=?, attribute_budget=?,
-           build_revision=build_revision+? WHERE telegram_id=?''',
-        (level, exp_value, stat_points, attribute_budget, int(levels_gained > 0), player_id),
-    )
-    if failure_hook:
-        failure_hook('after_xp_update')
-    conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (gold, player_id))
-    if failure_hook:
-        failure_hook('after_gold_update')
-    return {'level_before': old_level, 'level_after': level, 'exp_after': exp_value,
-            'gold_after': gold, 'leveled_up': level > old_level}
 
 
 def _add_legacy_mastery_exp(conn, player_id: int, weapon_id: str, exp: int) -> dict:
@@ -895,6 +868,11 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
         if failure_hook:
             failure_hook('before_final_encounter_update')
 
+        from game.regional_objectives import apply_combat_bindings
+        rav1_progress = apply_combat_bindings(conn, encounter_id=encounter_id, plan=plan)
+        if failure_hook:
+            failure_hook('after_rav1_progress')
+
         all_participant_ids = list(plan.get('eligible_recipient_ids') or []) + list(plan.get('defeated_participant_ids') or [])
         for player_id in all_participant_ids:
             if not _has_other_live_engagement(conn, int(player_id), encounter_id):
@@ -916,6 +894,7 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
                 if int(row['player_id']) == int(plan.get('owner_player_id', 0))
             ), None),
             'mastery_awards': mastery_results,
+            'rav1_progress': rav1_progress,
             'applied_at': datetime.now(timezone.utc).isoformat(),
         }
         conn.execute('''UPDATE pve_reward_settlements SET status='applied', result_json=?,

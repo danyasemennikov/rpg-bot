@@ -41,6 +41,16 @@ MIXED_ENCOUNTERS = {
         "label": {"en": "Ruins Patrol", "ru": "Патруль руин", "es": "Patrulla de las ruinas"},
         "units": (("zombie", "melee"), ("zombie", "melee"), ("skeleton_mage", "ranged")),
     },
+    "rav1_frostspine_n6_pass": {
+        "location_id": "frostspine_n6",
+        "label": {"en": "Stone at the Pass", "ru": "Камень на перевале", "es": "Piedra en el paso"},
+        "units": (("mountain_stone_golem", "front"), ("stone_beetle", "melee")),
+    },
+    "rav1_mireveil_n6_crosscurrent": {
+        "location_id": "mireveil_n6",
+        "label": {"en": "Crosscurrent Predators", "ru": "Хищники на встречном течении", "es": "Depredadores de la contracorriente"},
+        "units": (("giant_leech", "melee"), ("water_snake", "melee")),
+    },
 }
 
 

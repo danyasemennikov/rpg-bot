@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for accepted decisions; not current state or roadmap
-- Last reconciled: 2026-09-26, against `27347ece2b17108a1aed1f6eb01f2a395480e6c9`
+- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
 
 This log is used to track **accepted decisions only**. Loose ideas or theoretical discussions should not be recorded here.
 
@@ -18,6 +18,35 @@ becoming a competing status summary.
 - **Decision:** [Clearly state the finalized decision.]
 - **Impact:** [What parts of the project, codebase, or balance this affects.]
 - **Status:** [e.g., Pending Implementation, Implemented in PR #123]
+
+---
+
+### Decision: Freeze Regional Adventures & Opportunities V1
+- **Date:** 2026-09-27
+- **Context:** PR233 merged the production/economy authority, leaving post-onboarding
+  regional play without an accepted nonlinear content boundary.
+- **Decision:** Implement RAV1-1 exactly: seven independent projects; a bounded
+  seven-kind objective model; separate permanent facts and one-time claims;
+  roster-lock combat bindings applied only at settlement T2; three exact repeat
+  delivery economics; three inn and four board service additions; and three
+  permanent equal-reward local choices. Human playtesting remains distinct from
+  automated acceptance, merge, and deployment.
+- **Impact:** Journal/read models, regional catalogue and schema, project/fact/claim
+  transactions, craft/combat observers, world services and encounters, ru/en/es UX,
+  production journeys, evidence, and documentation. No Chapter II or global campaign.
+- **Status:** Accepted frozen contract; implementation is an unmerged Draft candidate.
+
+---
+
+### Decision: Verify PR233 merge without rewriting its history
+- **Date:** 2026-09-27
+- **Context:** Documents still described PR233 as pending after it had merged.
+- **Decision:** Record PR233 as merged at
+  `ebd8f73ade53fcadb89942b703a947782276ea1c`, while retaining the report's original
+  candidate SHA and test provenance as historical evidence.
+- **Impact:** Current-state navigation and PEV1 status headers only; no claim of
+  deployment or RAV1 validation.
+- **Status:** Implemented in the RAV1 candidate documentation reconciliation.
 
 ---
 

@@ -235,8 +235,9 @@ def persist_turn_result(
             }
         table = "pve_encounters" if encounter_kind == "pve" else "pvp_engagements"
         id_column = "encounter_id" if encounter_kind == "pve" else "id"
+        payload_column = ", battle_state_json" if encounter_kind == "pve" else ""
         revision_row = conn.execute(
-            f"SELECT turn_revision, state_revision, rules_version FROM {table} WHERE {id_column}=?", (encounter_id,)
+            f"SELECT turn_revision, state_revision, rules_version{payload_column} FROM {table} WHERE {id_column}=?", (encounter_id,)
         ).fetchone()
         if not revision_row or str(revision_row["rules_version"]) != RULES_VERSION:
             if owns:
@@ -254,6 +255,11 @@ def persist_turn_result(
                 conn.rollback()
             return {"applied": False, "reason": "stale_revision"}
         complete_state["state_revision"] = current_state_revision + 1
+        if encounter_kind == "pve":
+            from game.regional_objectives import preserve_combat_credit_marker
+            preserve_combat_credit_marker(
+                json.loads(str(revision_row["battle_state_json"] or "{}")), complete_state,
+            )
         conn.execute('''INSERT INTO combat_turn_results_v1
             (encounter_kind, encounter_id, turn_revision, result_json, state_json, rules_version)
             VALUES (?, ?, ?, ?, ?, ?)''', (

@@ -451,6 +451,8 @@ def use_battle_consumable(telegram_id: int, action_token: str, encounter_id: str
         if int(row['turn_revision']) != expected_turn or int(row['state_revision']) != expected_state:
             raise ActionRejected('stale_action')
         state = json.loads(row['battle_state_json'])
+        from game.regional_objectives import preserve_combat_credit_marker
+        preserve_combat_credit_marker(json.loads(row['battle_state_json']), state)
         is_v1 = str(row['rules_version']) == RULES_VERSION and state.get('rules_version') == RULES_VERSION
         actor = (state.get('participant_states_v1') or {}).get(str(telegram_id)) if is_v1 else None
         if is_v1 and not isinstance(actor, dict):

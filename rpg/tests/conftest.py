@@ -26,6 +26,11 @@ def isolated_sqlite_db(tmp_path):
     _ensure_pve_encounter_table()
     _ensure_world_spawn_table()
 
+    from game.regional_schema import ensure_regional_schema
+    regional_conn = database.get_connection()
+    ensure_regional_schema(regional_conn)
+    regional_conn.close()
+
     conn = database.get_connection()
     for telegram_id in (1, 777):
         conn.execute(
