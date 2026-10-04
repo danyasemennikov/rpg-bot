@@ -87,8 +87,14 @@ production operation require separate evidence.
   `ce88335267c6dbc05bef289e88deebd1fa28ea60`; repaired acceptance-test SHA:
   `43b5fb7a62f0265a89e20aeb9c3613f4605c56fc`; approved candidate:
   `436a0c1015766c38215f74ddb7ccd844a6c5a669`.
-- Human Telegram validation: NOT RUN; the Fresh solo, Returning solo, and Two-player
-  sessions remain outstanding post-merge validation. RAV1 is not fully playtested.
+- Human Telegram validation: IN PROGRESS / interrupted by blocker in Session 1.
+  HV1-B01 was reported on merged main
+  `f581eb204b40f4d52ee2b709822c71906a7a8cd5`: Aster → First Patrol →
+  `westwild_n1` / Wheat Fields → Attack: Rabbit x1 crashes before combat starts
+  because `start_battle` calls `setdefault` on PTB's read-only `Application.user_data`.
+  The candidate repair uses mutable `context.user_data`; its merge and live
+  validation remain unconfirmed. Session 1 is incomplete; Returning solo and
+  Two-player sessions remain outstanding. RAV1 is not fully playtested.
 - Deployment is not established by merge. Exact validation results remain in
   [the delivery report](epics/REGIONAL_ADVENTURES_V1_REPORT.md) and historical evidence.
 
