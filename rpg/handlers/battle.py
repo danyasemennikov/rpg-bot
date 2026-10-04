@@ -643,7 +643,7 @@ async def start_battle(
     user  = query.from_user
     p     = dict(get_player(user.id))
     lang  = p.get('lang', 'ru')
-    app_state = context.application.user_data.setdefault(user.id, {}) if context is not None else {}
+    app_state = context.user_data if context is not None else {}
     aggro_prelock = _is_aggro_prelock_start(player_row=p, app_state=app_state)
 
     if mixed_encounter_id:

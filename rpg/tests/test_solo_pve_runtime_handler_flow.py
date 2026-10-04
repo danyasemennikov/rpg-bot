@@ -1,6 +1,6 @@
 import unittest
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from types import MappingProxyType, SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
 
 from handlers import battle as battle_handler
 from game.pve_live import OpenWorldRuntimeStartBlocked
@@ -26,9 +26,9 @@ class _DummyContext:
 
 class _DummyStartBattleContext:
     def __init__(self, *, with_aggro_marker: bool = True):
-        self.user_data = {}
-        app_user_data = {88001: {'aggro_message_id': 999}} if with_aggro_marker else {88001: {}}
-        self.application = SimpleNamespace(user_data=app_user_data)
+        self.user_data = {'aggro_message_id': 999} if with_aggro_marker else {}
+        # PTB exposes a read-only mapping whose per-user value is context.user_data.
+        self.application = SimpleNamespace(user_data=MappingProxyType({88001: self.user_data}))
 
 
 class _DummyCombatContext:
@@ -54,6 +54,34 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
             'level': 1,
             'stat_points': 0,
         }
+
+    async def test_delayed_aggro_persists_marker_with_readonly_application_data(self):
+        from handlers.location import aggro_attack
+
+        context = _DummyStartBattleContext(with_aggro_marker=False)
+        context.bot = SimpleNamespace(send_message=AsyncMock(
+            return_value=SimpleNamespace(message_id=1234),
+        ))
+        player = {**self._player_row(), 'in_battle': 0}
+        mob = {'id': 'forest_wolf', 'name': 'Forest Wolf', 'hp': 20, 'level': 2}
+        conn = Mock()
+        with patch('handlers.location.asyncio.sleep', new=AsyncMock()) as sleep_mock, \
+             patch('handlers.location.get_player', return_value=player), \
+             patch('handlers.location.get_player_lang', return_value='en'), \
+             patch('handlers.location.get_connection', return_value=conn):
+            await aggro_attack(context, 88001, mob, 'dark_forest', delay=5)
+
+        sleep_mock.assert_awaited_once_with(5)
+        conn.execute.assert_called_once_with(
+            'UPDATE players SET in_battle=1 WHERE telegram_id=?', (88001,),
+        )
+        conn.commit.assert_called_once()
+        conn.close.assert_called_once()
+        context.bot.send_message.assert_awaited_once()
+        self.assertEqual(context.bot.send_message.await_args.kwargs['chat_id'], 88001)
+        self.assertIs(context.application.user_data[88001], context.user_data)
+        self.assertEqual(context.user_data['aggro_message_id'], 1234)
+        self.assertEqual(list(context.application.user_data), [88001])
 
     async def test_fight_first_spawn_unavailable_rolls_back_prelocated_battle_lock(self):
         update = _DummyUpdate('fight_first_forest_wolf')
@@ -224,6 +252,42 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
 
         leave_mock.assert_called_once_with(encounter_id='pve-enc-live', player_id=88001)
         update.callback_query.answer.assert_awaited_once()
+        update.callback_query.edit_message_text.assert_awaited_once()
+
+    async def test_start_battle_with_readonly_application_data_reaches_runtime(self):
+        update = _DummyUpdate('fight_forest_wolf')
+        context = _DummyStartBattleContext(with_aggro_marker=False)
+        player = {**self._player_row(), 'in_battle': 0}
+        with patch('handlers.battle.get_player', return_value=player), \
+             patch('handlers.battle.get_mob', return_value={'id': 'forest_wolf', 'hp': 20, 'level': 2}), \
+             patch('handlers.battle.get_equipped_combat_items', return_value={}), \
+             patch('handlers.battle.get_player_effective_stats', return_value={
+                 'strength': 5, 'agility': 5, 'intuition': 5, 'vitality': 5, 'wisdom': 5, 'luck': 5,
+                 'max_hp': 100, 'max_mana': 50, 'physical_defense_bonus': 0, 'magic_defense_bonus': 0,
+                 'accuracy_bonus': 0, 'evasion_bonus': 0, 'block_chance_bonus': 0, 'magic_power_bonus': 0, 'healing_power_bonus': 0,
+             }), \
+             patch('handlers.battle.get_mastery', return_value={'level': 1, 'exp': 0}), \
+             patch('handlers.battle.init_battle', return_value={
+                 'mob_id': 'forest_wolf',
+                 'log': [],
+                 'player_hp': 100,
+                 'player_mana': 50,
+                 'player_max_hp': 100,
+                 'player_max_mana': 50,
+             }), \
+             patch('handlers.battle.create_or_load_open_world_pve_encounter', return_value=('pve-enc-live', 'created')), \
+             patch('handlers.battle.ensure_runtime_for_battle') as runtime_mock, \
+             patch('handlers.battle.persist_solo_pve_encounter_state') as persist_mock, \
+             patch('handlers.battle.save_battle') as save_mock, \
+             patch('handlers.battle.build_battle_message', return_value=('battle', None)):
+            await battle_handler.start_battle(update, context, 'forest_wolf', mob_first=False)
+
+        runtime_mock.assert_called_once()
+        persist_mock.assert_called_once()
+        save_mock.assert_called_once_with(88001)
+        self.assertEqual(context.user_data['battle']['pve_encounter_id'], 'pve-enc-live')
+        self.assertEqual(context.user_data['battle_mob']['id'], 'forest_wolf')
+        self.assertIs(context.application.user_data[88001], context.user_data)
         update.callback_query.edit_message_text.assert_awaited_once()
 
     async def test_start_battle_clears_local_cache_when_runtime_start_blocked(self):
