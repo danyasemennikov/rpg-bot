@@ -1,6 +1,6 @@
 import unittest
 from types import MappingProxyType, SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from handlers import battle as battle_handler
 from game.pve_live import OpenWorldRuntimeStartBlocked
@@ -54,6 +54,34 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
             'level': 1,
             'stat_points': 0,
         }
+
+    async def test_delayed_aggro_persists_marker_with_readonly_application_data(self):
+        from handlers.location import aggro_attack
+
+        context = _DummyStartBattleContext(with_aggro_marker=False)
+        context.bot = SimpleNamespace(send_message=AsyncMock(
+            return_value=SimpleNamespace(message_id=1234),
+        ))
+        player = {**self._player_row(), 'in_battle': 0}
+        mob = {'id': 'forest_wolf', 'name': 'Forest Wolf', 'hp': 20, 'level': 2}
+        conn = Mock()
+        with patch('handlers.location.asyncio.sleep', new=AsyncMock()) as sleep_mock, \
+             patch('handlers.location.get_player', return_value=player), \
+             patch('handlers.location.get_player_lang', return_value='en'), \
+             patch('handlers.location.get_connection', return_value=conn):
+            await aggro_attack(context, 88001, mob, 'dark_forest', delay=5)
+
+        sleep_mock.assert_awaited_once_with(5)
+        conn.execute.assert_called_once_with(
+            'UPDATE players SET in_battle=1 WHERE telegram_id=?', (88001,),
+        )
+        conn.commit.assert_called_once()
+        conn.close.assert_called_once()
+        context.bot.send_message.assert_awaited_once()
+        self.assertEqual(context.bot.send_message.await_args.kwargs['chat_id'], 88001)
+        self.assertIs(context.application.user_data[88001], context.user_data)
+        self.assertEqual(context.user_data['aggro_message_id'], 1234)
+        self.assertEqual(list(context.application.user_data), [88001])
 
     async def test_fight_first_spawn_unavailable_rolls_back_prelocated_battle_lock(self):
         update = _DummyUpdate('fight_first_forest_wolf')

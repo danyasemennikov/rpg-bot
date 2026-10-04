@@ -2529,7 +2529,7 @@ async def aggro_attack(context, telegram_id: int, mob: dict, location_id: str, d
                 ),
             ]])
         )
-        context.application.user_data.setdefault(telegram_id, {})['aggro_message_id'] = msg.message_id
+        context.user_data['aggro_message_id'] = msg.message_id
     except Exception:
         pass
 
