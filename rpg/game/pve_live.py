@@ -146,8 +146,10 @@ PARTICIPANT_COMBAT_SNAPSHOT_FIELDS = (
 )
 
 
-def _ensure_pve_encounter_table() -> None:
-    conn = get_connection()
+def _ensure_pve_encounter_table(*, conn=None) -> None:
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     conn.execute(
         '''
         CREATE TABLE IF NOT EXISTS pve_encounters (
@@ -209,12 +211,15 @@ def _ensure_pve_encounter_table() -> None:
         # closed when that evidence is unavailable.
         conn.execute("ALTER TABLE pve_encounters ADD COLUMN source_units_json TEXT")
     ensure_build_schema(conn)
-    conn.commit()
-    conn.close()
+    if owns_connection:
+        conn.commit()
+        conn.close()
 
 
-def _ensure_world_spawn_table() -> None:
-    conn = get_connection()
+def _ensure_world_spawn_table(*, conn=None) -> None:
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     conn.execute(
         '''
         CREATE TABLE IF NOT EXISTS pve_spawn_instances (
@@ -252,8 +257,9 @@ def _ensure_world_spawn_table() -> None:
         conn.execute("ALTER TABLE pve_spawn_instances ADD COLUMN special_spawn_key TEXT")
     if 'special_spawn_name' not in columns:
         conn.execute("ALTER TABLE pve_spawn_instances ADD COLUMN special_spawn_name TEXT")
-    conn.commit()
-    conn.close()
+    if owns_connection:
+        conn.commit()
+        conn.close()
 
 
 def _normalize_spawn_profile(raw_profile: object) -> str:

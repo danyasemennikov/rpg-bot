@@ -104,8 +104,10 @@ def _deserialize_reason_context(raw_value: str | None) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _ensure_reinforcement_table() -> None:
-    conn = get_connection()
+def _ensure_reinforcement_table(*, conn=None) -> None:
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     conn.execute(
         '''
         CREATE TABLE IF NOT EXISTS pvp_engagement_reinforcements (
@@ -121,8 +123,9 @@ def _ensure_reinforcement_table() -> None:
         )
         '''
     )
-    conn.commit()
-    conn.close()
+    if owns_connection:
+        conn.commit()
+        conn.close()
 
 
 def _is_player_busy_with_live_pvp_conn(conn, *, player_id: int) -> bool:
