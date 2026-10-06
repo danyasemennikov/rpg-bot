@@ -62,12 +62,52 @@ def build_activities(player):
     finally:
         conn.close()
     lines = [t('keyboard.activities',lang),'📍 '+escape(get_location_name(player['location_id'],lang))]
-    buttons = [InlineKeyboardButton(t('pxe1.gather',lang,profession=t('professions.names.'+source.profession_key,lang)),callback_data='px:gather:'+source.profession_key)
+    buttons = [InlineKeyboardButton(t('pxe1.gather',lang,profession=t('professions.names.'+source.profession_key,lang)),callback_data='px:gatherpreview:'+source.profession_key)
         for source in build_location_gather_source_profiles(player['location_id']) if source.profession_key!='hunting'][:4]
     buttons += [InlineKeyboardButton(t('professions.title',lang),callback_data='pe_o:0'),
         InlineKeyboardButton(t('pxe1.tools',lang),callback_data='px:tools'),
         InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')]
     keyboard = _kb([buttons[i:i+2] for i in range(0,len(buttons),2)])
+    validate_surface('\n'.join(lines),keyboard)
+    return '\n'.join(lines),keyboard
+
+
+def gathering_preview_card(player,profession):
+    from game.gathering_runtime import _source_snapshot
+    from game.profession_tools import get_tool
+    from game.player_activity import require_available
+    lang = player.get('lang','ru')
+    snapshot = _source_snapshot(player['location_id'],profession)
+    conn = get_connection()
+    reason = None
+    try:
+        tool = get_tool(conn,player['telegram_id'],profession)
+        state = conn.execute('SELECT level FROM player_gathering_professions WHERE telegram_id=? AND profession_key=?',
+                             (player['telegram_id'],profession)).fetchone()
+        level = int(state[0]) if state else 1
+        try: require_available(conn,player['telegram_id'])
+        except ActionRejected: reason = 'gather_busy'
+    finally: conn.close()
+    if not reason:
+        if not tool or not tool['durability']: reason = 'gather_broken'
+        elif not any(e['required_level']<=level and e['required_tool_tier']<=tool['tier'] for e in snapshot['entries']):
+            reason = 'gather_locked'
+    lines = [t('pxe1.gather',lang,profession=t('professions.names.'+profession,lang)),
+             t('pxe1.gather_preview',lang),t('pxe1.gather_tool_hint',lang)]
+    for entry in snapshot['entries'][:4]:
+        lines.append(t('pxe1.gather_source_line',lang,name=escape(get_item_name(entry['item_id'],lang)),
+                       chance=entry['chance_bp']/100,level=entry['required_level'],tier=entry['required_tool_tier']))
+    if tool: lines.append(t('pxe1.tool_durability',lang,current=tool['durability'],maximum=60*tool['tier']))
+    rows = []
+    if reason: lines.append(t('pxe1.'+reason,lang))
+    else:
+        payload = encoded({'schema_version':1,'catalog_version':2,'profession_key':profession,
+                           'location_id':player['location_id'],'tool_revision':tool['revision'],'source_snapshot':snapshot})
+        token = issue_actions(player['telegram_id'],'pxe1_gather_start',[payload])[payload]
+        rows.append([InlineKeyboardButton(t('pxe1.gather_start',lang),callback_data='px:gatherstart:'+token)])
+    rows.append([InlineKeyboardButton(t('pxe1.tools',lang),callback_data='px:tools'),
+                 InlineKeyboardButton(t('gear.back_btn',lang),callback_data='px:local:home:0')])
+    keyboard = _kb(rows)
     validate_surface('\n'.join(lines),keyboard)
     return '\n'.join(lines),keyboard
 
@@ -172,6 +212,10 @@ async def handle_activity_buttons(update,context):
     lang = player.get('lang','ru')
     data = query.data
     now_ms = int(time.time()*1000)
+    if data.startswith('px:shop:'):
+        from handlers.shop_views import handle_shop_buttons
+        await handle_shop_buttons(update,context)
+        return
     if data.startswith(('px:local:', 'px:mapregion:', 'px:world:')):
         from handlers.world_views import location_card, map_card
         if data.startswith('px:local:'):
@@ -185,13 +229,9 @@ async def handle_activity_buttons(update,context):
         await query.answer()
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
-    if data.startswith('px:gatherpreview:'):
-        profession = data.removeprefix('px:gatherpreview:')
-        text = '\n'.join([t('pxe1.gather', lang, profession=t('professions.names.'+profession, lang)),
-                          t('pxe1.gather_preview', lang), t('pxe1.gather_tool_hint', lang)])
-        keyboard = _kb([[InlineKeyboardButton(t('pxe1.gather_start', lang), callback_data='px:gather:'+profession)],
-                        [InlineKeyboardButton(t('pxe1.tools', lang), callback_data='px:tools'),
-                         InlineKeyboardButton(t('gear.back_btn', lang), callback_data='px:local:home:0')]])
+    if data.startswith(('px:gatherpreview:','px:gather:')):
+        profession = data.split(':',2)[2]
+        text,keyboard = gathering_preview_card(player,profession)
         await query.answer()
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
@@ -272,10 +312,25 @@ async def handle_activity_buttons(update,context):
                     raise ActionRejected('stale_action')
                 session = start_travel_session(conn,player['telegram_id'],intent['preview'],request_id='ui:'+token,now_ms=now_ms)
             kind = 'travel'
-        elif data.startswith('px:gather:'):
-            result = start_gathering_session(conn,player['telegram_id'],data.removeprefix('px:gather:'),
-                location_id=player['location_id'],request_id='telegram:'+str(query.id),now_ms=now_ms)
-            session,kind = result['session'],'gather'
+        elif data.startswith('px:gatherstart:'):
+            token = data.removeprefix('px:gatherstart:')
+            prior = conn.execute('SELECT * FROM player_gathering_sessions WHERE player_id=? AND start_request_id=?',
+                                 (player['telegram_id'],'ui:'+token)).fetchone()
+            if prior: session = dict(prior)
+            else:
+                from game.gathering_runtime import _source_snapshot
+                from game.profession_tools import get_tool
+                intent = json.loads(consume_action(conn,player['telegram_id'],'pxe1_gather_start',token))
+                if intent.get('schema_version')!=1 or intent.get('catalog_version')!=2:
+                    raise ActionRejected('stale_action')
+                profession = intent['profession_key']
+                tool = get_tool(conn,player['telegram_id'],profession)
+                if not tool or tool['revision']!=intent['tool_revision'] or _source_snapshot(player['location_id'],profession)!=intent['source_snapshot']:
+                    raise ActionRejected('stale_action')
+                result = start_gathering_session(conn,player['telegram_id'],profession,location_id=intent['location_id'],
+                                                request_id='ui:'+token,now_ms=now_ms)
+                session = result['session']
+            kind = 'gather'
         elif data.startswith('px:stop:'):
             _,_,kind,session_id = data.split(':',3)
             if kind not in {'travel','gather'}:
@@ -298,8 +353,11 @@ async def handle_activity_buttons(update,context):
         await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
         conn = get_connection()
         try:
-            conn.execute('''UPDATE player_pxe1_ui SET surface_kind=?,surface_ref=?,chat_id=?,message_id=?,surface_revision=? WHERE player_id=?''',
-                (kind,session['session_id'],query.message.chat_id,query.message.message_id,session['revision'],player['telegram_id']))
+            conn.execute('''INSERT INTO player_pxe1_ui(player_id,schema_version,surface_kind,surface_ref,chat_id,message_id,surface_revision,updated_ms)
+                VALUES (?,1,?,?,?,?,?,?) ON CONFLICT(player_id) DO UPDATE SET surface_kind=excluded.surface_kind,
+                surface_ref=excluded.surface_ref,chat_id=excluded.chat_id,message_id=excluded.message_id,
+                surface_revision=excluded.surface_revision,updated_ms=excluded.updated_ms''',
+                (player['telegram_id'],kind,session['session_id'],query.message.chat_id,query.message.message_id,session['revision'],now_ms))
             conn.commit()
         finally:
             conn.close()

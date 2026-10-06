@@ -210,7 +210,7 @@ def test_shop_purchase_receipt_and_delivery_rollback():
     assert snapshot() == before
     assert try_buy_curated_shop_item(PID, 'capital_city', 99, 'health_potion_small', action_token=token)['ok']
     before = snapshot()
-    assert not try_buy_curated_shop_item(PID, 'capital_city', 99, 'health_potion_small', action_token=token)['ok']
+    assert try_buy_curated_shop_item(PID, 'capital_city', 99, 'health_potion_small', action_token=token)['recovered']
     assert snapshot() == before
 
 

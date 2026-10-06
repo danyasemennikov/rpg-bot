@@ -161,11 +161,15 @@ def craft_tool(player_id: int, recipe_id: str, *, action_token: str | None,
             raise ActionRejected('tool_changed')
         if tool['tier']>recipe.output_spec.tool_tier:
             raise ActionRejected('tool_no_downgrade')
+        if payload.get('replacement_confirmed') is not True:
+            raise ActionRejected('tool_confirmation_required')
         commission = payload.get('commission') is True
         inputs,gold,supplied = commission_inputs(conn,player_id,recipe) if commission else (dict(recipe.requirements),0,{})
         # Aggregate duplicate stacks; never credit guild contributions to inventory.
         for item,quantity in inputs.items():
             owned = conn.execute('SELECT COALESCE(SUM(quantity),0) FROM inventory WHERE telegram_id=? AND item_id=?', (player_id,item)).fetchone()[0]
+            if 'input_snapshot' in payload and payload['input_snapshot'].get(item)!=owned:
+                raise ActionRejected('tool_quote_changed')
             if owned<quantity:
                 raise ActionRejected('missing_materials')
         if player['gold']<gold:

@@ -103,10 +103,24 @@ def _receipt_list_label(receipt: dict, lang: str) -> str:
     return f"{_receipt_action_label(receipt, lang)} · {_receipt_status_label(receipt, lang)}"
 
 
-def build_overview(player: dict, page: int = 0):
+def build_overview(player: dict, page: int = 0, *, group=None):
     lang, player_id = player.get('lang', 'ru'), int(player['telegram_id'])
     gathering, crafting, _ = _state(player_id)
-    keys = list(GATHERING_PROFESSION_KEYS + CRAFTING_PROFESSION_KEYS)
+    if group not in {'gathering','crafting'}:
+        rows = [[InlineKeyboardButton(t('pxe1.gathering_professions',lang),callback_data='pe_group:gathering:0')],
+                [InlineKeyboardButton(t('pxe1.crafting_professions',lang),callback_data='pe_group:crafting:0')],
+                [InlineKeyboardButton(t('pxe1.tools',lang),callback_data='px:tools'),
+                 InlineKeyboardButton(t('professions.receipts',lang),callback_data='pe_h:0')],
+                [InlineKeyboardButton(t('professions.back',lang),callback_data='px:home')]]
+        from game.quest_board import get_player_hunt_contract_state
+        state = get_player_hunt_contract_state(player_id)
+        if state:
+            objective = next((o for o in state['contract'].objectives if o.action=='craft' and state.get('objective_progress',{}).get(o.key,0)<o.required),None)
+            recipe = next((r for r in ACTIVE_RECIPES if objective and r.output_spec.item_id==objective.target),None)
+            if recipe:
+                rows.insert(0,[InlineKeyboardButton(t('pxe1.required_recipe',lang),callback_data='pe_r:'+recipe.recipe_id)])
+        return t('professions.title',lang),_kb(rows)
+    keys = list(GATHERING_PROFESSION_KEYS if group=='gathering' else CRAFTING_PROFESSION_KEYS)
     rows_on_page, page, pages = _page(keys, page)
     lines = [t('professions.title', lang)]
     rows = []
@@ -118,12 +132,12 @@ def build_overview(player: dict, page: int = 0):
         rows.append([InlineKeyboardButton(name, callback_data=f'pe_p:{key}')])
     nav = []
     if page:
-        nav.append(InlineKeyboardButton('◀️', callback_data=f'pe_o:{page-1}'))
+        nav.append(InlineKeyboardButton('◀️', callback_data=f'pe_group:{group}:{page-1}'))
     if page + 1 < pages:
-        nav.append(InlineKeyboardButton('▶️', callback_data=f'pe_o:{page+1}'))
+        nav.append(InlineKeyboardButton('▶️', callback_data=f'pe_group:{group}:{page+1}'))
     if nav:
         rows.append(nav)
-    rows.append([InlineKeyboardButton(t('professions.receipts', lang), callback_data='pe_h:0')])
+    rows.append([InlineKeyboardButton(t('professions.back',lang),callback_data='pe_o:0')])
     return '\n'.join(lines), _kb(rows)
 
 
@@ -195,7 +209,11 @@ def build_recipe_list(player: dict, key: str, filter_key: str, page: int = 0):
     if filter_key == 'known': recipes = [r for r in recipes if r.recipe_id in known]
     elif filter_key == 'learnable': recipes = [r for r in recipes if r.recipe_id not in known and r.required_level <= level]
     else: recipes = [r for r in recipes if r.recipe_id not in known and r.required_level > level]
-    recipes.sort(key=lambda r: (r.required_level, r.recipe_id))
+    from game.quest_board import get_player_hunt_contract_state
+    active = get_player_hunt_contract_state(player_id)
+    needed = {o.target for o in active['contract'].objectives if o.action=='craft'
+              and active.get('objective_progress',{}).get(o.key,0)<o.required} if active else set()
+    recipes.sort(key=lambda r: (r.output_spec.item_id not in needed,r.required_level, r.recipe_id))
     shown, page, pages = _page(recipes, page)
     rows = [[InlineKeyboardButton(_recipe_name(r, lang), callback_data=f'pe_r:{r.recipe_id}')] for r in shown]
     nav = []
@@ -421,11 +439,47 @@ def build_receipt(player: dict, token: str):
 
 def build_mutation_result(player: dict, receipt: dict, recipe_id: str = ''):
     lang = player.get('lang', 'ru')
+    lines = [t('professions.'+receipt['status'],lang)]
     rows = []
+    for output in receipt.get('granted',[]):
+        if output.get('kind')=='tool':
+            from game.profession_tools import TOOL_NAMES
+            name = t('pxe1.tool.'+TOOL_NAMES[output['profession_key']],lang)
+            lines.append(escape(name)+' · '+t('pxe1.tool.tier.'+str(output['tool_tier']),lang))
+            lines.append(t('pxe1.tool_output',lang,capacity=60*output['tool_tier']))
+        else:
+            lines.append(escape(get_item_name(output['item_id'],lang))+f" ×{output['quantity']}")
+            if output.get('instance_ids'):
+                from handlers.inventory import resolve_equip_slot_for_item,get_equipped
+                from game.gear_progression import issue_gear_equip_intents
+                slot = resolve_equip_slot_for_item(output['item_id'],get_equipped(player['telegram_id']))
+                instance = output['instance_ids'][0]
+                if slot:
+                    tokens = issue_gear_equip_intents(player['telegram_id'],instance,[slot])
+                    if slot in tokens:
+                        rows.append([InlineKeyboardButton(t('inventory.equip_btn',lang),callback_data=f'inv_gequip_{tokens[slot]}_g{instance}_gear'),
+                                     InlineKeyboardButton(t('gear.compare_btn',lang),callback_data=f'inv_cmp_g{instance}_{slot}_gear')])
+    inputs = [escape(get_item_name(r['item_id'],lang))+f" ×{r['quantity']}" for r in receipt.get('consumed',[])]
+    if inputs:
+        lines.append(t('professions.receipt_consumed',lang))
+        lines += [' · '.join(inputs[i:i+3]) for i in range(0,len(inputs),3)]
+    for progression in receipt.get('progression',[]):
+        lines.append(t('pxe1.craft_xp_result',lang,name=t('professions.names.'+progression['profession_key'],lang),
+                       xp=progression['xp_awarded'],level=progression['new_level']))
+    if receipt.get('gold_delta') or receipt.get('action_kind')=='learn':
+        lines.append(t('professions.gold_result',lang,delta=receipt.get('gold_delta',0),after=receipt.get('gold_after',0)))
     if recipe_id:
         rows.append([InlineKeyboardButton(t('professions.craft_again', lang), callback_data=f'pe_r:{recipe_id}')])
-    rows.append([InlineKeyboardButton(t('professions.back', lang), callback_data='pe_o:0')])
-    return '\n'.join(_receipt_lines(receipt, lang)), _kb(rows)
+    rows.append([InlineKeyboardButton(t('professions.back',lang),callback_data='pe_o:0'),
+                 InlineKeyboardButton(t('professions.receipts',lang),callback_data='pe_h:0')])
+    from game.quest_board import get_player_hunt_contract_state
+    state = get_player_hunt_contract_state(player['telegram_id'])
+    if state and state['status']=='completed':
+        rows.append([InlineKeyboardButton(t('pxe1.assignment_ready',lang),callback_data='alpha_assignment')])
+    from game.player_ui import validate_surface
+    keyboard = _kb(rows)
+    validate_surface('\n'.join(lines),keyboard)
+    return '\n'.join(lines),keyboard
 
 
 async def handle_profession_buttons(update, context):
@@ -434,9 +488,13 @@ async def handle_profession_buttons(update, context):
         await query.answer(t('common.no_character', 'ru'), show_alert=True); return
     player, data = dict(player_row), query.data; lang = player.get('lang', 'ru')
     notice = None
+    replayed = False
     try:
         if data.startswith('pe_o'):
             page = int(data.split(':')[1]) if ':' in data else 0; view = build_overview(player, page)
+        elif data.startswith('pe_group:'):
+            _,group,page = data.split(':')
+            view = build_overview(player,int(page),group=group)
         elif data.startswith('pe_p:'):
             view = build_profession(player, data.split(':', 1)[1])
         elif data.startswith('pe_g:'):
@@ -449,6 +507,9 @@ async def handle_profession_buttons(update, context):
             view = recipe_card(player,recipe_id,details=prefix=='pe_details',commission=prefix=='pe_commission',inputs_page=int(page[0]) if page else None)
         elif data.startswith('pe_r:'):
             view = build_recipe(player, data.split(':', 1)[1])
+        elif data.startswith('pe_tc:'):
+            from handlers.recipe_views import tool_craft_confirmation
+            view = tool_craft_confirmation(player,data.split(':',1)[1])
         elif data.startswith('pe_m:'):
             _, item_id, page = data.split(':'); view = build_material(player, item_id, int(page))
         elif data.startswith('pe_h:'):
@@ -460,8 +521,9 @@ async def handle_profession_buttons(update, context):
             conn = get_connection()
             try: action = conn.execute('SELECT kind, payload FROM player_ui_actions WHERE token=? AND player_id=?', (token, player['telegram_id'])).fetchone()
             finally: conn.close()
-            recovered_receipt = get_receipt(player['telegram_id'], f'ui:{token}') if not action else None
+            recovered_receipt = get_receipt(player['telegram_id'], f'ui:{token}')
             if recovered_receipt:
+                replayed = True
                 result = recovered_receipt; recipe_id = recovered_receipt.get('recipe_id') or ''
             elif not action: result = {'status':'stale_action'}; recipe_id = ''
             elif action['kind'] == 'learn':
@@ -474,7 +536,6 @@ async def handle_profession_buttons(update, context):
                 recipe_id=parse_recipe_intent(action['payload']) or ''; crafted=craft_recipe(player['telegram_id'], recipe_id, action_token=token); result={'status':crafted.status}
             committed = get_receipt(player['telegram_id'], f'ui:{token}')
             if committed:
-                notice = t(f"professions.{committed['status']}", lang)
                 view = build_mutation_result(dict(get_player(player['telegram_id'])), committed, recipe_id)
             else:
                 notice = t(f"professions.{result['status']}", lang)
@@ -484,6 +545,6 @@ async def handle_profession_buttons(update, context):
         notice = t('professions.stale_action', lang); view = build_overview(player)
     await query.answer(notice or '')
     from game.player_feedback import inline_feedback,acknowledge_presented_facts
-    text,keys = inline_feedback(player['telegram_id'],lang,view[0]) if data.startswith('pe_a:') else (view[0],[])
+    text,keys = inline_feedback(player['telegram_id'],lang,view[0]) if data.startswith('pe_a:') and not replayed else (view[0],[])
     await query.edit_message_text(text, reply_markup=view[1], parse_mode='HTML')
     acknowledge_presented_facts(player['telegram_id'],keys)

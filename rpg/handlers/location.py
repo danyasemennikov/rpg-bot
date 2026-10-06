@@ -541,28 +541,46 @@ def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
 
 def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: int, item_id: str,
                              *, action_token: str | None = None) -> dict:
-    """Покупка предмета из витрины магазина. Возвращает статус операции."""
-    stock_by_id = {
-        row['item_id']: row
-        for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location_id), [])
-    }
-    stock_row = stock_by_id.get(item_id)
-    if not stock_row:
-        return {'ok': False, 'reason': 'not_available'}
-
-    item = get_item(item_id)
-    if not item:
-        return {'ok': False, 'reason': 'not_available'}
-
-    level_min = stock_row.get('level_min', item.get('req_level', 1))
-    price = item.get('buy_price', 0)
+    """Current vendor transaction, including old receipts and quantity previews."""
     conn = get_connection()
     from game.action_receipts import peaceful_player, consume_action, require_item_delivery, ActionRejected
     try:
         conn.execute('BEGIN IMMEDIATE')
-        player = peaceful_player(conn, telegram_id, service='shop', location_id=location_id)
+        quantity = 1
+        intent = None
         if action_token is not None:
-            consume_action(conn, telegram_id, 'shop_buy', action_token, payload=item_id)
+            receipt = conn.execute('''SELECT result_json FROM gear_mutation_receipts
+                WHERE action_token=? AND player_id=? AND action_kind='purchase' ''',
+                (action_token,telegram_id)).fetchone()
+            if receipt:
+                result = json.loads(receipt['result_json'])
+                if result.get('item_id')!=item_id:
+                    raise ActionRejected('stale_action')
+                conn.commit()
+                return {**result,'ok':True,'recovered':True}
+            raw = consume_action(conn, telegram_id, 'shop_buy', action_token)
+            if raw.startswith('{'):
+                intent = json.loads(raw)
+                if (intent.get('schema_version')!=1 or intent.get('catalog_version')!=2
+                        or intent.get('item_id')!=item_id or type(intent.get('quantity')) is not int):
+                    raise ActionRejected('stale_action')
+                quantity = intent['quantity']
+                location_id = intent['location_id']
+            elif raw!=item_id:
+                raise ActionRejected('stale_action')
+        player = peaceful_player(conn, telegram_id, service='shop', location_id=location_id)
+        stock_row = next((r for r in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location_id),[])
+                          if r['item_id']==item_id),None)
+        item = get_item(item_id)
+        if not stock_row or not item:
+            raise ActionRejected('not_available')
+        level_min = stock_row.get('level_min',item.get('req_level',1))
+        unit_price = int(item.get('buy_price',0))
+        if not 1<=quantity<=99 or (item['item_type'] in {'weapon','armor','accessory'} and quantity!=1):
+            raise ActionRejected('stale_action')
+        if intent and int(intent.get('unit_price',-1))!=unit_price:
+            raise ActionRejected('stale_action')
+        price = unit_price*quantity
         if player['level'] < level_min:
             return {'ok': False, 'reason': 'level_required', 'required_level': level_min}
         if price <= 0:
@@ -582,21 +600,24 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
                 'max_durability': 100,
             }
         delivery = grant_item_to_player(
-            telegram_id, item_id, quantity=1, source='shop',
+            telegram_id, item_id, quantity=quantity, source='shop',
             source_level=1 if is_field_item(item_id) else max(player['level'], level_min),
             conn=conn, provenance={'source': 'vendor', 'location_id': resolve_location_id(location_id)},
             **grant_kwargs,
         )
-        require_item_delivery(delivery, 1)
+        require_item_delivery(delivery, quantity)
+        from game.sale_policy import owned_count
+        result = {'schema_version':1,'catalog_version':2,'status':'purchased',
+                  'item_id':item_id,'quantity':quantity,'unit_price':unit_price,'price':price,
+                  'gold_delta':-price,'gold_after':int(player['gold'])-price,
+                  'remaining':owned_count(conn,telegram_id,item_id),
+                  'instance_ids':delivery.get('instance_ids',[])}
         if action_token is not None:
             conn.execute('''INSERT INTO gear_mutation_receipts
                 (action_token, player_id, action_kind, result_json) VALUES (?, ?, 'purchase', ?)''',
-                (action_token, telegram_id, json.dumps({
-                    'status': 'purchased', 'item_id': item_id, 'price': price,
-                    'instance_ids': delivery.get('instance_ids', []),
-                }, ensure_ascii=False, sort_keys=True)))
+                (action_token, telegram_id, json.dumps(result, ensure_ascii=False, sort_keys=True)))
         conn.commit()
-        return {'ok': True, 'price': price}
+        return {**result,'ok':True}
     except ActionRejected as exc:
         conn.rollback()
         return {'ok': False, 'reason': str(exc)}
@@ -610,76 +631,13 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
 
 
 def build_shop_message(player: dict, location: dict, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
-    lang = player.get('lang', 'ru')
-    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location['id']), [])
-    location_name = get_location_name(location['id'], lang)
-    text = t('location.shop_title_named', lang, place=location_name) + '\n\n'
-    keyboard = []
-    page_count = max(1, (len(stock_rows) + 7) // 8)
-    page = max(0, min(page_count - 1, int(page)))
-    visible_rows = stock_rows[page * 8:page * 8 + 8]
-
-    if not stock_rows:
-        text += t('location.shop_empty', lang)
-    else:
-        text += t('gear.page', lang, page=page + 1, pages=page_count) + '\n'
-        for stock_row in visible_rows:
-            item = get_item(stock_row['item_id'])
-            if not item:
-                continue
-            item_name = get_item_name(stock_row['item_id'], lang)
-            req_level = stock_row.get('level_min', item.get('req_level', 1))
-            price = item.get('buy_price', 0)
-            text += t(
-                'location.shop_entry',
-                lang,
-                name=item_name,
-                level=req_level,
-                price=price,
-            ) + '\n'
-            if player['level'] >= req_level:
-                keyboard.append([InlineKeyboardButton(
-                    t('location.shop_buy_btn', lang, name=item_name, price=price),
-                    callback_data=f"shop_preview_{stock_row['item_id']}|{page}",
-                )])
-
-    nav = []
-    if page > 0:
-        nav.append(InlineKeyboardButton('◀️', callback_data=f'shop_page_{page - 1}'))
-    if page + 1 < page_count:
-        nav.append(InlineKeyboardButton('▶️', callback_data=f'shop_page_{page + 1}'))
-    if nav:
-        keyboard.append(nav)
-
-    keyboard.append([InlineKeyboardButton(t('gear.catalog_btn', lang), callback_data='inv_catalog')])
-    keyboard.append([InlineKeyboardButton(t('chapter.sell', lang), callback_data='alpha_sell')])
-    keyboard.append([InlineKeyboardButton(t('location.shop_back_btn', lang), callback_data='shop_back')])
-    return text, InlineKeyboardMarkup(keyboard)
+    from handlers.shop_views import buy_list
+    return buy_list({**player,'location_id':player.get('location_id',location['id']),'gold':player.get('gold',0)},page)
 
 
 def build_shop_item_preview(player: dict, location: dict, item_id: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
-    stock = {row['item_id']: row for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location['id']), [])}
-    row = stock.get(item_id)
-    item = get_item(item_id)
-    lang = player.get('lang', 'ru')
-    if not row or not item:
-        return t('location.shop_not_available', lang), InlineKeyboardMarkup([[
-            InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'shop_page_{page}')]])
-    from game.action_receipts import issue_actions
-    token = issue_actions(int(player['telegram_id']), 'shop_buy', [item_id]).get(item_id)
-    lines = [f"<b>{get_item_name(item_id, lang)}</b>",
-             t('location.shop_entry', lang, name=get_item_name(item_id, lang),
-               level=row.get('level_min', item.get('req_level', 1)), price=item.get('buy_price', 0))]
-    if is_field_item(item_id):
-        lines.append(t('gear.tier_rarity', lang, tier=1, rarity=t('inventory.rarity_common', lang), enhance=0))
-    keyboard = []
-    if token:
-        keyboard.append([InlineKeyboardButton(
-            t('gear.buy_here_btn', lang, gold=item.get('buy_price', 0)),
-            callback_data=f'shop_buy_{item_id}|{token}',
-        )])
-    keyboard.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'shop_page_{page}')])
-    return '\n'.join(lines), InlineKeyboardMarkup(keyboard)
+    from handlers.shop_views import buy_preview
+    return buy_preview(player,item_id)
 
 
 def build_quest_board_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
@@ -1334,17 +1292,17 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
         if profession == '':
             await update.message.reply_text(t('location.lower_gather_stale', lang))
             return True
-        result = gather_resource(int(player['telegram_id']), profession,
-                                 location_id=player['location_id'],
-                                 travel_revision=int(player.get('travel_revision', 0)),
-                                 request_id=request_id)
+        from handlers.activities import gathering_preview_card
+        text,keyboard = gathering_preview_card(player,profession)
+        await update.message.reply_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return True
     status = result['status']
     if result.get('session'):
         from handlers.activities import activity_card
         from game.player_ui import present_surface
         session = result['session']
         text,keyboard = activity_card(dict(get_player(player['telegram_id'])),session,'gather')
-        await present_surface(context.bot,player['telegram_id'],text,keyboard,kind='gather',ref=session['session_id'],revision=session['revision'])
+        await present_surface(context.bot,player['telegram_id'],text,keyboard,kind='gather',ref=session['session_id'],revision=session['revision'],force_refresh=True)
         return True
     if status == 'empty':
         await update.message.reply_text(t('location.gather_fail', lang))
@@ -1650,6 +1608,26 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         except BadRequest as exc:
             if 'message is not modified' not in str(exc).lower():
                 raise
+        await query.answer()
+        return
+
+    if data.startswith('shop_buy_'):
+        # Successful old purchases remain recoverable after travel or combat.
+        from handlers.shop_views import result_card
+        raw = data.removeprefix('shop_buy_')
+        if '|' not in raw or not p:
+            await query.answer(t('chapter.stale_action',lang),show_alert=True)
+            return
+        item_id,token = raw.split('|',1)
+        result = try_buy_curated_shop_item(user.id,p['location_id'],p['level'],item_id,action_token=token)
+        if not result['ok']:
+            await query.answer(t('pxe1.shop.stale',lang),show_alert=True)
+            return
+        text,keyboard,keys = result_card(dict(get_player(user.id)),result,buy=True)
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        if keys:
+            from game.player_feedback import acknowledge_presented_facts
+            acknowledge_presented_facts(user.id,keys)
         await query.answer()
         return
 
@@ -2375,41 +2353,6 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
-    if data.startswith('shop_buy_'):
-        raw = data.replace('shop_buy_', '', 1)
-        if '|' not in raw:
-            await query.answer(t('chapter.stale_action', lang), show_alert=True)
-            return
-        item_id, action_token = raw.split('|', 1)
-        location = get_location(p['location_id'])
-        if not location:
-            await query.answer(t('location.not_found', lang), show_alert=True)
-            return
-        if 'shop' not in location.get('services', []):
-            await query.answer(t('location.shop_not_available', lang), show_alert=True)
-            return
-
-        result = try_buy_curated_shop_item(
-            telegram_id=user.id,
-            location_id=location['id'],
-            player_level=p['level'],
-            item_id=item_id,
-            action_token=action_token,
-        )
-        if not result['ok']:
-            if result['reason'] == 'level_required':
-                await query.answer(t('location.shop_level_required', lang, level=result['required_level']), show_alert=True)
-            elif result['reason'] == 'not_enough_gold':
-                await query.answer(t('location.shop_no_gold', lang, price=result['price']), show_alert=True)
-            else:
-                await query.answer(t('location.shop_not_available', lang), show_alert=True)
-            return
-
-        player_after = dict(get_player(user.id))
-        text, keyboard = build_shop_message(player_after, location)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
-        await query.answer(t('location.shop_buy_ok', lang, name=get_item_name(item_id, lang), price=result['price']))
-        return
 
 
 

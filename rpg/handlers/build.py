@@ -419,71 +419,13 @@ def build_masteries_view(player_id: int, lang: str) -> tuple[str, InlineKeyboard
 
 
 def build_families_view(player_id: int, lang: str) -> tuple[str, InlineKeyboardMarkup]:
-    model = _load_model(player_id)
-    equipped = model["snapshot"]["family"]
-    lines = [f"🏹 <b>{_c(lang, 'skills')}</b>"]
-    keyboard = []
-    for family in FAMILIES:
-        mastery = model["masteries"].get(family)
-        if not mastery and family != equipped:
-            continue
-        level = int((mastery or {}).get("level", 1))
-        points = int((mastery or {}).get("skill_points", 2))
-        suffix = " ✅" if family == equipped else ""
-        keyboard.append([InlineKeyboardButton(
-            f"{_family_name(family, lang)} · M{level} · {points}◆{suffix}",
-            callback_data=f"bv_family_{family}",
-        )])
-    if equipped == "unarmed" and not keyboard:
-        lines.append(_c(lang, "power"))
-    keyboard.append([InlineKeyboardButton(f"↩️ {_c(lang, 'back')}", callback_data="bv_main")])
-    return "\n\n".join(lines), InlineKeyboardMarkup(keyboard)
+    from handlers.character import weapon_families_card
+    return weapon_families_card(player_id,lang)
 
 
 def build_family_view(player_id: int, family: str, lang: str) -> tuple[str, InlineKeyboardMarkup]:
-    family = normalize_family(family)
-    if family not in FAMILIES:
-        return build_families_view(player_id, lang)
-    model = _load_model(player_id)
-    mastery = model["masteries"].get(family) or {"level": 1, "exp": 0, "skill_points": 2}
-    conn = get_connection()
-    try:
-        ranks = family_skill_ranks(player_id, family, conn=conn)
-    finally:
-        conn.close()
-    lines = [
-        f"⚔️ <b>{escape(_family_name(family, lang))}</b>",
-        f"{_c(lang, 'mastery')} M{mastery['level']} · {mastery['skill_points']} {_c(lang, 'points')}",
-    ]
-    keyboard = []
-    for branch in ("A", "B"):
-        identity = BRANCH_IDENTITIES[family][branch]
-        identity_name, tradeoff = _BRANCH_COPY.get(lang, _BRANCH_COPY["en"])[identity]
-        branch_spend = sum(int(ranks.get(item, 0)) for item in SKILL_TREES[family][branch][:-1])
-        lines.extend(["", f"<b>{branch} · {escape(identity_name)}</b>", escape(tradeoff)])
-        for skill_id in SKILL_TREES[family][branch]:
-            spec = SKILL_SPECS[skill_id]
-            rank = int(ranks.get(skill_id, 0))
-            required = spec.unlock_mastery if rank == 0 else RANK_REQUIREMENTS.get(rank + 1, MAX_MASTERY + 1)
-            if rank >= MAX_SKILL_RANK:
-                state = _c(lang, "max")
-            elif int(mastery["level"]) < required:
-                state = f"{_c(lang, 'locked')} M{required}"
-            elif int(mastery["skill_points"]) < 1:
-                state = _c(lang, "no_points")
-            elif rank == 0 and spec.unlock_mastery == 8 and branch_spend < 8:
-                state = f"{_c(lang, 'locked')} {branch_spend}/8"
-            else:
-                state = _c(lang, "ready")
-            lines.append(f"{'✅' if rank else '○'} {escape(get_skill_name(skill_id, lang))} · {rank}/3 · {state}")
-            keyboard.append([InlineKeyboardButton(
-                f"{get_skill_name(skill_id, lang)} · {rank}/3", callback_data=f"bv_skill_{skill_id}",
-            )])
-    keyboard.extend([
-        [InlineKeyboardButton(f"♻️ {_c(lang, 'reset')}", callback_data=f"bv_reset_{family}")],
-        [InlineKeyboardButton(f"↩️ {_c(lang, 'back')}", callback_data="bv_families")],
-    ])
-    return "\n".join(lines), InlineKeyboardMarkup(keyboard)
+    from handlers.character import weapon_family_card
+    return weapon_family_card(player_id,normalize_family(family),lang)
 
 
 def build_skill_view(player_id: int, skill_id: str, lang: str):

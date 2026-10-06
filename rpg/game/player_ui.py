@@ -61,12 +61,12 @@ def validate_surface(text,keyboard,*,list_view=False,long_detail=False):
                 raise ValueError('surface_callback_budget')
 
 
-async def present_surface(bot,player_id,text,keyboard,*,kind,ref,revision,chat_id=None):
+async def present_surface(bot,player_id,text,keyboard,*,kind,ref,revision,chat_id=None,force_refresh=False):
     """Edit a current activity card. Persist successful delivery coordinates only."""
     validate_surface(text,keyboard)
     prior = _row(player_id) or {}
     same = prior.get('surface_kind')==kind and prior.get('surface_ref')==ref
-    if same and prior.get('surface_revision')==revision and prior.get('message_id'):
+    if same and prior.get('surface_revision')==revision and prior.get('message_id') and not force_refresh:
         return False
     chat_id = chat_id or prior.get('chat_id') or player_id
     message = None
@@ -77,6 +77,9 @@ async def present_surface(bot,player_id,text,keyboard,*,kind,ref,revision,chat_i
             from telegram.error import BadRequest
             if isinstance(exc,BadRequest) and 'not modified' in str(exc).lower():
                 message = prior['message_id']
+            elif isinstance(exc,BadRequest) and any(reason in str(exc).lower() for reason in
+                    ('message to edit not found',"message can't be edited")):
+                message = await bot.send_message(chat_id,text,reply_markup=keyboard,parse_mode='HTML')
             else:
                 raise
     else:

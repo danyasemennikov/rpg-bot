@@ -707,7 +707,7 @@ def attribute_spending_preview(player_id: int, deltas: dict[str,int]) -> dict[st
         player = require_available(conn,player_id,spend_attributes=True)
         attributes,total = _spending_values(player,deltas)
         max_hp,max_mana = _prospective_effective_caps(conn,player_id,player,attributes,[])
-        payload = build_intent_payload(player,'spend_attributes',deltas=deltas)
+        payload = build_intent_payload(player,'spend_attributes',operation_payload_version=1,deltas=deltas)
     except (ActionRejected,BuildRejected,ValueError,TypeError) as exc:
         return {'success':False,'reason':str(exc)}
     finally:
@@ -730,6 +730,8 @@ def apply_attribute_spending(player_id: int, token: str) -> dict[str,Any]:
             return {**duplicate,'already_applied':True}
         intent = _parse_intent(consume_action(conn,player_id,BUILD_ACTION_KIND,token))
         if intent.get('op')!='spend_attributes':
+            raise BuildRejected('wrong_intent')
+        if intent.get('operation_payload_version')!=1:
             raise BuildRejected('wrong_intent')
         player = _validate_intent_authority(conn,player_id,intent,spend_attributes=True)
         attributes,total = _spending_values(player,intent.get('deltas'))

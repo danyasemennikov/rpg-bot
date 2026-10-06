@@ -167,11 +167,14 @@ def get_recipe(recipe_id: str) -> ProfessionRecipe | None:
 
 
 def recipe_intent_payload(recipe_id: str, *, tool_revision: int | None=None,
-                          commission: bool=False) -> str:
+                          commission: bool=False,replacement_confirmed: bool=False,
+                          input_snapshot: dict | None=None) -> str:
     payload = {'schema_version':1,'catalog_version':2,'recipe_id':recipe_id}
     recipe = get_recipe(recipe_id)
     if recipe and recipe.output_spec.kind=='tool':
-        payload.update(tool_revision=tool_revision,commission=commission)
+        payload.update(tool_revision=tool_revision,commission=commission,replacement_confirmed=replacement_confirmed)
+        if input_snapshot is not None:
+            payload['input_snapshot'] = input_snapshot
     return json.dumps(
         payload,
         sort_keys=True, separators=(',', ':'),

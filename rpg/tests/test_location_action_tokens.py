@@ -43,7 +43,8 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         location = get_location('village')
         assert location is not None
         text, _keyboard = build_shop_message(player, location)
-        self.assertIn('Shop — 🏘️ Ashen Village', text)
+        self.assertIn('🏘️ Ashen Village', text)
+        self.assertIn('Shop ·',text)
         self.assertNotIn('Frontier Outpost', text)
 
     def test_shop_message_title_is_truthful_for_frontier_outpost(self):
@@ -51,7 +52,8 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         location = get_location('frontier_outpost')
         assert location is not None
         text, _keyboard = build_shop_message(player, location)
-        self.assertIn('Shop — 🏕️ Frontier Outpost', text)
+        self.assertIn('🏕️ Frontier Outpost', text)
+        self.assertIn('Shop ·',text)
         self.assertNotIn('Village vendor', text)
 
     def test_frontier_outpost_does_not_expose_service_snapshot_commands(self):

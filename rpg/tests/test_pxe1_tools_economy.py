@@ -27,7 +27,7 @@ def test_tier_two_commission_contributes_directly_once_and_preserves_mask(profes
     for item,quantity in {'wood_common':36,'iron_ore':8,'coal':2}.items():
         conn.execute('INSERT INTO inventory(telegram_id,item_id,quantity) VALUES (1,?,?)',(item,quantity))
     conn.commit()
-    payload = recipe_intent_payload(recipe_id,tool_revision=1,commission=True)
+    payload = recipe_intent_payload(recipe_id,tool_revision=1,commission=True,replacement_confirmed=True)
     token = issue_actions(1,'craft',[payload])[payload]
     result = craft_tool(1,recipe_id,action_token=token)
     assert result['status']=='crafted' and result['gold_delta']==-80
@@ -93,7 +93,7 @@ def test_no_downgrade_mask_survives_and_exact_slot_craft():
     conn.commit()
     revision = get_tool(conn,1,'mining')['revision']
     conn.close()
-    payload = recipe_intent_payload('pxe_tool_mining_1',tool_revision=revision)
+    payload = recipe_intent_payload('pxe_tool_mining_1',tool_revision=revision,replacement_confirmed=True)
     token = issue_actions(1,'craft',[payload])[payload]
     result = craft_tool(1,'pxe_tool_mining_1',action_token=token)
     assert result['status']=='crafted'

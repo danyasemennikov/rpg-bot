@@ -84,3 +84,47 @@ def test_new_locale_keys_and_placeholder_parity():
     expected = flatten(PXE1_STRINGS['en'])
     assert flatten(PXE1_STRINGS['ru'])==expected
     assert flatten(PXE1_STRINGS['es'])==expected
+
+
+def test_deleted_activity_card_replaced_once_and_other_transport_errors_keep_coordinates():
+    from game.player_ui import present_surface
+    from telegram.error import BadRequest
+    conn = get_connection()
+    conn.execute("INSERT OR REPLACE INTO player_pxe1_ui(player_id,schema_version,surface_kind,surface_ref,chat_id,message_id,surface_revision,updated_ms) VALUES (1,1,'gather','test',1,40,1,0)")
+    conn.commit();conn.close()
+    bot = SimpleNamespace(edit_message_text=AsyncMock(side_effect=BadRequest('Message to edit not found')),
+                          send_message=AsyncMock(return_value=SimpleNamespace(message_id=41)))
+    assert asyncio.run(present_surface(bot,1,'Gathering',None,kind='gather',ref='test',revision=1,force_refresh=True))
+    assert bot.send_message.await_count==1
+    assert not asyncio.run(present_surface(bot,1,'Gathering',None,kind='gather',ref='test',revision=1))
+    bot.edit_message_text.side_effect = RuntimeError('offline')
+    with pytest.raises(RuntimeError,match='offline'):
+        asyncio.run(present_surface(bot,1,'Gathering',None,kind='gather',ref='test',revision=2))
+    conn = get_connection()
+    assert conn.execute('SELECT message_id,surface_revision FROM player_pxe1_ui WHERE player_id=1').fetchone()[:]==(41,1)
+    conn.close()
+
+
+def test_gather_start_token_replays_terminal_session_without_starting_again():
+    from handlers.activities import gathering_preview_card,handle_activity_buttons
+    conn = get_connection()
+    conn.execute('BEGIN IMMEDIATE')
+    grant_player_pxe1_starters(conn,1,now_ms=1000,acquired_via='starter')
+    conn.execute("UPDATE players SET location_id='westwild_n1' WHERE telegram_id=1")
+    conn.commit();conn.close()
+    text,keyboard = gathering_preview_card(dict(get_player(1)),'herbalism')
+    validate_surface(text,keyboard)
+    start = next(b.callback_data for row in keyboard.inline_keyboard for b in row if b.callback_data.startswith('px:gatherstart:'))
+    q = SimpleNamespace(from_user=SimpleNamespace(id=1),data=start,answer=AsyncMock(),edit_message_text=AsyncMock(),
+                        message=SimpleNamespace(chat_id=1,message_id=50))
+    asyncio.run(handle_activity_buttons(SimpleNamespace(callback_query=q),SimpleNamespace(user_data={})))
+    conn = get_connection()
+    session = dict(conn.execute('SELECT * FROM player_gathering_sessions WHERE player_id=1').fetchone())
+    conn.execute("UPDATE player_gathering_sessions SET status='cancelled',next_due_ms=NULL WHERE session_id=?",(session['session_id'],))
+    conn.execute('DELETE FROM player_ui_actions WHERE player_id=1')
+    conn.commit();conn.close()
+    asyncio.run(handle_activity_buttons(SimpleNamespace(callback_query=q),SimpleNamespace(user_data={})))
+    conn = get_connection()
+    assert conn.execute('SELECT COUNT(*) FROM player_gathering_sessions WHERE player_id=1').fetchone()[0]==1
+    assert conn.execute('SELECT status FROM player_gathering_sessions WHERE session_id=?',(session['session_id'],)).fetchone()[0]=='cancelled'
+    conn.close()

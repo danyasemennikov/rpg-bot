@@ -308,27 +308,50 @@ def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
         payload = consume_action(conn, telegram_id, 'sell', action_token, payload=payload)
         authorized = True
         player = peaceful_player(conn, telegram_id, service='shop')
-        inv_id, expected_quantity = (int(value) for value in payload.split(':'))
+        from game.sale_policy import sale_quote,validate_sale_quote,GEAR_TYPES
+        confirmed = False
+        if payload.startswith('{'):
+            intent = json.loads(payload)
+            if intent.get('schema_version')!=1 or intent.get('catalog_version')!=2:
+                raise ActionRejected('stale_action')
+            quote = intent['quote']
+            if quote.get('entry_type')!='i':
+                raise ActionRejected('stale_action')
+            confirmed = intent.get('confirmed') is True
+            inv_id,expected_quantity = quote['entry_id'],quote['stack_count']
+            quantity = quote['quantity']
+        else:
+            inv_id,expected_quantity = (int(value) for value in payload.split(':'))
+            quantity = 1
+            quote = sale_quote(conn,telegram_id,'i',inv_id,quantity)
         row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inv_id, telegram_id)).fetchone()
         if not row or row['quantity'] != expected_quantity or expected_quantity <= 0:
             raise ActionRejected('stale_action')
         item = get_item(row['item_id'])
-        if not item or (item['item_type'] != 'material' and row['item_id'] not in PEV1_CONSUMABLE_IDS) or item['sell_price'] <= 0:
+        if not item or (item['item_type'] not in {'material',*GEAR_TYPES} and row['item_id'] not in PEV1_CONSUMABLE_IDS) or item['sell_price'] <= 0:
             raise ActionRejected('stale_action')
-        if expected_quantity == 1:
+        warning = validate_sale_quote(conn,telegram_id,quote,confirmed=confirmed)
+        if warning:
+            conn.rollback()
+            return warning
+        if expected_quantity == quantity:
             conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
         else:
-            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
-        conn.execute('UPDATE players SET gold=gold+? WHERE telegram_id=?', (item['sell_price'], telegram_id))
-        register_contract_objective(conn, telegram_id, 'sell', row['item_id'], 1, player['location_id'])
-        result = {'schema_version':1,'action_kind':'sell','status':'sold','player_id':telegram_id,
+            conn.execute('UPDATE inventory SET quantity=quantity-? WHERE id=?', (quantity,inv_id))
+        proceeds = quote['total']
+        conn.execute('UPDATE players SET gold=gold+? WHERE telegram_id=?', (proceeds, telegram_id))
+        if item['item_type'] in GEAR_TYPES:
+            conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?',(telegram_id,))
+        register_contract_objective(conn, telegram_id, 'sell', row['item_id'], quantity, player['location_id'])
+        result = {'schema_version':1,'catalog_version':2,'action_kind':'sell','status':'sold','player_id':telegram_id,
                   'location_id':player['location_id'],'recipe_id':None,
-                  'consumed':[{'item_id':row['item_id'],'quantity':1}],'granted':[],
-                  'gold_delta':item['sell_price'],'gold_after':int(player['gold'])+item['sell_price'],
-                  'progression':[],'source':{'inventory_id':inv_id},'details':{}}
-        store_receipt(conn, telegram_id, f'ui:{action_token}', 'sell', receipt_hash, result)
+                  'consumed':[{'item_id':row['item_id'],'quantity':quantity}],'granted':[],
+                  'item_id':row['item_id'],'quantity':quantity,'remaining':expected_quantity-quantity,
+                  'gold_delta':proceeds,'gold_after':int(player['gold'])+proceeds,
+                  'progression':[],'source':{'inventory_id':inv_id},'details':{'quote':quote}}
+        store_receipt(conn, telegram_id, f'ui:{action_token}', 'sell', receipt_hash, result,catalog_version=2)
         conn.commit()
-        return {**result, 'gold': item['sell_price']}
+        return {**result, 'gold': proceeds}
     except ActionRejected as exc:
         status = str(exc)
         if authorized and status != 'stale_action':
@@ -1012,7 +1035,7 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
 
     if data.startswith(('inv_equip_', 'inv_unequip_', 'inv_enhance_', 'inv_drop_', 'inv_transfer_', 'inv_gift_',
                         'inv_gequip_', 'inv_gunequip_', 'inv_genh_', 'inv_lequip_', 'inv_lunequip_',
-                        'inv_sellask_', 'inv_gsell_')):
+                        'inv_sellask_')):
         from game.pvp_live import has_active_live_pvp_engagement
         if p['in_battle'] or has_active_live_pvp_engagement(user.id):
             await query.answer(t('chapter.in_battle', lang), show_alert=True)
@@ -1168,15 +1191,11 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
             await query.answer(t('gear.state_changed', lang), show_alert=True)
             return
         entry = _load_inventory_entry(user.id, parts[3])
-        preview = build_gear_mutation_preview(user.id, 'sale', entry['id']) if entry else None
-        if not preview:
+        if not entry:
             await query.answer(t('gear.state_changed', lang), show_alert=True)
             return
-        text = t('gear.sell_confirm', lang, gold=preview['cost']['gold'])
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(t('common.confirm', lang), callback_data=f'inv_gsell_{parts[2]}_{parts[3]}_{parts[4]}')],
-            [InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'inv_item_{parts[3]}_{parts[4]}')],
-        ])
+        from handlers.shop_views import sale_preview
+        text,keyboard = sale_preview(p,parts[3])
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
         return
@@ -1187,13 +1206,28 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
             await query.answer(t('gear.state_changed', lang), show_alert=True)
             return
         result = apply_gear_intent(user.id, 'sale', parts[2])
+        from handlers.shop_views import sale_preview,result_card
+        if result.get('status')=='confirmation_required':
+            text,keyboard = sale_preview(p,parts[3],confirmation_quote=result['quote'])
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
+            return
         if result.get('status') != 'sold':
             key = 'equipped_item' if result.get('status') == 'equipped_item' else 'state_changed'
             await query.answer(t(f'gear.{key}', lang), show_alert=True)
             return
-        await query.answer(t('gear.sold', lang, gold=result['gold']), show_alert=True)
-        text, keyboard = build_inventory_list(user.id, parts[4], lang)
+        if 'item_id' not in result:
+            # Old receipts did not retain an item name; recover their exact gold.
+            text = t('gear.sold',lang,gold=result['gold'])
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('gear.back_btn',lang),callback_data='inv_tab_'+parts[4])]])
+            keys = []
+        else:
+            text,keyboard,keys = result_card(dict(get_player(user.id)),result)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        if keys:
+            from game.player_feedback import acknowledge_presented_facts
+            acknowledge_presented_facts(user.id,keys)
+        await query.answer()
         return
 
     if data.startswith(('inv_gequip_', 'inv_gunequip_', 'inv_genh_')):

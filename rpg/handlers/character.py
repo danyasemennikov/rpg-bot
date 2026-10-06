@@ -143,7 +143,8 @@ def weapon_family_card(player_id,family,lang,*,branch=None):
             name = _BRANCH_COPY.get(lang,_BRANCH_COPY['en'])[BRANCH_IDENTITIES[family][selected]][0]
             rows.append([InlineKeyboardButton(name,callback_data=f'bv_branch_{family}:{selected}')])
         rows.append([InlineKeyboardButton(t('pxe1.other_families',lang),callback_data='bv_families')])
-    rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='bv_family_'+family if branch else 'bv_character')])
+    rows.append([InlineKeyboardButton(_c(lang,'reset'),callback_data='bv_reset_'+family),
+                 InlineKeyboardButton(t('common.back',lang),callback_data='bv_family_'+family if branch else 'bv_character')])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines),keyboard,list_view=bool(branch))
     return '\n'.join(lines),keyboard
@@ -179,7 +180,7 @@ def skill_card(player_id,skill_id,lang,*,details=False):
     lines = [f"<b>{escape(get_skill_name(skill_id,lang))}</b> · {rank}/3",
              escape(_label(_KIND_LABELS,lang,spec.kind)),
              _c(lang,'target')+': '+escape(_label(_TARGET_LABELS,lang,spec.target)),
-             t('pxe1.skill_cost',lang,mana=rank_mana_cost(spec,current_rank),cooldown=spec.cooldown if spec.cooldown is not None else 0),
+             t('pxe1.passive_skill',lang) if spec.kind=='passive' else t('pxe1.skill_cost',lang,mana=rank_mana_cost(spec,current_rank),cooldown=spec.cooldown if spec.cooldown is not None else 0),
              _c(lang,'available_pvp') if skill_id in PVP_SKILL_ALLOWLIST else _c(lang,'pve_only')]
     if reasons:
         lines.extend(reasons)

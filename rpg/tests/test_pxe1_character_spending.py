@@ -87,3 +87,18 @@ def test_character_attribute_and_all_twenty_branch_cards_use_compact_localized_v
             assert len([b for row in keyboard.inline_keyboard for b in row if b.callback_data.startswith('bv_skill_')])==5
             import re
             assert not re.search(r'\bM\d+\b',text) and 'pxe1.' not in text
+
+
+@pytest.mark.parametrize('lang',['ru','en','es'])
+def test_all_hundred_skill_details_have_friendly_locks_and_read_only_scope(lang):
+    from game.build_contract import SKILL_SPECS
+    from handlers.character import skill_card
+    setup_player()
+    for skill_id in SKILL_SPECS:
+        text,keyboard = skill_card(1,skill_id,lang)
+        validate_surface(text,keyboard)
+        from game.i18n import get_skill_name
+        from html import unescape
+        assert '[pxe1.' not in text and get_skill_name(skill_id,lang) in unescape(text)
+        if '_' in skill_id: assert skill_id not in text
+        assert not any(b.callback_data.startswith('battle_v1_') for row in keyboard.inline_keyboard for b in row)

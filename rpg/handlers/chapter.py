@@ -246,31 +246,8 @@ def build_harvest_menu(player: dict, page: int = 0):
 
 
 def build_sell_menu(player: dict, page: int = 0):
-    lang, player_id = player.get('lang', 'ru'), player['telegram_id']
-    conn = get_connection()
-    try:
-        candidates = conn.execute('''SELECT inv.id, inv.item_id, inv.quantity FROM inventory inv
-            JOIN items i ON i.item_id=inv.item_id WHERE inv.telegram_id=?
-            AND i.sell_price>0 AND inv.quantity>0 ORDER BY inv.item_id''',
-                             (player_id,)).fetchall()
-    finally:
-        conn.close()
-    from game.items_data import get_item
-    from game.seed import PEV1_CONSUMABLE_IDS
-    items = [row for row in candidates if get_item(row['item_id'])['item_type'] == 'material' or row['item_id'] in PEV1_CONSUMABLE_IDS]
-    pages = max(1, (len(items) + 7) // 8); page = min(max(0, int(page)), pages - 1)
-    items = items[page * 8:(page + 1) * 8]
-    payloads = [f"{row['id']}:{row['quantity']}" for row in items]
-    tokens = issue_actions(player_id, 'sell', payloads)
-    rows = [_button(t('chapter.sell_button', lang, name=get_item_name(row['item_id'], lang),
-                      price=get_item(row['item_id'])['sell_price'], qty=row['quantity']),
-                    f'alpha_sellone_{tokens[payload]}') for row, payload in zip(items, payloads)]
-    nav = []
-    if page: nav.append(InlineKeyboardButton('◀️', callback_data=f'alpha_sell_page_{page-1}'))
-    if page + 1 < pages: nav.append(InlineKeyboardButton('▶️', callback_data=f'alpha_sell_page_{page+1}'))
-    if nav: rows.append(nav)
-    rows.append(_button(t('location.shop_btn', lang), 'shop'))
-    return t('chapter.sell_intro', lang), InlineKeyboardMarkup(rows)
+    from handlers.shop_views import sell_categories
+    return sell_categories(player)
 
 
 async def journal_command(update, context):
@@ -351,7 +328,7 @@ async def handle_chapter_buttons(update, context):
         view = build_harvest_menu
     elif data == 'alpha_sell' or data.startswith('alpha_sellone_') or data.startswith('alpha_sell_page_'):
         location = get_location(player['location_id']) or {}
-        if 'shop' not in location.get('services', []):
+        if 'shop' not in location.get('services', []) and not data.startswith('alpha_sellone_'):
             status = 'wrong_location'
         else:
             view = build_sell_menu
@@ -364,7 +341,25 @@ async def handle_chapter_buttons(update, context):
             if data.startswith('alpha_sellone_'):
                 from handlers.inventory import try_sell_inventory_item
                 result = try_sell_inventory_item(player_id, data.removeprefix('alpha_sellone_'))
-                status = result['status']
+                from handlers.shop_views import sale_preview,result_card
+                keys = []
+                if result['status']=='confirmation_required':
+                    quote = result['quote']
+                    text,keyboard = sale_preview(dict(get_player(player_id)),f"i{quote['entry_id']}",confirmation_quote=quote)
+                elif result['status']=='sold':
+                    # Historical receipts may predate the compact result fields.
+                    result = {**result,'item_id':result['consumed'][0]['item_id'],
+                              'quantity':result['consumed'][0]['quantity']}
+                    text,keyboard,keys = result_card(dict(get_player(player_id)),result)
+                else:
+                    await query.answer(t('pxe1.shop.stale',lang),show_alert=True)
+                    return
+                await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+                if keys:
+                    from game.player_feedback import acknowledge_presented_facts
+                    acknowledge_presented_facts(player_id,keys)
+                await query.answer()
+                return
     if status:
         await query.answer(t(f'chapter.{status}', lang), show_alert=True)
     elif not answered:
