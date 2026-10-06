@@ -11,6 +11,8 @@ from game.actor_snapshot import build_actor_snapshot
 from game.build_contract import RULES_VERSION
 from game.build_progression import ensure_build_schema
 from game.combat_orders import load_combat_orders, persist_turn_result, submit_combat_order
+from game.combat_identity import combat_seed, evaluate_action, evaluate_enemy_action
+from game.enemy_profiles import choose_enemy_action
 from game.balance import (
     normalize_armor_class,
     normalize_encumbrance,
@@ -463,17 +465,21 @@ def _refresh_respawning_spawns_for_location(*, location_id: str) -> None:
     conn.close()
 
 
-def ensure_location_pve_spawn_instances(*, location_id: str) -> None:
+def ensure_location_pve_spawn_instances(*, location_id: str, conn=None) -> None:
     if not location_id:
         return
-    _ensure_world_spawn_table()
+    owns_connection = conn is None
+    if owns_connection:
+        _ensure_world_spawn_table()
     location = get_location(location_id) or {}
     mob_ids = [str(mob_id) for mob_id in location.get('mobs', []) if isinstance(mob_id, str) and mob_id]
     if not mob_ids:
-        _refresh_respawning_spawns_for_location(location_id=location_id)
+        if owns_connection:
+            _refresh_respawning_spawns_for_location(location_id=location_id)
         return
 
-    conn = get_connection()
+    if owns_connection:
+        conn = get_connection()
     for mob_id in mob_ids:
         profile_counts = _resolve_world_spawn_profile_counts(location=location, mob_id=mob_id)
         for spawn_profile, spawn_count in profile_counts:
@@ -528,9 +534,10 @@ def ensure_location_pve_spawn_instances(*, location_id: str) -> None:
                         SPAWN_STATE_IDLE,
                     ),
                 )
-    conn.commit()
-    conn.close()
-    _refresh_respawning_spawns_for_location(location_id=location_id)
+    if owns_connection:
+        conn.commit()
+        conn.close()
+        _refresh_respawning_spawns_for_location(location_id=location_id)
 
 
 def list_location_available_spawn_instances(*, location_id: str) -> list[dict]:
@@ -749,6 +756,7 @@ def _prune_expired_forming_encounters(
     try:
         filters = [
             "e.status='active'",
+            "e.lifecycle_version=0",
             "e.anchor_spawn_instance_id IS NOT NULL",
             "s.linked_encounter_id = e.encounter_id",
             "s.state=?",
@@ -985,6 +993,14 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
 
 
 def can_join_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tuple[bool, str]:
+    conn = get_connection()
+    try:
+        version = conn.execute('SELECT lifecycle_version FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+        if version and version['lifecycle_version'] == 1:
+            import time
+            return _pxe1_join_eligibility(conn,encounter_id,player_id,int(time.time()*1000))
+    finally:
+        conn.close()
     if not encounter_id:
         return False, 'not_found'
 
@@ -1085,6 +1101,16 @@ def join_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tuple
         if not _table_exists(conn, 'pve_encounter_participants'):
             return False, 'not_found'
         conn.execute('BEGIN IMMEDIATE')
+        version = conn.execute('SELECT lifecycle_version FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+        if version and version['lifecycle_version'] == 1:
+            import time
+            eligible,reason = _pxe1_join_eligibility(conn,encounter_id,player_id,int(time.time()*1000))
+            if not eligible:
+                return False,reason
+            conn.execute("INSERT INTO pve_encounter_participants(encounter_id,player_id,side_id,status) VALUES (?,?,'side_a','active')", (encounter_id,player_id))
+            conn.execute('UPDATE pve_encounters SET formation_revision=formation_revision+1 WHERE encounter_id=?', (encounter_id,))
+            conn.commit()
+            return True,'joined'
         player_row = conn.execute(
             'SELECT telegram_id, location_id, in_battle FROM players WHERE telegram_id=? LIMIT 1',
             (int(player_id),),
@@ -1178,6 +1204,17 @@ def leave_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tupl
         if not _table_exists(conn, 'pve_encounter_participants'):
             return False, 'not_found'
         conn.execute('BEGIN IMMEDIATE')
+        version = conn.execute('SELECT lifecycle_version FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+        if version and version['lifecycle_version'] == 1:
+            if pve_world_phase(conn,encounter_id) != 'forming':
+                return False,'locked'
+            changed = conn.execute("UPDATE pve_encounter_participants SET status='left',updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND player_id=? AND status='active'", (encounter_id,player_id))
+            if changed.rowcount != 1:
+                return False,'not_joined'
+            roster = _repair_forming_owner(conn,encounter_id)
+            conn.execute('UPDATE pve_encounters SET formation_revision=formation_revision+1 WHERE encounter_id=?', (encounter_id,))
+            conn.commit()
+            return True,'left' if roster else 'left_collapsed'
         expired_ids = _prune_expired_forming_encounters(conn, encounter_id=encounter_id)
         if expired_ids:
             conn.commit()
@@ -1260,6 +1297,153 @@ def leave_open_world_pve_encounter(*, encounter_id: str, player_id: int) -> tupl
         conn.close()
 
 
+def _pxe1_join_eligibility(conn, encounter_id, player_id, now_ms) -> tuple[bool,str]:
+    from game.player_activity import require_available
+    from game.action_receipts import ActionRejected
+    from game.locations import resolve_location_id
+    row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+    if not row or pve_world_phase(conn,encounter_id) != 'forming' or now_ms >= int(row['formation_deadline_ms']):
+        return False,'locked'
+    prior = conn.execute('SELECT status FROM pve_encounter_participants WHERE encounter_id=? AND player_id=?', (encounter_id,player_id)).fetchone()
+    if prior:
+        return False,'already_joined' if prior['status']=='active' else 'cannot_rejoin'
+    try:
+        player = require_available(conn,player_id)
+        if resolve_location_id(player['location_id']) != resolve_location_id(row['location_id']):
+            return False,'wrong_location'
+    except ActionRejected as exc:
+        return False,str(exc)
+    return True,'eligible'
+
+
+def pve_world_phase(conn, encounter_id: str) -> str:
+    row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+    if not row:
+        return 'missing'
+    if row['status'] != 'active':
+        return str(row['status'])
+    sources = conn.execute('SELECT state FROM pve_spawn_instances WHERE linked_encounter_id=?', (encounter_id,)).fetchall()
+    if sources and all(s['state'] == 'forming' for s in sources) and row['runtime_started_ms'] is None:
+        return 'forming'
+    return 'active'
+
+
+def _repair_forming_owner(conn, encounter_id: str) -> list[int]:
+    row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+    members = conn.execute('''SELECT player_id FROM pve_encounter_participants
+        WHERE encounter_id=? AND status='active' AND side_id=? ORDER BY joined_at,player_id''',
+        (encounter_id,SIDE_PLAYER)).fetchall()
+    ids = [int(r['player_id']) for r in members]
+    if not ids:
+        conn.execute("UPDATE pve_encounters SET status='abandoned',formation_revision=formation_revision+1,finished_at=CURRENT_TIMESTAMP WHERE encounter_id=?", (encounter_id,))
+        conn.execute("UPDATE pve_spawn_instances SET state='idle',linked_encounter_id=NULL,respawn_available_at=NULL WHERE linked_encounter_id=? AND state='forming'", (encounter_id,))
+        return []
+    owner = int(row['owner_player_id'])
+    if owner not in ids:
+        owner = ids[0]
+        state = _deserialize_payload(row['battle_state_json'])
+        projection = _build_participant_bootstrap_snapshot_for_player(battle_state=state,participant_id=owner,conn=conn)
+        state.update(projection)
+        conn.execute('''UPDATE pve_encounters SET owner_player_id=?,battle_state_json=?,
+            formation_revision=formation_revision+1 WHERE encounter_id=?''',
+            (owner,_serialize_payload(state),encounter_id))
+    return [owner] + [pid for pid in ids if pid != owner]
+
+
+def start_due_pve_formation(conn, *, encounter_id: str, now_ms: int) -> dict:
+    """Freeze roster/snapshots/first phase in the caller's IMMEDIATE transaction."""
+    if not conn.in_transaction:
+        raise RuntimeError('formation start requires caller transaction')
+    row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+    phase = pve_world_phase(conn,encounter_id)
+    if not row or phase != 'forming' or row['lifecycle_version'] != 1:
+        return {'phase':phase,'player_ids':json.loads(row['locked_roster_json'] or '{}').get('player_ids',[]) if row else []}
+    if now_ms < int(row['formation_deadline_ms']):
+        return {'phase':'forming','player_ids':[]}
+    sources = conn.execute('SELECT * FROM pve_spawn_instances WHERE linked_encounter_id=?', (encounter_id,)).fetchall()
+    declared = _deserialize_payload(row['source_units_json']).get('units') or []
+    source_ids = {s['spawn_instance_id'] for s in sources}
+    valid = (sources and row['anchor_spawn_instance_id'] in source_ids
+             and source_ids == {u.get('spawn_instance_id') for u in declared}
+             and all(s['state']=='forming' and s['location_id']==row['location_id'] for s in sources))
+    if not valid:
+        conn.execute("UPDATE pve_encounters SET status='start_failed',finished_at=CURRENT_TIMESTAMP WHERE encounter_id=?", (encounter_id,))
+        conn.execute("UPDATE pve_encounter_participants SET status='left' WHERE encounter_id=? AND status='active'", (encounter_id,))
+        conn.execute("UPDATE pve_spawn_instances SET state='idle',linked_encounter_id=NULL WHERE linked_encounter_id=? AND state='forming'", (encounter_id,))
+        return {'phase':'start_failed','player_ids':[]}
+    from game.player_activity import require_available
+    from game.action_receipts import ActionRejected
+    from game.locations import resolve_location_id
+    members = conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'", (encounter_id,)).fetchall()
+    for member in members:
+        pid = int(member['player_id'])
+        try:
+            player = require_available(conn,pid,exclude_pve=encounter_id)
+            if resolve_location_id(player['location_id']) != resolve_location_id(row['location_id']):
+                raise ActionRejected('wrong_location')
+        except ActionRejected:
+            conn.execute("UPDATE pve_encounter_participants SET status='left' WHERE encounter_id=? AND player_id=?", (encounter_id,pid))
+    roster = _repair_forming_owner(conn,encounter_id)
+    if not roster:
+        return {'phase':'abandoned','player_ids':[]}
+    row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+    state = _deserialize_payload(row['battle_state_json'])
+    state['participant_states'] = {}
+    for pid in roster:
+        projection = _build_participant_bootstrap_snapshot_for_player(battle_state=state,participant_id=pid,conn=conn)
+        state['participant_states'][str(pid)] = _normalize_projection_snapshot(projection,fallback_snapshot=projection)
+    if row['rules_version'] == RULES_VERSION:
+        state['participant_states_v1'] = {str(pid):build_actor_snapshot(pid,conn=conn) for pid in roster}
+    state['side_a_player_ids'] = roster
+    state['pve_encounter_id'] = encounter_id
+    sync_projection_for_participant(battle_state=state,player_id=int(row['owner_player_id']))
+    # Local runtime builds the same first phase without exposing a precommit cache.
+    temporary_store = LiveCombatRuntimeStore()
+    temporary_runtime = LiveCombatRuntime(temporary_store)
+    runtime = temporary_runtime.create_encounter(encounter_id=encounter_id,
+        side_a_participants=roster,
+        side_b_participants=enemy_participant_ids_for_battle(encounter_id=encounter_id,battle_state=state),
+        active_side_id=state.get('active_side') or SIDE_PLAYER)
+    runtime = temporary_runtime.open_side_turn(encounter_id=encounter_id,
+        now=datetime.fromtimestamp(now_ms/1000,timezone.utc))
+    sync_battle_projection_from_runtime(battle_state=state,runtime_state=runtime,
+        now=datetime.fromtimestamp(now_ms/1000,timezone.utc))
+    from game.regional_objectives import capture_combat_bindings
+    capture_combat_bindings(conn,encounter_id=encounter_id,player_ids=roster)
+    conn.execute('''UPDATE pve_encounters SET locked_roster_json=?,battle_state_json=?,
+        runtime_started_ms=?,formation_revision=formation_revision+1,turn_revision=?
+        WHERE encounter_id=?''', (_serialize_payload({'player_ids':roster}),_serialize_payload(state),
+                                  now_ms,runtime.turn_revision,encounter_id))
+    conn.execute("UPDATE pve_spawn_instances SET state='active' WHERE linked_encounter_id=? AND state='forming'", (encounter_id,))
+    conn.executemany('UPDATE players SET in_battle=1 WHERE telegram_id=?', ((pid,) for pid in roster))
+    return {'phase':'active','player_ids':roster,'battle':state,'encounter_id':encounter_id}
+
+
+def process_due_pve_formations(*, now_ms: int, limit: int = 100) -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute('''SELECT encounter_id FROM pve_encounters WHERE lifecycle_version=1
+            AND runtime_started_ms IS NULL AND status='active' AND formation_deadline_ms<=?
+            ORDER BY formation_deadline_ms,encounter_id LIMIT ?''', (now_ms,limit)).fetchall()
+    finally:
+        conn.close()
+    results = []
+    for row in rows:
+        conn = get_connection()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            result = start_due_pve_formation(conn,encounter_id=row['encounter_id'],now_ms=now_ms)
+            conn.commit()
+            results.append(result)
+        except Exception:
+            conn.rollback()
+            import logging
+            logging.getLogger(__name__).exception('PXE1 formation start retry: %s', row['encounter_id'])
+        finally:
+            conn.close()
+    return results
+
+
 def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[int] | None:
     """
     Atomically finalize forming open-world encounter roster and lock spawn state.
@@ -1270,6 +1454,13 @@ def lock_open_world_pve_roster_for_runtime_start(*, encounter_id: str) -> list[i
         return None
     conn = get_connection()
     try:
+        version = conn.execute('SELECT lifecycle_version FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+        if version and version['lifecycle_version'] == 1:
+            import time
+            conn.execute('BEGIN IMMEDIATE')
+            result = start_due_pve_formation(conn, encounter_id=encounter_id, now_ms=int(time.time()*1000))
+            conn.commit()
+            return result.get('player_ids') if result['phase'] == 'active' else None
         if not _table_exists(conn, 'pve_encounters') or not _table_exists(conn, 'pve_spawn_instances'):
             return None
         conn.execute('BEGIN IMMEDIATE')
@@ -1934,6 +2125,11 @@ def create_pve_encounter(
             (encounter_id, int(player_id), SIDE_PLAYER),
         )
 
+    if resolved_anchor_id:
+        import time
+        conn.execute('''UPDATE pve_encounters SET lifecycle_version=1,formation_deadline_ms=?,
+            formation_revision=1 WHERE encounter_id=?''', (int(time.time()*1000)+12000, encounter_id))
+
     if owns_connection:
         conn.commit()
         conn.close()
@@ -2098,187 +2294,100 @@ def create_or_load_open_world_pve_encounter(
 ) -> tuple[str | None, str]:
     _ensure_pve_encounter_table()
     ensure_location_pve_spawn_instances(location_id=location_id)
+    from game.player_activity import require_available
+    from game.action_receipts import ActionRejected
+    from game.locations import resolve_location_id
     participant_ids = side_a_player_ids or [int(owner_player_id)]
     encounter_id = f'pve-enc-{uuid.uuid4().hex[:12]}'
-    selected_spawn_profile = DEFAULT_WORLD_SPAWN_PROFILE
-    if not spawn_instance_id:
-        conn = get_connection()
-        busy_row = conn.execute(
-            '''
-            SELECT linked_encounter_id
-            FROM pve_spawn_instances
-            WHERE location_id=? AND mob_id=? AND linked_encounter_id IS NOT NULL
-            LIMIT 1
-            ''',
-            (location_id, mob_id),
-        ).fetchone()
-        conn.close()
-        if busy_row and busy_row['linked_encounter_id']:
-            return str(busy_row['linked_encounter_id']), 'spawn_busy'
-    if spawn_instance_id:
-        conn = get_connection()
-        spawn_row = conn.execute(
-            '''
-            SELECT spawn_profile, special_spawn_key, special_spawn_name
-            FROM pve_spawn_instances
-            WHERE spawn_instance_id=?
-              AND location_id=?
-              AND mob_id=?
-            LIMIT 1
-            ''',
-            (str(spawn_instance_id), location_id, mob_id),
-        ).fetchone()
-        conn.close()
-        if spawn_row:
-            selected_spawn_profile = _normalize_spawn_profile(spawn_row['spawn_profile'])
-    claimed_spawn_ids: list[str] = []
-    if pack_claim_from_visible_group and spawn_instance_id and is_pack_enabled_mob(mob_id):
-        conn = get_connection()
-        group_row = conn.execute(
-            '''
-            SELECT spawn_profile, special_spawn_key, special_spawn_name
-            FROM pve_spawn_instances
-            WHERE spawn_instance_id=?
-              AND location_id=?
-              AND mob_id=?
-              AND state=?
-              AND linked_encounter_id IS NULL
-            LIMIT 1
-            ''',
-            (str(spawn_instance_id), location_id, mob_id, SPAWN_STATE_IDLE),
-        ).fetchone()
-        conn.close()
-        if group_row:
-            claimed_spawn_ids = _claim_spawn_pack_for_encounter(
-                encounter_id=encounter_id,
-                location_id=location_id,
-                mob_id=mob_id,
-                spawn_profile=str(group_row['spawn_profile'] or 'normal'),
-                special_spawn_key=group_row['special_spawn_key'],
-                special_spawn_name=group_row['special_spawn_name'],
-                required_anchor_spawn_instance_id=str(spawn_instance_id),
-            )
-    if not claimed_spawn_ids:
-        claimed_spawn_id = _claim_spawn_instance_for_encounter(
-            encounter_id=encounter_id,
-            location_id=location_id,
-            mob_id=mob_id,
-            spawn_profile=selected_spawn_profile if spawn_instance_id else None,
-            spawn_instance_id=spawn_instance_id,
-        )
-        if claimed_spawn_id:
-            claimed_spawn_ids = [claimed_spawn_id]
-    claimed_spawn_id = claimed_spawn_ids[0] if claimed_spawn_ids else None
-    if not claimed_spawn_id:
-        conn = get_connection()
-        if spawn_instance_id:
-            active_row = conn.execute(
-                '''
-                SELECT linked_encounter_id
-                FROM pve_spawn_instances
-                WHERE spawn_instance_id=?
-                  AND location_id=?
-                  AND mob_id=?
-                  AND linked_encounter_id IS NOT NULL
-                LIMIT 1
-                ''',
-                (
-                    str(spawn_instance_id),
-                    location_id,
-                    mob_id,
-                ),
-            ).fetchone()
-        else:
-            active_row = conn.execute(
-                '''
-                SELECT linked_encounter_id
-                FROM pve_spawn_instances
-                WHERE location_id=?
-                  AND mob_id=?
-                  AND linked_encounter_id IS NOT NULL
-                ORDER BY updated_at DESC
-                LIMIT 1
-                ''',
-                (
-                    location_id,
-                    mob_id,
-                ),
-            ).fetchone()
-        conn.close()
-        if active_row and active_row['linked_encounter_id']:
-            return str(active_row['linked_encounter_id']), 'spawn_busy'
-        return None, 'spawn_unavailable'
     conn = get_connection()
-    claimed_spawn_row = conn.execute(
-        '''
-        SELECT spawn_profile, special_spawn_key, special_spawn_name
-        FROM pve_spawn_instances
-        WHERE spawn_instance_id=?
-        LIMIT 1
-        ''',
-        (claimed_spawn_id,),
-    ).fetchone()
-    conn.close()
-    if claimed_spawn_row:
-        selected_spawn_profile = _normalize_spawn_profile(claimed_spawn_row['spawn_profile'])
-    special_spawn_key = str(claimed_spawn_row['special_spawn_key'] or '').strip() if claimed_spawn_row else ''
-    special_spawn_name = str(claimed_spawn_row['special_spawn_name'] or '').strip() if claimed_spawn_row else ''
-
-    battle_state['location_id'] = location_id
-    battle_state['anchor_spawn_instance_id'] = claimed_spawn_id
-    battle_state['encounter_kind'] = 'pve'
-    if special_spawn_key:
-        battle_state['special_spawn_key'] = special_spawn_key
-    if special_spawn_name:
-        battle_state['special_spawn_name'] = special_spawn_name
-    if special_spawn_key:
-        battle_state['spawn_identity'] = f'{location_id}:{mob_id}:{special_spawn_key}'
-    if len(claimed_spawn_ids) > 1:
-        enemy_units = []
-        max_hp = int((mob or {}).get('hp', battle_state.get('mob_max_hp', battle_state.get('mob_hp', 1))) or 1)
-        for index, unit_spawn_id in enumerate(claimed_spawn_ids, start=1):
-            enemy_units.append({
-                'unit_id': f'unit-{index}',
-                'spawn_instance_id': unit_spawn_id,
-                'mob_id': mob_id,
-                'spawn_profile': selected_spawn_profile,
-                'special_spawn_key': special_spawn_key,
-                'special_spawn_name': special_spawn_name,
-                'hp': max_hp,
-                'max_hp': max_hp,
-                'dead': False,
-                'mob_effects': [],
-                'formation_line': resolve_enemy_formation_line_for_mob(mob_id),
-            })
-        battle_state['enemy_units'] = enemy_units
-        battle_state['pack_archetype'] = get_open_world_pack_archetype_metadata(mob_id)
-        battle_state['active_enemy_unit_id'] = enemy_units[0]['unit_id']
-        battle_state['pack_size'] = len(enemy_units)
-    apply_world_spawn_profile_combat_scaling(
-        battle_state=battle_state,
-        mob=mob or {},
-        spawn_profile=selected_spawn_profile,
-    )
     try:
-        create_pve_encounter(
-            owner_player_id=int(owner_player_id),
-            side_a_player_ids=participant_ids,
-            battle_state=battle_state,
-            mob=mob,
-            encounter_id=encounter_id,
-            location_id=location_id,
-            anchor_spawn_instance_id=claimed_spawn_id,
-        )
-    except Exception:
-        _set_spawn_instance_state_for_encounter(
-            encounter_id=encounter_id,
-            state=SPAWN_STATE_IDLE,
-            clear_link=True,
-            respawn_seconds=None,
-        )
-        raise
+        conn.execute('BEGIN IMMEDIATE')
+        # A stale Attack returns the exact occupied source before activity checks.
+        if spawn_instance_id:
+            selected = conn.execute("SELECT * FROM pve_spawn_instances WHERE spawn_instance_id=? AND location_id=? AND mob_id=?",
+                                    (spawn_instance_id,location_id,mob_id)).fetchone()
+        else:
+            selected = conn.execute("SELECT * FROM pve_spawn_instances WHERE location_id=? AND mob_id=? ORDER BY CASE WHEN state='idle' THEN 0 ELSE 1 END,spawn_instance_id LIMIT 1",
+                                    (location_id,mob_id)).fetchone()
+        if not selected:
+            return None, 'spawn_unavailable'
+        if selected['linked_encounter_id']:
+            return str(selected['linked_encounter_id']), 'spawn_busy'
+        if selected['state'] != SPAWN_STATE_IDLE:
+            return None, 'spawn_unavailable'
+        for participant in participant_ids:
+            player = require_available(conn, participant)
+            if resolve_location_id(player['location_id']) != resolve_location_id(location_id):
+                raise ActionRejected('wrong_location')
+        claimed_spawn_row = selected
+        selected_spawn_profile = _normalize_spawn_profile(selected['spawn_profile'])
+        claimed_spawn_ids = [str(selected['spawn_instance_id'])]
+        if pack_claim_from_visible_group and is_pack_enabled_mob(mob_id):
+            rows = conn.execute("""SELECT spawn_instance_id FROM pve_spawn_instances
+                WHERE location_id=? AND mob_id=? AND spawn_profile=?
+                AND COALESCE(special_spawn_key,'')=? AND COALESCE(special_spawn_name,'')=?
+                AND state='idle' AND linked_encounter_id IS NULL ORDER BY spawn_instance_id""",
+                (location_id,mob_id,selected_spawn_profile,selected['special_spawn_key'] or '',selected['special_spawn_name'] or '')).fetchall()
+            claimed_spawn_ids = [str(r['spawn_instance_id']) for r in rows]
+        claimed_spawn_id = str(selected['spawn_instance_id'])
+        placeholders = ','.join('?' for _ in claimed_spawn_ids)
+        changed = conn.execute(f"UPDATE pve_spawn_instances SET state='forming',linked_encounter_id=?,updated_at=CURRENT_TIMESTAMP WHERE spawn_instance_id IN ({placeholders}) AND state='idle' AND linked_encounter_id IS NULL",
+                               (encounter_id,*claimed_spawn_ids))
+        if changed.rowcount != len(claimed_spawn_ids):
+            raise RuntimeError('source_reservation_changed')
+        special_spawn_key = str(claimed_spawn_row['special_spawn_key'] or '').strip() if claimed_spawn_row else ''
+        special_spawn_name = str(claimed_spawn_row['special_spawn_name'] or '').strip() if claimed_spawn_row else ''
 
-    return encounter_id, 'created'
+        battle_state['location_id'] = location_id
+        battle_state['anchor_spawn_instance_id'] = claimed_spawn_id
+        battle_state['encounter_kind'] = 'pve'
+        if special_spawn_key:
+            battle_state['special_spawn_key'] = special_spawn_key
+        if special_spawn_name:
+            battle_state['special_spawn_name'] = special_spawn_name
+        if special_spawn_key:
+            battle_state['spawn_identity'] = f'{location_id}:{mob_id}:{special_spawn_key}'
+        if len(claimed_spawn_ids) > 1:
+            enemy_units = []
+            max_hp = int((mob or {}).get('hp', battle_state.get('mob_max_hp', battle_state.get('mob_hp', 1))) or 1)
+            for index, unit_spawn_id in enumerate(claimed_spawn_ids, start=1):
+                enemy_units.append({
+                    'unit_id': f'unit-{index}',
+                    'spawn_instance_id': unit_spawn_id,
+                    'mob_id': mob_id,
+                    'spawn_profile': selected_spawn_profile,
+                    'special_spawn_key': special_spawn_key,
+                    'special_spawn_name': special_spawn_name,
+                    'hp': max_hp,
+                    'max_hp': max_hp,
+                    'dead': False,
+                    'mob_effects': [],
+                    'formation_line': resolve_enemy_formation_line_for_mob(mob_id),
+                })
+            battle_state['enemy_units'] = enemy_units
+            battle_state['pack_archetype'] = get_open_world_pack_archetype_metadata(mob_id)
+            battle_state['active_enemy_unit_id'] = enemy_units[0]['unit_id']
+            battle_state['pack_size'] = len(enemy_units)
+        apply_world_spawn_profile_combat_scaling(
+            battle_state=battle_state,
+            mob=mob or {},
+            spawn_profile=selected_spawn_profile,
+        )
+        create_pve_encounter(
+            owner_player_id=int(owner_player_id), side_a_player_ids=participant_ids,
+            battle_state=battle_state, mob=mob, encounter_id=encounter_id,
+            location_id=location_id, anchor_spawn_instance_id=claimed_spawn_id, conn=conn,
+        )
+        conn.commit()
+        return encounter_id, 'created'
+    except ActionRejected as exc:
+        conn.rollback()
+        return None, str(exc)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_active_pve_encounter_id_for_player(*, player_id: int, ensure_schema: bool = True) -> str | None:
@@ -2864,17 +2973,23 @@ def ensure_participant_combat_state(
     return participant_states
 
 
-def _build_participant_bootstrap_snapshot_for_player(*, battle_state: dict, participant_id: int) -> dict:
+def _build_participant_bootstrap_snapshot_for_player(*, battle_state: dict, participant_id: int, conn=None) -> dict:
     fallback = _build_projection_snapshot_from_battle_state(battle_state=battle_state)
-    conn = get_connection()
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_connection()
     row = conn.execute('SELECT * FROM players WHERE telegram_id=?', (int(participant_id),)).fetchone()
-    conn.close()
     if not row:
+        if owns_connection:
+            conn.close()
         return fallback
 
     player = dict(row)
-    effective = get_player_effective_stats(int(participant_id), player)
-    equipped_ids = get_equipped_item_ids(int(participant_id))
+    effective = get_player_effective_stats(int(participant_id), player, conn=conn)
+    from game.gear_instances import resolve_equipped_item_ids_with_fallback
+    equipped_ids = resolve_equipped_item_ids_with_fallback(int(participant_id), conn=conn)
+    if owns_connection:
+        conn.close()
     weapon_item = get_item(equipped_ids.get('weapon') or 'unarmed') if equipped_ids.get('weapon') else None
     offhand_item = get_item(equipped_ids.get('offhand')) if equipped_ids.get('offhand') else None
     chest_item = get_item(equipped_ids.get('chest')) if equipped_ids.get('chest') else None
@@ -3631,3 +3746,243 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
 
 def is_pack_enabled_mob(mob_id: str) -> bool:
     return is_open_world_pack_enabled_mob(mob_id)
+
+
+def apply_pxe1_pve_death(player_id: int, encounter_id: str, *, now_ms: int) -> dict:
+    """Retryable current-policy defeat; the receipt and respawn share one writer."""
+    from game.action_receipts import record_request
+    from game.combat import calc_death_penalty
+    from game.balance import calc_max_hp
+    from game.economy_actions import store_receipt,intent_hash
+    from game.location_threats import arrive_at_location
+    from game.pvp_death_policy import resolve_death_respawn_hub
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        request_id = f'pve_death:{encounter_id}:{player_id}'
+        prior = conn.execute('SELECT result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?',(player_id,request_id)).fetchone()
+        if prior:
+            conn.rollback()
+            return json.loads(prior['result_json'])['penalty']
+        row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+        if not row or row['lifecycle_version']!=1:
+            raise ValueError('unknown_pxe1_death')
+        state = _deserialize_payload(row['battle_state_json'])
+        actor = (state.get('participant_states_v1') or {}).get(str(player_id))
+        if not actor or int(actor.get('hp',1))>0:
+            raise ValueError('uncommitted_pve_death')
+        player = dict(conn.execute('SELECT * FROM players WHERE telegram_id=?',(player_id,)).fetchone())
+        penalty = calc_death_penalty(player)
+        if not record_request(conn,player_id,request_id):
+            raise RuntimeError('pve_death_receipt_missing')
+        arrive_at_location(conn,player_id,resolve_death_respawn_hub(location_id=row['location_id']),now_ms=now_ms)
+        conn.execute('''UPDATE players SET exp=?,gold=?,hp=?,mana=?,in_battle=0 WHERE telegram_id=?''',
+            (max(0,player['exp']-penalty['exp_loss']),max(0,player['gold']-penalty['gold_loss']),
+             max(1,int(calc_max_hp(player['vitality'])*.30)),max(0,int(actor['mana'])),player_id))
+        conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?',(player_id,))
+        conn.execute("UPDATE pve_encounter_participants SET status='defeated',updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND player_id=? AND status='active'",(encounter_id,player_id))
+        state.setdefault('group_death_penalties',{})[str(player_id)] = penalty
+        state['side_a_player_ids'] = [int(p) for p in state.get('side_a_player_ids',[]) if int(p)!=player_id]
+        conn.execute('UPDATE pve_encounters SET battle_state_json=?,state_revision=state_revision+1 WHERE encounter_id=?',(_serialize_payload(state),encounter_id))
+        store_receipt(conn,player_id,request_id,'pve_death_pxe1',intent_hash('pve_death_pxe1',player_id,{'encounter_id':encounter_id}),
+            {'schema_version':1,'catalog_version':2,'penalty':penalty,'encounter_id':encounter_id},catalog_version=2)
+        conn.commit()
+        # Membership projection is refreshed only after its committed change.
+        mark_group_participant_defeated(encounter_id=encounter_id,participant_id=player_id)
+        return penalty
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def process_due_pve_world_sides(*,now_ms: int,limit: int=100) -> list[dict]:
+    """Drive the existing evaluator/T1/T2 without Telegram callback state."""
+    from game.pve_reward_settlement import prepare_victory_settlement,apply_prepared_settlement
+    conn = get_connection()
+    try:
+        rows = conn.execute('''SELECT encounter_id,owner_player_id FROM pve_encounters
+            WHERE lifecycle_version=1 AND runtime_started_ms IS NOT NULL AND status='active'
+            ORDER BY COALESCE(json_extract(battle_state_json,'$.side_deadline_at'),''),encounter_id LIMIT ?''',(limit,)).fetchall()
+    finally:
+        conn.close()
+    results = []
+    for row in rows:
+        encounter_id,owner = row['encounter_id'],row['owner_player_id']
+        try:
+            restored = load_active_pve_encounter(encounter_id=encounter_id)
+            if not restored:
+                continue
+            state,mob = restored
+            if state.get('rules_version')!=RULES_VERSION:
+                continue
+            terminal_defeat = bool(state.get('participant_states_v1')) and all(int(a.get('hp',0))<=0 for a in state['participant_states_v1'].values())
+            runtime = None if terminal_defeat or state.get('mob_dead') else ensure_runtime_for_battle(player_id=owner,battle_state=state,mob=mob)
+            if not state.get('mob_dead') and not terminal_defeat:
+                if runtime.active_side_id==SIDE_ENEMY:
+                    changed = run_enemy_instant_side(player_id=owner,battle_state=state,
+                        on_enemy_action=lambda action:_dispatch_v1_enemy_action(action,battle_state=state))
+                else:
+                    changed = process_due_timeout_for_battle(player_id=owner,battle_state=state,
+                        now=datetime.fromtimestamp(now_ms/1000,timezone.utc),
+                        on_player_timeout_action=lambda action:_dispatch_v1_player_action(action,battle_state=state),
+                        on_enemy_action=lambda action:_dispatch_v1_enemy_action(action,battle_state=state))
+                if not changed:
+                    continue
+            if not persist_solo_pve_encounter_state(encounter_id=encounter_id,battle_state=state,mob=mob):
+                continue
+            for raw_id,actor in (state.get('participant_states_v1') or {}).items():
+                if int(actor.get('hp',0))<=0:
+                    apply_pxe1_pve_death(int(raw_id),encounter_id,now_ms=now_ms)
+            if any(int(actor.get('hp',0))<=0 for actor in (state.get('participant_states_v1') or {}).values()):
+                state,mob = load_active_pve_encounter(encounter_id=encounter_id)
+            if all(int(a.get('hp',0))<=0 for a in (state.get('participant_states_v1') or {}).values()):
+                finish_solo_pve_encounter(player_id=owner,encounter_id=encounter_id,status='death')
+                results.append({'encounter_id':encounter_id,'phase':'death'})
+            elif state.get('mob_dead'):
+                prepared = prepare_victory_settlement(encounter_id=encounter_id,battle_state=state,mob=mob)
+                if prepared['status'] in {'prepared','applied'}:
+                    settlement = apply_prepared_settlement(encounter_id)
+                    results.append({'encounter_id':encounter_id,'phase':'victory','settlement':settlement})
+            else:
+                results.append({'encounter_id':encounter_id,'phase':'active','battle':state})
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('PXE1 PvE world resolution retry: %s',encounter_id)
+    return results
+
+
+def _v1_log_events(battle_state: dict, events: list[dict]) -> None:
+    """Persist compact structural events; localized rendering stays at UI edge."""
+    battle_state.setdefault('combat_events_v1', []).extend(events)
+    # A bounded fallback log keeps old compact battle cards useful while the
+    # locale renderer consumes the structured events.
+    for event in events[-8:]:
+        kind = str(event.get('kind') or 'event')
+        if kind in {'direct', 'enemy_direct', 'retaliation', 'dot'}:
+            amount = int(event.get('hp_removed', event.get('amount', 0)) or 0)
+            battle_state.setdefault('log', []).append(f"{kind}: {amount}")
+        elif kind in {'heal', 'hot', 'mana'}:
+            battle_state.setdefault('log', []).append(f"{kind}: +{int(event.get('amount', 0) or 0)}")
+
+
+def _sync_v1_to_legacy_projection(battle_state: dict) -> None:
+    participants = battle_state.get('participant_states_v1') or {}
+    legacy = battle_state.setdefault('participant_states', {})
+    for pid, actor in participants.items():
+        target = legacy.setdefault(str(pid), {})
+        target.update({
+            'player_hp': int(actor.get('hp', 0)),
+            'hp': int(actor.get('hp', 0)),
+            'player_max_hp': int(actor.get('max_hp', 1)),
+            'max_hp': int(actor.get('max_hp', 1)),
+            'player_mana': int(actor.get('mana', 0)),
+            'mana': int(actor.get('mana', 0)),
+            'player_max_mana': int(actor.get('max_mana', 0)),
+            'max_mana': int(actor.get('max_mana', 0)),
+            'player_dead': not int(actor.get('hp', 0)) > 0,
+            'defeated': not int(actor.get('hp', 0)) > 0,
+            'effects_v1': list(actor.get('effects') or []),
+            'manual_contribution': bool(actor.get('manual_contribution')),
+            'snapshotted_family': actor.get('family'),
+            'level_at_encounter_start': int(actor.get('level', 1)),
+        })
+    enemies = list(battle_state.get('enemy_states_v1') or [])
+    units = list(battle_state.get('enemy_units') or [])
+    for index, enemy in enumerate(enemies):
+        if index < len(units):
+            units[index]['hp'] = int(enemy.get('hp', 0))
+            units[index]['max_hp'] = int(enemy.get('max_hp', 1))
+            units[index]['dead'] = not int(enemy.get('hp', 0)) > 0
+            units[index]['effects_v1'] = list(enemy.get('effects') or [])
+    if units:
+        battle_state['enemy_units'] = units
+    active = next((enemy for enemy in enemies if int(enemy.get('hp', 0)) > 0), None)
+    if active:
+        battle_state['active_enemy_unit_id'] = active.get('unit_id')
+        battle_state['mob_hp'] = int(active.get('hp', 0))
+        battle_state['mob_max_hp'] = int(active.get('max_hp', 1))
+        battle_state['mob_dead'] = False
+    else:
+        battle_state['mob_hp'] = 0
+        battle_state['mob_dead'] = True
+
+
+def _dispatch_v1_player_action(action, *, battle_state: dict) -> None:
+    actor_id = int(getattr(action, 'participant_id', 0) or 0)
+    participants = dict(battle_state.get('participant_states_v1') or {})
+    actor = participants.get(str(actor_id))
+    if not actor:
+        return
+    opponents = list(battle_state.get('enemy_states_v1') or [])
+    action_type = str(getattr(action, 'action_type', '') or '')
+    if action_type == 'basic_attack':
+        action_payload = {
+            'kind': 'normal',
+            'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
+            'manual': True,
+        }
+    elif action_type == 'skill':
+        action_payload = {
+            'kind': 'skill', 'skill_id': getattr(action, 'skill_id', None),
+            'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
+            'manual': True,
+        }
+    elif action_type == 'fallback_guard':
+        action_payload = {'kind': 'timeout_guard', 'manual': False}
+    elif action_type == 'flee_failed':
+        action_payload = {'kind': 'flee_failed', 'manual': True}
+    else:
+        action_payload = {'kind': 'guard', 'manual': True}
+    result = evaluate_action(
+        actor,
+        list(participants.values()),
+        opponents,
+        action_payload,
+        rng_seed=combat_seed(
+            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
+            actor_id, action_payload.get('target_id'), len(battle_state.get('combat_events_v1', [])),
+        ),
+        side_index=int(battle_state.get('turn_revision', 0)),
+    )
+    if not result.get('accepted'):
+        return
+    updated_participants = {str(item.get('actor_id')): item for item in result['allies']}
+    battle_state['participant_states_v1'] = updated_participants
+    battle_state['enemy_states_v1'] = result['opponents']
+    _v1_log_events(battle_state, result['events'])
+    _sync_v1_to_legacy_projection(battle_state)
+
+
+def _dispatch_v1_enemy_action(action, *, battle_state: dict) -> None:
+    encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    enemy_index = resolve_enemy_unit_index_for_participant(
+        encounter_id=encounter_id,
+        battle_state=battle_state,
+        participant_id=int(getattr(action, 'participant_id', 0) or 0),
+    )
+    enemies = list(battle_state.get('enemy_states_v1') or [])
+    if enemy_index is None or enemy_index >= len(enemies):
+        enemy_index = next((index for index, enemy in enumerate(enemies) if int(enemy.get('hp', 0)) > 0), None)
+    if enemy_index is None:
+        return
+    enemy = enemies[enemy_index]
+    players = list((battle_state.get('participant_states_v1') or {}).values())
+    chosen = choose_enemy_action(enemy, enemies)
+    result = evaluate_enemy_action(
+        enemy, enemies, players, chosen,
+        rng_seed=combat_seed(
+            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
+            enemy.get('unit_id'), chosen.get('target_id'), len(battle_state.get('combat_events_v1', [])),
+        ),
+        side_index=int(battle_state.get('turn_revision', 0)),
+    )
+    if not result.get('accepted'):
+        return
+    battle_state['enemy_states_v1'] = result['allies']
+    battle_state['participant_states_v1'] = {
+        str(item.get('actor_id')): item for item in result['players']
+    }
+    _v1_log_events(battle_state, result['events'])
+    _sync_v1_to_legacy_projection(battle_state)

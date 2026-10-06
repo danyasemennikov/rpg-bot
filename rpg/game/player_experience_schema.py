@@ -194,8 +194,18 @@ def _upgrade_pending_pvp(conn) -> None:
             raise RuntimeError(f'invalid legacy PvP preparation payload: {row["id"]}')
         if payload.get('battle'):
             continue  # Initialized legacy battles retain their historical 1v1 rules.
+        from game.pvp_rules import is_recent_retaliation_context
+        attacker = conn.execute('SELECT * FROM players WHERE telegram_id=?',(row['attacker_id'],)).fetchone()
+        defender = conn.execute('SELECT * FROM players WHERE telegram_id=?',(row['defender_id'],)).fetchone()
+        if not attacker or not defender:
+            continue  # Lock recovery cancels unverifiable principal membership.
+        payload.update(schema_version=1,catalog_version=2,flow='open_world_group')
+        payload['crime_context'] = {str(row['attacker_id']): {
+            'initiator_snapshot':dict(attacker),'original_defender_snapshot':dict(defender),
+            'initiation_infamy':0,'red_flag_applied':False,
+            'retaliation_context':is_recent_retaliation_context(attacker_id=row['attacker_id'],defender_id=row['defender_id'],conn=conn)}}
         conn.execute('''UPDATE pvp_engagements SET world_model_version=1, engagement_state='pending',
-            combat_seed=COALESCE(combat_seed,?) WHERE id=?''', (secrets.token_hex(16), row['id']))
+            reason_context=?,combat_seed=COALESCE(combat_seed,?) WHERE id=?''', (json.dumps(payload,ensure_ascii=False),secrets.token_hex(16), row['id']))
         conn.execute("""UPDATE pvp_engagement_reinforcements SET status='expired'
             WHERE engagement_id=? AND membership_version=0 AND status IN ('pending','accepted')""", (row['id'],))
 
@@ -246,6 +256,9 @@ def ensure_player_experience_schema(conn, *, now_ms: int | None = None) -> None:
                     (player['player_id'], now_ms, now_ms))
             _upgrade_formations(conn, now_ms)
             _upgrade_pending_pvp(conn)
+            from game.location_threats import seed_visit_threats
+            for player in conn.execute('SELECT telegram_id FROM players').fetchall():
+                seed_visit_threats(conn,player['telegram_id'],now_ms=now_ms)
             conn.execute('INSERT INTO economy_schema_migrations(version) VALUES (?)', (MIGRATION_VERSION,))
         violations = [tuple(row) for row in conn.execute('PRAGMA foreign_key_check')]
         if violations:

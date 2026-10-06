@@ -25,11 +25,17 @@ def crafting_training_ceiling(recipe_level: int) -> int:
     return 20
 
 
-def crafting_xp_for_success(*, current_level: int, current_exp: int, recipe_level: int) -> int:
+def crafting_xp_for_success(*, current_level: int, current_exp: int, recipe_level: int,
+                            material_value: int) -> int:
     ceiling = crafting_training_ceiling(recipe_level)
     if current_level >= ceiling or current_level >= MAX_PROFESSION_LEVEL:
         return 0
-    return min(250 * int(recipe_level), xp_to_level(current_level, current_exp, ceiling))
+    if not isinstance(material_value,int) or isinstance(material_value,bool) or material_value<=0:
+        raise ValueError('invalid recipe material value')
+    base = min(10+5*int(recipe_level),material_value)
+    gap = int(current_level)-int(recipe_level)
+    award = base if gap<=2 else max(1,base//2) if gap<=4 else max(1,base//4)
+    return min(award,xp_to_level(current_level,current_exp,ceiling))
 
 
 @dataclass(frozen=True)

@@ -335,7 +335,20 @@ def _load_model(player_id: int) -> dict[str, Any]:
         conn.close()
 
 
-def build_main_view(player_id: int, lang: str) -> tuple[str, InlineKeyboardMarkup]:
+def build_main_view(player_id: int, lang: str):
+    model = _load_model(player_id)
+    player, snapshot = model['player'], model['snapshot']
+    lines = [t('pxe1.build_equipment',lang),_family_name(snapshot['family'],lang)]
+    if player['stat_points']>0:
+        lines.append(t('pxe1.free_points',lang,count=player['stat_points']))
+    rows = [[InlineKeyboardButton(t('pxe1.attributes',lang),callback_data='bv_attr'),InlineKeyboardButton(t('pxe1.weapon_skills',lang),callback_data='bv_equipped_skills')],
+        [InlineKeyboardButton(_c(lang,'equipment'),callback_data='inv_tab_weapon')],
+        [InlineKeyboardButton(t('pxe1.reset_options',lang),callback_data='bv_reset_options')],
+        [InlineKeyboardButton(t('pxe1.details',lang),callback_data='bv_character_details'),InlineKeyboardButton(t('common.back',lang),callback_data='bv_character')]]
+    return '\n'.join(lines),InlineKeyboardMarkup(rows)
+
+
+def build_character_details(player_id: int, lang: str) -> tuple[str, InlineKeyboardMarkup]:
     model = _load_model(player_id)
     player, snapshot = model["player"], model["snapshot"]
     family = snapshot["family"]
@@ -376,45 +389,9 @@ def _new_attribute_draft(model: dict[str, Any]) -> dict[str, int]:
     return {key: int(model["player"][key]) for key in ATTRIBUTE_KEYS}
 
 
-def build_attributes_view(
-    player_id: int, lang: str, *, draft: dict[str, int] | None = None,
-) -> tuple[str, InlineKeyboardMarkup, dict[str, int]]:
-    model = _load_model(player_id)
-    snapshot, player = model["snapshot"], model["player"]
-    draft = dict(draft or _new_attribute_draft(model))
-    budget = int(player["attribute_budget"])
-    spent = sum(max(0, int(draft[key]) - 1) for key in ATTRIBUTE_KEYS)
-    remaining = budget - spent
-    labels = _ATTRIBUTE_LABELS.get(lang, _ATTRIBUTE_LABELS["en"])
-    lines = [
-        f"📊 <b>{_c(lang, 'attributes')}</b>",
-        f"{_c(lang, 'unspent')}: <b>{remaining}</b>",
-        _c(lang, "safe_only"),
-    ]
-    keyboard = []
-    for key in ATTRIBUTE_KEYS:
-        effective = int(snapshot[key])
-        base = int(draft[key])
-        lines.append(f"{escape(labels[key])}: <b>{base}</b> → {effective - int(player[key]) + base}")
-        keyboard.append([
-            InlineKeyboardButton("−", callback_data=f"bv_ad_{key}"),
-            InlineKeyboardButton(f"{labels[key]} {base}", callback_data="bv_noop"),
-            InlineKeyboardButton("+", callback_data=f"bv_ai_{key}"),
-        ])
-    lines.extend([
-        "",
-        f"❤️ {_c(lang, 'hp')}: {100 + 18 * draft['vitality']} + gear",
-        f"🔷 {_c(lang, 'mana')}: {50 + 12 * draft['wisdom']} + gear",
-        f"🎒 {_c(lang, 'carry')}: {20 + 5 * draft['strength']}",
-        f"🎯 {_c(lang, 'accuracy')}: 100 + 2×AGI + INT + gear",
-        f"💨 {_c(lang, 'evasion')}: 100 + 2×AGI + LUCK + gear",
-        f"💥 {_c(lang, 'crit')}: min(35%, .35×LUCK + .05×AGI)",
-    ])
-    keyboard.extend([
-        [InlineKeyboardButton(f"✅ {_c(lang, 'confirm')}", callback_data="bv_attr_preview")],
-        [InlineKeyboardButton(f"↩️ {_c(lang, 'back')}", callback_data="bv_main")],
-    ])
-    return "\n".join(lines), InlineKeyboardMarkup(keyboard), draft
+def build_attributes_view(player_id: int, lang: str, *, draft=None):
+    from handlers.character import redistribution_card
+    return redistribution_card(player_id,lang,draft=draft)
 
 
 def build_masteries_view(player_id: int, lang: str) -> tuple[str, InlineKeyboardMarkup]:
@@ -509,41 +486,9 @@ def build_family_view(player_id: int, family: str, lang: str) -> tuple[str, Inli
     return "\n".join(lines), InlineKeyboardMarkup(keyboard)
 
 
-def build_skill_view(player_id: int, skill_id: str, lang: str) -> tuple[str, InlineKeyboardMarkup]:
-    spec = SKILL_SPECS.get(skill_id)
-    if not spec:
-        return build_families_view(player_id, lang)
-    model = _load_model(player_id)
-    mastery = model["masteries"].get(spec.family) or {"level": 1, "skill_points": 2}
-    conn = get_connection()
-    try:
-        ranks = family_skill_ranks(player_id, spec.family, conn=conn)
-        rank = ranks.get(skill_id, 0)
-    finally:
-        conn.close()
-    next_rank = min(3, rank + 1)
-    required = spec.unlock_mastery if rank == 0 else RANK_REQUIREMENTS.get(next_rank, MAX_MASTERY + 1)
-    lines = [
-        f"{escape(get_skill_name(skill_id, lang))}",
-        f"{_c(lang, 'rank')}: <b>{rank}/3</b>",
-        f"{_c(lang, 'cost')}: <b>{rank_mana_cost(spec, max(1, next_rank))}</b> · {_c(lang, 'cooldown')}: <b>{spec.cooldown if spec.cooldown is not None else _c(lang, 'passive')}</b>",
-        f"{_c(lang, 'target')}: <b>{escape(_label(_TARGET_LABELS, lang, spec.target))}</b> · {_c(lang, 'school')}: <b>{escape(_label(_SCHOOL_LABELS, lang, spec.school or 'support'))}</b>",
-        f"{_c(lang, 'description')}: {escape(get_skill_desc(skill_id, lang))}",
-        f"{_c(lang, 'rank_effect')} {max(1, next_rank)} · {_c(lang, 'exact')}: {escape(_skill_profile(spec, lang, max(1, next_rank)))}",
-        f"PvP: {_c(lang, 'available_pvp') if skill_id in PVP_SKILL_ALLOWLIST else _c(lang, 'pve_only')}",
-    ]
-    keyboard = []
-    if rank < 3:
-        branch_spend = sum(int(ranks.get(item, 0)) for item in SKILL_TREES[spec.family][spec.branch][:-1])
-        legal_level = (
-            int(mastery["level"]) >= required
-            and int(mastery["skill_points"]) > 0
-            and not (rank == 0 and spec.unlock_mastery == 8 and branch_spend < 8)
-        )
-        button = f"➕ {_c(lang, 'learn')} · M{required} · 1◆"
-        keyboard.append([InlineKeyboardButton(button, callback_data=f"bv_buy_{skill_id}" if legal_level else "bv_noop")])
-    keyboard.append([InlineKeyboardButton(f"↩️ {_c(lang, 'back')}", callback_data=f"bv_family_{spec.family}")])
-    return "\n".join(lines), InlineKeyboardMarkup(keyboard)
+def build_skill_view(player_id: int, skill_id: str, lang: str):
+    from handlers.character import skill_card
+    return skill_card(player_id,skill_id,lang)
 
 
 def build_pvp_view(player_id: int, lang: str) -> tuple[str, InlineKeyboardMarkup]:
@@ -585,12 +530,10 @@ async def build_attributes_command(update: Update, context: ContextTypes.DEFAULT
     if not get_player(user.id):
         await update.message.reply_text(t("common.no_character", lang))
         return
-    text, keyboard, draft = build_attributes_view(user.id, lang)
-    notice = _consume_notice(user.id, lang)
-    if notice:
-        text = notice + "\n\n" + text
-    context.user_data["build_v1_attributes"] = draft
-    await _send_view(update, text, keyboard)
+    from handlers.character import spending_card
+    context.user_data['pxe1_attribute_deltas'] = {}
+    text,keyboard = spending_card(user.id,lang)
+    await _send_view(update,text,keyboard)
 
 
 async def build_skills_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -599,7 +542,8 @@ async def build_skills_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not get_player(user.id):
         await update.message.reply_text(t("common.no_character", lang))
         return
-    text, keyboard = build_families_view(user.id, lang)
+    from handlers.character import weapon_family_card
+    text, keyboard = weapon_family_card(user.id,_load_model(user.id)['snapshot']['family'],lang)
     notice = _consume_notice(user.id, lang)
     if notice:
         text = notice + "\n\n" + text
@@ -611,14 +555,24 @@ async def handle_build_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
     user = query.from_user
     lang = get_player_lang(user.id)
     data = str(query.data or "")
+    if data in {'bv_attr','bv_character','bv_character_more','bv_character_details','bv_reset_options','bv_help','bv_settings'} or data.startswith('bv_spend_'):
+        from handlers.character import handle_character_buttons
+        await handle_character_buttons(update,context)
+        return
     if data == "bv_noop":
         await query.answer()
         return
     if data == "bv_main":
         text, keyboard = build_main_view(user.id, lang)
-    elif data == "bv_attr":
+    elif data == "bv_attr_reset":
         text, keyboard, draft = build_attributes_view(user.id, lang)
         context.user_data["build_v1_attributes"] = draft
+    elif data.startswith('bv_reset_attr_'):
+        from handlers.character import redistribution_card
+        key = data.removeprefix('bv_reset_attr_')
+        draft = context.user_data.get('build_v1_attributes')
+        text,keyboard,draft = redistribution_card(user.id,lang,draft=draft,selected=key)
+        context.user_data['build_v1_attributes'] = draft
     elif data.startswith(("bv_ai_", "bv_ad_")):
         draft = context.user_data.get("build_v1_attributes")
         if not isinstance(draft, dict):
@@ -635,7 +589,8 @@ async def handle_build_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         elif data.startswith("bv_ad_") and int(draft[key]) > 1:
             draft[key] = int(draft[key]) - 1
         context.user_data["build_v1_attributes"] = draft
-        text, keyboard, _ = build_attributes_view(user.id, lang, draft=draft)
+        from handlers.character import redistribution_card
+        text, keyboard, _ = redistribution_card(user.id,lang,draft=draft,selected=key)
     elif data == "bv_attr_preview":
         draft = context.user_data.get("build_v1_attributes") or _new_attribute_draft(_load_model(user.id))
         preview = attribute_redistribution_preview(user.id, draft)
@@ -665,10 +620,23 @@ async def handle_build_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data["build_v1_attributes"] = draft
     elif data == "bv_masteries":
         text, keyboard = build_masteries_view(user.id, lang)
-    elif data == "bv_families":
-        text, keyboard = build_families_view(user.id, lang)
+    elif data == 'bv_equipped_skills':
+        from handlers.character import weapon_family_card
+        text, keyboard = weapon_family_card(user.id,_load_model(user.id)['snapshot']['family'],lang)
+    elif data == "bv_families" or data.startswith('bv_families_page_'):
+        from handlers.character import weapon_families_card
+        page = int(data.removeprefix('bv_families_page_')) if data.startswith('bv_families_page_') else 0
+        text, keyboard = weapon_families_card(user.id,lang,page)
+    elif data.startswith('bv_branch_'):
+        from handlers.character import weapon_family_card
+        family, branch = data.removeprefix('bv_branch_').split(':')
+        text, keyboard = weapon_family_card(user.id,family,lang,branch=branch)
     elif data.startswith("bv_family_"):
-        text, keyboard = build_family_view(user.id, data.removeprefix("bv_family_"), lang)
+        from handlers.character import weapon_family_card
+        text, keyboard = weapon_family_card(user.id, data.removeprefix("bv_family_"), lang)
+    elif data.startswith('bv_skilldetails_'):
+        from handlers.character import skill_card
+        text,keyboard = skill_card(user.id,data.removeprefix('bv_skilldetails_'),lang,details=True)
     elif data.startswith("bv_skill_"):
         text, keyboard = build_skill_view(user.id, data.removeprefix("bv_skill_"), lang)
     elif data.startswith("bv_buy_"):

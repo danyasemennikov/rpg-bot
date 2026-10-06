@@ -78,13 +78,19 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
         else:
             if not encounter_id.isdigit():
                 raise ActionRejected("stale_action")
-            encounter = conn.execute('''SELECT engagement_state AS status, rules_version,
-                    turn_revision, attacker_id, defender_id
+            encounter = conn.execute('''SELECT *,engagement_state AS status
                 FROM pvp_engagements WHERE id=?''', (int(encounter_id),)).fetchone()
             valid_encounter = bool(
                 encounter and str(encounter["status"]) == "converted_to_battle"
                 and int(player_id) in {int(encounter["attacker_id"]), int(encounter["defender_id"])}
             )
+            if encounter and encounter['world_model_version'] == 1:
+                from game.pvp_group_runtime import authorize_order
+                battle = json.loads(encounter['reason_context']).get('battle') or {}
+                if revision != int(battle.get('turn_revision',-1)):
+                    raise ActionRejected('stale_action')
+                authorize_order(conn,encounter,battle,player_id,payload.get('action') or {},deadline_at=payload.get('deadline_at'))
+                valid_encounter = True
         if (
             not valid_encounter
             or str(encounter["rules_version"]) != RULES_VERSION
@@ -98,7 +104,7 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
             raise ActionRejected("stale_action") from exc
         if deadline.tzinfo is None:
             deadline = deadline.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > deadline.astimezone(timezone.utc):
+        if datetime.now(timezone.utc) >= deadline.astimezone(timezone.utc):
             raise ActionRejected("deadline_elapsed")
         action = payload.get("action")
         if not isinstance(action, dict):

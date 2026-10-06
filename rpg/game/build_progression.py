@@ -670,13 +670,85 @@ def _store_receipt(conn: sqlite3.Connection, token: str, player_id: int, kind: s
         ))
 
 
-def _validate_intent_authority(conn: sqlite3.Connection, player_id: int, intent: dict[str, Any]) -> dict[str, Any]:
-    player = peaceful_player(conn, player_id)
+def _validate_intent_authority(conn: sqlite3.Connection, player_id: int, intent: dict[str, Any], *, spend_attributes=False) -> dict[str, Any]:
+    if spend_attributes:
+        from game.player_activity import require_available
+        player = require_available(conn,player_id,spend_attributes=True)
+    else:
+        player = peaceful_player(conn, player_id)
     if int(player.get("build_revision", 0)) != int(intent.get("build_revision", -1)):
         raise BuildRejected("stale_build")
     if int(player.get("gear_revision", 0)) != int(intent.get("gear_revision", -1)):
         raise BuildRejected("stale_gear")
     return player
+
+
+def _spending_values(player, deltas):
+    if not isinstance(deltas,dict) or not set(deltas).issubset(ATTRIBUTE_KEYS):
+        raise BuildRejected('malformed_attributes')
+    if any(type(value) is not int or value<0 for value in deltas.values()):
+        raise BuildRejected('malformed_attributes')
+    total = sum(deltas.values())
+    budget = int(player['attribute_budget'] if player.get('attribute_budget') is not None else observed_attribute_budget(player))
+    already_spent = sum(int(player[key])-1 for key in ATTRIBUTE_KEYS)
+    available = min(int(player['stat_points']),max(0,budget-already_spent))
+    if total<1 or total>available:
+        raise BuildRejected('attribute_budget')
+    attributes = {key:int(player[key])+deltas.get(key,0) for key in ATTRIBUTE_KEYS}
+    if any(value<1 or value>100 for value in attributes.values()):
+        raise BuildRejected('attribute_bounds')
+    return attributes,total
+
+
+def attribute_spending_preview(player_id: int, deltas: dict[str,int]) -> dict[str,Any]:
+    from game.player_activity import require_available
+    conn = get_connection()
+    try:
+        player = require_available(conn,player_id,spend_attributes=True)
+        attributes,total = _spending_values(player,deltas)
+        max_hp,max_mana = _prospective_effective_caps(conn,player_id,player,attributes,[])
+        payload = build_intent_payload(player,'spend_attributes',deltas=deltas)
+    except (ActionRejected,BuildRejected,ValueError,TypeError) as exc:
+        return {'success':False,'reason':str(exc)}
+    finally:
+        conn.close()
+    token = issue_actions(player_id,BUILD_ACTION_KIND,[payload])[payload]
+    return {'success':True,'token':token,'before':{key:player[key] for key in ATTRIBUTE_KEYS},
+            'attributes':attributes,'unspent':int(player['stat_points'])-total,
+            'max_hp':max_hp,'max_mana':max_mana,'carry_weight':20+5*attributes['strength']}
+
+
+def apply_attribute_spending(player_id: int, token: str) -> dict[str,Any]:
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        duplicate = _receipt(conn,token,player_id)
+        if duplicate is not None:
+            if duplicate.get('op')!='spend_attributes':
+                raise BuildRejected('wrong_intent')
+            conn.rollback()
+            return {**duplicate,'already_applied':True}
+        intent = _parse_intent(consume_action(conn,player_id,BUILD_ACTION_KIND,token))
+        if intent.get('op')!='spend_attributes':
+            raise BuildRejected('wrong_intent')
+        player = _validate_intent_authority(conn,player_id,intent,spend_attributes=True)
+        attributes,total = _spending_values(player,intent.get('deltas'))
+        conn.execute('''UPDATE players SET strength=?,agility=?,intuition=?,vitality=?,wisdom=?,luck=?,
+            stat_points=stat_points-?,max_hp=?,max_mana=?,carry_weight=?,build_revision=build_revision+1
+            WHERE telegram_id=?''',(*[attributes[key] for key in ATTRIBUTE_KEYS],total,
+                100+18*attributes['vitality'],50+12*attributes['wisdom'],20+5*attributes['strength'],player_id))
+        result = {'success':True,'op':'spend_attributes','attributes':attributes,'unspent':int(player['stat_points'])-total,'unequipped':[]}
+        _store_receipt(conn,token,player_id,'spend_attributes',result)
+        conn.commit()
+        return result
+    except (ActionRejected,BuildRejected,ValueError,TypeError) as exc:
+        conn.rollback()
+        return {'success':False,'reason':str(exc)}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def apply_skill_purchase(player_id: int, token: str) -> dict[str, Any]:

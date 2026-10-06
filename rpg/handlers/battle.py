@@ -243,8 +243,18 @@ def apply_rewards(telegram_id: int, player: dict, rewards: dict) -> dict:
         'new_gold':   new_gold,
     }
 
-def apply_death(telegram_id: int, player: dict):
+def apply_death(telegram_id: int, player: dict, *, encounter_id: str | None=None):
     """Применяет штраф смерти и возрождает в региональном safe-хабе."""
+    if encounter_id:
+        conn = get_connection()
+        try:
+            row = conn.execute('SELECT lifecycle_version FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+        finally:
+            conn.close()
+        if row and row['lifecycle_version']==1:
+            import time
+            from game.pve_live import apply_pxe1_pve_death
+            return apply_pxe1_pve_death(telegram_id,encounter_id,now_ms=int(time.time()*1000))
     penalty  = calc_death_penalty(player)
     new_exp  = max(0, player['exp'] - penalty['exp_loss'])
     new_gold = max(0, player['gold'] - penalty['gold_loss'])
@@ -768,6 +778,8 @@ async def start_battle(
     battle_state['weapon_id']     = actual_weapon_id
     battle_state['mastery_level'] = mastery['level']
     battle_state['mastery_exp']   = mastery['exp']
+    if mob_first:
+        battle_state['active_side'] = SIDE_ENEMY
     if mixed_encounter_id:
         encounter_id, encounter_status = create_mixed_open_world_pve_encounter(
             owner_player_id=user.id,
@@ -792,9 +804,26 @@ async def start_battle(
         return
     if encounter_status == 'spawn_busy':
         _rollback_prebattle_lock_if_needed(context=context, telegram_id=user.id, should_rollback=aggro_prelock)
-        await query.answer(t('location.pve_spawn_engaged', lang), show_alert=True)
+        from handlers.location import build_pve_encounter_detail_message
+        text,keyboard = build_pve_encounter_detail_message(dict(p),str(encounter_id))
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        await query.answer()
         return
     battle_state['pve_encounter_id'] = encounter_id
+
+    # Canonical spawns always form. The world job owns the deadline start.
+    from game.pve_live import pve_world_phase
+    formation_conn = get_connection()
+    try:
+        forming = pve_world_phase(formation_conn,str(encounter_id)) == 'forming'
+    finally:
+        formation_conn.close()
+    if forming:
+        from handlers.location import build_pve_encounter_detail_message
+        detail_text,detail_keyboard = build_pve_encounter_detail_message(dict(p),str(encounter_id))
+        await query.edit_message_text(detail_text,reply_markup=detail_keyboard,parse_mode='HTML')
+        await query.answer()
+        return
 
     # V1 aggression uses the same durable enemy-side runtime/evaluator as every
     # later enemy turn. The legacy strike remains only for legacy encounters.
@@ -911,6 +940,18 @@ async def enter_open_world_pve_battle(update, context, encounter_id: str) -> Non
         await query.answer(t('location.pve_no_encounter', lang), show_alert=True)
         return
     battle_state, mob = restored
+    from game.pve_live import pve_world_phase
+    conn = get_connection()
+    try:
+        forming = pve_world_phase(conn,encounter_id)=='forming'
+    finally:
+        conn.close()
+    if forming:
+        from handlers.location import build_pve_encounter_detail_message
+        text,keyboard = build_pve_encounter_detail_message(p,encounter_id)
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        await query.answer()
+        return
 
     roster = get_pve_encounter_player_ids(encounter_id=encounter_id)
     if int(user.id) not in roster:
@@ -1229,7 +1270,7 @@ async def _handle_death_or_resurrection(
 
     grouped_penalties = battle_state.get('group_death_penalties') or {}
     cached_penalty = grouped_penalties.get(str(user_id)) if _is_group_encounter(battle_state) else None
-    penalty = cached_penalty or apply_death(user_id, player)
+    penalty = cached_penalty or apply_death(user_id, player,encounter_id=battle_state.get('pve_encounter_id'))
     battle_state['player_dead'] = True
     battle_state['player_hp'] = 0
     update_participant_combat_state_from_projection(battle_state=battle_state, player_id=user_id)
@@ -1542,139 +1583,12 @@ def _apply_timeout_fallback_action(action, battle_state: dict, lang: str) -> Non
         )
 
 
-def _v1_log_events(battle_state: dict, events: list[dict]) -> None:
-    """Persist compact structural events; localized rendering stays at UI edge."""
-    battle_state.setdefault('combat_events_v1', []).extend(events)
-    # A bounded fallback log keeps old compact battle cards useful while the
-    # locale renderer consumes the structured events.
-    for event in events[-8:]:
-        kind = str(event.get('kind') or 'event')
-        if kind in {'direct', 'enemy_direct', 'retaliation', 'dot'}:
-            amount = int(event.get('hp_removed', event.get('amount', 0)) or 0)
-            battle_state.setdefault('log', []).append(f"{kind}: {amount}")
-        elif kind in {'heal', 'hot', 'mana'}:
-            battle_state.setdefault('log', []).append(f"{kind}: +{int(event.get('amount', 0) or 0)}")
 
 
-def _sync_v1_to_legacy_projection(battle_state: dict) -> None:
-    participants = battle_state.get('participant_states_v1') or {}
-    legacy = battle_state.setdefault('participant_states', {})
-    for pid, actor in participants.items():
-        target = legacy.setdefault(str(pid), {})
-        target.update({
-            'player_hp': int(actor.get('hp', 0)),
-            'hp': int(actor.get('hp', 0)),
-            'player_max_hp': int(actor.get('max_hp', 1)),
-            'max_hp': int(actor.get('max_hp', 1)),
-            'player_mana': int(actor.get('mana', 0)),
-            'mana': int(actor.get('mana', 0)),
-            'player_max_mana': int(actor.get('max_mana', 0)),
-            'max_mana': int(actor.get('max_mana', 0)),
-            'player_dead': not int(actor.get('hp', 0)) > 0,
-            'defeated': not int(actor.get('hp', 0)) > 0,
-            'effects_v1': list(actor.get('effects') or []),
-            'manual_contribution': bool(actor.get('manual_contribution')),
-            'snapshotted_family': actor.get('family'),
-            'level_at_encounter_start': int(actor.get('level', 1)),
-        })
-    enemies = list(battle_state.get('enemy_states_v1') or [])
-    units = list(battle_state.get('enemy_units') or [])
-    for index, enemy in enumerate(enemies):
-        if index < len(units):
-            units[index]['hp'] = int(enemy.get('hp', 0))
-            units[index]['max_hp'] = int(enemy.get('max_hp', 1))
-            units[index]['dead'] = not int(enemy.get('hp', 0)) > 0
-            units[index]['effects_v1'] = list(enemy.get('effects') or [])
-    if units:
-        battle_state['enemy_units'] = units
-    active = next((enemy for enemy in enemies if int(enemy.get('hp', 0)) > 0), None)
-    if active:
-        battle_state['active_enemy_unit_id'] = active.get('unit_id')
-        battle_state['mob_hp'] = int(active.get('hp', 0))
-        battle_state['mob_max_hp'] = int(active.get('max_hp', 1))
-        battle_state['mob_dead'] = False
-    else:
-        battle_state['mob_hp'] = 0
-        battle_state['mob_dead'] = True
 
 
-def _dispatch_v1_player_action(action, *, battle_state: dict) -> None:
-    actor_id = int(getattr(action, 'participant_id', 0) or 0)
-    participants = dict(battle_state.get('participant_states_v1') or {})
-    actor = participants.get(str(actor_id))
-    if not actor:
-        return
-    opponents = list(battle_state.get('enemy_states_v1') or [])
-    action_type = str(getattr(action, 'action_type', '') or '')
-    if action_type == 'basic_attack':
-        action_payload = {
-            'kind': 'normal',
-            'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
-            'manual': True,
-        }
-    elif action_type == 'skill':
-        action_payload = {
-            'kind': 'skill', 'skill_id': getattr(action, 'skill_id', None),
-            'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
-            'manual': True,
-        }
-    elif action_type == 'fallback_guard':
-        action_payload = {'kind': 'timeout_guard', 'manual': False}
-    elif action_type == 'flee_failed':
-        action_payload = {'kind': 'flee_failed', 'manual': True}
-    else:
-        action_payload = {'kind': 'guard', 'manual': True}
-    result = evaluate_action(
-        actor,
-        list(participants.values()),
-        opponents,
-        action_payload,
-        rng_seed=combat_seed(
-            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
-            actor_id, action_payload.get('target_id'), len(battle_state.get('combat_events_v1', [])),
-        ),
-        side_index=int(battle_state.get('turn_revision', 0)),
-    )
-    if not result.get('accepted'):
-        return
-    updated_participants = {str(item.get('actor_id')): item for item in result['allies']}
-    battle_state['participant_states_v1'] = updated_participants
-    battle_state['enemy_states_v1'] = result['opponents']
-    _v1_log_events(battle_state, result['events'])
-    _sync_v1_to_legacy_projection(battle_state)
 
 
-def _dispatch_v1_enemy_action(action, *, battle_state: dict) -> None:
-    encounter_id = str(battle_state.get('pve_encounter_id') or '')
-    enemy_index = resolve_enemy_unit_index_for_participant(
-        encounter_id=encounter_id,
-        battle_state=battle_state,
-        participant_id=int(getattr(action, 'participant_id', 0) or 0),
-    )
-    enemies = list(battle_state.get('enemy_states_v1') or [])
-    if enemy_index is None or enemy_index >= len(enemies):
-        enemy_index = next((index for index, enemy in enumerate(enemies) if int(enemy.get('hp', 0)) > 0), None)
-    if enemy_index is None:
-        return
-    enemy = enemies[enemy_index]
-    players = list((battle_state.get('participant_states_v1') or {}).values())
-    chosen = choose_enemy_action(enemy, enemies)
-    result = evaluate_enemy_action(
-        enemy, enemies, players, chosen,
-        rng_seed=combat_seed(
-            battle_state.get('combat_seed'), battle_state.get('turn_revision', 0),
-            enemy.get('unit_id'), chosen.get('target_id'), len(battle_state.get('combat_events_v1', [])),
-        ),
-        side_index=int(battle_state.get('turn_revision', 0)),
-    )
-    if not result.get('accepted'):
-        return
-    battle_state['enemy_states_v1'] = result['allies']
-    battle_state['participant_states_v1'] = {
-        str(item.get('actor_id')): item for item in result['players']
-    }
-    _v1_log_events(battle_state, result['events'])
-    _sync_v1_to_legacy_projection(battle_state)
 
 
 def _run_group_enemy_side_action(
@@ -1835,7 +1749,7 @@ def _process_group_participant_death_consequences(
         if str(participant_id) not in death_penalties:
             participant_player_row = get_player(participant_id)
             if participant_player_row:
-                penalty = apply_death(participant_id, dict(participant_player_row))
+                penalty = apply_death(participant_id, dict(participant_player_row),encounter_id=encounter_id)
                 death_penalties[str(participant_id)] = penalty
 
         battle_state['player_dead'] = True
@@ -2528,3 +2442,5 @@ def _build_mastery_text(mastery_result: dict, lang: str) -> str:
     return text
 
 print('✅ handlers/battle.py создан!')
+
+from game.pve_live import (_v1_log_events, _sync_v1_to_legacy_projection, _dispatch_v1_player_action, _dispatch_v1_enemy_action)

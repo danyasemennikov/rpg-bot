@@ -78,12 +78,10 @@ def build_regional_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
     lang, player_id = player.get("lang", "ru"), int(player["telegram_id"])
     pins = list_pins(player_id)
     lines = [f"🧭 <b>{t('rav1.nav.home', lang)}</b>",
-             t("rav1.help.nonlinear", lang),
-             t("rav1.progress.no_global", lang), "",
+             t("pxe1.choose_direction", lang),
              f"📍 {get_location_name(player['location_id'], lang)}"]
     if pins:
-        lines.append("")
-        for pin in pins:
+        for pin in pins[:2]:
             if pin["owner_kind"] == "project":
                 label = _title("project", pin["owner_id"], lang)
             elif pin["owner_kind"] == "gear":
@@ -107,21 +105,21 @@ def build_regional_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
     if hunt:
         from game.quest_board import build_contract_title, get_hunt_contract
         contract = get_hunt_contract(str(hunt["contract_key"]))
-        lines += ["", f"🎯 {html.escape(str(build_contract_title(contract, lang) if contract else t('rav1.services.board', lang)))}"]
+        lines += [f"🎯 {html.escape(str(build_contract_title(contract, lang) if contract else t('rav1.services.board', lang)))}"]
     rows = [
-        [InlineKeyboardButton(t("rav1.nav.nearby", lang), callback_data="rv:v:n:0:all"),
-         InlineKeyboardButton(t("rav1.nav.leads", lang), callback_data="rv:v:l:0:all")],
         [InlineKeyboardButton(t("rav1.nav.pursuits", lang), callback_data="rv:v:p:0:all"),
-         InlineKeyboardButton(t("rav1.nav.regions", lang), callback_data="rv:v:r:0:all")],
+         InlineKeyboardButton(t("rav1.nav.nearby", lang), callback_data="quest_board_back")],
+        [InlineKeyboardButton(t("rav1.nav.regions", lang), callback_data="rv:v:r:0:all"),
+         InlineKeyboardButton(t("rav1.nav.leads", lang), callback_data="rv:v:l:0:all")],
         [InlineKeyboardButton(t("rav1.nav.resolved", lang), callback_data="rv:v:s:0:all"),
-         InlineKeyboardButton(t("rav1.nav.work", lang), callback_data="rv:v:w:0:all")],
-        [InlineKeyboardButton(t("rav1.nav.map", lang), callback_data=_map_callback(player)),
-         InlineKeyboardButton(t("rav1.nav.professions", lang), callback_data="pe_o:0")],
-        [InlineKeyboardButton(t("rav1.nav.equipment", lang), callback_data="inv_catalog"),
-         InlineKeyboardButton(t("rav1.nav.build", lang), callback_data="bv_main")],
-        [InlineKeyboardButton(t("rav1.nav.history", lang), callback_data="alpha_history")],
+         InlineKeyboardButton(t("pxe1.discoveries", lang), callback_data="rv:v:s:0:ww")],
+        [InlineKeyboardButton(t("rav1.nav.work", lang), callback_data="rv:v:w:0:all"),
+         InlineKeyboardButton(t("gear.back_btn", lang), callback_data="alpha_history")],
     ]
-    return "\n".join(lines), _journal_markup(rows)
+    keyboard = _journal_markup(rows)
+    from game.player_ui import validate_surface
+    validate_surface('\n'.join(lines), keyboard)
+    return "\n".join(lines), keyboard
 
 
 def _list_screen(player: dict, view: str, requested_page: int, region: str) -> tuple[str, InlineKeyboardMarkup]:
@@ -132,6 +130,8 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
         title, rows = t("rav1.nav.leads", lang), leads(player_id, region)
     elif view == "p":
         title, rows = t("rav1.nav.pursuits", lang), pursuits(player_id)
+        rows = [row for row in rows if (row['kind']=='project' and row.get('pinned') is not None)
+                or (row['kind']=='hunt' and row['status'] in {'active','completed'})]
     elif view == "r":
         title = t("rav1.nav.regions", lang)
         rows = [{"kind":"region","content_id":row["content_id"],"status":"available","data":row}
@@ -629,8 +629,12 @@ async def handle_regional_buttons(update, context):
     match = _VIEW_RE.fullmatch(data)
     if match:
         view, raw_page, region = match.groups()
-        text, keyboard = (build_regional_home(player) if view == "h"
-                          else _list_screen(player, view, int(raw_page), region))
+        if view == 'n':
+            from handlers.location import build_location_message
+            text, keyboard = build_location_message(player, get_location(player['location_id']))
+        else:
+            text, keyboard = (build_regional_home(player) if view == "h"
+                              else _list_screen(player, view, int(raw_page), region))
         await query.answer()
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
         return

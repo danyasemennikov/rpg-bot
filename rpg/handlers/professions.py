@@ -56,6 +56,9 @@ def _page(values, page, size=PAGE_SIZE):
 
 
 def _recipe_name(recipe, lang: str) -> str:
+    if recipe.output_spec.kind=='tool':
+        from game.profession_tools import TOOL_NAMES
+        return f"{t('pxe1.tool.tier.'+str(recipe.output_spec.tool_tier),lang)} · {t('pxe1.tool.'+TOOL_NAMES[recipe.output_spec.profession_key],lang)}"
     band = 1 if recipe.required_level <= 2 else recipe.required_level
     return f"{get_item_name(recipe.output_spec.item_id, lang)} · {t(f'professions.band_{band}', lang)}"
 
@@ -205,6 +208,11 @@ def build_recipe_list(player: dict, key: str, filter_key: str, page: int = 0):
 
 
 def build_recipe(player: dict, recipe_id: str):
+    from handlers.recipe_views import recipe_card
+    return recipe_card(player,recipe_id)
+
+
+def _legacy_recipe(player: dict, recipe_id: str):
     lang, player_id = player.get('lang', 'ru'), int(player['telegram_id'])
     recipe = get_recipe(recipe_id)
     if not recipe:
@@ -244,16 +252,18 @@ def build_recipe(player: dict, recipe_id: str):
         lines.append(t('professions.gear_output', lang, tier=recipe.output_spec.item_tier,
                        rarity=t(f'professions.rarity_{recipe.output_spec.rarity}', lang)))
         lines.append(t(f'professions.secondary_{recipe.output_spec.secondary_policy}', lang))
-    else:
+    elif recipe.output_spec.kind != 'tool':
         bonuses = json.loads(str(output_item.get('stat_bonus_json') or '{}'))
         lines.append(t('professions.recovery_output', lang,
                        hp=int(bonuses.get('heal', 0)), mana=int(bonuses.get('mana', 0))))
-    lines.append(t('professions.output_sale', lang, gold=int(output_item.get('sell_price', 0))))
+    if recipe.output_spec.kind != 'tool':
+        lines.append(t('professions.output_sale',lang,gold=int(output_item.get('sell_price',0))))
     lines.append(t('professions.recipe_xp_ceiling', lang, ceiling=recipe.training_ceiling))
     xp_award = crafting_xp_for_success(
         current_level=int(state['level']),
         current_exp=int(state['exp']),
         recipe_level=recipe.required_level,
+        material_value=recipe.material_value,
     )
     if xp_award:
         lines.append(t('professions.recipe_xp_award', lang, xp=xp_award))
@@ -263,7 +273,16 @@ def build_recipe(player: dict, recipe_id: str):
                  and _peaceful_guild_access(player_id))
     lines.append(t('professions.craftable' if can_craft else 'professions.not_craftable', lang))
     if known:
-        payload = recipe_intent_payload(recipe_id)
+        tool_revision = None
+        if recipe.output_spec.kind=='tool':
+            from game.profession_tools import get_tool
+            conn = get_connection()
+            try:
+                tool = get_tool(conn,player_id,recipe.output_spec.profession_key)
+                tool_revision = tool['revision'] if tool else None
+            finally:
+                conn.close()
+        payload = recipe_intent_payload(recipe_id,tool_revision=tool_revision)
         token = issue_actions(player_id, 'craft', [payload]).get(payload)
         if token: rows.append([InlineKeyboardButton(t('professions.craft', lang), callback_data=f'pe_a:{token}')])
     elif int(state['level']) >= recipe.required_level:
@@ -344,8 +363,13 @@ def _receipt_lines(receipt: dict, lang: str) -> list[str]:
     for key in ('consumed', 'granted'):
         values = receipt.get(key) or []
         lines.append(t(f'professions.receipt_{key}', lang))
-        lines.extend(f"• {escape(get_item_name(value.get('item_id'), lang))} ×{int(value.get('quantity', 0))}"
-                     for value in values)
+        for value in values:
+            if value.get('kind')=='tool':
+                from game.profession_tools import TOOL_NAMES
+                name = t('pxe1.tool.'+TOOL_NAMES[value['profession_key']],lang)+' · '+t('pxe1.tool.tier.'+str(value['tool_tier']),lang)
+            else:
+                name = get_item_name(value.get('item_id'),lang)
+            lines.append(f"• {escape(name)} ×{int(value.get('quantity',0))}")
         if not values:
             lines.append(t('professions.none', lang))
         for value in values:
@@ -419,6 +443,10 @@ async def handle_profession_buttons(update, context):
             _, key, page = data.split(':'); view = build_resource_list(player, key, int(page))
         elif data.startswith('pe_l:'):
             _, key, filter_key, page = data.split(':'); view = build_recipe_list(player, key, filter_key, int(page))
+        elif data.startswith(('pe_details:','pe_inputs:','pe_commission:')):
+            from handlers.recipe_views import recipe_card
+            prefix,recipe_id,*page = data.split(':')
+            view = recipe_card(player,recipe_id,details=prefix=='pe_details',commission=prefix=='pe_commission',inputs_page=int(page[0]) if page else None)
         elif data.startswith('pe_r:'):
             view = build_recipe(player, data.split(':', 1)[1])
         elif data.startswith('pe_m:'):
@@ -455,4 +483,7 @@ async def handle_profession_buttons(update, context):
     except (ValueError, KeyError):
         notice = t('professions.stale_action', lang); view = build_overview(player)
     await query.answer(notice or '')
-    await query.edit_message_text(view[0][:3600], reply_markup=view[1], parse_mode='HTML')
+    from game.player_feedback import inline_feedback,acknowledge_presented_facts
+    text,keys = inline_feedback(player['telegram_id'],lang,view[0]) if data.startswith('pe_a:') else (view[0],[])
+    await query.edit_message_text(text, reply_markup=view[1], parse_mode='HTML')
+    acknowledge_presented_facts(player['telegram_id'],keys)

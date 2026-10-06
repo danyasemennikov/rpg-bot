@@ -108,8 +108,10 @@ def clear_respawn_protection_on_dangerous_reentry(*, player_id: int, location_id
         clear_respawn_protection(player_id=player_id)
 
 
-def is_recent_retaliation_context(*, attacker_id: int, defender_id: int, window_minutes: int = RECENT_AGGRESSOR_WINDOW_MINUTES) -> bool:
-    conn = get_connection()
+def is_recent_retaliation_context(*, attacker_id: int, defender_id: int, window_minutes: int = RECENT_AGGRESSOR_WINDOW_MINUTES, conn=None) -> bool:
+    owns = conn is None
+    if owns:
+        conn = get_connection()
     row = conn.execute(
         '''
         SELECT id
@@ -121,12 +123,15 @@ def is_recent_retaliation_context(*, attacker_id: int, defender_id: int, window_
         ''',
         (defender_id, attacker_id, f'-{int(window_minutes)} minutes'),
     ).fetchone()
-    conn.close()
+    if owns:
+        conn.close()
     return bool(row)
 
 
-def count_recent_repeat_kills(*, winner_id: int, loser_id: int, window_minutes: int) -> int:
-    conn = get_connection()
+def count_recent_repeat_kills(*, winner_id: int, loser_id: int, window_minutes: int, conn=None) -> int:
+    owns = conn is None
+    if owns:
+        conn = get_connection()
     row = conn.execute(
         '''
         SELECT COUNT(1) AS total
@@ -141,17 +146,18 @@ def count_recent_repeat_kills(*, winner_id: int, loser_id: int, window_minutes: 
         ''',
         (winner_id, winner_id, loser_id, loser_id, winner_id, f'-{int(window_minutes)} minutes'),
     ).fetchone()
-    conn.close()
+    if owns:
+        conn.close()
     return int(row['total'] or 0) if row else 0
 
 
-def resolve_illegal_aggression_infamy(*, attacker: dict, defender: dict, location_id: str | None) -> int:
+def resolve_illegal_aggression_infamy(*, attacker: dict, defender: dict, location_id: str | None, conn=None) -> int:
     if not is_aggression_illegal(attacker=attacker, defender=defender, location_id=location_id):
         return 0
     infamy = BASE_INFAMY_ILLEGAL_GUARDED_AGGRESSION
     attacker_id = int(attacker.get('telegram_id', 0) or 0)
     defender_id = int(defender.get('telegram_id', 0) or 0)
-    if attacker_id and defender_id and is_recent_retaliation_context(attacker_id=attacker_id, defender_id=defender_id):
+    if attacker_id and defender_id and is_recent_retaliation_context(attacker_id=attacker_id, defender_id=defender_id, conn=conn):
         infamy = 1
     return infamy
 
@@ -164,6 +170,8 @@ def resolve_kill_infamy_delta(
     initial_target: dict | None = None,
     location_id: str | None,
     repeat_kill_count: int,
+    conn=None,
+    retaliation_context: bool | None = None,
 ) -> int:
     initiator_row = initiator or winner
     target_row = initial_target or loser
@@ -175,10 +183,12 @@ def resolve_kill_infamy_delta(
             infamy += EXTRA_INFAMY_PROTECTED_TARGET_KILL
         if repeat_kill_count > 0:
             infamy += min(MAX_EXTRA_INFAMY_REPEAT_HARASSMENT, repeat_kill_count)
-        if is_recent_retaliation_context(
+        retaliation = retaliation_context if retaliation_context is not None else is_recent_retaliation_context(
             attacker_id=int(initiator_row['telegram_id']),
             defender_id=int(target_row['telegram_id']),
-        ):
+            conn=conn,
+        )
+        if retaliation:
             infamy = max(1, infamy - 1)
         return infamy
     return 0

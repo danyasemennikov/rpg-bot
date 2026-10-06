@@ -60,6 +60,8 @@ async def handle_settings_buttons(update: Update, context: ContextTypes.DEFAULT_
             text=t('settings.language_set', new_lang),
             reply_markup=main_keyboard(new_lang)
         )
+        from game.player_ui import mark_menu_installed
+        mark_menu_installed(user.id,new_lang)
 
         text, keyboard = build_settings(user.id, new_lang)
         try:

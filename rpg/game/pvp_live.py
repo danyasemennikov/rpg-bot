@@ -129,6 +129,16 @@ def _ensure_reinforcement_table(*, conn=None) -> None:
 
 
 def _is_player_busy_with_live_pvp_conn(conn, *, player_id: int) -> bool:
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name='pvp_participant_settlements_pxe1'").fetchone():
+        row = conn.execute('''SELECT e.id FROM pvp_engagements e
+            WHERE e.engagement_state IN ('pending','active','converted_to_battle')
+            AND (e.attacker_id=? OR e.defender_id=? OR EXISTS(
+                SELECT 1 FROM pvp_engagement_reinforcements r WHERE r.engagement_id=e.id
+                AND r.ally_id=? AND r.status IN ('accepted','locked')))
+            AND (e.world_model_version=0 OR NOT EXISTS(
+                SELECT 1 FROM pvp_participant_settlements_pxe1 s WHERE s.engagement_id=e.id AND s.player_id=?))
+            LIMIT 1''', (player_id,player_id,player_id,player_id)).fetchone()
+        return bool(row)
     row = conn.execute(
         '''
         SELECT id FROM pvp_engagements
@@ -169,6 +179,22 @@ def _row_to_engagement(row) -> OpenWorldPvpEngagement:
 
 
 def create_live_engagement(*, attacker: dict, defender: dict, location_id: str, illegal_aggression: bool) -> int:
+    from game.pvp_world import create_preparation
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        engagement_id = create_preparation(conn, attacker_id=int(attacker['telegram_id']),
+            defender_id=int(defender['telegram_id']), location_id=location_id, now_ms=int(_utc_now().timestamp()*1000))
+        conn.commit()
+        return engagement_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _create_legacy_live_engagement(*, attacker: dict, defender: dict, location_id: str, illegal_aggression: bool) -> int:
     _ensure_reinforcement_table()
     engagement = create_open_world_pvp_engagement(
         attacker_id=int(attacker['telegram_id']),
@@ -210,6 +236,24 @@ def create_live_engagement(*, attacker: dict, defender: dict, location_id: str, 
 
 
 def can_create_live_engagement(*, attacker_id: int, defender_id: int) -> tuple[bool, str | None]:
+    from game.player_activity import player_activity
+    from game.action_receipts import ActionRejected
+    conn = get_connection()
+    try:
+        activity = player_activity(conn, attacker_id)
+        if activity:
+            return False, 'attacker_busy'
+        activity = player_activity(conn, defender_id)
+        if activity and activity['kind'] not in {'travel','gather'}:
+            return False, 'defender_busy'
+        return True, None
+    except ActionRejected:
+        return False, 'missing_player'
+    finally:
+        conn.close()
+
+
+def _can_create_legacy_live_engagement(*, attacker_id: int, defender_id: int) -> tuple[bool, str | None]:
     _ensure_reinforcement_table()
     conn = get_connection()
     attacker = conn.execute(
@@ -273,12 +317,16 @@ def get_pending_player_engagement(player_id: int):
     row = conn.execute(
         '''
         SELECT * FROM pvp_engagements
-        WHERE (attacker_id=? OR defender_id=?)
+        WHERE (attacker_id=? OR defender_id=? OR EXISTS(
+            SELECT 1 FROM pvp_engagement_reinforcements r WHERE r.engagement_id=pvp_engagements.id
+            AND r.ally_id=? AND r.membership_version=1 AND r.status IN ('accepted','locked')))
           AND engagement_state IN (?, ?, ?)
+          AND (world_model_version=0 OR NOT EXISTS(
+              SELECT 1 FROM pvp_participant_settlements_pxe1 s WHERE s.engagement_id=pvp_engagements.id AND s.player_id=?))
         ORDER BY id DESC
         LIMIT 1
         ''',
-        (player_id, player_id, ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE),
+        (player_id, player_id, player_id, ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE,player_id),
     ).fetchone()
     conn.close()
     return row
@@ -656,6 +704,13 @@ def _is_reinforcement_eligibility_blocked(
 
 
 def can_join_pending_encounter_side(*, engagement_row, player_id: int, side: str) -> tuple[bool, str | None]:
+    if engagement_row['world_model_version'] == 1:
+        conn = get_connection()
+        try:
+            invite = conn.execute("SELECT 1 FROM pvp_engagement_reinforcements WHERE engagement_id=? AND ally_id=? AND side=? AND membership_version=1 AND status='pending'", (engagement_row['id'],player_id,side)).fetchone()
+            return (True,None) if invite else (False,'invitation_required')
+        finally:
+            conn.close()
     if side not in REINFORCEMENT_SIDES:
         return False, 'invalid_side'
     if str(engagement_row['engagement_state']) != ENGAGEMENT_STATE_PENDING:
@@ -699,6 +754,15 @@ def can_join_pending_encounter_side(*, engagement_row, player_id: int, side: str
 
 
 def join_pending_encounter_side(*, engagement_row, player_id: int, side: str) -> tuple[bool, str | None]:
+    if engagement_row['world_model_version'] == 1:
+        principal = engagement_row['attacker_id'] if side == 'initiator' else engagement_row['defender_id']
+        conn = get_connection()
+        invite = conn.execute("SELECT 1 FROM pvp_engagement_reinforcements WHERE engagement_id=? AND ally_id=? AND inviter_id=? AND side=? AND status='pending' AND membership_version=1",
+            (engagement_row['id'],player_id,principal,side)).fetchone()
+        conn.close()
+        if not invite:
+            return False, 'invitation_required'
+        return respond_to_reinforcement_invite(engagement_id=engagement_row['id'],ally_id=player_id,accepted=True)
     ok, reason = can_join_pending_encounter_side(engagement_row=engagement_row, player_id=player_id, side=side)
     if not ok:
         return False, reason
@@ -717,6 +781,9 @@ def join_pending_encounter_side(*, engagement_row, player_id: int, side: str) ->
 
 
 def invite_reinforcement_ally(*, engagement_row, inviter_id: int, ally_id: int) -> tuple[bool, str | None]:
+    if engagement_row['world_model_version'] == 1:
+        from game.pvp_world import invite
+        return _pxe1_membership_mutation(invite, engagement_id=engagement_row['id'],principal_id=inviter_id,ally_id=ally_id)
     reason = _is_reinforcement_eligibility_blocked(
         engagement_row=engagement_row,
         inviter_id=inviter_id,
@@ -740,6 +807,12 @@ def invite_reinforcement_ally(*, engagement_row, inviter_id: int, ally_id: int) 
 
 
 def respond_to_reinforcement_invite(*, engagement_id: int, ally_id: int, accepted: bool) -> tuple[bool, str | None]:
+    conn = get_connection()
+    row = conn.execute('SELECT world_model_version FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
+    conn.close()
+    if row and row['world_model_version'] == 1:
+        from game.pvp_world import respond
+        return _pxe1_membership_mutation(respond,engagement_id=engagement_id,ally_id=ally_id,accepted=accepted)
     _ensure_reinforcement_table()
     conn = get_connection()
     engagement_row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
@@ -860,6 +933,33 @@ def list_reinforcement_candidates(*, engagement_row, inviter_id: int, limit: int
     side = _resolve_side_for_player(engagement_row=engagement_row, player_id=inviter_id)
     if side is None or str(engagement_row['engagement_state']) != ENGAGEMENT_STATE_PENDING:
         return []
+    if engagement_row['world_model_version'] == 1:
+        from game.action_receipts import ActionRejected
+        from game.pvp_world import invite
+        conn = get_connection()
+        try:
+            candidates = conn.execute('SELECT telegram_id,name,level FROM players WHERE location_id=? AND telegram_id NOT IN (?,?) ORDER BY level DESC,telegram_id LIMIT 20',
+                (engagement_row['location_id'],engagement_row['attacker_id'],engagement_row['defender_id'])).fetchall()
+            result = []
+            # Preview the exact mutation in a rollback-only writer; no second
+            # eligibility policy and no invitation/flag writes escape preview.
+            conn.execute('BEGIN IMMEDIATE')
+            for candidate in candidates:
+                conn.execute('SAVEPOINT invitation_preview')
+                try:
+                    invite(conn,engagement_id=engagement_row['id'],principal_id=inviter_id,ally_id=candidate['telegram_id'],now_ms=int(_utc_now().timestamp()*1000))
+                    result.append(dict(candidate))
+                except ActionRejected:
+                    pass
+                finally:
+                    conn.execute('ROLLBACK TO invitation_preview')
+                    conn.execute('RELEASE invitation_preview')
+                if len(result)>=limit:
+                    break
+            conn.rollback()
+            return result
+        finally:
+            conn.close()
     _ensure_reinforcement_table()
     conn = get_connection()
     rows = conn.execute(
@@ -893,6 +993,19 @@ def advance_engagement_to_live_battle_if_ready(engagement_row, *, now: datetime 
     if not engagement_row:
         return 'missing', {}
     check_now = now or _utc_now()
+    if engagement_row['world_model_version'] == 1:
+        from game.pvp_world import lock_preparation
+        conn = get_connection()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            result = lock_preparation(conn,engagement_id=engagement_row['id'],now_ms=int(check_now.timestamp()*1000))
+            conn.commit()
+            return result
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     engagement = _row_to_engagement(engagement_row)
     payload = _deserialize_reason_context(engagement_row['reason_context'])
     updated = activate_engagement_if_ready(engagement, now=check_now)
@@ -923,9 +1036,25 @@ def advance_engagement_to_live_battle_if_ready(engagement_row, *, now: datetime 
     return ENGAGEMENT_STATE_CONVERTED_TO_BATTLE, payload
 
 
-def resolve_engagement_escape(engagement_row, *, escape_succeeded: bool) -> tuple[str, bool]:
+def resolve_engagement_escape(engagement_row, *, escape_succeeded: bool | None = None, actor_id: int | None=None, action_token: str | None=None) -> tuple[str, bool]:
     if not engagement_row:
         return 'missing', False
+    if engagement_row['world_model_version'] == 1:
+        from game.action_receipts import ActionRejected
+        from game.pvp_world import attempt_escape
+        if actor_id is None or action_token is None:
+            raise ActionRejected('stale_action')
+        conn = get_connection()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            result = attempt_escape(conn,engagement_id=engagement_row['id'],actor_id=actor_id,token=action_token,now_ms=int(_utc_now().timestamp()*1000))
+            conn.commit()
+            return result['state'], result['state']=='converted_to_battle'
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     engagement = _row_to_engagement(engagement_row)
     payload = _deserialize_reason_context(engagement_row['reason_context'])
     updated, should_start_battle = resolve_escape_attempt(
@@ -1308,7 +1437,34 @@ def _resolve_v1_pvp_submission(
     return True
 
 
-def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_id: str | None) -> tuple[str, dict]:
+def resolve_live_battle_turn(engagement_row, *, actor_id: int, selected_action_id: str | None, target_id: int | None=None) -> tuple[str, dict]:
+    if engagement_row['world_model_version'] == 1:
+        from game.action_receipts import ActionRejected
+        from game.pvp_group_runtime import locked_sides, living, resolve_group_turn
+        conn = get_connection()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            current = conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement_row['id'],)).fetchone()
+            context = _deserialize_reason_context(current['reason_context'])
+            battle = context.get('battle') or {}
+            selected = None
+            if selected_action_id:
+                sides = locked_sides(current)
+                opposite = 'side_b' if actor_id in sides['side_a'] else 'side_a'
+                opponents = living(battle,sides[opposite])
+                chosen_target = target_id if target_id is not None else next(iter(opponents),actor_id)
+                selected = _v1_action_payload(selected_action_id,actor_id=actor_id,target_id=chosen_target)
+            result = resolve_group_turn(conn,engagement_id=current['id'],actor_id=actor_id,action=selected,now_ms=int(_utc_now().timestamp()*1000))
+            conn.commit()
+            return result
+        except ActionRejected as exc:
+            conn.rollback()
+            return str(exc), context
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     payload = _deserialize_reason_context(engagement_row['reason_context'])
     battle = payload.get('battle') or {}
     if battle.get('state') != PVP_BATTLE_STATE_LIVE:
@@ -1885,7 +2041,7 @@ def apply_illegal_aggression_penalties(*, attacker_id: int) -> None:
     defender_id = None
     current_row = conn.execute(
         '''
-        SELECT defender_id, location_id
+        SELECT defender_id, location_id, world_model_version
         FROM pvp_engagements
         WHERE attacker_id=?
           AND engagement_state IN (?, ?, ?)
@@ -1896,6 +2052,9 @@ def apply_illegal_aggression_penalties(*, attacker_id: int) -> None:
     ).fetchone()
     location_id = None
     if current_row:
+        if current_row['world_model_version'] == 1:
+            conn.close()
+            return  # Creation/consent already charged within its writer.
         defender_id = int(current_row['defender_id'])
         location_id = str(current_row['location_id'])
     defender = conn.execute('SELECT * FROM players WHERE telegram_id=?', (defender_id,)).fetchone() if defender_id else None
@@ -1915,6 +2074,24 @@ def apply_illegal_aggression_penalties(*, attacker_id: int) -> None:
     )
     conn.commit()
     conn.close()
+
+
+def _pxe1_membership_mutation(operation, **kwargs):
+    from game.action_receipts import ActionRejected
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        operation(conn,now_ms=int(_utc_now().timestamp()*1000),**kwargs)
+        conn.commit()
+        return True, None
+    except ActionRejected as exc:
+        conn.rollback()
+        return False, str(exc)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
@@ -1943,6 +2120,24 @@ def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
         battle = payload.get('battle') or {}
         if battle.get('state') != PVP_BATTLE_STATE_LIVE:
             continue
+        if row['world_model_version'] == 1:
+            from game.pvp_group_runtime import resolve_group_turn
+            from game.pvp_world import milliseconds
+            if int(check_now.timestamp()*1000) < milliseconds(battle['side_deadline_at']):
+                continue
+            conn = get_connection()
+            try:
+                conn.execute('BEGIN IMMEDIATE')
+                status, updated_payload = resolve_group_turn(conn,engagement_id=row['id'],now_ms=int(check_now.timestamp()*1000))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+            if status in {'resolved','finished'}:
+                events.append({'type':'turn_auto_resolved','row':row,'payload':updated_payload,'status':status})
+            continue
         runtime_state = _ensure_live_runtime_for_battle(
             engagement_row=row,
             battle=battle,
@@ -1960,6 +2155,9 @@ def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
 async def run_live_pvp_tick(bot) -> None:
     for event in process_live_pvp_due_events():
         row = event['row']
+        if row['world_model_version'] == 1:
+            await _deliver_pxe1_pvp_event(bot,event)
+            continue
         if event['type'] == 'engagement_live':
             for player_id in (int(row['attacker_id']), int(row['defender_id'])):
                 lang = get_player_lang(player_id)
@@ -1976,10 +2174,45 @@ async def run_live_pvp_tick(bot) -> None:
                 winner_id = int(row['defender_id'])
             for player_id in (int(row['attacker_id']), int(row['defender_id'])):
                 lang = get_player_lang(player_id)
-                msg_key = 'location.pvp_battle_finished'
-                if winner_id == player_id:
-                    msg_key = 'location.pvp_win_notice'
+                msg_key = 'location.pvp_win_notice' if winner_id == player_id else 'location.pvp_battle_finished'
                 try:
-                    await bot.send_message(player_id, t(msg_key, lang))
+                    await bot.send_message(player_id,t(msg_key,lang))
                 except Exception:
                     pass
+
+
+async def _deliver_pxe1_pvp_event(bot,event):
+    """Committed members receive their own card; deaths receive hub results."""
+    from handlers.pvp_group import live_card
+    from game.i18n import get_location_name
+    battle = (event.get('payload') or {}).get('battle') or {}
+    conn = get_connection()
+    try:
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(event['row']['id'],)).fetchone()
+        receipts = {r['player_id']:json.loads(r['result_json']) for r in conn.execute('SELECT player_id,result_json FROM pvp_participant_settlements_pxe1 WHERE engagement_id=?',(row['id'],))}
+        group_row = conn.execute('SELECT result_json FROM pvp_group_settlements_pxe1 WHERE engagement_id=?',(row['id'],)).fetchone()
+        group = json.loads(group_row['result_json']) if group_row else None
+        side_result = conn.execute("SELECT result_json FROM combat_turn_results_v1 WHERE encounter_kind='pvp' AND encounter_id=? ORDER BY turn_revision DESC LIMIT 1",(str(row['id']),)).fetchone()
+        newly_dead = {d['player_id'] for d in json.loads(side_result['result_json']).get('deaths',[])} if side_result else set()
+    finally:
+        conn.close()
+    for raw_id,actor in battle.get('participants_v1',{}).items():
+        player_id = int(raw_id)
+        lang = get_player_lang(player_id)
+        keyboard = None
+        if player_id in receipts and player_id not in newly_dead:
+            continue  # A prior death never receives another live prompt.
+        if player_id in newly_dead:
+            death = receipts[player_id]
+            text = t('location.pvp_personal_death',lang,hub=get_location_name(death['respawn_hub'],lang),
+                     quantity=sum(death['loss_pool'].values()),hp=death['hp_after'],mana=death['mana_after'])
+        elif group:
+            quantity = sum(g['quantity'] for g in group['grants'] if g['recipient_id']==player_id)
+            text = t('location.pvp_personal_result',lang,hp=actor['hp'],mana=actor['mana'],quantity=quantity)
+        else:
+            text,keyboard = live_card(row,event['payload'],player_id,lang)
+        try:
+            await bot.send_message(player_id,text,reply_markup=keyboard,parse_mode='HTML')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('PvP delivery failed for player %s',player_id)

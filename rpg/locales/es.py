@@ -696,6 +696,21 @@ STRINGS = {
         ),
     },
 }
+
+STRINGS['common']['refresh'] = '🔄 Actualizar'
+STRINGS['keyboard']['activities'] = '🧰 Actividades'
+STRINGS['keyboard']['profile'] = '👤 Personaje'
+STRINGS['pxe1'] = {'menu_home':'👤 <b>{name}</b>\n📍 {location}\nElige dónde comienza tu próxima aventura.'}
+from locales.pxe1 import PXE1_STRINGS
+STRINGS['pxe1'].update(PXE1_STRINGS['es'])
+STRINGS['location'].update({
+    'pvp_leave_prep':'Salir de la preparación',
+    'pvp_reinforcement_status_locked':'en combate',
+    'pvp_reinforcement_status_left':'salió',
+    'pvp_reinforcement_status_revoked':'revocada',
+    'pvp_personal_death':'Derrota · regreso a {hub}\nPV {hp} · PM {mana}\nMateriales perdidos: {quantity}\nProtección tras revivir: 8 minutos',
+    'pvp_personal_result':'JcJ terminado\nPV {hp} · PM {mana}\nMateriales recibidos: {quantity}',
+})
 from locales.professions import STRINGS as _PROFESSION_STRINGS
 STRINGS['professions'] = _PROFESSION_STRINGS['es']
 from locales.rav1_es import STRINGS as _RAV1_STRINGS
