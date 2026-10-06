@@ -2,6 +2,7 @@
 
 PXE1_STRINGS = {
     'en': {
+        'membership':{'invite':'Invite ally','attacking':'Acceptance commits you to the attacking side until combat starts or you leave.','side_count':'{name}: {count}/2 · invited: {invited}', 'join_side': "Join {name}'s side", 'recovered': 'Recorded outcome: {outcome}.', 'pending': 'Invited', 'accepted': 'Accepted', 'rejected': 'Declined', 'revoked': 'Revoked', 'left': 'Left'},
         'open_assignment':'Open assignment','accept_assignment':'Accept assignment','assignment_available':'Available assignment',
         'required_recipe':'Required recipe','sources':'Sources','story':'Story','more':'More',
         'route_to':'Route to {name}','chapter_slot_busy':'Finish or abandon this hunt before accepting Chapter work.',
@@ -76,6 +77,7 @@ PXE1_STRINGS = {
             'settings':'Language and settings','help':'Commands and help'},
     },
     'ru': {
+        'membership':{'invite':'Пригласить союзника','attacking':'Принятие закрепляет вас за атакующей стороной до начала боя или выхода.','side_count':'{name}: {count}/2 · приглашений: {invited}', 'join_side': 'На сторону {name}', 'recovered': 'Сохранённый результат: {outcome}.', 'pending': 'Приглашение отправлено', 'accepted': 'Принято', 'rejected': 'Отклонено', 'revoked': 'Отозвано', 'left': 'Выход выполнен'},
         'open_assignment':'Открыть задание','accept_assignment':'Принять задание','assignment_available':'Доступное задание',
         'required_recipe':'Нужный рецепт','sources':'Источники','story':'История задания','more':'Ещё',
         'route_to':'Маршрут: {name}','chapter_slot_busy':'Завершите или отмените охоту, чтобы принять задание Главы.',
@@ -150,6 +152,7 @@ PXE1_STRINGS = {
             'settings':'Язык и настройки','help':'Команды и помощь'},
     },
     'es': {
+        'membership':{'invite':'Invitar aliado','attacking':'Aceptar te compromete con el bando atacante hasta que empiece el combate o salgas.','side_count':'{name}: {count}/2 · invitaciones: {invited}', 'join_side': 'Unirse al bando de {name}', 'recovered': 'Resultado guardado: {outcome}.', 'pending': 'Invitación enviada', 'accepted': 'Aceptada', 'rejected': 'Rechazada', 'revoked': 'Revocada', 'left': 'Salida completada'},
         'open_assignment':'Abrir misión','accept_assignment':'Aceptar misión','assignment_available':'Misión disponible',
         'required_recipe':'Receta necesaria','sources':'Fuentes','story':'Historia','more':'Más',
         'route_to':'Ruta a {name}','chapter_slot_busy':'Termina o abandona esta cacería antes de aceptar una misión del Capítulo.',
@@ -268,3 +271,6 @@ PXE1_SHOP_STRINGS = {
 }
 for _lang,_strings in PXE1_SHOP_STRINGS.items():
     PXE1_STRINGS[_lang]['shop'] = _strings
+
+for _lang,_expired in {'en':'Invitation expired','ru':'Приглашение истекло','es':'La invitación caducó'}.items():
+    PXE1_STRINGS[_lang]['membership']['expired'] = _expired

@@ -142,3 +142,96 @@ def test_invalid_principal_cancels_invalid_ally_expires():
     assert state=='converted_to_battle'
     assert conn.execute('SELECT status FROM pvp_engagement_reinforcements WHERE ally_id=2').fetchone()[0]=='expired'
     conn.close()
+
+
+def membership_token(conn,e,actor,operation,**choice):
+    row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(e,)).fetchone()
+    payload=encoded({'schema_version':1,'catalog_version':2,'engagement_id':e,'state_revision':row['state_revision'],'operation':operation,**choice})
+    return issue_actions(actor,'pvp_membership_pxe1',[payload])[payload]
+
+
+def apply_choice(conn,actor,token,now=1001000):
+    from game.pvp_world import apply_membership_intent
+    conn.execute('BEGIN IMMEDIATE')
+    result=apply_membership_intent(conn,actor_id=actor,token=token,now_ms=now)
+    conn.commit();return result
+
+
+def test_opaque_membership_receipts_replay_before_move_cleanup_and_lock():
+    conn,e=prepare()
+    with patch('time.time',return_value=1001):
+        token=membership_token(conn,e,1,'invite',ally_id=2)
+        invited=apply_choice(conn,1,token)
+        assert invited['outcome']=='pending'
+        receipt=conn.execute('SELECT schema_version,catalog_version FROM economy_action_receipts WHERE player_id=1 AND request_id=?',('ui:'+token,)).fetchone()
+        assert tuple(receipt)==(1,2)
+        accept=membership_token(conn,e,2,'accept',reinforcement_id=invited['reinforcement_id'])
+        result=apply_choice(conn,2,accept)
+        actor_after=dict(conn.execute('SELECT * FROM players WHERE telegram_id=2').fetchone())
+        conn.execute('BEGIN IMMEDIATE');lock_preparation(conn,engagement_id=e,now_ms=1300000);conn.commit()
+        conn.execute('DELETE FROM player_ui_actions');conn.execute("UPDATE players SET location_id='capital_city',travel_revision=travel_revision+1 WHERE telegram_id=2");conn.commit()
+        replay=apply_choice(conn,2,accept,now=999999999)
+        assert {k:v for k,v in replay.items() if k!='recovered'}==result
+        assert replay['recovered']
+        current=dict(conn.execute('SELECT * FROM players WHERE telegram_id=2').fetchone())
+        assert current['infamy']==actor_after['infamy']
+        assert current['gold']==actor_after['gold'] and current['exp']==actor_after['exp']
+        assert conn.execute('SELECT COUNT(*) FROM pvp_engagement_reinforcements').fetchone()[0]==1
+    conn.close()
+
+
+def test_membership_state_revision_actor_and_reinforcement_bindings():
+    from game.pvp_world import apply_membership_intent
+    conn,e=prepare()
+    with patch('time.time',return_value=1001):
+        invitation=apply_choice(conn,1,membership_token(conn,e,1,'invite',ally_id=2))
+        accept=membership_token(conn,e,2,'accept',reinforcement_id=invitation['reinforcement_id'])
+        conn.execute('BEGIN IMMEDIATE')
+        with pytest.raises(ActionRejected): apply_membership_intent(conn,actor_id=3,token=accept,now_ms=1001000)
+        conn.rollback()
+        conn.execute('BEGIN IMMEDIATE');invite(conn,engagement_id=e,principal_id=777,ally_id=3,now_ms=1001000);conn.commit()
+        conn.execute('BEGIN IMMEDIATE')
+        with pytest.raises(ActionRejected,match='stale_action'): apply_membership_intent(conn,actor_id=2,token=accept,now_ms=1001000)
+        conn.rollback()
+        wrong=membership_token(conn,e,3,'accept',reinforcement_id=invitation['reinforcement_id'])
+        conn.execute('BEGIN IMMEDIATE')
+        with pytest.raises(ActionRejected,match='not_participant'): apply_membership_intent(conn,actor_id=3,token=wrong,now_ms=1001000)
+        conn.rollback()
+    assert not conn.execute("SELECT 1 FROM pvp_engagement_reinforcements WHERE status='accepted'").fetchone()
+    conn.close()
+
+
+def test_membership_crime_and_receipt_roll_back_together():
+    from game.pvp_world import apply_membership_intent
+    conn,e=prepare()
+    with patch('time.time',return_value=1001):
+        invitation=apply_choice(conn,1,membership_token(conn,e,1,'invite',ally_id=2))
+        accept=membership_token(conn,e,2,'accept',reinforcement_id=invitation['reinforcement_id'])
+        before=tuple(conn.execute('SELECT infamy,red_flag,exp,gold FROM players WHERE telegram_id=2').fetchone())
+        conn.execute('BEGIN IMMEDIATE')
+        with patch('game.pvp_world.store_receipt',side_effect=RuntimeError('before receipt')):
+            with pytest.raises(RuntimeError): apply_membership_intent(conn,actor_id=2,token=accept,now_ms=1001000)
+        conn.rollback()
+        assert tuple(conn.execute('SELECT infamy,red_flag,exp,gold FROM players WHERE telegram_id=2').fetchone())==before
+        assert conn.execute('SELECT status FROM pvp_engagement_reinforcements WHERE id=?',(invitation['reinforcement_id'],)).fetchone()[0]=='pending'
+        assert conn.execute('SELECT used FROM player_ui_actions WHERE token=?',(accept,)).fetchone()[0]==0
+        assert apply_choice(conn,2,accept)['outcome']=='accepted'
+    conn.close()
+
+
+def test_bound_leave_after_deadline_before_start_and_revoke_decline_receipts():
+    conn,e=prepare()
+    with patch('time.time',return_value=1001):
+        invitation=apply_choice(conn,1,membership_token(conn,e,1,'invite',ally_id=2))
+        assert apply_choice(conn,2,membership_token(conn,e,2,'accept',reinforcement_id=invitation['reinforcement_id']))['outcome']=='accepted'
+        leave=membership_token(conn,e,2,'leave',reinforcement_id=invitation['reinforcement_id'])
+        result=apply_choice(conn,2,leave,now=1301000)
+        assert result['outcome']=='left'
+        invitation=apply_choice(conn,1,membership_token(conn,e,1,'invite',ally_id=3))
+        assert apply_choice(conn,1,membership_token(conn,e,1,'revoke',ally_id=3,reinforcement_id=invitation['reinforcement_id']))['outcome']=='revoked'
+        invitation=apply_choice(conn,777,membership_token(conn,e,777,'invite',ally_id=4))
+        assert apply_choice(conn,4,membership_token(conn,e,4,'decline',reinforcement_id=invitation['reinforcement_id']))['outcome']=='rejected'
+    conn.execute('BEGIN IMMEDIATE');lock_preparation(conn,engagement_id=e,now_ms=1301000);conn.commit()
+    roster=json.loads(conn.execute('SELECT locked_roster_json FROM pvp_engagements WHERE id=?',(e,)).fetchone()[0])
+    assert len(roster['side_a'])==len(roster['side_b'])==1
+    conn.close()

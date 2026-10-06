@@ -1890,6 +1890,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         if not engagement_row:
             await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
             return
+        if engagement_row['world_model_version']==1:
+            from handlers.pvp_group import preparation_or_live_card
+            text,keyboard=preparation_or_live_card(engagement_row,dict(p))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
+            return
         ok, _reason = join_pending_encounter_side(
             engagement_row=engagement_row,
             player_id=int(user.id),
@@ -1915,6 +1921,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         conn.close()
         if not engagement_row:
             await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        if engagement_row['world_model_version']==1:
+            from handlers.pvp_group import preparation_or_live_card
+            text,keyboard=preparation_or_live_card(engagement_row,dict(p))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
             return
         ok, reason = invite_reinforcement_ally(
             engagement_row=engagement_row,
@@ -1950,6 +1962,15 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         action = raw.split('_', 1)[0]
         engagement_id = int(raw.split('_', 1)[1])
         accepted = action == 'accept'
+        conn=get_connection()
+        try: current=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement_id,)).fetchone()
+        finally: conn.close()
+        if current and current['world_model_version']==1:
+            from handlers.pvp_group import preparation_or_live_card
+            text,keyboard=preparation_or_live_card(current,dict(p))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
+            return
         ok, reason = respond_to_reinforcement_invite(
             engagement_id=engagement_id,
             ally_id=int(user.id),
@@ -1981,6 +2002,15 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                 arguments = {'engagement_id': engagement_id, 'actor_id': user.id, 'ally_id': ally_id}
             else:
                 arguments = {'engagement_id': int(data.removeprefix('pvp_leaveprep_')), 'actor_id': user.id}
+            conn=get_connection()
+            try: current=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(arguments['engagement_id'],)).fetchone()
+            finally: conn.close()
+            if current and current['world_model_version']==1:
+                from handlers.pvp_group import preparation_or_live_card
+                text,keyboard=preparation_or_live_card(current,dict(p))
+                await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+                await query.answer()
+                return
             ok,_ = _pxe1_membership_mutation(leave_or_revoke, **arguments)
             if not ok:
                 await query.answer(t('location.pvp_reinforcement_response_blocked',lang),show_alert=True)
@@ -1989,6 +2019,26 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         text,keyboard = _build_location_message_with_snapshot(context,refreshed_player,get_location(refreshed_player['location_id']),pvp_only_view=_should_use_pvp_only_location_view(refreshed_player))
         await query.answer()
         await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_allies_'):
+        from handlers.pvp_group import allies_card
+        from game.action_receipts import ActionRejected
+        engagement_id,page=map(int,data.removeprefix('pvp_allies_').split('_'))
+        conn=get_connection()
+        try: row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement_id,)).fetchone()
+        finally: conn.close()
+        try: text,keyboard=allies_card(row,dict(p),page)
+        except (ActionRejected,KeyError,TypeError):
+            await query.answer(t('location.pvp_reinforcement_invite_blocked',lang),show_alert=True)
+            return
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('pvp_member_'):
+        from handlers.pvp_group import handle_membership_choice
+        await handle_membership_choice(update,context)
         return
 
     if data.startswith('pvp_cv_'):

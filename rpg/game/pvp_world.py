@@ -212,6 +212,54 @@ def leave_or_revoke(conn, *, engagement_id, actor_id, ally_id=None, now_ms):
     conn.execute('UPDATE pvp_engagements SET state_revision=state_revision+1 WHERE id=?', (engagement_id,))
 
 
+def apply_membership_intent(conn,*,actor_id,token,now_ms):
+    """Consume a complete preparation choice and replay its immutable receipt."""
+    from game.economy_actions import intent_hash
+    _writer(conn)
+    kind='pvp_membership_pxe1';request_id='ui:'+token
+    prior=conn.execute('SELECT * FROM economy_action_receipts WHERE player_id=? AND request_id=?',(actor_id,request_id)).fetchone()
+    if prior:
+        result=json.loads(prior['result_json'])
+        if (prior['action_kind']!=kind or result.get('actor_id')!=actor_id
+                or prior['request_hash']!=intent_hash(kind,actor_id,result.get('intent',{}))):
+            raise ActionRejected('stale_action')
+        return {**result,'recovered':True}
+    intent=json.loads(consume_action(conn,actor_id,kind,token))
+    if intent.get('schema_version')!=1 or intent.get('catalog_version')!=2:
+        raise ActionRejected('stale_action')
+    row=engagement(conn,intent.get('engagement_id'))
+    if row['state_revision']!=intent.get('state_revision'):
+        raise ActionRejected('stale_action')
+    operation=intent.get('operation')
+    member=None
+    if operation in {'accept','decline','revoke','leave'}:
+        member=conn.execute('SELECT * FROM pvp_engagement_reinforcements WHERE id=? AND engagement_id=? AND membership_version=1',
+                            (intent.get('reinforcement_id'),row['id'])).fetchone()
+        if not member: raise ActionRejected('membership_missing')
+        if operation in {'accept','decline','leave'} and member['ally_id']!=actor_id:
+            raise ActionRejected('not_participant')
+        if operation=='revoke' and (member['inviter_id']!=actor_id or member['ally_id']!=intent.get('ally_id')):
+            raise ActionRejected('not_principal')
+    if operation=='invite':
+        invite(conn,engagement_id=row['id'],principal_id=actor_id,ally_id=intent.get('ally_id'),now_ms=now_ms)
+        member=conn.execute('SELECT * FROM pvp_engagement_reinforcements WHERE engagement_id=? AND ally_id=? AND membership_version=1',
+                            (row['id'],intent['ally_id'])).fetchone()
+    elif operation in {'accept','decline'}:
+        respond(conn,engagement_id=row['id'],ally_id=actor_id,accepted=operation=='accept',now_ms=now_ms)
+    elif operation in {'leave','revoke'}:
+        leave_or_revoke(conn,engagement_id=row['id'],actor_id=actor_id,ally_id=intent.get('ally_id') if operation=='revoke' else None,now_ms=now_ms)
+    else: raise ActionRejected('invalid_action')
+    current=engagement(conn,row['id'])
+    member=conn.execute('SELECT * FROM pvp_engagement_reinforcements WHERE id=?',(member['id'],)).fetchone()
+    result={'schema_version':1,'catalog_version':2,'action_kind':kind,'actor_id':actor_id,
+        'engagement_id':row['id'],'reinforcement_id':member['id'],'ally_id':member['ally_id'],
+        'operation':operation,'outcome':member['status'],'side':member['side'],
+        'state_revision_before':row['state_revision'],'state_revision_after':current['state_revision'],
+        'gold_delta':0,'granted':[],'consumed':[],'progression':[],'intent':intent}
+    store_receipt(conn,actor_id,request_id,kind,intent_hash(kind,actor_id,intent),result,catalog_version=2)
+    return result
+
+
 def cancel_preparation(conn, row, *, reason, now_ms):
     context = json.loads(row['reason_context'])
     context['terminal_reason'] = reason

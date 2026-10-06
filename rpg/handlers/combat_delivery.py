@@ -52,7 +52,7 @@ def pve_result(player,row,participant,death,settlement):
             from collections import Counter
             lines.append(t('battle.loot',lang,items=', '.join(escape(get_item_name(i,lang))+f' ×{n}' for i,n in list(Counter(items).items())[:3])))
             rows.append([InlineKeyboardButton(t('keyboard.inventory',lang),callback_data='inv_tab_all')])
-        if reward.get('leveled_up'): lines.append(t('pxe1.character_level',lang,level=reward['new_level']))
+        if reward.get('leveled_up'): lines.append(t('pxe1.character_level',lang,level=reward['level_after']))
         if eligible and player['telegram_id']==row['owner_player_id'] and row['mob_id'] in HARVEST_ITEMS:
             rows.append([InlineKeyboardButton(t('chapter.harvest',lang),callback_data='alpha_extract_'+row['encounter_id'])])
     else: return None

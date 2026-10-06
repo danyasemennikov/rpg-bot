@@ -15,9 +15,9 @@ from game.player_ui import validate_surface
 
 
 def preparation_or_live_card(row, player):
-    from datetime import datetime, timezone
+    import time
     from game.action_receipts import issue_actions
-    from game.pvp_live import advance_engagement_to_live_battle_if_ready, list_reinforcement_candidates
+    from game.pvp_live import advance_engagement_to_live_battle_if_ready
     state, context = advance_engagement_to_live_battle_if_ready(row)
     player_id, lang = player['telegram_id'], player.get('lang', 'ru')
     if state == 'converted_to_battle':
@@ -35,10 +35,16 @@ def preparation_or_live_card(row, player):
         members = [dict(r) for r in conn.execute('SELECT r.*,p.name FROM pvp_engagement_reinforcements r JOIN players p ON p.telegram_id=r.ally_id WHERE engagement_id=? AND membership_version=1 ORDER BY r.id', (row['id'],))]
     finally:
         conn.close()
-    left = max(0, int((datetime.fromisoformat(row['engagement_ready_at']).replace(tzinfo=timezone.utc)-datetime.now(timezone.utc)).total_seconds()))
+    from game.pvp_world import milliseconds
+    left = max(0,(milliseconds(row['engagement_ready_at'])-int(time.time()*1000)+999)//1000)
     lines = [t('location.pvp_pending', lang), escape(principals[0])+' ↔ '+escape(principals[1]),
              t('pxe1.remaining', lang, time=f'{left//60}:{left%60:02d}')]
+    for side,name in zip(('initiator','defender'),principals):
+        count=1+sum(m['side']==side and m['status']=='accepted' for m in members)
+        invited=sum(m['side']==side and m['status']=='pending' for m in members)
+        lines.append(t('pxe1.membership.side_count',lang,name=escape(name),count=count,invited=invited))
     rows = []
+    membership_choices = []
     for member in members:
         if member['status'] in {'pending', 'accepted'}:
             lines.append(f"{escape(member['name'])} · {t('location.pvp_reinforcement_status_'+member['status'], lang)}")
@@ -46,20 +52,29 @@ def preparation_or_live_card(row, player):
         payload = encoded({'schema_version':1,'catalog_version':2,'engagement_id':row['id'],'state_revision':row['state_revision']})
         token = issue_actions(player_id, 'pvp_prep_escape', [payload])[payload]
         rows.append([InlineKeyboardButton(t('location.pvp_escape_btn', lang), callback_data=f"pvp_escape_{row['id']}_{token}")])
-        for candidate in list_reinforcement_candidates(engagement_row=row, inviter_id=player_id, limit=2):
-            rows.append([InlineKeyboardButton(t('location.pvp_reinforcement_invite_btn', lang, name=candidate['name']), callback_data=f"pvp_invite_{row['id']}_{candidate['telegram_id']}")])
+        own_side='initiator' if player_id==row['attacker_id'] else 'defender'
+        if not any(m['side']==own_side and m['status'] in {'pending','accepted'} for m in members):
+            rows.append([InlineKeyboardButton(t('pxe1.membership.invite',lang),callback_data=f"pvp_allies_{row['id']}_0")])
         for member in members:
             if member['inviter_id'] == player_id and member['status'] == 'pending':
-                rows.append([InlineKeyboardButton(t('pxe1.revoke_invitation', lang), callback_data=f"pvp_revoke_{row['id']}_{member['ally_id']}")])
+                membership_choices.append((t('pxe1.revoke_invitation',lang),
+                    {'operation':'revoke','ally_id':member['ally_id'],'reinforcement_id':member['id']}))
     else:
         member = next((m for m in members if m['ally_id'] == player_id and m['status'] in {'pending','accepted'}), None)
         if member and member['status'] == 'pending':
-            lines.append(t('pxe1.pvp_ally_crime_warning' if member['side'] == 'initiator' else 'pxe1.pvp_ally_defence', lang))
-            rows.append([InlineKeyboardButton(t('location.pvp_reinforcement_accept_btn', lang), callback_data=f"pvp_reinf_accept_{row['id']}"),
-                         InlineKeyboardButton(t('location.pvp_reinforcement_decline_btn', lang), callback_data=f"pvp_reinf_decline_{row['id']}")])
+            warning='pxe1.pvp_ally_crime_warning' if member['side']=='initiator' and context.get('illegal_aggression') else 'pxe1.membership.attacking' if member['side']=='initiator' else 'pxe1.pvp_ally_defence'
+            lines.append(t(warning,lang))
+            side_name=principals[0] if member['side']=='initiator' else principals[1]
+            membership_choices += [(t('pxe1.membership.join_side',lang,name=side_name),{'operation':'accept','reinforcement_id':member['id']}),
+                                   (t('location.pvp_reinforcement_decline_btn',lang),{'operation':'decline','reinforcement_id':member['id']})]
         elif member:
-            rows.append([InlineKeyboardButton(t('location.pvp_leave_prep', lang), callback_data=f"pvp_leaveprep_{row['id']}")])
-    rows.append([InlineKeyboardButton(t('common.refresh', lang), callback_data='pvp_refresh')])
+            membership_choices.append((t('location.pvp_leave_prep',lang),{'operation':'leave','reinforcement_id':member['id']}))
+    payloads=[encoded({'schema_version':1,'catalog_version':2,'engagement_id':row['id'],
+                       'state_revision':row['state_revision'],**choice}) for _,choice in membership_choices]
+    tokens=issue_actions(player_id,'pvp_membership_pxe1',payloads)
+    for (label,_),payload in zip(membership_choices,payloads):
+        rows.append([InlineKeyboardButton(label,callback_data='pvp_member_'+tokens[payload])])
+    rows.append([InlineKeyboardButton(t('common.refresh',lang),callback_data=f"pvp_view_{row['id']}")])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines), keyboard)
     return '\n'.join(lines), keyboard
@@ -235,3 +250,134 @@ async def handle_read_selection(update,context):
     record_surface(player['telegram_id'],kind='pvp',ref=str(row['id']),revision=battle['turn_revision'],
                    chat_id=query.message.chat_id,message_id=query.message.message_id)
     await query.answer()
+
+
+async def handle_membership_choice(update,context):
+    import time
+    from database import get_player
+    from game.pvp_world import apply_membership_intent
+    from game.action_receipts import ActionRejected
+    from game.player_ui import record_surface
+    query=update.callback_query;actor_id=query.from_user.id
+    player=dict(get_player(actor_id));lang=player.get('lang','ru')
+    conn=get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        result=apply_membership_intent(conn,actor_id=actor_id,token=query.data.removeprefix('pvp_member_'),now_ms=int(time.time()*1000))
+        conn.commit()
+    except (ActionRejected,ValueError,KeyError,TypeError):
+        conn.rollback();result=None
+    finally: conn.close()
+    if not result:
+        await query.answer(t('location.pvp_reinforcement_response_blocked',lang),show_alert=True)
+        conn=get_connection()
+        try:
+            token=conn.execute("SELECT payload FROM player_ui_actions WHERE token=? AND player_id=? AND kind='pvp_membership_pxe1'",(query.data.removeprefix('pvp_member_'),actor_id)).fetchone()
+            intent=json.loads(token['payload']) if token else {}
+            row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(intent.get('engagement_id'),)).fetchone()
+        finally: conn.close()
+        if row:
+            text,keyboard=preparation_or_live_card(row,player)
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+    if result.get('recovered'):
+        text=t('pxe1.membership.recovered',lang,outcome=t('pxe1.membership.'+result['outcome'],lang))
+        keyboard=InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.location',lang),callback_data='px:local:home:0')]])
+    else:
+        conn=get_connection()
+        try: row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(result['engagement_id'],)).fetchone()
+        finally: conn.close()
+        text,keyboard=preparation_or_live_card(row,player)
+    await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+    await query.answer()
+    # Transport may fail after the commit. The tick retries from persisted members.
+    if not result.get('recovered'):
+        conn=get_connection()
+        try: current=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(result['engagement_id'],)).fetchone()
+        finally: conn.close()
+        revision=current['turn_revision'] if current['engagement_state']=='converted_to_battle' else 1_000_000_000+current['state_revision']
+        record_surface(actor_id,kind='pvp',ref=str(result['engagement_id']),revision=revision,
+                       chat_id=query.message.chat_id,message_id=query.message.message_id)
+        await deliver_preparation_updates(context.bot,result['engagement_id'],skip_player=actor_id,
+                                          invited_player=result['ally_id'] if result['operation']=='invite' else None)
+
+
+async def deliver_preparation_updates(bot,engagement_id,*,skip_player=None,invited_player=None):
+    import logging
+    from database import get_player
+    from game.player_ui import present_surface,_row
+    conn=get_connection()
+    try:
+        row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement_id,)).fetchone()
+        if not row or row['world_model_version']!=1: return
+        members=[dict(r) for r in conn.execute('SELECT * FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1',(engagement_id,))]
+        recipients={row['attacker_id'],row['defender_id']}
+        recipients.update(m['ally_id'] for m in members)
+        if invited_player: recipients.add(invited_player)
+    finally: conn.close()
+    for player_id in sorted(recipients):
+        if player_id==skip_player: continue
+        prior=_row(player_id) or {}
+        # Live cards and their personal consequences belong to combat delivery.
+        if row['engagement_state']=='converted_to_battle' and player_id in {row['attacker_id'],row['defender_id'],*(m['ally_id'] for m in members if m['status']=='locked')}: continue
+        member=next((m for m in members if m['ally_id']==player_id),None)
+        closed=member and member['status'] not in {'pending','accepted'}
+        if closed and (prior.get('surface_ref')!=str(engagement_id) or prior.get('surface_kind') not in {'pvp','pvp_result'}): continue
+        kind='pvp_result' if closed or row['engagement_state']!='pending' else 'pvp'
+        revision=1_000_000_000+row['state_revision']
+        if prior.get('surface_kind')==kind and prior.get('surface_ref')==str(engagement_id) and prior.get('surface_revision')==revision: continue
+        try:
+            if closed:
+                lang=get_player(player_id)['lang']
+                text=t('pxe1.membership.'+member['status'],lang)
+                keyboard=InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.location',lang),callback_data='px:local:home:0')]])
+            else:
+                text,keyboard=preparation_or_live_card(row,dict(get_player(player_id)))
+            await present_surface(bot,player_id,text,keyboard,kind=kind,ref=str(engagement_id),revision=revision)
+        except Exception:
+            logging.getLogger(__name__).exception('PvP preparation delivery retry for player %s',player_id)
+
+
+async def retry_preparation_delivery(bot):
+    """Retry failed invitations/status cards without changing gameplay authority."""
+    conn=get_connection()
+    try:
+        ids=[r[0] for r in conn.execute("""SELECT e.id FROM pvp_engagements e
+            WHERE e.world_model_version=1 AND (e.engagement_state='pending' OR EXISTS(
+                SELECT 1 FROM player_pxe1_ui u WHERE u.surface_kind='pvp'
+                    AND u.surface_ref=CAST(e.id AS TEXT) AND u.surface_revision>=1000000000))
+            ORDER BY e.id LIMIT 100""")]
+    finally: conn.close()
+    for engagement_id in ids:
+        await deliver_preparation_updates(bot,engagement_id)
+
+
+def allies_card(row,player,page=0):
+    from game.pvp_live import list_reinforcement_candidates
+    from game.action_receipts import issue_actions,ActionRejected
+    from game.pvp_world import milliseconds
+    import time
+    player_id=player['telegram_id'];lang=player.get('lang','ru')
+    if not row or row['world_model_version']!=1 or player_id not in {row['attacker_id'],row['defender_id']} or row['engagement_state']!='pending' or int(time.time()*1000)>=milliseconds(row['engagement_ready_at']):
+        raise ActionRejected('not_principal')
+    candidates=list_reinforcement_candidates(engagement_row=row,inviter_id=player_id,limit=None)
+    pages=max(1,(len(candidates)+5)//6);page=max(0,min(int(page),pages-1))
+    visible=candidates[page*6:page*6+6]
+    payloads=[encoded({'schema_version':1,'catalog_version':2,'engagement_id':row['id'],
+        'state_revision':row['state_revision'],'operation':'invite','ally_id':ally['telegram_id']}) for ally in visible]
+    tokens=issue_actions(player_id,'pvp_membership_pxe1',payloads)
+    lines=[t('pxe1.membership.invite',lang),t('gear.page',lang,page=page+1,pages=pages)]
+    rows=[]
+    for ally,payload in zip(visible,payloads):
+        label=ally['name']+' · '+t('common.level',lang)+' '+str(ally['level'])
+        lines.append(escape(label))
+        rows.append([InlineKeyboardButton(label,callback_data='pvp_member_'+tokens[payload])])
+    if not visible: lines.append(t('location.pvp_reinforcement_invite_blocked',lang))
+    nav=[]
+    if page: nav.append(InlineKeyboardButton('◀️',callback_data=f"pvp_allies_{row['id']}_{page-1}"))
+    if page+1<pages: nav.append(InlineKeyboardButton('▶️',callback_data=f"pvp_allies_{row['id']}_{page+1}"))
+    if nav: rows.append(nav)
+    rows.append([InlineKeyboardButton(t('common.back',lang),callback_data=f"pvp_view_{row['id']}")])
+    keyboard=InlineKeyboardMarkup(rows);text='\n'.join(lines)
+    validate_surface(text,keyboard,list_view=True)
+    return text,keyboard

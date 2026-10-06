@@ -68,10 +68,41 @@ Focused progression (Python 3.12.10, pytest 9.1.1, isolated temporary SQLite):
   **15 passed, 4.84s**.
 - One mistyped character suite filename collected no tests; it is not evidence.
 
+## Membership continuation, candidate based on 0d459e9
+
+Preparation Invite/Accept/Decline/Revoke/Leave now use requester-owned opaque
+intents binding engagement revision and exact membership row. The existing
+economy receipt owner stores immutable zero-reward outcomes; replay precedes
+location, cleanup and roster checks. Invitations expose all eligible allies in
+six-entry pages. Preparation delivery retries from persisted membership without
+reissuing unchanged cards/tokens. Legacy raw membership buttons only reopen the
+current version-1 card. Legacy initialized 1v1 fixtures use the version-0 creator;
+the due query supports their stored deadline/turn-start fallback. The existing
+character reward owner records level facts atomically, and victory presentation
+uses its canonical level_after result.
+
+Focused evidence (same isolated Python/SQLite environment):
+
+- Initial combined run: collection error from an incorrectly indented compatibility
+  fixture; no gameplay pass claimed. Corrected affected run: 74 passed, 14.59s.
+- New callback/transport/page tests + membership + old 1v1: 1 failed / 50 passed,
+  10.13s. Page fixture used a historical epoch without patching the candidate
+  domain clock; corrected affected UI/feedback/delivery run: 15 passed, 4.48s.
+- Expanded membership callbacks/runtime/compatibility/feedback/delivery + RAV
+  transactions/combat: 4 failed / 75 passed, 16.19s. All failures were RAV fixtures
+  attempting immediate fresh formation lock. They now advance the actual due
+  formation owner while retaining binding, reward and fail-closed assertions.
+- Expanded rerun: 1 failed / 78 passed, 16.34s (helper returned roster envelope
+  rather than player_ids). Corrected affected RAV combat: 4 passed, 0.95s.
+- New coverage includes real ru/en/es Invite→Accept→Leave callbacks, immutable
+  replay after movement/token cleanup, commit before Telegram, retry after blocked
+  delivery, 31 eligible candidates across six pages, rejecting raw enrollment,
+  and isolating one corrupt durable PvP order from a healthy due engagement.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and
-combat integration; bind/replay PvP membership operations and repair known
+combat integration; repair known
 runtime/recovery compatibility gaps before Phase 7 integrated ru/en/es journeys.
 Reconcile older journey fixtures to actual timed domain owners without weakening
 rollback, replay, reward, mastery, or actor-membership checks. Run the full suite

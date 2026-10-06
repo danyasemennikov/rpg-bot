@@ -96,3 +96,26 @@ def test_kill_feedback_is_localized_coalesced_and_acknowledged_only_after_presen
     acknowledge_presented_facts(1,keys)
     assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE state='pending'").fetchone()[0]==0
     conn.close()
+
+
+def test_shared_character_reward_level_fact_uses_same_transaction():
+    from game.progression_rewards import apply_progression_reward
+    from game.balance import exp_to_next_level
+    from unittest.mock import patch
+    conn=get_connection()
+    level=conn.execute('SELECT level FROM players WHERE telegram_id=1').fetchone()[0]
+    conn.execute('UPDATE players SET exp=0 WHERE telegram_id=1');conn.commit()
+    conn.execute('BEGIN IMMEDIATE')
+    with patch('game.player_feedback.record_feedback',side_effect=RuntimeError('feedback failure')):
+        with pytest.raises(RuntimeError,match='feedback failure'):
+            apply_progression_reward(conn,1,exp_to_next_level(level),3)
+    conn.rollback()
+    assert conn.execute('SELECT level FROM players WHERE telegram_id=1').fetchone()[0]==level
+    assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE source_kind='character'").fetchone()[0]==0
+    conn.execute('BEGIN IMMEDIATE')
+    result=apply_progression_reward(conn,1,exp_to_next_level(level),3)
+    conn.commit()
+    assert result['level_after']==level+1
+    fact=conn.execute("SELECT * FROM player_feedback_events WHERE source_kind='character'").fetchone()
+    assert fact['state']=='pending' and json.loads(fact['payload_json'])=={'old_level':level,'new_level':level+1}
+    conn.close()

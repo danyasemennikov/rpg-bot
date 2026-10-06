@@ -938,7 +938,7 @@ def list_reinforcement_candidates(*, engagement_row, inviter_id: int, limit: int
         from game.pvp_world import invite
         conn = get_connection()
         try:
-            candidates = conn.execute('SELECT telegram_id,name,level FROM players WHERE location_id=? AND telegram_id NOT IN (?,?) ORDER BY level DESC,telegram_id LIMIT 20',
+            candidates = conn.execute('SELECT telegram_id,name,level FROM players WHERE location_id=? AND telegram_id NOT IN (?,?) ORDER BY level DESC,telegram_id',
                 (engagement_row['location_id'],engagement_row['attacker_id'],engagement_row['defender_id'])).fetchall()
             result = []
             # Preview the exact mutation in a rollback-only writer; no second
@@ -954,7 +954,7 @@ def list_reinforcement_candidates(*, engagement_row, inviter_id: int, limit: int
                 finally:
                     conn.execute('ROLLBACK TO invitation_preview')
                     conn.execute('RELEASE invitation_preview')
-                if len(result)>=limit:
+                if limit is not None and len(result)>=limit:
                     break
             conn.rollback()
             return result
@@ -984,7 +984,7 @@ def list_reinforcement_candidates(*, engagement_row, inviter_id: int, limit: int
         if reason is not None:
             continue
         result.append(dict(row))
-        if len(result) >= limit:
+        if limit is not None and len(result) >= limit:
             break
     return result
 
@@ -2109,7 +2109,8 @@ def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
         WHERE engagement_state IN (?, ?, ?)
           AND ((engagement_state IN ('pending','active') AND julianday(engagement_ready_at)<=julianday(?))
                OR (engagement_state='converted_to_battle' AND json_valid(reason_context)
-                   AND julianday(json_extract(reason_context,'$.battle.side_deadline_at'))<=julianday(?)))
+                   AND julianday(COALESCE(json_extract(reason_context,'$.battle.side_deadline_at'),
+                       datetime(json_extract(reason_context,'$.battle.turn_started_at'),'+15 seconds')))<=julianday(?)))
         ORDER BY CASE WHEN engagement_state IN ('pending','active') THEN engagement_ready_at
                  ELSE json_extract(reason_context,'$.battle.side_deadline_at') END,id ASC LIMIT 100
         ''',
@@ -2191,6 +2192,9 @@ async def run_live_pvp_tick(bot) -> None:
                     await bot.send_message(player_id,t(msg_key,lang))
                 except Exception:
                     pass
+
+    from handlers.pvp_group import retry_preparation_delivery
+    await retry_preparation_delivery(bot)
 
 
 async def _deliver_pxe1_pvp_event(bot,event):
