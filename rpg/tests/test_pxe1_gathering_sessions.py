@@ -41,6 +41,29 @@ def test_no_instant_grant_and_fifteen_ticks_no_sixteenth():
     conn.close()
 
 
+def test_corrupt_accounting_or_source_interrupts_without_new_yield_or_wear():
+    for corruption in ('missing_receipt','counter','source'):
+        conn,session=start(request=corruption)
+        conn.execute('BEGIN IMMEDIATE');commit_gathering_tick(conn,session,now_ms=9000);conn.commit()
+        before=[tuple(r) for r in conn.execute('SELECT * FROM inventory')]
+        tool_before=tuple(conn.execute("SELECT durability,revision FROM player_profession_tools WHERE player_id=1 AND profession_key='mining'").fetchone())
+        if corruption=='missing_receipt':
+            conn.execute('DELETE FROM economy_action_receipts WHERE request_id=?',(f'gather:{session}:1',))
+        elif corruption=='counter':
+            conn.execute('UPDATE player_gathering_sessions SET last_tick=0 WHERE session_id=?',(session,))
+        else:
+            row=conn.execute('SELECT source_snapshot_json FROM player_gathering_sessions WHERE session_id=?',(session,)).fetchone()
+            source=json.loads(row[0]);source['entries'][0]['chance_bp']=6000
+            conn.execute('UPDATE player_gathering_sessions SET source_snapshot_json=? WHERE session_id=?',(json.dumps(source),session))
+        conn.commit();conn.execute('BEGIN IMMEDIATE')
+        result=commit_gathering_tick(conn,session,now_ms=17000);conn.commit()
+        assert result['status']=='interrupted'
+        assert before==[tuple(r) for r in conn.execute('SELECT * FROM inventory')]
+        assert tool_before==tuple(conn.execute("SELECT durability,revision FROM player_profession_tools WHERE player_id=1 AND profession_key='mining'").fetchone())
+        assert conn.execute('SELECT state FROM player_feedback_events WHERE event_key=?',('recovery:gather:'+session,)).fetchone()[0]=='pending'
+        conn.close()
+
+
 def test_exact_decoded_seed_encoding_and_unrenormalized_locked_gem():
     snapshot = _source_snapshot('old_mine_entrance','mining')
     assert [e['chance_bp'] for e in snapshot['entries']]==[6500,3000,500]

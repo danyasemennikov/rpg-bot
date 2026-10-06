@@ -1371,10 +1371,13 @@ def start_due_pve_formation(conn, *, encounter_id: str, now_ms: int) -> dict:
              and source_ids == {u.get('spawn_instance_id') for u in declared}
              and all(s['state']=='forming' and s['location_id']==row['location_id'] for s in sources))
     if not valid:
+        from game.player_experience_schema import _recovery_notice
+        for member in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(encounter_id,)).fetchall():
+            _recovery_notice(conn,member['player_id'],domain='pve',ref=encounter_id,reason='start_failed',now_ms=now_ms)
         conn.execute("UPDATE pve_encounters SET status='start_failed',finished_at=CURRENT_TIMESTAMP WHERE encounter_id=?", (encounter_id,))
         conn.execute("UPDATE pve_encounter_participants SET status='left' WHERE encounter_id=? AND status='active'", (encounter_id,))
         conn.execute("UPDATE pve_spawn_instances SET state='idle',linked_encounter_id=NULL WHERE linked_encounter_id=? AND state='forming'", (encounter_id,))
-        return {'phase':'start_failed','player_ids':[]}
+        return {'phase':'start_failed','player_ids':[],'encounter_id':encounter_id}
     from game.player_activity import require_available
     from game.action_receipts import ActionRejected
     from game.locations import resolve_location_id
@@ -1392,6 +1395,24 @@ def start_due_pve_formation(conn, *, encounter_id: str, now_ms: int) -> dict:
         return {'phase':'abandoned','player_ids':[]}
     row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
     state = _deserialize_payload(row['battle_state_json'])
+    # Only an unstarted formation may cross the rules cutover. Already-active
+    # legacy encounters retain their stored runtime and historical snapshots.
+    current_build_rules=conn.execute("SELECT 1 FROM build_rules_state WHERE migration_key=? AND state='active'",(RULES_VERSION,)).fetchone()
+    if row['rules_version']!=RULES_VERSION and current_build_rules:
+        from game.enemy_profiles import resolve_enemy_snapshot
+        from game.mobs import get_mob
+        old_units={u.get('spawn_instance_id'):u for u in state.get('enemy_units',[])}
+        enemies=[]
+        for source in declared:
+            unit_mob=get_mob(source['mob_id'])
+            if not unit_mob: raise ValueError('unknown_forming_enemy')
+            old=old_units.get(source['spawn_instance_id'],{})
+            enemies.append(resolve_enemy_snapshot(unit_mob,unit_id=source['unit_id'],
+                formation=old.get('formation') or old.get('formation_line'),spawn_profile=source['spawn_profile']))
+        state['enemy_states_v1']=enemies
+        state['rules_version']=RULES_VERSION
+        conn.execute('UPDATE pve_encounters SET rules_version=? WHERE encounter_id=?',(RULES_VERSION,encounter_id))
+        row=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
     state['participant_states'] = {}
     for pid in roster:
         projection = _build_participant_bootstrap_snapshot_for_player(battle_state=state,participant_id=pid,conn=conn)
@@ -2171,6 +2192,9 @@ def create_mixed_open_world_pve_encounter(
     """Atomically reserve a frozen mixed recipe and its durable encounter."""
     from game.enemy_profiles import MIXED_ENCOUNTERS
     from game.mobs import get_mob
+    from game.player_activity import require_available
+    from game.locations import resolve_location_id
+    from game.action_receipts import ActionRejected
 
     recipe = MIXED_ENCOUNTERS.get(str(recipe_id))
     if not recipe:
@@ -2183,11 +2207,15 @@ def create_mixed_open_world_pve_encounter(
     _ensure_pve_encounter_table()
     ensure_location_pve_spawn_instances(location_id=location_id)
     encounter_id = f'pve-enc-{uuid.uuid4().hex[:12]}'
-    participant_ids = side_a_player_ids or [int(owner_player_id)]
+    participant_ids = _normalize_player_ids([int(owner_player_id),*(side_a_player_ids or [])])
     required_counts = Counter(str(mob_id) for mob_id, _formation in units_recipe)
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        for participant_id in participant_ids:
+            player=require_available(conn,participant_id)
+            if resolve_location_id(player['location_id'])!=resolve_location_id(location_id):
+                raise ActionRejected('wrong_location')
         selected_by_mob: dict[str, list[str]] = {}
         selected_spawn_ids: list[str] = []
         for mob_id, required_count in required_counts.items():

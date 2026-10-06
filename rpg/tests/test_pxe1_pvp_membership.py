@@ -235,3 +235,23 @@ def test_bound_leave_after_deadline_before_start_and_revoke_decline_receipts():
     roster=json.loads(conn.execute('SELECT locked_roster_json FROM pvp_engagements WHERE id=?',(e,)).fetchone()[0])
     assert len(roster['side_a'])==len(roster['side_b'])==1
     conn.close()
+
+
+@pytest.mark.parametrize('corruption',['seed','payload'])
+def test_unverifiable_preparation_is_cancelled_with_durable_notice(corruption):
+    conn,e=prepare()
+    conn.execute('BEGIN IMMEDIATE')
+    invite(conn,engagement_id=e,principal_id=1,ally_id=2,now_ms=1001000)
+    respond(conn,engagement_id=e,ally_id=2,accepted=True,now_ms=1002000)
+    if corruption=='seed': conn.execute("UPDATE pvp_engagements SET combat_seed='bad' WHERE id=?",(e,))
+    else: conn.execute("UPDATE pvp_engagements SET reason_context='bad JSON' WHERE id=?",(e,))
+    before=[tuple(r) for r in conn.execute('SELECT * FROM players')]
+    state,_=lock_preparation(conn,engagement_id=e,now_ms=1300000)
+    conn.commit()
+    assert state=='cancelled'
+    assert before==[tuple(r) for r in conn.execute('SELECT * FROM players')]
+    assert conn.execute('SELECT status FROM pvp_engagement_reinforcements WHERE ally_id=2').fetchone()[0]=='expired'
+    assert not is_player_busy_with_live_pvp(2)
+    assert {r[0] for r in conn.execute("SELECT player_id FROM player_feedback_events WHERE source_kind='pvp' AND state='pending'")}=={1,2,777}
+    assert not conn.execute('SELECT 1 FROM pvp_group_settlements_pxe1').fetchone()
+    conn.close()

@@ -101,6 +101,7 @@ def gather_tick_roll(seed: str, tick_index: int, snapshot: dict) -> dict | None:
     n = int.from_bytes(hashlib.sha256(bytes.fromhex(seed)+b':gather:'+str(tick_index).encode('ascii')).digest()[:8],'big')
     selected = None
     for entry in entries:
+        if not isinstance(entry,dict): raise ValueError('invalid gathering source entry')
         resource = RESOURCES.get(entry.get('item_id'))
         chance = entry.get('chance_bp')
         if (not resource or resource.profession_key!=snapshot.get('profession_key')
@@ -172,12 +173,19 @@ def commit_gathering_tick(conn, session_id: str, *, now_ms: int) -> dict:
     player_id = int(session['player_id'])
     request_id = f'gather:{session_id}:{tick}'
     request_hash = intent_hash('gather_tick_pxe1',player_id,{'session_id':session_id,'tick':tick,'seed':session['seed']})
-    recovered = find_receipt(conn,player_id,request_id,'gather_tick_pxe1',request_hash)
-    if recovered:
-        return {**recovered,'recovered':True}
     try:
+        # A future receipt beside an older session counter cannot occur in the
+        # atomic tick. Quarantine it rather than repeatedly granting/replaying.
+        if find_receipt(conn,player_id,request_id,'gather_tick_pxe1',request_hash):
+            raise ValueError('gather_receipt_counter_mismatch')
         accounting = json.loads(session['result_json'])
         if not isinstance(accounting,dict):
+            raise ValueError('invalid gathering accounting')
+        if (not isinstance(accounting.get('items'),dict) or not isinstance(accounting.get('xp'),int)
+                or isinstance(accounting.get('xp'),bool) or accounting['xp']<0
+                or not isinstance(accounting.get('max_attempts'),int) or isinstance(accounting.get('max_attempts'),bool)
+                or not 1<=accounting['max_attempts']<=15
+                or any(not isinstance(n,int) or isinstance(n,bool) or n<=0 for n in accounting['items'].values())):
             raise ValueError('invalid gathering accounting')
         player = require_available(conn,player_id,exclude_gather=session_id)
         if (resolve_location_id(player['location_id'])!=session['location_id']
@@ -189,10 +197,35 @@ def commit_gathering_tick(conn, session_id: str, *, now_ms: int) -> dict:
         if (tick>15 or accounting.get('schema_version')!=1 or accounting.get('attempts')!=session['last_tick']
                 or sum(accounting.get('items',{}).values())!=session['yield_total']):
             raise ValueError('invalid gathering accounting')
+        receipts=conn.execute("SELECT * FROM economy_action_receipts WHERE player_id=? AND request_id GLOB ?",
+            (player_id,f'gather:{session_id}:*')).fetchall()
+        if len(receipts)!=session['last_tick']:
+            raise ValueError('gather_receipt_counter_mismatch')
+        if session['last_tick']:
+            by_tick={r['request_id']:r for r in receipts}
+            for prior_tick in range(1,tick):
+                prior=by_tick.get(f'gather:{session_id}:{prior_tick}')
+                expected_hash=intent_hash('gather_tick_pxe1',player_id,{'session_id':session_id,'tick':prior_tick,'seed':session['seed']})
+                if not prior or prior['action_kind']!='gather_tick_pxe1' or prior['request_hash']!=expected_hash:
+                    raise ValueError('gather_receipt_counter_mismatch')
+                fact=json.loads(prior['result_json'])
+                if fact['session_id']!=session_id or fact['tick_index']!=prior_tick:
+                    raise ValueError('gather_receipt_counter_mismatch')
+            if fact['result']!=accounting:
+                raise ValueError('gather_receipt_counter_mismatch')
+        elif accounting.get('items') or accounting.get('xp')!=0:
+            raise ValueError('gather_receipt_counter_mismatch')
         snapshot = json.loads(session['source_snapshot_json'])
+        if not isinstance(snapshot,dict) or snapshot.get('profession_key')!=session['profession_key']:
+            raise ValueError('invalid gathering snapshot')
+        if snapshot!=_source_snapshot(session['location_id'],session['profession_key']):
+            raise ValueError('invalid gathering source provenance')
         selected = gather_tick_roll(session['seed'],tick,snapshot)
-    except (ActionRejected,ValueError,TypeError) as exc:
+    except (ActionRejected,ValueError,TypeError,KeyError,AttributeError,RuntimeError) as exc:
         conn.execute("UPDATE player_gathering_sessions SET status='interrupted',terminal_reason=?,next_due_ms=NULL,revision=revision+1,updated_ms=? WHERE session_id=?", (str(exc),now_ms,session_id))
+        from game.player_feedback import record_feedback
+        record_feedback(conn,player_id,event_key='recovery:gather:'+session_id,source_kind='gather_session',
+            source_id=session_id,event_kind='recovery',payload={'reason':str(exc)},now_ms=now_ms)
         return {'status':'interrupted','reason':str(exc),'session_id':session_id}
     profession = conn.execute('SELECT * FROM player_gathering_professions WHERE telegram_id=? AND profession_key=?', (player_id,session['profession_key'])).fetchone()
     eligible = selected and profession['level']>=selected['required_level'] and tool['tier']>=selected['required_tool_tier']

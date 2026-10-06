@@ -143,3 +143,83 @@ def test_existing_authoritative_player_state_and_receipt_bytes_preserved():
     assert finale['event_key'] == 'chapter_finale:chapter_homecoming'
     assert conn.execute("SELECT result_json FROM economy_action_receipts WHERE request_id='old'").fetchone()[0] == receipt
     conn.close()
+
+
+@pytest.mark.parametrize('declaration',['TEXT NOT NULL DEFAULT 0','INTEGER NOT NULL DEFAULT 0'])
+def test_existing_added_column_type_and_check_shape_fail_closed(declaration):
+    conn=database.get_connection()
+    conn.execute('ALTER TABLE players RENAME COLUMN location_visit_revision TO old_visit_revision')
+    conn.execute('ALTER TABLE players ADD COLUMN location_visit_revision '+declaration)
+    conn.commit()
+    before=[tuple(r) for r in conn.execute('SELECT * FROM players')]
+    conn.execute('BEGIN IMMEDIATE')
+    with pytest.raises(RuntimeError,match='incompatible PXE1 column players.location_visit_revision'):
+        ensure_player_experience_schema(conn)
+    assert conn.in_transaction and before==[tuple(r) for r in conn.execute('SELECT * FROM players')]
+    conn.rollback();conn.close()
+
+
+def test_bad_pending_pvp_is_quarantined_without_blocking_valid_cutover():
+    conn=database.get_connection()
+    conn.execute('DELETE FROM economy_schema_migrations WHERE version=?',(MIGRATION_VERSION,))
+    for payload in ('broken JSON','[]','{"battle":"bad"}','{}'):
+        conn.execute("""INSERT INTO pvp_engagements(attacker_id,defender_id,location_id,engagement_started_at,
+            engagement_ready_at,engagement_state,reason_context) VALUES (1,777,'westwild_n3',
+            '2026-10-05T00:00:00+00:00','2026-10-05T00:05:00+00:00','pending',?)""",(payload,))
+    conn.execute("INSERT INTO pvp_engagement_reinforcements(engagement_id,side,inviter_id,ally_id,status) VALUES (4,'initiator',1,777,'accepted')")
+    conn.commit()
+    preserved=[tuple(r) for r in conn.execute('SELECT * FROM players')]
+    install(conn,2000)
+    rows=conn.execute('SELECT * FROM pvp_engagements ORDER BY id').fetchall()
+    assert [r['engagement_state'] for r in rows]==['cancelled','cancelled','cancelled','pending']
+    assert all(r['world_model_version']==1 for r in rows)
+    assert json.loads(rows[0]['reason_context'])['legacy_reason_context']=='broken JSON'
+    assert rows[3]['engagement_ready_at']=='2026-10-05T00:05:00+00:00'
+    assert preserved==[tuple(r) for r in conn.execute('SELECT * FROM players')]
+    assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE event_kind='recovery'").fetchone()[0]==8
+    before=snapshot(conn);install(conn,9999);assert snapshot(conn)==before
+    conn.close()
+
+
+def test_coherent_legacy_forming_cutover_uses_current_snapshots_and_world_execution():
+    from game.build_progression import migrate_character_builds_v1
+    from game.build_contract import RULES_VERSION
+    from game.pve_live import process_due_pve_formations,process_due_pve_world_sides
+    from tests.test_pxe1_encounter_lifecycle import prepare
+    migrate_character_builds_v1()  # The PXE1 baseline already has build rules active.
+    encounter,_=prepare()
+    conn=database.get_connection()
+    conn.execute('DELETE FROM economy_schema_migrations WHERE version=?',(MIGRATION_VERSION,))
+    conn.execute("UPDATE pve_encounters SET lifecycle_version=0,rules_version='legacy_v0',formation_deadline_ms=NULL WHERE encounter_id=?",(encounter,))
+    before=dict(conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone())
+    conn.commit();install(conn,2000000)
+    upgraded=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()
+    assert upgraded['formation_deadline_ms']==2012000 and upgraded['formation_revision']==1
+    assert upgraded['source_units_json']==before['source_units_json'] and upgraded['reward_seed']==before['reward_seed']
+    migrate_character_builds_v1()
+    conn.execute('UPDATE players SET hp=73,mana=31 WHERE telegram_id=1');conn.commit()
+    result=process_due_pve_formations(now_ms=2012000)
+    assert result[0]['player_ids']==[1]
+    row=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()
+    state=json.loads(row['battle_state_json'])
+    assert row['rules_version']==RULES_VERSION and state['rules_version']==RULES_VERSION
+    assert state['participant_states_v1']['1']['hp']==73 and state['participant_states_v1']['1']['mana']==31
+    assert state['enemy_states_v1'] and state['side_deadline_at']
+    assert process_due_pve_world_sides(now_ms=2027000)[0]['encounter_id']==encounter
+    assert conn.execute('SELECT turn_revision FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0]>1
+    conn.close()
+
+
+def test_invalid_legacy_formation_releases_only_owned_forming_sources():
+    from tests.test_pxe1_encounter_lifecycle import prepare
+    encounter,spawn=prepare()
+    conn=database.get_connection()
+    conn.execute('DELETE FROM economy_schema_migrations WHERE version=?',(MIGRATION_VERSION,))
+    conn.execute("UPDATE pve_encounters SET lifecycle_version=0,source_units_json='bad JSON' WHERE encounter_id=?",(encounter,))
+    conn.commit();install(conn,2000000)
+    assert conn.execute('SELECT status FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0]=='start_failed'
+    source=conn.execute('SELECT state,linked_encounter_id FROM pve_spawn_instances WHERE spawn_instance_id=?',(spawn['spawn_instance_id'],)).fetchone()
+    assert tuple(source)==('idle',None)
+    assert conn.execute('SELECT status FROM pve_encounter_participants WHERE encounter_id=?',(encounter,)).fetchone()[0]=='left'
+    assert json.loads(conn.execute("SELECT payload_json FROM player_feedback_events WHERE source_kind='pve'").fetchone()[0])['reason']=='start_failed'
+    conn.close()

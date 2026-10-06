@@ -1,4 +1,5 @@
 import json
+import pytest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
@@ -50,6 +51,20 @@ def test_always_twelve_seconds_and_atomic_automatic_start():
     runtime = ensure_runtime_for_battle(player_id=777,battle_state=state,mob=mob)
     assert runtime.turn_revision == json.loads(before)['turn_revision']
     assert state['side_deadline_at'] == json.loads(before)['side_deadline_at']
+
+
+def test_mixed_reservation_rechecks_actor_activity_and_location_under_writer():
+    from game.action_receipts import ActionRejected
+    from game.pve_live import create_mixed_open_world_pve_encounter
+    conn=database.get_connection()
+    with pytest.raises(ActionRejected,match='wrong_location'):
+        create_mixed_open_world_pve_encounter(owner_player_id=1,recipe_id='westwild_n8_mixed',battle_state={})
+    conn.execute("UPDATE players SET location_id='westwild_n8',in_battle=1 WHERE telegram_id=1");conn.commit()
+    with pytest.raises(ActionRejected,match='in_battle'):
+        create_mixed_open_world_pve_encounter(owner_player_id=1,recipe_id='westwild_n8_mixed',battle_state={})
+    assert conn.execute("SELECT COUNT(*) FROM pve_spawn_instances WHERE location_id='westwild_n8' AND linked_encounter_id IS NOT NULL").fetchone()[0]==0
+    assert conn.execute('SELECT COUNT(*) FROM pve_encounters').fetchone()[0]==0
+    conn.close()
 
 
 def test_join_equality_rejected_leave_after_deadline_and_transfer():

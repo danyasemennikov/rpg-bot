@@ -90,6 +90,9 @@ def advance_travel_edge(conn, session_id: str, *, now_ms: int, recovering: bool=
             raise ActionRejected('route_changed')
     except (ActionRejected,ValueError,TypeError) as exc:
         conn.execute("UPDATE player_travel_sessions SET status='interrupted',terminal_reason=?,next_due_ms=NULL,revision=revision+1,updated_ms=? WHERE session_id=?", (str(exc),now_ms,session_id))
+        from game.player_feedback import record_feedback
+        record_feedback(conn,session['player_id'],event_key='recovery:travel:'+session_id,source_kind='travel_session',
+            source_id=session_id,event_kind='recovery',payload={'reason':str(exc)},now_ms=now_ms)
         return dict(conn.execute('SELECT * FROM player_travel_sessions WHERE session_id=?', (session_id,)).fetchone())
     arrival_ms = now_ms if recovering else session['next_due_ms']
     arrive_at_location(conn,session['player_id'],path[edge+1],now_ms=arrival_ms)

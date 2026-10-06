@@ -158,11 +158,13 @@ def initialize_runtime():
     migrate_character_builds_v1()
     import time
     from game.gathering_runtime import interrupt_gathering_at_startup
+    from game.player_activity import recover_activity_overlaps
     from game.world_activity_tick import run_world_activity_tick
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
         interrupt_gathering_at_startup(conn,now_ms=int(time.time()*1000))
+        recover_activity_overlaps(conn,now_ms=int(time.time()*1000))
         conn.commit()
     except Exception:
         conn.rollback()

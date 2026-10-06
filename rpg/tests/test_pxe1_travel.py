@@ -29,6 +29,19 @@ def test_exact_routes_and_preview_no_mutation():
     conn.close()
 
 
+def test_startup_overlap_interrupts_not_due_travel_without_relocating_or_rewards():
+    from game.player_activity import recover_activity_overlaps
+    conn=prepare();conn.execute('BEGIN IMMEDIATE')
+    session=start_travel_session(conn,1,preview_travel(conn,1,'capital_city'),request_id='overlap',now_ms=1000)
+    conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id=1')
+    before=tuple(conn.execute('SELECT location_id,hp,mana,exp,gold FROM players WHERE telegram_id=1').fetchone())
+    recover_activity_overlaps(conn,now_ms=2000);conn.commit()
+    assert conn.execute('SELECT status FROM player_travel_sessions WHERE session_id=?',(session['session_id'],)).fetchone()[0]=='interrupted'
+    assert before==tuple(conn.execute('SELECT location_id,hp,mana,exp,gold FROM players WHERE telegram_id=1').fetchone())
+    assert conn.execute('SELECT state FROM player_feedback_events WHERE event_key=?',('recovery:travel:'+session['session_id'],)).fetchone()[0]=='pending'
+    conn.close()
+
+
 def test_only_discovered_intermediate_nodes_and_adjacent_exploration():
     conn = prepare()
     conn.execute("DELETE FROM player_location_discovery WHERE location_id='westwild_n3'")

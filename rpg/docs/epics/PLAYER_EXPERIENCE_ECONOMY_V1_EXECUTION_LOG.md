@@ -99,6 +99,39 @@ Focused evidence (same isolated Python/SQLite environment):
   delivery, 31 eligible candidates across six pages, rejecting raw enrollment,
   and isolating one corrupt durable PvP order from a healthy due engagement.
 
+## Cutover/activity continuation, candidate based on 462db09
+
+Validated type/null/default/CHECK shape for all nine added columns. Corrupt
+legacy preparations and incoherent formations are locally quarantined with typed
+recovery notices; valid rows still migrate and original preparation deadlines
+stay intact. Unsupported old invitation consent gets a localized reinvite notice.
+An unstarted formation crossing the rules cutover snapshots current actors/enemies
+at lock and executes through the shared world owner; already-active legacy rows
+retain their compatibility semantics. Mixed reservations now validate every
+actor's location/activity under the writer. Startup stops lower-priority travel
+without relocating players. Gather ticks check committed receipt/counter/accounting
+agreement and source provenance; invalid sessions interrupt without another yield
+or durability debit. Travel interruptions retain a durable recovery fact. Nearby
+mixed labels show actual unit count and remain paginated beside individual spawns.
+
+Focused evidence:
+
+- Initial schema/lifecycle/world/feedback: 22 passed, 4.31s.
+- Expanded migration fixtures: 1 failed / 26 passed, 5.21s. Fixture incorrectly
+  performed the pre-PXE1 build cutover after creating a legacy encounter; corrected
+  to the actual baseline ordering. Affected expanded run: 31 passed, 6.06s.
+- Gather/travel/membership/schema/RAV/mixed: 1 failed / 39 passed, 7.51s; old
+  mixed visibility assertion expected the entire encounter list on Location home.
+  Updated to traverse actual Nearby encounter pages. Rerun: 40 passed, 8.93s.
+- Expanded activity/death run: 2 failed / 48 passed, 11.68s. A misplaced mixed
+  guard block was caught in the personal death function; moved to the reservation
+  writer. Rerun: 1 failed / 24 passed, 7.81s; contention fixture's second claimant
+  was in another location. Corrected both claimants to the actual local source.
+  Affected lifecycle/world/death/mixed/RAV: 25 passed, 7.33s.
+- Latest affected combined command:
+  `python -m pytest -q tests/test_pxe1_schema.py tests/test_pxe1_feedback_journal.py tests/test_pxe1_gathering_sessions.py tests/test_pxe1_travel.py tests/test_pxe1_encounter_lifecycle.py tests/test_pxe1_pve_world_tick.py tests/test_pxe1_pvp_membership.py tests/test_pxe1_pvp_membership_ui.py tests/test_pxe1_combat_delivery.py tests/test_character_builds_v1_mixed_encounters.py tests/test_regional_adventures_combat.py`
+  **72 passed, 17.16s**.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

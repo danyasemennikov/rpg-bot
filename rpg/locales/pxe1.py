@@ -274,3 +274,15 @@ for _lang,_strings in PXE1_SHOP_STRINGS.items():
 
 for _lang,_expired in {'en':'Invitation expired','ru':'Приглашение истекло','es':'La invitación caducó'}.items():
     PXE1_STRINGS[_lang]['membership']['expired'] = _expired
+
+for _lang,_copy in {
+    'en':{'pvp_reinvite_required':'The preparation was updated. Old invitations expired; the principal must invite allies again.',
+          'pvp_cancelled':'This preparation could not be restored and was cancelled. Your committed items and progress are preserved.',
+          'start_failed':'This encounter could not start. Open Location to choose an available encounter.'},
+    'ru':{'pvp_reinvite_required':'Подготовка обновлена. Старые приглашения истекли; глава стороны должен пригласить союзников заново.',
+          'pvp_cancelled':'Подготовку не удалось восстановить, и она отменена. Сохранённые предметы и прогресс остались у вас.',
+          'start_failed':'Не удалось начать бой. Откройте Локацию, чтобы выбрать доступный бой.'},
+    'es':{'pvp_reinvite_required':'Se actualizó la preparación. Las invitaciones anteriores caducaron; el líder debe volver a invitar a los aliados.',
+          'pvp_cancelled':'No se pudo recuperar esta preparación y se canceló. Conservas los objetos y el progreso ya registrados.',
+          'start_failed':'No se pudo iniciar este combate. Abre Ubicación para elegir un combate disponible.'},
+}.items(): PXE1_STRINGS[_lang].update(_copy)

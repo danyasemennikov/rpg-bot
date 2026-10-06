@@ -58,7 +58,9 @@ def render_feedback(events,lang):
         elif kind=='claim':
             lines.append(t('pxe1.assignment_claimed',lang,gold=payload['reward_gold'],xp=payload['reward_exp']))
         elif kind=='recovery':
-            lines.append(t('pxe1.recovery',lang))
+            key={'reinvite_required':'pxe1.pvp_reinvite_required','cancelled':'pxe1.pvp_cancelled',
+                 'start_failed':'pxe1.start_failed'}.get(payload.get('reason'),'pxe1.recovery')
+            lines.append(t(key,lang))
     return '\n'.join(lines),InlineKeyboardMarkup([[InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')]])
 
 

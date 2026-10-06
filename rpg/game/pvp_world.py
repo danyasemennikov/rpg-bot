@@ -261,10 +261,16 @@ def apply_membership_intent(conn,*,actor_id,token,now_ms):
 
 
 def cancel_preparation(conn, row, *, reason, now_ms):
-    context = json.loads(row['reason_context'])
+    try: context = json.loads(row['reason_context'])
+    except (ValueError,TypeError): context = {'legacy_reason_context':row['reason_context']}
+    if not isinstance(context,dict): context={'legacy_reason_context':row['reason_context']}
     context['terminal_reason'] = reason
     conn.execute("UPDATE pvp_engagements SET engagement_state='cancelled',reason_context=?,state_revision=state_revision+1 WHERE id=?", (encoded(context), row['id']))
     conn.execute("UPDATE pvp_engagement_reinforcements SET status='expired',responded_at=? WHERE engagement_id=? AND membership_version=1 AND status IN ('accepted','pending')", (iso(now_ms), row['id']))
+    from game.player_experience_schema import _recovery_notice
+    recipients={row['attacker_id'],row['defender_id'],*(m['ally_id'] for m in conn.execute('SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1',(row['id'],)))}
+    for actor_id in recipients:
+        _recovery_notice(conn,actor_id,domain='pvp',ref=row['id'],reason='cancelled',now_ms=now_ms)
     return 'cancelled', context
 
 
@@ -273,6 +279,14 @@ def lock_preparation(conn, *, engagement_id, now_ms, failed_escape=False):
     row = engagement(conn, engagement_id)
     if row['engagement_state'] != 'pending' or (not failed_escape and now_ms < milliseconds(row['engagement_ready_at'])):
         return row['engagement_state'], json.loads(row['reason_context'])
+    if (not isinstance(row['combat_seed'],str) or len(row['combat_seed'])!=32
+            or any(c not in '0123456789abcdef' for c in row['combat_seed'])):
+        return cancel_preparation(conn,row,reason='invalid_seed',now_ms=now_ms)
+    try:
+        context=json.loads(row['reason_context'])
+        if not isinstance(context,dict): raise ValueError()
+    except (ValueError,TypeError):
+        return cancel_preparation(conn,row,reason='invalid_preparation',now_ms=now_ms)
     try:
         for principal in (row['attacker_id'], row['defender_id']):
             _local_available(conn, row, principal, now_ms=now_ms)

@@ -56,3 +56,16 @@ def interrupt_peaceful_activity(conn, player_id: int, *, reason: str, now_ms: in
         conn.execute(f'''UPDATE {table} SET status='interrupted',terminal_reason=?,next_due_ms=NULL,
             revision=revision+1,updated_ms=? WHERE player_id=? AND status='running' ''',
             (reason,now_ms,player_id))
+
+
+def recover_activity_overlaps(conn,*,now_ms):
+    """Preserve committed combat/location; stop lower-priority travel on restart."""
+    from game.player_feedback import record_feedback
+    for session in conn.execute("SELECT session_id,player_id FROM player_travel_sessions WHERE status='running'").fetchall():
+        activity=player_activity(conn,session['player_id'],exclude_travel=session['session_id'])
+        if activity and activity['kind'] not in {'travel','gather'}:
+            conn.execute("""UPDATE player_travel_sessions SET status='interrupted',terminal_reason='activity_overlap',
+                next_due_ms=NULL,revision=revision+1,updated_ms=? WHERE session_id=?""",(now_ms,session['session_id']))
+            record_feedback(conn,session['player_id'],event_key='recovery:travel:'+session['session_id'],
+                source_kind='travel_session',source_id=session['session_id'],event_kind='recovery',
+                payload={'reason':'activity_overlap'},now_ms=now_ms)

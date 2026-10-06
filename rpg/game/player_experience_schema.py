@@ -156,6 +156,28 @@ def _validate_tables(conn) -> None:
         expected.close()
 
 
+def _validate_additions(conn) -> None:
+    expected=sqlite3.connect(':memory:')
+    try:
+        for table,additions in _ADDITIONS.items():
+            expected.execute('CREATE TABLE "'+table+'" ('+','.join('"'+name+'" '+decl for name,decl in additions.items())+')')
+            columns={r['name']:tuple(r)[2:] for r in conn.execute(f'PRAGMA table_info("{table}")')}
+            sql=conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?",(table,)).fetchone()['sql']
+            normalized=_normalized(sql.replace('"','').replace('[','').replace(']',''))
+            for column in expected.execute(f'PRAGMA table_info("{table}")'):
+                name=column[1]
+                if columns.get(name)!=tuple(column)[2:] or _normalized(name+additions[name]) not in normalized:
+                    raise RuntimeError(f'incompatible PXE1 column {table}.{name}')
+    finally: expected.close()
+
+
+def _recovery_notice(conn,player_id,*,domain,ref,reason,now_ms):
+    from game.player_feedback import record_feedback
+    if conn.execute('SELECT 1 FROM players WHERE telegram_id=?',(player_id,)).fetchone():
+        record_feedback(conn,player_id,event_key=f'recovery:{domain}:{ref}:{reason}',source_kind=domain,
+            source_id=ref,event_kind='recovery',payload={'reason':reason},now_ms=now_ms)
+
+
 def grant_player_pxe1_starters(conn, player_id: int, *, now_ms: int, acquired_via: str) -> None:
     """INSERT only: repeated welcome/migration never repairs an existing tool."""
     conn.executemany('''INSERT OR IGNORE INTO player_profession_tools
@@ -177,35 +199,56 @@ def _upgrade_formations(conn, now_ms: int) -> None:
     for row in rows:
         sources = conn.execute('SELECT * FROM pve_spawn_instances WHERE linked_encounter_id=?',
                                (row['encounter_id'],)).fetchall()
-        if (not sources or any(s['state'] != 'forming' or s['location_id'] != row['location_id'] for s in sources)
-                or row['anchor_spawn_instance_id'] not in {s['spawn_instance_id'] for s in sources}):
+        try:
+            declared=json.loads(row['source_units_json'])['units']
+            state=json.loads(row['battle_state_json'])
+            valid=(isinstance(state,dict) and isinstance(declared,list) and sources
+                and all(s['state']=='forming' and s['location_id']==row['location_id'] for s in sources)
+                and row['anchor_spawn_instance_id'] in {s['spawn_instance_id'] for s in sources}
+                and {s['spawn_instance_id'] for s in sources}=={u['spawn_instance_id'] for u in declared})
+        except (ValueError,TypeError,KeyError): valid=False
+        if not valid:
+            conn.execute("UPDATE pve_encounters SET lifecycle_version=1,status='start_failed',finished_at=CURRENT_TIMESTAMP WHERE encounter_id=?",(row['encounter_id'],))
+            for member in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(row['encounter_id'],)).fetchall():
+                _recovery_notice(conn,member['player_id'],domain='pve',ref=row['encounter_id'],reason='start_failed',now_ms=now_ms)
+            conn.execute("UPDATE pve_encounter_participants SET status='left' WHERE encounter_id=? AND status='active'",(row['encounter_id'],))
+            conn.execute("UPDATE pve_spawn_instances SET state='idle',linked_encounter_id=NULL,respawn_available_at=NULL WHERE linked_encounter_id=? AND state='forming'",(row['encounter_id'],))
             continue
         conn.execute('''UPDATE pve_encounters SET lifecycle_version=1, formation_deadline_ms=?,
             formation_revision=1 WHERE encounter_id=?''', (now_ms + 12000, row['encounter_id']))
 
 
-def _upgrade_pending_pvp(conn) -> None:
+def _upgrade_pending_pvp(conn,now_ms) -> None:
     for row in conn.execute("SELECT * FROM pvp_engagements WHERE world_model_version=0 AND engagement_state IN ('pending','active')").fetchall():
         try:
             payload = json.loads(row['reason_context'] or '{}')
-        except (ValueError, TypeError):
-            raise RuntimeError(f'invalid legacy PvP preparation payload: {row["id"]}')
-        if not isinstance(payload, dict):
-            raise RuntimeError(f'invalid legacy PvP preparation payload: {row["id"]}')
-        if payload.get('battle'):
+        except (ValueError, TypeError): payload=None
+        battle=payload.get('battle') if isinstance(payload,dict) else None
+        if isinstance(battle,dict) and battle.get('state')=='live':
             continue  # Initialized legacy battles retain their historical 1v1 rules.
         from game.pvp_rules import is_recent_retaliation_context
         attacker = conn.execute('SELECT * FROM players WHERE telegram_id=?',(row['attacker_id'],)).fetchone()
         defender = conn.execute('SELECT * FROM players WHERE telegram_id=?',(row['defender_id'],)).fetchone()
-        if not attacker or not defender:
-            continue  # Lock recovery cancels unverifiable principal membership.
+        seed=row['combat_seed'] or secrets.token_hex(16)
+        if (not isinstance(payload,dict) or battle or not attacker or not defender
+                or len(seed)!=32 or any(c not in '0123456789abcdef' for c in seed)):
+            context={'schema_version':1,'catalog_version':2,'terminal_reason':'invalid_legacy_preparation',
+                     'legacy_reason_context':row['reason_context']}
+            conn.execute("UPDATE pvp_engagements SET world_model_version=1,engagement_state='cancelled',reason_context=?,state_revision=state_revision+1 WHERE id=?",(json.dumps(context,ensure_ascii=False),row['id']))
+            for actor_id in {row['attacker_id'],row['defender_id']}:
+                _recovery_notice(conn,actor_id,domain='pvp',ref=row['id'],reason='cancelled',now_ms=now_ms)
+            conn.execute("UPDATE pvp_engagement_reinforcements SET status='expired' WHERE engagement_id=? AND membership_version=0 AND status IN ('pending','accepted')",(row['id'],))
+            continue
         payload.update(schema_version=1,catalog_version=2,flow='open_world_group')
         payload['crime_context'] = {str(row['attacker_id']): {
             'initiator_snapshot':dict(attacker),'original_defender_snapshot':dict(defender),
             'initiation_infamy':0,'red_flag_applied':False,
             'retaliation_context':is_recent_retaliation_context(attacker_id=row['attacker_id'],defender_id=row['defender_id'],conn=conn)}}
         conn.execute('''UPDATE pvp_engagements SET world_model_version=1, engagement_state='pending',
-            reason_context=?,combat_seed=COALESCE(combat_seed,?) WHERE id=?''', (json.dumps(payload,ensure_ascii=False),secrets.token_hex(16), row['id']))
+            reason_context=?,combat_seed=? WHERE id=?''', (json.dumps(payload,ensure_ascii=False),seed, row['id']))
+        old_invites=conn.execute("SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=0 AND status IN ('pending','accepted')",(row['id'],)).fetchall()
+        for actor_id in {row['attacker_id'],row['defender_id'],*(r['ally_id'] for r in old_invites)}:
+            if old_invites: _recovery_notice(conn,actor_id,domain='pvp',ref=row['id'],reason='reinvite_required',now_ms=now_ms)
         conn.execute("""UPDATE pvp_engagement_reinforcements SET status='expired'
             WHERE engagement_id=? AND membership_version=0 AND status IN ('pending','accepted')""", (row['id'],))
 
@@ -238,6 +281,7 @@ def ensure_player_experience_schema(conn, *, now_ms: int | None = None) -> None:
                     if marked:
                         raise RuntimeError(f'PXE1 marker missing {table}.{name}')
                     conn.execute(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {declaration}')
+        _validate_additions(conn)
         for name, declaration in _INDEXES.items():
             existing = conn.execute("SELECT sql FROM sqlite_master WHERE type='index' AND name=?", (name,)).fetchone()
             if existing:
@@ -255,7 +299,7 @@ def ensure_player_experience_schema(conn, *, now_ms: int | None = None) -> None:
                             '{"schema_version":1,"historical":true}', 'acknowledged',?,?)''',
                     (player['player_id'], now_ms, now_ms))
             _upgrade_formations(conn, now_ms)
-            _upgrade_pending_pvp(conn)
+            _upgrade_pending_pvp(conn,now_ms)
             from game.location_threats import seed_visit_threats
             for player in conn.execute('SELECT telegram_id FROM players').fetchall():
                 seed_visit_threats(conn,player['telegram_id'],now_ms=now_ms)

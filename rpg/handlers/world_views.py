@@ -84,6 +84,7 @@ def local_entries(player):
         categories['encounters'].append((label, f"fight_spawn_{spawn['spawn_instance_id']}"))
     for mixed in list_location_available_mixed_encounters(location_id=player['location_id']):
         label = str(mixed['label'].get(lang) or mixed['label'].get('en'))
+        label += ' ×'+str(len(mixed['units']))
         categories['encounters'].append((label, f"fight_mixed_{mixed['recipe_id']}"))
     for encounter in get_pending_location_encounters(location_id=player['location_id'], limit=100):
         label = t('pxe1.pvp_pair', lang, attacker=encounter['attacker_name'], defender=encounter['defender_name'])
