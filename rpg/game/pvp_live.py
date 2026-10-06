@@ -2195,47 +2195,40 @@ async def run_live_pvp_tick(bot) -> None:
 
     from handlers.pvp_group import retry_preparation_delivery
     await retry_preparation_delivery(bot)
+    from handlers.combat_results import deliver_pending_results
+    await deliver_pending_results(bot,domain='pvp')
+    # Failed live delivery retries from the same persisted revision, including
+    # the initial roster lock; a missing Telegram card never stops the battle.
+    conn=get_connection()
+    try:
+        retry_rows=conn.execute("SELECT * FROM pvp_engagements WHERE world_model_version=1 AND engagement_state='converted_to_battle' AND json_valid(reason_context) ORDER BY id LIMIT 100").fetchall()
+    finally: conn.close()
+    for row in retry_rows:
+        await _deliver_pxe1_pvp_event(bot,{'row':row,'payload':json.loads(row['reason_context'])})
 
 
 async def _deliver_pxe1_pvp_event(bot,event):
-    """Committed members receive their own card; deaths receive hub results."""
+    """Deliver living cards; personal receipt facts own all result retries."""
     from handlers.pvp_group import live_card
-    from game.i18n import get_location_name
+    from handlers.combat_results import deliver_pending_results
     from game.player_ui import present_surface,_row
-    from telegram import InlineKeyboardButton,InlineKeyboardMarkup
-    battle = (event.get('payload') or {}).get('battle') or {}
-    conn = get_connection()
+    battle=(event.get('payload') or {}).get('battle') or {}
+    conn=get_connection()
     try:
-        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(event['row']['id'],)).fetchone()
-        receipts = {r['player_id']:json.loads(r['result_json']) for r in conn.execute('SELECT player_id,result_json FROM pvp_participant_settlements_pxe1 WHERE engagement_id=?',(row['id'],))}
-        group_row = conn.execute('SELECT result_json FROM pvp_group_settlements_pxe1 WHERE engagement_id=?',(row['id'],)).fetchone()
-        group = json.loads(group_row['result_json']) if group_row else None
-        side_result = conn.execute("SELECT result_json FROM combat_turn_results_v1 WHERE encounter_kind='pvp' AND encounter_id=? ORDER BY turn_revision DESC LIMIT 1",(str(row['id']),)).fetchone()
-        newly_dead = {d['player_id'] for d in json.loads(side_result['result_json']).get('deaths',[])} if side_result else set()
-    finally:
-        conn.close()
-    for raw_id,actor in battle.get('participants_v1',{}).items():
-        player_id = int(raw_id)
-        lang = get_player_lang(player_id)
-        kind = 'pvp_result' if player_id in newly_dead or group else 'pvp'
-        revision = int(battle.get('turn_revision',0))
-        prior = _row(player_id) or {}
-        if prior.get('surface_kind')==kind and prior.get('surface_ref')==str(row['id']) and prior.get('surface_revision')==revision:
-            continue
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.location',lang),callback_data='px:local:home:0')]])
-        if player_id in receipts and player_id not in newly_dead:
-            continue  # A prior death never receives another live prompt.
-        if player_id in newly_dead:
-            death = receipts[player_id]
-            text = t('location.pvp_personal_death',lang,hub=get_location_name(death['respawn_hub'],lang),
-                     quantity=sum(death['loss_pool'].values()),hp=death['hp_after'],mana=death['mana_after'])
-        elif group:
-            quantity = sum(g['quantity'] for g in group['grants'] if g['recipient_id']==player_id)
-            text = t('location.pvp_personal_result',lang,hp=actor['hp'],mana=actor['mana'],quantity=quantity)
-        else:
-            text,keyboard = live_card(row,event['payload'],player_id,lang)
-        try:
-            await present_surface(bot,player_id,text,keyboard,kind=kind,ref=str(row['id']),revision=revision)
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception('PvP delivery failed for player %s',player_id)
+        row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(event['row']['id'],)).fetchone()
+        dead={r[0] for r in conn.execute('SELECT player_id FROM pvp_participant_settlements_pxe1 WHERE engagement_id=?',(row['id'],))}
+        terminal=conn.execute('SELECT 1 FROM pvp_group_settlements_pxe1 WHERE engagement_id=?',(row['id'],)).fetchone()
+    finally: conn.close()
+    if not terminal:
+        for raw_id in battle.get('participants_v1',{}):
+            player_id=int(raw_id)
+            if player_id in dead: continue
+            prior=_row(player_id) or {};revision=int(battle.get('turn_revision',0))
+            if prior.get('surface_kind')=='pvp' and prior.get('surface_ref')==str(row['id']) and prior.get('surface_revision')==revision: continue
+            try:
+                text,keyboard=live_card(row,event['payload'],player_id,get_player_lang(player_id))
+                await present_surface(bot,player_id,text,keyboard,kind='pvp',ref=str(row['id']),revision=revision)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('PvP delivery failed for player %s',player_id)
+    await deliver_pending_results(bot,domain='pvp')

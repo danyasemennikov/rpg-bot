@@ -41,7 +41,7 @@ def pve_result(player,row,participant,death,settlement):
     if death:
         penalty = death['penalty']
         lines = [t('battle.death',lang,exp_loss=penalty['exp_loss'],gold_loss=penalty['gold_loss']),
-                 escape(get_location_name(player['location_id'],lang))+f" · ❤️ {player['hp']}/{player['max_hp']} · 🔵 {player['mana']}/{player['max_mana']}"]
+                 escape(get_location_name(death.get('respawn_hub',player['location_id']),lang))+f" · ❤️ {death.get('hp_after',player['hp'])}/{death.get('max_hp',player['max_hp'])} · 🔵 {death.get('mana_after',player['mana'])}/{death.get('max_mana',player['max_mana'])}"]
     elif settlement:
         reward = next((r for r in settlement.get('recipients',[]) if r['player_id']==player['telegram_id']),None)
         eligible = reward is not None
@@ -84,6 +84,8 @@ async def deliver_pve_updates(bot,results=(),*,now_ms=None,limit=100):
                 prior = conn.execute('SELECT * FROM player_pxe1_ui WHERE player_id=?',(player_id,)).fetchone()
                 death = conn.execute("SELECT result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?",(player_id,f"pve_death:{row['encounter_id']}:{player_id}")).fetchone()
                 result = death is not None or participant['status']=='victory'
+                if result:
+                    continue  # Immutable result facts retry independently of current battle turns.
                 kind = 'pve_result' if result else 'pve'
                 revision = 1 if result else formation_revision(row,now_ms) if row['runtime_started_ms'] is None else row['turn_revision']
                 if prior and prior['surface_kind']==kind and prior['surface_ref']==row['encounter_id'] and prior['surface_revision']==revision and prior['message_id']:
@@ -112,3 +114,5 @@ async def deliver_pve_updates(bot,results=(),*,now_ms=None,limit=100):
             if delivered: acknowledge_presented_facts(player_id,keys)
         except Exception:
             logger.exception('PXE1 PvE delivery retry for player %s',player_id)
+    from handlers.combat_results import deliver_pending_results
+    await deliver_pending_results(bot,domain='pve',limit=limit)

@@ -132,6 +132,39 @@ Focused evidence:
   `python -m pytest -q tests/test_pxe1_schema.py tests/test_pxe1_feedback_journal.py tests/test_pxe1_gathering_sessions.py tests/test_pxe1_travel.py tests/test_pxe1_encounter_lifecycle.py tests/test_pxe1_pve_world_tick.py tests/test_pxe1_pvp_membership.py tests/test_pxe1_pvp_membership_ui.py tests/test_pxe1_combat_delivery.py tests/test_character_builds_v1_mixed_encounters.py tests/test_regional_adventures_combat.py`
   **72 passed, 17.16s**.
 
+## Personal-result continuation, candidate based on dd3ca10
+
+Personal PvE deaths/T2 victories and PvP deaths/group survivor results now record
+one delivery fact in the existing feedback table inside their consequence writer.
+The immutable receipt remains the only reward/loss authority. Pending results
+retry independently of later side revisions, initial Telegram coordinates or
+restart. Generic inline/finale feedback cannot consume an unseen result fact.
+Successful transport followed by acknowledgment failure preserves visible Details
+tokens; replay acknowledges without another send or consequence. PvP results show
+own damage, infamy, loss/loot names and private paginated Details in ru/en/es.
+Simultaneous-death receipts capture the whole batch's personal infamy before their
+first insert. Already-settled actors receive no later live prompts. Failed live
+cards also retry from persisted authority. PvE death presentation uses its frozen
+hub/HP/MP result rather than rewriting history after later movement.
+
+Focused evidence:
+
+- Initial result/runtime/feedback/RAV run: 24 passed, 5.92s.
+- Expanded result recovery: 2 failed / 27 passed, 7.38s. Existing T2 query projected
+  only status; included the full encounter row so lifecycle-specific delivery
+  facts are recorded. Affected rerun: 29 passed, 6.95s.
+- Wider adjacent run: **28 failed / 74 passed, 24.92s**. New result tests passed;
+  old durability fixtures used fresh PvP in a safe zone, while PR230/pack fixtures
+  retained immediate formation locks, 8-entry inventory pages, old category
+  routes and instantaneous travel. Those integration failures remain open unless
+  specifically repaired below; do not treat the combined run as a pass.
+- Three durability compatibility fixtures now use the version-0 engagement
+  creator, preserving their old-runtime recovery assertions. New result suites +
+  durability + existing itemization/T2 rollback suites: **75 passed, 15.33s**.
+- Latest personal-result, delivery, multiplayer runtime, feedback and legacy PvP:
+  `python -m pytest -q tests/test_pxe1_combat_result_recovery.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_pvp_group_runtime.py tests/test_pxe1_feedback_journal.py tests/test_pvp_live_flow_v1.py`
+  **60 passed, 12.02s**, including simultaneous-death infamy finalization.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

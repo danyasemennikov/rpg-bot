@@ -27,6 +27,12 @@ def record_progression(conn,player_id,profession,progression,source_id):
             payload={'profession_key':profession,'old_level':progression.old_level,'new_level':progression.new_level})
 
 
+def record_combat_result(conn,player_id,*,domain,ref,phase,now_ms=None):
+    """Delivery fact only: the existing immutable combat receipt owns effects."""
+    record_feedback(conn,player_id,event_key=f'combat_result:{domain}:{ref}:{phase}',source_kind='combat_result',
+        source_id=ref,event_kind='recovery',payload={'domain':domain,'phase':phase},now_ms=now_ms)
+
+
 def acknowledge_feedback(conn,player_id,event_key,*,now_ms=None):
     return conn.execute("UPDATE player_feedback_events SET state='acknowledged',acknowledged_ms=? WHERE player_id=? AND event_key=? AND state<>'acknowledged'",
         (int(time.time()*1000) if now_ms is None else now_ms,player_id,event_key)).rowcount==1
@@ -68,7 +74,7 @@ def inline_feedback(player_id,lang,text):
     """Read committed facts for an action card. Acknowledge only after transport."""
     conn = get_connection()
     try:
-        events = [dict(r) for r in conn.execute("SELECT * FROM player_feedback_events WHERE player_id=? AND state='pending' AND event_kind<>'chapter_finale' ORDER BY created_ms,event_key",(player_id,))]
+        events = [dict(r) for r in conn.execute("SELECT * FROM player_feedback_events WHERE player_id=? AND state='pending' AND event_kind<>'chapter_finale' AND source_kind<>'combat_result' ORDER BY created_ms,event_key",(player_id,))]
     finally:
         conn.close()
     latest = {}
@@ -114,6 +120,10 @@ async def present_pending_feedback(bot,player_id,*,recover_presented=False,origi
     if not events:
         return False
     finales = [event for event in events if event['event_kind']=='chapter_finale']
+    if not finales and any(event['source_kind']=='combat_result' for event in events):
+        from handlers.combat_results import deliver_pending_results
+        return await deliver_pending_results(bot,player_id=player_id)
+    events=[event for event in events if event['source_kind']!='combat_result']
     selected = finales[:1] or events
     text,keyboard = render_feedback(selected,get_player_lang(player_id))
     if not text:

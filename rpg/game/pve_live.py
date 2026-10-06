@@ -3820,7 +3820,12 @@ def apply_pxe1_pve_death(player_id: int, encounter_id: str, *, now_ms: int) -> d
         state['state_revision'] = int(row['state_revision'])+1
         conn.execute('UPDATE pve_encounters SET battle_state_json=?,state_revision=state_revision+1 WHERE encounter_id=?',(_serialize_payload(state),encounter_id))
         store_receipt(conn,player_id,request_id,'pve_death_pxe1',intent_hash('pve_death_pxe1',player_id,{'encounter_id':encounter_id}),
-            {'schema_version':1,'catalog_version':2,'penalty':penalty,'encounter_id':encounter_id},catalog_version=2)
+            {'schema_version':1,'catalog_version':2,'penalty':penalty,'encounter_id':encounter_id,
+             'respawn_hub':resolve_death_respawn_hub(location_id=row['location_id']),
+             'hp_after':max(1,int(calc_max_hp(player['vitality'])*.30)),'max_hp':player['max_hp'],
+             'mana_after':max(0,int(actor['mana'])),'max_mana':player['max_mana']},catalog_version=2)
+        from game.player_feedback import record_combat_result
+        record_combat_result(conn,player_id,domain='pve',ref=encounter_id,phase='death',now_ms=now_ms)
         conn.commit()
         # Membership projection is refreshed only after its committed change.
         mark_group_participant_defeated(encounter_id=encounter_id,participant_id=player_id)

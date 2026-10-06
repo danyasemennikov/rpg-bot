@@ -2036,6 +2036,11 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
+    if data.startswith('pvp_result_'):
+        from handlers.combat_results import handle_result_details
+        await handle_result_details(update,context)
+        return
+
     if data.startswith('pvp_member_'):
         from handlers.pvp_group import handle_membership_choice
         await handle_membership_choice(update,context)

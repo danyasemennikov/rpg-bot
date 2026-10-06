@@ -286,3 +286,15 @@ for _lang,_copy in {
           'pvp_cancelled':'No se pudo recuperar esta preparación y se canceló. Conservas los objetos y el progreso ya registrados.',
           'start_failed':'No se pudo iniciar este combate. Abre Ubicación para elegir un combate disponible.'},
 }.items(): PXE1_STRINGS[_lang].update(_copy)
+
+for _lang,_copy in {
+    'en':{'damage':'Damage dealt: {given} · received: {taken}','infamy':'Your infamy change: +{delta}',
+          'protection':'Respawn protection: 8 minutes at the hub.','lost':'Your lost materials:','received':'Your received items:',
+          'draw':'PvP draw','victory':'Your side won'},
+    'ru':{'damage':'Нанесено урона: {given} · получено: {taken}','infamy':'Изменение вашей дурной славы: +{delta}',
+          'protection':'Защита после возрождения: 8 минут в городе.','lost':'Ваши потерянные материалы:','received':'Полученные вами предметы:',
+          'draw':'Ничья в PvP','victory':'Ваша сторона победила'},
+    'es':{'damage':'Daño causado: {given} · recibido: {taken}','infamy':'Cambio de tu infamia: +{delta}',
+          'protection':'Protección tras reaparecer: 8 minutos en el centro.','lost':'Tus materiales perdidos:','received':'Objetos que recibiste:',
+          'draw':'Empate de PvP','victory':'Tu bando ganó'},
+}.items(): PXE1_STRINGS[_lang]['result']=_copy

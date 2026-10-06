@@ -732,7 +732,7 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
         plan = _load_json(row['plan_json'])
         if plan.get('encounter_id') != encounter_id:
             raise RuntimeError('settlement_identity_mismatch')
-        encounter = conn.execute('SELECT status FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
+        encounter = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
         if not encounter or str(encounter['status']) != 'resolving_victory':
             raise RuntimeError('settlement_encounter_state_mismatch')
 
@@ -900,6 +900,11 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
         conn.execute('''UPDATE pve_reward_settlements SET status='applied', result_json=?,
             updated_at=CURRENT_TIMESTAMP, applied_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND status='prepared' ''',
             (_canonical_json(result), encounter_id))
+        if (conn.execute("SELECT 1 FROM sqlite_master WHERE name='player_feedback_events'").fetchone()
+                and 'lifecycle_version' in encounter.keys() and encounter['lifecycle_version']==1):
+            from game.player_feedback import record_combat_result
+            for member in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='victory'",(encounter_id,)).fetchall():
+                record_combat_result(conn,member['player_id'],domain='pve',ref=encounter_id,phase='terminal')
         conn.commit()
         if failure_hook:
             failure_hook('after_t2_commit')

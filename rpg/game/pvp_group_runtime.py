@@ -169,10 +169,22 @@ def settle_deaths(conn, row, context, *, turn_revision, now_ms, failure_hook=Non
             'credited_actor_id':credited,'prior_pair_counts':counts,'repeat_scale':float(scale),
             'inventory_before':quantities,'loss_pool':pool,'log_id':log_id,'infamy_delta':infamy,
             'respawn_hub':hub,'hp_after':max(1,int(victim['max_hp'])*30//100),'mana_after':max(0,int(snapshot['mana']))}
+        result['damage_dealt']=sum(int(sources.get(str(victim_id),0)) for sources in battle.get('damage_by_source',{}).values())
+        result['damage_taken']=sum(int(n) for n in battle.get('damage_by_source',{}).get(str(victim_id),{}).values())
+        new_deaths.append(result)
+    # Finalize each new receipt once, after every death consequence in this
+    # atomic batch. Simultaneous DOT deaths can change the credited actor's
+    # infamy even when that actor was already processed earlier in the batch.
+    prior_deaths=[json.loads(r[0]) for r in conn.execute('SELECT result_json FROM pvp_participant_settlements_pxe1 WHERE engagement_id=?',(row['id'],))]
+    for result in new_deaths:
+        victim_id=result['player_id']
+        result['personal_infamy_delta']=int(context.get('crime_context',{}).get(str(victim_id),{}).get('initiation_infamy',0))
+        result['personal_infamy_delta']+=sum(d['infamy_delta'] for d in prior_deaths+new_deaths if d['credited_actor_id']==victim_id)
         conn.execute('''INSERT INTO pvp_participant_settlements_pxe1
             (engagement_id,player_id,schema_version,turn_revision,result_json,status,created_ms)
             VALUES (?,?,1,?,?,'applied',?)''',(row['id'],victim_id,turn_revision,encoded(result),now_ms))
-        new_deaths.append(result)
+        from game.player_feedback import record_combat_result
+        record_combat_result(conn,victim_id,domain='pvp',ref=row['id'],phase='death',now_ms=now_ms)
         if failure_hook:
             failure_hook('after_participant_receipt')
     return new_deaths
@@ -221,6 +233,10 @@ def settle_group(conn, row, context, *, turn_revision, now_ms, failure_hook=None
         (engagement_id,schema_version,terminal_turn_revision,result_json,status,created_ms)
         VALUES (?,1,?,?,'applied',?)''',(row['id'],turn_revision,encoded(result),now_ms))
     conn.execute("UPDATE pvp_engagements SET engagement_state='cancelled' WHERE id=?",(row['id'],))
+    from game.player_feedback import record_combat_result
+    for ids in alive.values():
+        for player_id in ids:
+            record_combat_result(conn,player_id,domain='pvp',ref=row['id'],phase='terminal',now_ms=now_ms)
     if failure_hook:
         failure_hook('after_group_receipt')
     return result
