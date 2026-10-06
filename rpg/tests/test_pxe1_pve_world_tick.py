@@ -69,3 +69,32 @@ def test_background_defeat_receipt_replays_without_repeated_penalty():
     assert conn.execute('SELECT status FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0]=='death'
     assert conn.execute('SELECT state FROM pve_spawn_instances WHERE spawn_instance_id=?',(spawn['spawn_instance_id'],)).fetchone()[0]=='respawning'
     conn.close()
+
+
+def test_partial_defeat_settles_before_next_deadline_and_preserves_survivor():
+    from game.pve_live import join_open_world_pve_encounter
+    from game.player_activity import player_activity
+    migrate_character_builds_v1()
+    encounter,_=prepare()
+    with patch('time.time',return_value=1001):
+        assert join_open_world_pve_encounter(encounter_id=encounter,player_id=777)[0]
+    process_due_pve_formations(now_ms=1012000)
+    state,mob=load_active_pve_encounter(encounter_id=encounter)
+    state['participant_states_v1']['1'].update(hp=0,dead=True)
+    survivor=dict(state['participant_states_v1']['777'])
+    deadline=state['side_deadline_at']
+    _sync_v1_to_legacy_projection(state)
+    assert persist_solo_pve_encounter_state(encounter_id=encounter,battle_state=state,mob=mob)
+    result=process_due_pve_world_sides(now_ms=1013000,encounter_id=encounter)
+    assert result[0]['phase']=='active'
+    current,_=load_active_pve_encounter(encounter_id=encounter)
+    assert current['participant_states_v1']['777']==survivor
+    assert current['side_deadline_at']==deadline
+    assert current['side_a_player_ids']==[777]
+    conn=get_connection()
+    assert player_activity(conn,1) is None
+    assert player_activity(conn,777)['kind']=='pve'
+    assert not conn.execute('SELECT 1 FROM combat_turn_results_v1').fetchone()
+    assert conn.execute('SELECT COUNT(*) FROM economy_action_receipts WHERE request_id=?',(f'pve_death:{encounter}:1',)).fetchone()[0]==1
+    conn.close()
+    assert process_due_pve_world_sides(now_ms=1014000,encounter_id=encounter)==[]

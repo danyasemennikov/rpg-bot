@@ -2,7 +2,7 @@
 # battle.py — обработчик боёв в Telegram
 # ============================================================
 
-import sys, json, logging
+import sys, json, logging, time
 from html import escape
 sys.path.append('/content/rpg_bot')
 import random
@@ -499,7 +499,14 @@ def _v1_action_buttons(player: dict, battle_state: dict, lang: str) -> tuple[lis
         status.append({'ru': '⚠️ Враг готовит тяжёлый удар', 'en': '⚠️ Enemy is charging a heavy hit', 'es': '⚠️ El enemigo prepara un golpe fuerte'}.get(lang, '⚠️ Enemy is charging a heavy hit'))
     return keyboard, status
 
-def build_battle_message(player, mob, battle_state, log):
+def build_battle_message(player,mob,battle_state,log):
+    if battle_state.get('rules_version')==RULES_VERSION and battle_state.get('participant_states_v1'):
+        from handlers.combat_views import home
+        return home(player,mob,battle_state)
+    return _legacy_battle_message(player,mob,battle_state,log)
+
+
+def _legacy_battle_message(player, mob, battle_state, log, *, details_only=False):
     lang = player.get('lang', 'ru')
 
     hp_bar_player = hp_bar(battle_state['player_hp'], battle_state['player_max_hp'])
@@ -588,6 +595,9 @@ def build_battle_message(player, mob, battle_state, log):
         ][-4:]
         if rendered:
             text += '\n' + '\n'.join(f'▫️ {line}' for line in rendered) + '\n'
+
+    if details_only:
+        return text, InlineKeyboardMarkup([])
 
     # Кнопки
     if battle_state.get('rules_version') == RULES_VERSION:
@@ -822,6 +832,8 @@ async def start_battle(
         from handlers.location import build_pve_encounter_detail_message
         detail_text,detail_keyboard = build_pve_encounter_detail_message(dict(p),str(encounter_id))
         await query.edit_message_text(detail_text,reply_markup=detail_keyboard,parse_mode='HTML')
+        from handlers.combat_delivery import remember_pve_card
+        remember_pve_card(query,user.id,str(encounter_id))
         await query.answer()
         return
 
@@ -1319,6 +1331,30 @@ async def _resolve_post_attack_combat_resolution(
     lang: str,
 ) -> bool:
     """Единый post-attack combat resolution: victory/death/persist/render."""
+    if battle_state.get('pxe1_lifecycle_version')==1 and battle_state.get('rules_version')==RULES_VERSION:
+        from game.pve_live import process_due_pve_world_sides
+        from handlers.combat_delivery import deliver_pve_updates
+        from game.player_ui import record_surface
+        encounter_id = battle_state['pve_encounter_id']
+        if not persist_solo_pve_encounter_state(encounter_id=encounter_id,battle_state=battle_state,mob=mob):
+            restored = load_active_pve_encounter(encounter_id=encounter_id)
+            if restored:
+                context.user_data['battle'],context.user_data['battle_mob'] = restored
+            await query.answer(t('battle.turn_not_ready',lang),show_alert=True)
+            return True
+        message = getattr(query,'message',None)
+        if message and getattr(message,'message_id',None):
+            record_surface(user_id,kind='pve',ref=encounter_id,revision=0,
+                           chat_id=message.chat_id,message_id=message.message_id)
+        results = process_due_pve_world_sides(now_ms=int(time.time()*1000),encounter_id=encounter_id)
+        await deliver_pve_updates(context.bot,results)
+        restored = load_active_pve_encounter(player_id=user_id)
+        if restored:
+            context.user_data['battle'],context.user_data['battle_mob'] = restored
+        else:
+            context.user_data.pop('battle',None)
+            context.user_data.pop('battle_mob',None)
+        return True
     _process_group_participant_death_consequences(
         battle_state=battle_state,
         owner_player_id=user_id,
@@ -1480,6 +1516,8 @@ async def _handle_battle_continues_update(
     # Бой продолжается
     text, keyboard = build_battle_message(player, mob, battle_state, battle_state['log'])
     await safe_edit(query, text, reply_markup=keyboard, parse_mode='HTML')
+    from handlers.combat_delivery import remember_pve_card
+    remember_pve_card(query,user_id,encounter_id)
 
 
 def _build_enemy_response_player_state(player: dict, battle_state: dict) -> dict:
@@ -1674,6 +1712,8 @@ def _run_group_enemy_side_action(
 
 
 def _reconcile_group_participant_outcomes(battle_state: dict) -> None:
+    if battle_state.get('pxe1_lifecycle_version')==1 and battle_state.get('rules_version')==RULES_VERSION:
+        return  # The shared world owner settles only committed snapshots.
     if not _is_group_encounter(battle_state):
         return
     encounter_id = str(battle_state.get('pve_encounter_id', ''))
@@ -1706,6 +1746,8 @@ def _process_group_participant_death_consequences(
     log: list | None = None,
     lang: str = 'ru',
 ) -> None:
+    if battle_state.get('pxe1_lifecycle_version')==1 and battle_state.get('rules_version')==RULES_VERSION:
+        return
     if not _is_group_encounter(battle_state):
         return
     encounter_id = str(battle_state.get('pve_encounter_id', ''))
@@ -1849,9 +1891,22 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     user  = query.from_user
     p     = dict(get_player(user.id))
     lang  = p.get('lang', 'ru')
+    if data.startswith('battle_px_'):
+        from handlers.combat_views import handle_read_selection
+        await handle_read_selection(update,context)
+        return
 
     battle_state = context.user_data.get('battle')
     mob          = context.user_data.get('battle_mob')
+    if battle_state and battle_state.get('rules_version')==RULES_VERSION:
+        restored = load_active_pve_encounter(player_id=user.id)
+        if not restored:
+            context.user_data.pop('battle',None)
+            context.user_data.pop('battle_mob',None)
+            await query.answer(t('battle.already_over',lang),show_alert=True)
+            return
+        battle_state,mob = restored
+        context.user_data['battle'],context.user_data['battle_mob'] = restored
 
     # Если состояние боя потеряно (перезапуск бота)
     if not battle_state or not mob:

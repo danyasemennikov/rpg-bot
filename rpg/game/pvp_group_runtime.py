@@ -269,6 +269,14 @@ def resolve_group_turn(conn, *, engagement_id, actor_id=None, action=None, now_m
         order = orders[player_id]
         selected = dict(order['action'])
         manual = order['order_kind']=='manual'
+        from game.pvp_live import _v1_action_ready
+        kind = selected.get('kind')
+        action_id = 'normal_attack' if kind=='normal' else 'guard' if kind in {'guard','timeout_guard'} else 'skill:'+str(selected.get('skill_id'))
+        if kind not in {'normal','guard','timeout_guard','skill'} or not _v1_action_ready(actors[str(player_id)],action_id):
+            raise ActionRejected('invalid_durable_order')
+        if ((kind in {'normal','skill'} and selected.get('target_id') not in sides[opposite])
+                or (kind in {'guard','timeout_guard'} and selected.get('target_id')!=player_id)):
+            raise ActionRejected('invalid_durable_order')
         selected['manual'] = manual
         if manual and player_id not in battle['manual_actor_ids']:
             battle['manual_actor_ids'].append(player_id)

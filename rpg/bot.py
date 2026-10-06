@@ -76,6 +76,8 @@ async def world_activity_tick(context):
     from handlers.activities import deliver_activity_updates
     results = run_world_activity_tick(now_ms=int(time.time()*1000),limit=100)
     await deliver_activity_updates(context.bot,results)
+    from handlers.combat_delivery import deliver_pve_updates
+    await deliver_pve_updates(context.bot,results)
 
 
 async def register_pxe1_commands(application):

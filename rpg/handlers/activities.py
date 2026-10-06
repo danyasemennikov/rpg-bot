@@ -200,8 +200,22 @@ async def activities_command(update,context):
     player = dict(row)
     from game.player_ui import install_menu_on_message
     await install_menu_on_message(update.message,player)
-    text,keyboard = build_activities(player)
-    await update.message.reply_text(text,reply_markup=keyboard,parse_mode='HTML')
+    conn = get_connection()
+    try:
+        current = None
+        for table,kind in (('player_travel_sessions','travel'),('player_gathering_sessions','gather')):
+            row = conn.execute(f"SELECT * FROM {table} WHERE player_id=? AND status='running'",(player['telegram_id'],)).fetchone()
+            if row:
+                current = (dict(row),kind);break
+    finally: conn.close()
+    if current:
+        session,kind = current
+        text,keyboard = activity_card(player,session,kind)
+        await present_surface(context.bot,player['telegram_id'],text,keyboard,kind=kind,
+                              ref=session['session_id'],revision=session['revision'],force_refresh=True)
+    else:
+        text,keyboard = build_activities(player)
+        await update.message.reply_text(text,reply_markup=keyboard,parse_mode='HTML')
 
 
 async def handle_activity_buttons(update,context):

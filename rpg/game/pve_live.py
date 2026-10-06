@@ -922,6 +922,10 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
         'e.location_id',
         'e.anchor_spawn_instance_id',
         'e.battle_state_json',
+        'e.lifecycle_version',
+        'e.formation_deadline_ms',
+        'e.formation_revision',
+        'e.runtime_started_ms',
         's.state AS spawn_state',
     ]
     if has_spawn_profile_column:
@@ -2509,7 +2513,7 @@ def load_active_pve_encounter(*, player_id: int | None = None, encounter_id: str
     conn = get_connection()
     row = conn.execute(
         '''
-        SELECT battle_state_json, mob_json
+        SELECT battle_state_json, mob_json, lifecycle_version
         FROM pve_encounters
         WHERE encounter_id=? AND status='active'
         ''',
@@ -2521,6 +2525,8 @@ def load_active_pve_encounter(*, player_id: int | None = None, encounter_id: str
 
     battle_state = _deserialize_payload(row['battle_state_json'])
     battle_state.setdefault('pve_encounter_id', str(resolved_encounter_id))
+    if row['lifecycle_version']==1:
+        battle_state['pxe1_lifecycle_version'] = 1
     return battle_state, _deserialize_payload(row['mob_json'])
 
 
@@ -3783,6 +3789,7 @@ def apply_pxe1_pve_death(player_id: int, encounter_id: str, *, now_ms: int) -> d
         conn.execute("UPDATE pve_encounter_participants SET status='defeated',updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND player_id=? AND status='active'",(encounter_id,player_id))
         state.setdefault('group_death_penalties',{})[str(player_id)] = penalty
         state['side_a_player_ids'] = [int(p) for p in state.get('side_a_player_ids',[]) if int(p)!=player_id]
+        state['state_revision'] = int(row['state_revision'])+1
         conn.execute('UPDATE pve_encounters SET battle_state_json=?,state_revision=state_revision+1 WHERE encounter_id=?',(_serialize_payload(state),encounter_id))
         store_receipt(conn,player_id,request_id,'pve_death_pxe1',intent_hash('pve_death_pxe1',player_id,{'encounter_id':encounter_id}),
             {'schema_version':1,'catalog_version':2,'penalty':penalty,'encounter_id':encounter_id},catalog_version=2)
@@ -3797,14 +3804,16 @@ def apply_pxe1_pve_death(player_id: int, encounter_id: str, *, now_ms: int) -> d
         conn.close()
 
 
-def process_due_pve_world_sides(*,now_ms: int,limit: int=100) -> list[dict]:
+def process_due_pve_world_sides(*,now_ms: int,limit: int=100,encounter_id: str | None=None) -> list[dict]:
     """Drive the existing evaluator/T1/T2 without Telegram callback state."""
     from game.pve_reward_settlement import prepare_victory_settlement,apply_prepared_settlement
     conn = get_connection()
     try:
         rows = conn.execute('''SELECT encounter_id,owner_player_id FROM pve_encounters
             WHERE lifecycle_version=1 AND runtime_started_ms IS NOT NULL AND status='active'
-            ORDER BY COALESCE(json_extract(battle_state_json,'$.side_deadline_at'),''),encounter_id LIMIT ?''',(limit,)).fetchall()
+            AND (? IS NULL OR encounter_id=?)
+            ORDER BY CASE WHEN json_valid(battle_state_json) THEN json_extract(battle_state_json,'$.side_deadline_at') ELSE '' END,encounter_id LIMIT ?''',
+            (encounter_id,encounter_id,limit)).fetchall()
     finally:
         conn.close()
     results = []
@@ -3817,6 +3826,15 @@ def process_due_pve_world_sides(*,now_ms: int,limit: int=100) -> list[dict]:
             state,mob = restored
             if state.get('rules_version')!=RULES_VERSION:
                 continue
+            conn = get_connection()
+            try:
+                unsettled = [r['player_id'] for r in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(encounter_id,))
+                             if int(state.get('participant_states_v1',{}).get(str(r['player_id']),{}).get('hp',1))<=0]
+            finally: conn.close()
+            for player_id in unsettled:
+                apply_pxe1_pve_death(player_id,encounter_id,now_ms=now_ms)
+            if unsettled:
+                state,mob = load_active_pve_encounter(encounter_id=encounter_id)
             terminal_defeat = bool(state.get('participant_states_v1')) and all(int(a.get('hp',0))<=0 for a in state['participant_states_v1'].values())
             runtime = None if terminal_defeat or state.get('mob_dead') else ensure_runtime_for_battle(player_id=owner,battle_state=state,mob=mob)
             if not state.get('mob_dead') and not terminal_defeat:
@@ -3828,7 +3846,7 @@ def process_due_pve_world_sides(*,now_ms: int,limit: int=100) -> list[dict]:
                         now=datetime.fromtimestamp(now_ms/1000,timezone.utc),
                         on_player_timeout_action=lambda action:_dispatch_v1_player_action(action,battle_state=state),
                         on_enemy_action=lambda action:_dispatch_v1_enemy_action(action,battle_state=state))
-                if not changed:
+                if not changed and not unsettled:
                     continue
             if not persist_solo_pve_encounter_state(encounter_id=encounter_id,battle_state=state,mob=mob):
                 continue

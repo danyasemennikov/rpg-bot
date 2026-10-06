@@ -2096,59 +2096,71 @@ def _pxe1_membership_mutation(operation, **kwargs):
 
 def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
     events: list[dict] = []
-    recover_terminal_pvp_settlements()
+    try:
+        recover_terminal_pvp_settlements()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("PvP terminal recovery retry")
     check_now = now or _utc_now()
     conn = get_connection()
     rows = conn.execute(
         '''
         SELECT * FROM pvp_engagements
         WHERE engagement_state IN (?, ?, ?)
-        ORDER BY id ASC
+          AND ((engagement_state IN ('pending','active') AND julianday(engagement_ready_at)<=julianday(?))
+               OR (engagement_state='converted_to_battle' AND json_valid(reason_context)
+                   AND julianday(json_extract(reason_context,'$.battle.side_deadline_at'))<=julianday(?)))
+        ORDER BY CASE WHEN engagement_state IN ('pending','active') THEN engagement_ready_at
+                 ELSE json_extract(reason_context,'$.battle.side_deadline_at') END,id ASC LIMIT 100
         ''',
-        (ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE),
+        (ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE,check_now.isoformat(),check_now.isoformat()),
     ).fetchall()
     conn.close()
 
     for row in rows:
-        if row['engagement_state'] in {ENGAGEMENT_STATE_PENDING, 'active'}:
-            state, payload = advance_engagement_to_live_battle_if_ready(row, now=check_now)
-            if state == ENGAGEMENT_STATE_CONVERTED_TO_BATTLE:
-                events.append({'type': 'engagement_live', 'row': row, 'payload': payload})
-            continue
-
-        payload = _deserialize_reason_context(row['reason_context'])
-        battle = payload.get('battle') or {}
-        if battle.get('state') != PVP_BATTLE_STATE_LIVE:
-            continue
-        if row['world_model_version'] == 1:
-            from game.pvp_group_runtime import resolve_group_turn
-            from game.pvp_world import milliseconds
-            if int(check_now.timestamp()*1000) < milliseconds(battle['side_deadline_at']):
+        try:
+            if row['engagement_state'] in {ENGAGEMENT_STATE_PENDING, 'active'}:
+                state, payload = advance_engagement_to_live_battle_if_ready(row, now=check_now)
+                if state == ENGAGEMENT_STATE_CONVERTED_TO_BATTLE:
+                    events.append({'type': 'engagement_live', 'row': row, 'payload': payload})
                 continue
-            conn = get_connection()
-            try:
-                conn.execute('BEGIN IMMEDIATE')
-                status, updated_payload = resolve_group_turn(conn,engagement_id=row['id'],now_ms=int(check_now.timestamp()*1000))
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
-            finally:
-                conn.close()
-            if status in {'resolved','finished'}:
-                events.append({'type':'turn_auto_resolved','row':row,'payload':updated_payload,'status':status})
-            continue
-        runtime_state = _ensure_live_runtime_for_battle(
-            engagement_row=row,
-            battle=battle,
-            now=check_now,
-        )
-        if runtime_state.side_deadline_at and check_now < runtime_state.side_deadline_at:
-            continue
-        actor_id = _runtime_active_player_id(engagement_row=row, state=runtime_state)
-        status, updated_payload = resolve_live_battle_turn(row, actor_id=actor_id, selected_action_id=None)
-        if status in {'resolved', 'finished'}:
-            events.append({'type': 'turn_auto_resolved', 'row': row, 'payload': updated_payload, 'status': status})
+
+            payload = _deserialize_reason_context(row['reason_context'])
+            battle = payload.get('battle') or {}
+            if battle.get('state') != PVP_BATTLE_STATE_LIVE:
+                continue
+            if row['world_model_version'] == 1:
+                from game.pvp_group_runtime import resolve_group_turn
+                from game.pvp_world import milliseconds
+                if int(check_now.timestamp()*1000) < milliseconds(battle['side_deadline_at']):
+                    continue
+                conn = get_connection()
+                try:
+                    conn.execute('BEGIN IMMEDIATE')
+                    status, updated_payload = resolve_group_turn(conn,engagement_id=row['id'],now_ms=int(check_now.timestamp()*1000))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    conn.close()
+                if status in {'resolved','finished'}:
+                    events.append({'type':'turn_auto_resolved','row':row,'payload':updated_payload,'status':status})
+                continue
+            runtime_state = _ensure_live_runtime_for_battle(
+                engagement_row=row,
+                battle=battle,
+                now=check_now,
+            )
+            if runtime_state.side_deadline_at and check_now < runtime_state.side_deadline_at:
+                continue
+            actor_id = _runtime_active_player_id(engagement_row=row, state=runtime_state)
+            status, updated_payload = resolve_live_battle_turn(row, actor_id=actor_id, selected_action_id=None)
+            if status in {'resolved', 'finished'}:
+                events.append({'type': 'turn_auto_resolved', 'row': row, 'payload': updated_payload, 'status': status})
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('PvP due-event retry for engagement %s',row['id'])
     return events
 
 
@@ -2185,6 +2197,8 @@ async def _deliver_pxe1_pvp_event(bot,event):
     """Committed members receive their own card; deaths receive hub results."""
     from handlers.pvp_group import live_card
     from game.i18n import get_location_name
+    from game.player_ui import present_surface,_row
+    from telegram import InlineKeyboardButton,InlineKeyboardMarkup
     battle = (event.get('payload') or {}).get('battle') or {}
     conn = get_connection()
     try:
@@ -2199,7 +2213,12 @@ async def _deliver_pxe1_pvp_event(bot,event):
     for raw_id,actor in battle.get('participants_v1',{}).items():
         player_id = int(raw_id)
         lang = get_player_lang(player_id)
-        keyboard = None
+        kind = 'pvp_result' if player_id in newly_dead or group else 'pvp'
+        revision = int(battle.get('turn_revision',0))
+        prior = _row(player_id) or {}
+        if prior.get('surface_kind')==kind and prior.get('surface_ref')==str(row['id']) and prior.get('surface_revision')==revision:
+            continue
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.location',lang),callback_data='px:local:home:0')]])
         if player_id in receipts and player_id not in newly_dead:
             continue  # A prior death never receives another live prompt.
         if player_id in newly_dead:
@@ -2212,7 +2231,7 @@ async def _deliver_pxe1_pvp_event(bot,event):
         else:
             text,keyboard = live_card(row,event['payload'],player_id,lang)
         try:
-            await bot.send_message(player_id,text,reply_markup=keyboard,parse_mode='HTML')
+            await present_surface(bot,player_id,text,keyboard,kind=kind,ref=str(row['id']),revision=revision)
         except Exception:
             import logging
             logging.getLogger(__name__).exception('PvP delivery failed for player %s',player_id)

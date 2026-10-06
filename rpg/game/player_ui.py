@@ -65,8 +65,10 @@ async def present_surface(bot,player_id,text,keyboard,*,kind,ref,revision,chat_i
     """Edit a current activity card. Persist successful delivery coordinates only."""
     validate_surface(text,keyboard)
     prior = _row(player_id) or {}
-    same = prior.get('surface_kind')==kind and prior.get('surface_ref')==ref
-    if same and prior.get('surface_revision')==revision and prior.get('message_id') and not force_refresh:
+    same_kind = prior.get('surface_kind')==kind or {prior.get('surface_kind'),kind} in (
+        {'pve','pve_result'},{'pvp','pvp_result'})
+    same = same_kind and prior.get('surface_ref')==ref
+    if same and prior.get('surface_kind')==kind and prior.get('surface_revision')==revision and prior.get('message_id') and not force_refresh:
         return False
     chat_id = chat_id or prior.get('chat_id') or player_id
     message = None
@@ -85,6 +87,12 @@ async def present_surface(bot,player_id,text,keyboard,*,kind,ref,revision,chat_i
     else:
         message = await bot.send_message(chat_id,text,reply_markup=keyboard,parse_mode='HTML')
     message_id = message if isinstance(message,int) else message.message_id
+    record_surface(player_id,kind=kind,ref=ref,revision=revision,chat_id=chat_id,message_id=message_id)
+    return True
+
+
+def record_surface(player_id,*,kind,ref,revision,chat_id,message_id):
+    """Remember a successfully sent or edited card, outside its gameplay writer."""
     conn = get_connection()
     try:
         conn.execute('''INSERT INTO player_pxe1_ui(player_id,schema_version,surface_kind,surface_ref,
@@ -96,4 +104,3 @@ async def present_surface(bot,player_id,text,keyboard,*,kind,ref,revision,chat_i
         conn.commit()
     finally:
         conn.close()
-    return True

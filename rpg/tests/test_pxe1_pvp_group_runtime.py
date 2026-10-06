@@ -144,3 +144,22 @@ def test_authorization_living_locked_side_and_invalid_provenance():
     conn.rollback()
     assert not conn.execute('SELECT 1 FROM pvp_participant_settlements_pxe1').fetchone()
     conn.close()
+
+
+def test_recovered_orders_recheck_frozen_pvp_allowlist_before_any_execution():
+    from game.combat_orders import submit_combat_order
+    conn,e=locked()
+    conn.execute('BEGIN IMMEDIATE')
+    submit_combat_order(encounter_kind='pvp',encounter_id=str(e),turn_revision=1,actor_id=1,
+        action={'kind':'skill','skill_id':'sword_rush','target_id':777},target_id=777,
+        deadline_at='1970-01-01T00:21:55+00:00',order_kind='manual',conn=conn)
+    conn.commit()
+    before=conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?',(e,)).fetchone()[0]
+    conn.execute('BEGIN IMMEDIATE')
+    with pytest.raises(ActionRejected,match='invalid_durable_order'):
+        resolve_group_turn(conn,engagement_id=e,now_ms=1315000)
+    conn.rollback()
+    assert conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?',(e,)).fetchone()[0]==before
+    assert not conn.execute('SELECT 1 FROM combat_turn_results_v1').fetchone()
+    assert not conn.execute('SELECT 1 FROM pvp_participant_settlements_pxe1').fetchone()
+    conn.close()

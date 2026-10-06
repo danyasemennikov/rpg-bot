@@ -464,6 +464,39 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         )
     )
     mob_name = f"{profile_marker} {display_name}".strip()
+    if detail.get('lifecycle_version')==1:
+        import time
+        from html import escape
+        from game.player_ui import validate_surface
+        participant_ids = detail.get('participant_player_ids',[])
+        member = int(player['telegram_id']) in participant_ids
+        forming = detail['runtime_started_ms'] is None
+        if not forming and member:
+            from game.pve_live import load_active_pve_encounter
+            from handlers.combat_views import home
+            loaded = load_active_pve_encounter(encounter_id=encounter_id)
+            if loaded: return home(player,loaded[1],loaded[0])
+        conn = get_connection()
+        try:
+            names = [r['name'] for pid in participant_ids for r in conn.execute('SELECT name FROM players WHERE telegram_id=?',(pid,))]
+        finally: conn.close()
+        lines = ['⚔️ <b>'+escape(mob_name)+'</b>',t('battle.pack_remaining',lang,count=detail['enemy_count']),
+                 t('pxe1.combat.participants',lang)+f" · {len(names)}: "+escape(', '.join(names[:2]))]
+        rows = []
+        if forming:
+            left = max(0,(int(detail['formation_deadline_ms'])-int(time.time()*1000)+999)//1000)
+            lines += [t('pxe1.combat.formation',lang,seconds=left),t('pxe1.combat.forming_hint',lang)]
+            can_join,_ = can_join_open_world_pve_encounter(encounter_id=encounter_id,player_id=int(player['telegram_id']))
+            if can_join: rows.append([InlineKeyboardButton(t('location.pve_join_btn',lang),callback_data='pve_join_'+encounter_id)])
+            if member: rows.append([InlineKeyboardButton(t('location.pve_leave_btn',lang),callback_data='pve_leave_'+encounter_id)])
+        else: lines.append(t('location.pve_status_locked',lang))
+        rows.append([InlineKeyboardButton(t('pxe1.combat.participants',lang),callback_data='pve_people_'+encounter_id+'_0')])
+        rows.append([InlineKeyboardButton(t('common.refresh',lang),callback_data='pve_view_'+encounter_id),
+                     InlineKeyboardButton(t('keyboard.location',lang),callback_data='px:local:home:0')])
+        text = '\n'.join(lines)
+        keyboard = InlineKeyboardMarkup(rows)
+        validate_surface(text,keyboard)
+        return text,keyboard
     status_key = 'location.pve_status_locked'
     can_join, _ = can_join_open_world_pve_encounter(
         encounter_id=encounter_id,
@@ -1639,7 +1672,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         p
         and p['in_battle']
         and not data.startswith('pvp_')
-        and not data.startswith('pve_enter_')
+        and not data.startswith('pve_')
     ):
         await query.answer(t('location.in_battle_block', lang), show_alert=True)
         return
@@ -1763,10 +1796,39 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
+    if data.startswith('pve_people_'):
+        from html import escape
+        from game.player_ui import validate_surface
+        encounter_id,page = data.removeprefix('pve_people_').rsplit('_',1)
+        page = int(page)
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        if not detail or detail['location_id']!=p['location_id']:
+            await query.answer(t('location.pve_no_encounter',lang),show_alert=True)
+            return
+        conn = get_connection()
+        try:
+            people = [r['name'] for pid in detail['participant_player_ids'] for r in conn.execute('SELECT name FROM players WHERE telegram_id=?',(pid,))]
+        finally: conn.close()
+        pages = max(1,(len(people)+5)//6);page = max(0,min(page,pages-1))
+        text = '\n'.join([t('pxe1.combat.participants',lang),t('gear.page',lang,page=page+1,pages=pages)]+[escape(n) for n in people[page*6:page*6+6]])
+        rows = []
+        nav = []
+        if page: nav.append(InlineKeyboardButton('◀️',callback_data=f'pve_people_{encounter_id}_{page-1}'))
+        if page+1<pages: nav.append(InlineKeyboardButton('▶️',callback_data=f'pve_people_{encounter_id}_{page+1}'))
+        if nav: rows.append(nav)
+        rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='pve_view_'+encounter_id)])
+        keyboard = InlineKeyboardMarkup(rows)
+        validate_surface(text,keyboard,list_view=True)
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        await query.answer()
+        return
+
     if data.startswith('pve_view_'):
         encounter_id = data.replace('pve_view_', '', 1)
         detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(p), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        from handlers.combat_delivery import remember_pve_card
+        remember_pve_card(query,user.id,encounter_id)
         await query.answer()
         return
 
@@ -1785,6 +1847,8 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t(key_by_reason.get(reason, 'location.pve_join_blocked'), lang), show_alert=True)
         detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(get_player(user.id)), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        from handlers.combat_delivery import remember_pve_card
+        remember_pve_card(query,user.id,encounter_id)
         return
 
     if data.startswith('pve_enter_'):
@@ -1809,6 +1873,8 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t(key_by_reason.get(reason, 'location.pve_leave_blocked'), lang), show_alert=True)
         detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(get_player(user.id)), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        from handlers.combat_delivery import remember_pve_card
+        remember_pve_card(query,user.id,encounter_id)
         return
 
     if data.startswith('pvp_join_'):
@@ -1925,6 +1991,11 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
         return
 
+    if data.startswith('pvp_cv_'):
+        from handlers.pvp_group import handle_read_selection
+        await handle_read_selection(update,context)
+        return
+
     if data.startswith('pvp_pick_'):
         from handlers.pvp_group import target_card
         from game.action_receipts import ActionRejected
@@ -1963,7 +2034,15 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             'waiting': 'location.pvp_wait_turn_timeout', 'invalid_action': 'location.pvp_action_not_ready',
             'not_your_turn': 'location.pvp_not_your_turn', 'finished': 'location.pvp_battle_finished',
         }.get(status, 'location.pvp_action_done')
-        await query.answer(t(status_key, lang), show_alert=True)
+        await query.answer(t(status_key, lang))
+        if engagement_row and engagement_row['world_model_version']==1:
+            from game.player_ui import record_surface
+            from game.pvp_live import _deliver_pxe1_pvp_event
+            # The originating message becomes this participant's combat surface.
+            record_surface(user.id,kind='pvp',ref=str(engagement_id),revision=max(0,int(consumed.get('turn_revision',0))-1),
+                           chat_id=query.message.chat_id,message_id=query.message.message_id)
+            await _deliver_pxe1_pvp_event(context.bot,{'row':engagement_row,'payload':_payload,'status':status,'type':'manual_order'})
+            return
         refreshed_player = dict(get_player(user.id))
         location = get_location(refreshed_player['location_id'])
         text, keyboard = _build_location_message_with_snapshot(
@@ -1985,6 +2064,18 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         conn.close()
         if not engagement_row:
             await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        if engagement_row['world_model_version']==1:
+            from handlers.pvp_group import target_card
+            from game.action_receipts import ActionRejected
+            selected = 'normal' if action_id=='normal_attack' else action_id.removeprefix('skill:')
+            try:
+                battle = json.loads(engagement_row['reason_context'])['battle']
+                text,keyboard = target_card(engagement_row,user.id,selected,battle['turn_revision'],lang)
+                await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+                await query.answer()
+            except (ActionRejected,ValueError,KeyError):
+                await query.answer(t('location.pvp_action_not_ready',lang),show_alert=True)
             return
         status, _payload = resolve_live_battle_turn(
             engagement_row,
