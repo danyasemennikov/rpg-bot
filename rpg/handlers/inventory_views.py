@@ -1,6 +1,7 @@
 """Compact inventory projections over existing gear, inventory and tool owners."""
 
 from html import escape
+import json
 from telegram import InlineKeyboardButton,InlineKeyboardMarkup
 from database import get_connection,get_player
 from game.i18n import get_item_name,t
@@ -45,6 +46,13 @@ def inventory_card(player_id,category,lang,page=0):
                 label += ' · '+RARITY_NAME.get(lang,RARITY_NAME['en']).get(rarity,rarity)
                 if enhance:
                     label += f' +{enhance}'
+                if row['entry_type']=='gear_instance':
+                    from game.gear_instances import resolve_gear_instance_item_data
+                    from handlers.inventory import _get_localized_stat_label
+                    resolved = resolve_gear_instance_item_data(row['instance'])
+                    secondaries = resolved['secondary_rolls']
+                    if secondaries:
+                        label += ' · '+', '.join(_get_localized_stat_label(str(roll['stat']),lang)+f" {int(roll['value']):+}" for roll in secondaries)
             elif row['quantity']>1:
                 label += f" ×{row['quantity']}"
             if equipped:
@@ -95,12 +103,17 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
     item = get_item(entry['item_id'])
     if more:
         # The detailed layer retains all existing actions and readable metadata.
-        keyboard = InlineKeyboardMarkup([list(row)[:2] for row in full_keyboard.inline_keyboard])
+        buttons = [button for row in full_keyboard.inline_keyboard for button in row]
+        buttons[-1:-1] = [InlineKeyboardButton(t('gear.catalog_btn',lang),callback_data='inv_catalog'),
+                          InlineKeyboardButton(t('gear.receipts_btn',lang),callback_data='inv_receipts'),
+                          InlineKeyboardButton(t('location.shop_btn',lang),callback_data='shop')]
+        keyboard = InlineKeyboardMarkup([buttons[i:i+2] for i in range(0,len(buttons),2)])
         validate_surface(full_text,keyboard,list_view=True,long_detail=True)
         return full_text,keyboard
     resolved = resolve_gear_instance_item_data(entry['instance']) if entry['entry_type']=='gear_instance' else item
-    lines = [f"<b>{escape(get_item_name(entry['item_id'],lang))}</b> ×{entry['quantity']}"]
     gear = item['item_type'] in {'weapon','armor','accessory'}
+    kind = 'gear' if gear else 'supplies' if item['item_type']=='potion' else 'material'
+    lines = [f"<b>{escape(get_item_name(entry['item_id'],lang))}</b> ×{entry['quantity']} · "+t('pxe1.inventory_categories.'+kind,lang)]
     if gear:
         rarity = resolved.get('instance_rarity',item['rarity'])
         from handlers.inventory import RARITY_NAME
@@ -112,21 +125,32 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
         requirements = [t('common.level',lang)+' '+str(item['req_level'])]
         requirements += [STAT_NAMES.get(lang,STAT_NAMES['en'])[key]+' '+str(item['req_'+key]) for key in ('strength','agility','intuition','wisdom') if item['req_'+key]>0]
         lines.append(t('inventory.reqs',lang,val=', '.join(requirements)))
-        bonuses = resolved.get('resolved_stat_bonus') or {}
+        bonuses = resolved.get('resolved_stat_bonus') if entry['entry_type']=='gear_instance' else json.loads(item['stat_bonus_json'] or '{}')
         if bonuses:
             from handlers.inventory import _get_localized_stat_label
-            lines.append(t('inventory.bonuses',lang,val=', '.join(_get_localized_stat_label(key,lang)+f' +{value}' for key,value in bonuses.items())))
+            lines.append(t('inventory.bonuses',lang,val=', '.join(_get_localized_stat_label(key,lang)+f' {value:+}' for key,value in bonuses.items())))
         slot = get_equipped_slot_for_entry_token(get_equipped(player_id),entry_token)
         if slot:
             lines.append(t('inventory.equipped',lang))
     elif item['item_type']=='potion':
-        import json
         effects = json.loads(item['stat_bonus_json'] or '{}')
         lines.append(f"❤️ +{effects.get('heal',0)} · 🔵 +{effects.get('mana',0)}")
+        lines.append(t('pxe1.supplies_restrictions',lang))
+    usable = True
+    if item['item_type']=='potion':
+        from game.action_receipts import ActionRejected,peaceful_player
+        conn = get_connection()
+        try:
+            peaceful_player(conn,player_id)
+        except ActionRejected:
+            usable = False
+            lines.append(t('pxe1.supplies_busy',lang))
+        finally:
+            conn.close()
     rows = []
     prefixes = ('inv_gequip_','inv_lequip_','inv_use_','inv_genh_','inv_cmp_')
     for row in full_keyboard.inline_keyboard:
-        buttons = [b for b in row if b.callback_data.startswith(prefixes)]
+        buttons = [b for b in row if b.callback_data.startswith(prefixes) and (usable or not b.callback_data.startswith('inv_use_'))]
         if buttons:
             rows.append(buttons)
     if item['item_type']=='material':

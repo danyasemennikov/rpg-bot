@@ -13,6 +13,26 @@ from game.profession_progression import crafting_xp_for_success
 from game.recipe_knowledge import known_recipe_ids
 
 
+def guild_route(player_id):
+    """Choose the nearest reachable guild using the same discovered-route owner."""
+    from game.locations import WORLD_LOCATIONS
+    from game.travel_runtime import preview_travel
+    conn = get_connection()
+    try:
+        candidates = []
+        for index,(location_id,location) in enumerate(WORLD_LOCATIONS.items()):
+            if 'craftsmen_guild' not in location.get('services',[]):
+                continue
+            try:
+                preview = preview_travel(conn,player_id,location_id)
+            except ActionRejected:
+                continue
+            candidates.append((len(preview['path']),index,location_id))
+        return min(candidates)[2] if candidates else None
+    finally:
+        conn.close()
+
+
 def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=None):
     from handlers.professions import _recipe_name,_state,_peaceful_guild_access,_legacy_recipe
     from game.profession_tools import commission_inputs,get_tool
@@ -66,7 +86,7 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
         keyboard = InlineKeyboardMarkup(rows)
         validate_surface(text,keyboard,long_detail=True)
         return text,keyboard
-    lines = [f'<b>{escape(_recipe_name(recipe,lang))}</b>',
+    lines = [f'<b>{escape(_recipe_name(recipe,lang))}</b> ×{recipe.output_spec.quantity}',
              t('professions.known' if known else 'professions.learnable' if state['level']>=recipe.required_level else 'professions.locked',lang)+' · '+t('professions.recipe_level',lang,level=recipe.required_level)]
     ingredients = [f'{escape(get_item_name(item,lang))}: {inventory.get(item,0)}/{quantity}' for item,quantity in required.items()]
     lines.extend(' · '.join(ingredients[i:i+3]) for i in range(0,len(ingredients),3))
@@ -75,9 +95,18 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
     else:
         from game.items_data import get_item
         output = get_item(recipe.output_spec.item_id)
-        lines.append(t('professions.output_sale',lang,gold=output['sell_price']))
+        if output['item_type']=='weapon':
+            lines.append(t('inventory.damage',lang,min=output['damage_min'],max=output['damage_max']))
+        elif output['item_type'] in {'armor','accessory'}:
+            from handlers.inventory import _get_localized_stat_label
+            bonuses = json.loads(output['stat_bonus_json'] or '{}')
+            effect = ', '.join(_get_localized_stat_label(key,lang)+f' {value:+}' for key,value in bonuses.items())
+            lines.append(t('inventory.defense',lang,val=output['defense'])+(' · '+effect if effect else ''))
+        else:
+            effects = json.loads(output['stat_bonus_json'] or '{}')
+            lines.append(f"❤️ +{effects.get('heal',0)} · 🔵 +{effects.get('mana',0)}")
     xp = crafting_xp_for_success(current_level=state['level'],current_exp=state['exp'],recipe_level=recipe.required_level,material_value=recipe.material_value)
-    lines.append(t('professions.recipe_xp_award',lang,xp=xp)+' · '+t('professions.recipe_xp_ceiling',lang,ceiling=recipe.training_ceiling))
+    lines.append(t('professions.recipe_xp_award',lang,xp=xp)+' · '+t('location.service_craftsmen_guild',lang))
     if commission:
         if reason:
             lines.append(t('pxe1.commission_reasons.'+reason,lang))
@@ -87,7 +116,8 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
                 lines.append(t('pxe1.commission_supplied',lang,items=', '.join(get_item_name(item,lang)+f' ×{quantity}' for item,quantity in supplied.items())))
     enough = all(inventory.get(item,0)>=quantity for item,quantity in required.items()) and player['gold']>=gold
     legal = known and state['level']>=recipe.required_level and enough and _peaceful_guild_access(player_id) and not reason
-    if tool and tool['tier']>recipe.output_spec.tool_tier:
+    downgrade = bool(tool and tool['tier']>recipe.output_spec.tool_tier)
+    if downgrade:
         legal = False
     rows = []
     if legal:
@@ -110,10 +140,13 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
         token = issue_actions(player_id,'learn',[payload])[payload]
         rows.append([InlineKeyboardButton(t('professions.learn',lang)+f' · {recipe.learning_gold} 💰',callback_data='pe_a:'+token)])
     else:
-        blocker = 'recipe_need_knowledge' if not known else 'recipe_need_level' if state['level']<recipe.required_level else 'recipe_need_guild' if not _peaceful_guild_access(player_id) else 'recipe_need_inputs'
+        blocker = 'recipe_need_knowledge' if not known else 'recipe_need_level' if state['level']<recipe.required_level else 'recipe_need_guild' if not _peaceful_guild_access(player_id) else 'recipe_no_downgrade' if downgrade else 'recipe_need_inputs'
         lines.append(t('pxe1.'+blocker,lang))
         if blocker=='recipe_need_guild':
-            rows.append([InlineKeyboardButton(t('pxe1.route_guild',lang),callback_data='px:map')])
+            destination = guild_route(player_id)
+            rows.append([InlineKeyboardButton(t('pxe1.route_guild',lang),callback_data='goto_'+destination if destination else 'px:map')])
+        elif blocker=='recipe_need_inputs':
+            rows.append([InlineKeyboardButton(t('pxe1.recipe_find_inputs',lang),callback_data=f'pe_inputs:{recipe_id}:0')])
     if recipe.output_spec.kind=='tool' and recipe.output_spec.profession_key in {'woodcutting','mining'} and recipe.output_spec.tool_tier>1 and not commission:
         rows.append([InlineKeyboardButton(t('pxe1.commission',lang),callback_data='pe_commission:'+recipe_id)])
     rows.append([InlineKeyboardButton(t('pxe1.sources',lang),callback_data=f'pe_inputs:{recipe_id}:0'),InlineKeyboardButton(t('pxe1.details',lang),callback_data='pe_details:'+recipe_id)])

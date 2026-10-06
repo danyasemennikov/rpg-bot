@@ -8,6 +8,52 @@ from handlers.recipe_views import recipe_card
 
 
 @pytest.mark.parametrize('lang',['ru','en','es'])
+def test_recipe_guild_route_opens_nearest_discovered_travel_preview_without_starting(lang):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from handlers.location import handle_location_buttons
+    from handlers.recipe_views import guild_route
+    conn = get_connection()
+    conn.execute('BEGIN IMMEDIATE')
+    grant_player_pxe1_starters(conn,1,now_ms=1000,acquired_via='starter')
+    conn.execute("UPDATE players SET location_id='westwild_n4',lang=? WHERE telegram_id=1",(lang,))
+    conn.executemany('INSERT OR IGNORE INTO player_location_discovery(telegram_id,location_id) VALUES (1,?)',
+        ((key,) for key in ('westwild_n5','hub_westwild','westwild_n3','westwild_n2','westwild_n1','capital_city')))
+    conn.commit();conn.close()
+    assert guild_route(1)=='hub_westwild'
+    text,keyboard = recipe_card(dict(get_player(1)),'pxe_tool_mining_1')
+    route = next(b.callback_data for row in keyboard.inline_keyboard for b in row if b.callback_data.startswith('goto_'))
+    assert route=='goto_hub_westwild'
+    query = SimpleNamespace(from_user=SimpleNamespace(id=1),data=route,answer=AsyncMock(),edit_message_text=AsyncMock())
+    asyncio.run(handle_location_buttons(SimpleNamespace(callback_query=query),SimpleNamespace(user_data={})))
+    text = query.edit_message_text.call_args.args[0]
+    keyboard = query.edit_message_text.call_args.kwargs['reply_markup']
+    validate_surface(text,keyboard)
+    assert any(b.callback_data.startswith('px:travel:') for row in keyboard.inline_keyboard for b in row)
+    conn = get_connection()
+    assert not conn.execute('SELECT 1 FROM player_travel_sessions WHERE player_id=1').fetchone()
+    assert dict(get_player(1))['location_id']=='westwild_n4'
+    conn.execute('DELETE FROM player_location_discovery WHERE telegram_id=1');conn.commit();conn.close()
+    assert guild_route(1) is None
+
+
+@pytest.mark.parametrize('lang',['ru','en','es'])
+def test_lower_tier_tool_recipe_names_downgrade_blocker(lang):
+    from game.i18n import t
+    conn = get_connection()
+    conn.execute('BEGIN IMMEDIATE')
+    grant_player_pxe1_starters(conn,1,now_ms=1000,acquired_via='starter')
+    conn.execute("UPDATE players SET location_id='hub_westwild',lang=? WHERE telegram_id=1",(lang,))
+    conn.execute("UPDATE player_profession_tools SET tier=2,durability=120 WHERE player_id=1 AND profession_key='mining'")
+    conn.commit();conn.close()
+    text,keyboard = recipe_card(dict(get_player(1)),'pxe_tool_mining_1')
+    validate_surface(text,keyboard)
+    assert t('pxe1.recipe_no_downgrade',lang) in text
+    assert not any(b.callback_data.startswith(('pe_a:','pe_tc:')) for row in keyboard.inline_keyboard for b in row)
+
+
+@pytest.mark.parametrize('lang',['ru','en','es'])
 def test_all_eighty_three_recipe_cards_compact_tool_output_has_no_sale_value(lang):
     conn = get_connection()
     conn.execute('BEGIN IMMEDIATE')

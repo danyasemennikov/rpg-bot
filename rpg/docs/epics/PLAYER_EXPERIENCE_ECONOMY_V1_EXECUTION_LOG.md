@@ -165,6 +165,26 @@ Focused evidence:
   `python -m pytest -q tests/test_pxe1_combat_result_recovery.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_pvp_group_runtime.py tests/test_pxe1_feedback_journal.py tests/test_pvp_live_flow_v1.py`
   **60 passed, 12.02s**, including simultaneous-death infamy finalization.
 
+## Inventory/recipe continuation, candidate based on f4ca53d
+
+Similar gear entries show their localized secondary rolls while retaining exact
+owned-instance callbacks. Compact item details include category, legacy bonuses
+and supply restrictions; blocked inventory potion use is omitted from the main
+card. More retains every existing action, regroups controls to two per row, and
+links catalogue, Records and Shop. Recipes show output quantity and effect,
+current XP and guild service. A guild route chooses the nearest reachable guild
+through the canonical discovered-route preview; opening it neither discovers a
+node nor starts travel. Missing-input and tool-downgrade blockers are explicit.
+
+Focused evidence:
+
+- Initial affected inventory/recipe/shop: **30 passed, 8.97s**.
+- Added ru/en/es distinct-roll, advanced-action, supply restriction, nearest-guild
+  real callback and downgrade coverage: **42 passed, 10.89s**.
+- Final affected inventory/recipe/shop/travel command:
+  `python -m pytest -q tests/test_pxe1_inventory_surfaces.py tests/test_pxe1_recipe_surfaces.py tests/test_pxe1_shop_transactions.py tests/test_pxe1_travel.py`
+  **48 passed, 11.71s**. `git diff --check` passed.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and
