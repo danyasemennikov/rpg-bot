@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation entry
-- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
+- Last reconciled: 2026-10-07, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 candidate separately identified
 
 Start here.
 
@@ -50,6 +50,18 @@ mechanic is implemented.
 professions/economy, PvE, and PvP documentation to current implementation owners.
 It also catalogues compatibility-retained system and pass documents.
 
+## PXE1 unmerged implementation candidate
+
+- [Frozen contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md)
+- [Implementation report](epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md)
+- [Automated evidence](evidence/player_experience_economy_v1.json)
+- [Human plan — NOT RUN](evidence/player_experience_economy_v1_human.md)
+- [Candidate owners](systems/README.md#pxe1-candidate-owners)
+
+Verified baseline is PR236, `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
+Historical PR234/233 acceptance retains its own provenance. PXE1 is not merged,
+independently approved, deployed or human-validated.
+
 ## Merged Epic delivery records
 
 [epics/README.md](epics/README.md) catalogues the PR229, PR230, PR231, PR233, and PR234 delivery
@@ -61,7 +73,7 @@ validation and limitations that applied to their delivery baseline.
 - Frozen merged Epic contract: [Regional Adventures & Opportunities V1 spec](epics/REGIONAL_ADVENTURES_V1_SPEC.md)
 - Merged delivery record: [Regional Adventures & Opportunities V1 report](epics/REGIONAL_ADVENTURES_V1_REPORT.md)
 - Exact historical acceptance evidence: [regional_adventures_v1.json](evidence/regional_adventures_v1.json)
-- Outstanding post-merge human validation (NOT RUN): [regional_adventures_v1_human.md](evidence/regional_adventures_v1_human.md)
+- Outstanding post-merge human validation (Session 1 interrupted): [regional_adventures_v1_human.md](evidence/regional_adventures_v1_human.md)
 
 PR234 merged at `adcc0baeee96c03852ed75c09e379b0c49be01d1`. Current merged-state
 claims belong to PROJECT_STATE_CURRENT.md; the report and JSON retain exact historical

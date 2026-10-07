@@ -1,5 +1,7 @@
 # Professions & Economy V1 — frozen implementation contract
 
+> **PXE1 candidate reconciliation — 2026-10-07.** The PXE1 candidate supersedes instantaneous Gather, 250×required-level craft XP, 63 active recipes/17 starters, and deferred tools. Its sections 7–10/15 define finite 8-second ticks (15 attempts/120 seconds), five durable tools across four tiers, 83 active recipes/22 starters, catalogue 2 and XP policy 2. Existing progression and catalogue-1 receipts are preserved. Owner-only hunting remains and adds exactly one knife wear in the existing harvest transaction. See [the frozen PXE1 contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 This repository copy preserves the PEV1-1 Stage 3 contract and Producer clarifications used for implementation.
 
 ## Producer clarifications for Stage 3

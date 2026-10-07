@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for confirmed merged state
-- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
+- Last reconciled: 2026-10-07, against `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`
 - Full prior snapshot: [archive/status/PROJECT_STATE_CURRENT_AT_PR231.md](archive/status/PROJECT_STATE_CURRENT_AT_PR231.md)
 
 This current section is the only merged-state summary. Plans belong in
@@ -18,10 +18,19 @@ deployment.
 - [PR232 — Documentation Architecture & Consolidation V1](https://github.com/danyasemennikov/rpg-bot/pull/232): merged.
 - [PR233 — Professions & Economy V1](https://github.com/danyasemennikov/rpg-bot/pull/233): merged.
 - [PR234 — Regional Adventures & Opportunities V1](https://github.com/danyasemennikov/rpg-bot/pull/234): merged.
-- PR234 merge/current reconciled `main`: `adcc0baeee96c03852ed75c09e379b0c49be01d1`.
+- PR234 merge: `adcc0baeee96c03852ed75c09e379b0c49be01d1`.
+- [PR236 — restore live PvE combat start](https://github.com/danyasemennikov/rpg-bot/pull/236): merged 2026-10-04; verified PXE1 baseline/current `origin/main`: `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
 
 The repository establishes merge state only. Deployment, live-account smoke, and
 production operation require separate evidence.
+
+## Unmerged PXE1 candidate
+
+[PXE1 frozen contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) is being implemented on
+`feat/pxe1-player-experience-economy-v1`. Candidate behavior and measured results belong
+to its report/evidence and [system owner map](systems/README.md#pxe1-candidate-owners).
+They do not alter the confirmed baseline described below. PXE1 human Telegram validation
+is **NOT RUN**; deployment and independent acceptance review are not established.
 
 ## Playable chapter and world
 

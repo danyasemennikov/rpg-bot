@@ -1,0 +1,178 @@
+{
+  "contract": "PXE1-1",
+  "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
+  "branch": "feat/pxe1-player-experience-economy-v1",
+  "status": "IMPLEMENTING",
+  "candidate_sha": null,
+  "draft_pr": null,
+  "merge": "NOT MERGED",
+  "deployment": "UNVERIFIED",
+  "independent_review": "NOT RUN",
+  "human_validation": "NOT RUN",
+  "full_suite": {
+    "status": "NOT RUN"
+  },
+  "earned_profession_rav_journeys": {
+    "status": "RUNNING",
+    "provenance": "one current registration/Chapter/profession history, SHA-256 whole DB clones; no old PEV1 history",
+    "collected_tests": 41
+  },
+  "focused_runs": [
+    {
+      "candidate": "6948487",
+      "command": "python -m pytest -q <all 25 discovered test_pxe1_*.py files>",
+      "passed": 280,
+      "seconds": 179.35,
+      "status": "PASSED"
+    },
+    {
+      "candidate": "a819e7b + integration repairs",
+      "command": "python -m pytest -q tests/test_alpha_transactions_v1.py tests/test_alpha_core_loop_integration_pr226.py tests/test_world_pve_encounter_foundation.py tests/test_contextual_lower_menu_pr1b1a.py tests/test_lower_service_menu_pr1b2a.py --tb=short",
+      "passed": 104,
+      "seconds": 21.25,
+      "status": "PASSED"
+    },
+    {
+      "candidate": "a819e7b + integration repairs",
+      "command": "python -m pytest -q <all 25 discovered test_pxe1_*.py files> tests/test_alpha_release_gate_pr3p.py tests/test_solo_pve_runtime_handler_flow.py tests/test_itemization_fix_packet_pr230.py tests/test_regional_adventures_review_repairs.py tests/test_character_builds_v1_ui.py --tb=short",
+      "passed": 475,
+      "failed": 1,
+      "seconds": 104.22,
+      "status": "FAILED",
+      "finding": "obsolete delayed-aggro fixture; reconciled with real durable threat and actual eligible mob"
+    },
+    {
+      "candidate": "a819e7b + integration repairs",
+      "command": "python -m pytest -q tests/test_solo_pve_runtime_handler_flow.py tests/test_pxe1_activity_conflicts.py tests/test_pxe1_pve_world_tick.py tests/test_alpha_core_loop_integration_pr226.py --tb=short",
+      "passed": 59,
+      "seconds": 12.04,
+      "status": "PASSED"
+    },
+    {
+      "candidate": "ed999c2 + prepared docs/earned fixture",
+      "command": "python -m pytest -q tests/test_character_builds_v1_contract.py tests/test_regional_adventures_contract.py tests/test_professions_economy_v1_migration.py tests/test_character_builds_v1_migration.py tests/test_pxe1_schema.py --tb=short",
+      "passed": 37,
+      "seconds": 15.85,
+      "status": "PASSED"
+    },
+    {
+      "candidate": "ed999c2 + earned journey reconciliation",
+      "command": "python -m pytest -q tests/test_character_builds_v1_journeys.py tests/test_character_builds_v1_group_journeys.py tests/test_regional_adventures_review_repairs.py tests/test_regional_adventures_localization.py tests/test_quest_board_phase1.py tests/test_craftsmen_guild_pr1b2b.py --tb=short",
+      "passed": 158,
+      "failed": 1,
+      "seconds": 1084.97,
+      "status": "FAILED",
+      "finding": "Parked group members entered real hostile formations; travel correctly denied. Journey now performs legal prestart Leave without granting progress."
+    },
+    {
+      "candidate": "ed999c2 + earned journey reconciliation",
+      "command": "python -m pytest -q tests/test_character_builds_v1_group_journeys.py --tb=short",
+      "passed": 3,
+      "seconds": 221.6,
+      "status": "PASSED",
+      "log": "pxe1-group-focused.log"
+    }
+  ],
+  "limitations": [
+    "Human Telegram validation NOT RUN; phone/desktop and real multi-account behavior unverified",
+    "Independent architecture review pending"
+  ],
+  "deviations": [],
+  "schema": {
+    "migration": "player_experience_economy_v1",
+    "table_count": 8,
+    "tables": [
+      "player_travel_sessions",
+      "player_gathering_sessions",
+      "player_profession_tools",
+      "player_location_threats",
+      "player_feedback_events",
+      "player_pxe1_ui",
+      "pvp_participant_settlements_pxe1",
+      "pvp_group_settlements_pxe1"
+    ],
+    "additive_column_count": 9,
+    "additive_columns": {
+      "players": [
+        "location_visit_revision"
+      ],
+      "pve_encounters": [
+        "lifecycle_version",
+        "formation_deadline_ms",
+        "formation_revision",
+        "runtime_started_ms"
+      ],
+      "pvp_engagements": [
+        "world_model_version",
+        "locked_roster_json",
+        "roster_locked_ms"
+      ],
+      "pvp_engagement_reinforcements": [
+        "membership_version"
+      ]
+    },
+    "catalog_version": 2,
+    "craft_xp_policy_version": 2,
+    "schema_versions": 1,
+    "index_count": 16,
+    "indexes": [
+      "idx_pxe1_travel_running",
+      "idx_pxe1_travel_due",
+      "idx_pxe1_travel_history",
+      "idx_pxe1_gather_running",
+      "idx_pxe1_gather_due",
+      "idx_pxe1_gather_history",
+      "idx_pxe1_threat_due",
+      "idx_pxe1_threat_player",
+      "idx_pxe1_feedback_player",
+      "idx_pxe1_pvp_death_player",
+      "idx_pve_formation_due",
+      "idx_pvp_pxe1_due",
+      "idx_pxe1_pvp_ally_once",
+      "idx_pxe1_pvp_seat",
+      "idx_pxe1_pvp_commitment",
+      "idx_pxe1_pvp_membership"
+    ]
+  },
+  "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
+  "historical_focused_evidence": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md",
+  "human_scenarios": {
+    "H01": "NOT RUN",
+    "H02": "NOT RUN",
+    "H03": "NOT RUN",
+    "H04": "NOT RUN",
+    "H05": "NOT RUN",
+    "H06": "NOT RUN",
+    "H07": "NOT RUN",
+    "H08": "NOT RUN",
+    "H09": "NOT RUN",
+    "H10": "NOT RUN",
+    "H11": "NOT RUN",
+    "H12": "NOT RUN",
+    "H13a": "NOT RUN",
+    "H13b": "NOT RUN",
+    "H13c": "NOT RUN",
+    "H13d": "NOT RUN",
+    "H13e": "NOT RUN",
+    "H14": "NOT RUN",
+    "H15": "NOT RUN",
+    "H16": "NOT RUN",
+    "H17": "NOT RUN",
+    "H18": "NOT RUN",
+    "H19": "NOT RUN",
+    "H20": "NOT RUN"
+  },
+  "environment": {
+    "python": "3.12.10",
+    "pytest": "9.1.1",
+    "python_telegram_bot": "21.11.1",
+    "platform": "win32",
+    "database": "isolated temporary SQLite; production database untouched"
+  },
+  "links": {
+    "contract": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md",
+    "report": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md",
+    "execution_log": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md",
+    "human_plan": "docs/evidence/player_experience_economy_v1_human.md"
+  }
+}

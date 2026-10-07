@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for forward priorities; not an implementation contract
-- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
+- Last reconciled: 2026-10-07, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 candidate separately identified
 
 Statuses used here:
 
@@ -15,11 +15,20 @@ in this roadmap.
 
 ## CURRENT
 
+### PXE1 integrated candidate
+
+- Status: **in progress**, frozen [PXE1-1 contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md).
+- One candidate branch and one future Draft PR; no merge authorization.
+- Complete automated journeys, final broad acceptance, report/evidence and independent
+  review. Human Telegram validation remains **NOT RUN** under the owner's explicit
+  implementation handoff instructions; run the [PXE1 human plan](evidence/player_experience_economy_v1_human.md)
+  separately before claiming live acceptance.
+
 ### RAV1 post-merge human validation
 
 - Status: **accepted process**, outstanding after PR234 merged; implementation is
   complete and no longer an active candidate.
-- Human Telegram validation: **NOT RUN**. Execute the existing
+- Human Telegram validation: **IN PROGRESS / interrupted in Session 1** (HV1-B01). PR236 repaired start; live revalidation is unverified. Complete the existing
   [Fresh solo, Returning solo, and Two-player plan](evidence/regional_adventures_v1_human.md)
   and record observations against an exact build.
 - This is post-merge validation, not an implementation or merge blocker. Automated

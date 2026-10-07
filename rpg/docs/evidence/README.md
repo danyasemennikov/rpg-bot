@@ -47,3 +47,10 @@ Historical generated diagnostics remain at compatibility paths and are unchanged
 - [Alpha route/class balance report V2](../ALPHA_ROUTE_CLASS_BALANCE_REPORT_V2.md)
 
 Their contents are historical evidence, not a current all-system balance certificate.
+
+
+`player_experience_economy_v1.json` records the unmerged PXE1 candidate against
+PR236. Its tests do not certify human Telegram behavior. The corresponding
+`player_experience_economy_v1_human.md` explicitly remains NOT RUN. The RAV1 human
+plan header is reconciled with the Session 1 interruption already recorded in current
+state; this does not alter historical JSON or fabricate repair revalidation.

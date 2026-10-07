@@ -10,7 +10,10 @@ and which limitations applied at that baseline. They do not replace current code
 
 ## Active Draft candidates
 
-None. RAV1 subsequently merged as PR234.
+PXE1 is in implementation on `feat/pxe1-player-experience-economy-v1`; its single
+Draft PR will link the [contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md),
+[report](PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md) and exact automated/human evidence.
+RAV1 subsequently merged as PR234.
 
 ## Merged Epics
 
