@@ -124,7 +124,10 @@ The first broad attempt on `ce2f51dd5e4c7c45faef107e38657099039ebdc5` completed 
 repairs pass. The next fresh earned attempt completed with 1 passed and 40 setup
 errors in 6526.18s; it exposed player vitals not reflecting accepted PvE actor damage.
 The atomic resource projection repair passes 37 focused checks; a new clean history
-is running on that repaired code. No final pass is claimed. The earned profession
+reached a correct valuable-sale confirmation that the older Inn funding helper
+failed to follow (1 passed / 40 setup errors, 1575.50s). That helper now uses the
+real quantity/confirmation Shop flow; its failing-state diagnostic passes and another
+fresh history is running. No final pass is claimed. The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
 No old PEV1 checkpoint substitutes for current PXE1 history. Optional focused-repair

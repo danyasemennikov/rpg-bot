@@ -3,26 +3,26 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "IMPLEMENTING",
-  "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
+  "candidate_sha": "8a9e10c8bfe328ef31b133a776a42a770c10a13d",
   "draft_pr": null,
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
   "independent_review": "NOT RUN",
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "NOT RUN ON VITALS-REPAIRED CANDIDATE",
+    "status": "NOT RUN ON CONFIRMED-RECOVERY CANDIDATE",
     "command": "python -m pytest -q",
-    "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140"
+    "candidate_sha": "8a9e10c8bfe328ef31b133a776a42a770c10a13d"
   },
   "earned_profession_rav_journeys": {
     "status": "RUNNING",
-    "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
+    "candidate_sha": "8a9e10c8bfe328ef31b133a776a42a770c10a13d",
     "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
-    "log": "pxe1-earned-vitals-repaired-fresh-pytest.log",
-    "session_id": 98396,
-    "earned_history": "fresh from registration; PXE1_EARNED_CHECKPOINT explicitly absent; no partial backup reused",
+    "log": "pxe1-earned-confirmed-recovery-fresh-pytest.log",
+    "session_id": 85414,
     "collected_tests": 41,
-    "observed_utc": "2026-10-07T21:15:12.430900+00:00"
+    "earned_history": "fresh from registration; no PXE1_EARNED_CHECKPOINT override; no failed partial history reused",
+    "observed_utc": "2026-10-07T21:43:46.040502+00:00"
   },
   "focused_runs": [
     {
@@ -354,18 +354,18 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "FRESH REPAIRED ACCEPTANCE RUNNING; PRIOR RUN TERMINAL FAILED",
+    "status": "FRESH CONFIRMED-RECOVERY ACCEPTANCE RUNNING; PRIOR RUNS TERMINAL FAILED",
     "observed_utc": "2026-10-07T17:20:23.805057+00:00",
-    "code_candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
-    "active_session_id": 98396,
+    "code_candidate_sha": "8a9e10c8bfe328ef31b133a776a42a770c10a13d",
+    "active_session_id": 85414,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
     "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
     "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
     "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
     "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
-    "final_broad_status": "NOT RUN ON VITALS-REPAIRED CANDIDATE",
+    "final_broad_status": "NOT RUN ON CONFIRMED-RECOVERY CANDIDATE",
     "human_validation": "NOT RUN",
-    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned-latest"
+    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\ca4331e-partial-earned"
   },
   "earned_journey_attempts": [
     {
@@ -381,6 +381,21 @@
       "seconds": 6526.18,
       "finding": "All 83 recipes and twelve professions reached 20; crafted gear enhanced/advanced. Consumable inventory proof exposed stale player HP/MP: combat actor lost HP but player row retained full prebattle resources. Shared fixture failure prevented 39 RAV branches from executing.",
       "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned-latest"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-vitals-repaired-fresh-pytest.log",
+      "session_id": 98396,
+      "earned_history": "fresh from registration; PXE1_EARNED_CHECKPOINT explicitly absent; no partial backup reused",
+      "collected_tests": 41,
+      "observed_utc": "2026-10-07T21:15:12.430900+00:00",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 1575.5,
+      "finding": "Actual combat damage now persists. Paid Inn recovery exhausted gold during tier-three crafting and used an obsolete immediate All sale; the valuable material stack correctly returned confirmation_required. Shared setup error prevented 39 RAV branches.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\ca4331e-partial-earned"
     }
   ],
   "remaining_output_diagnostic": {
@@ -402,5 +417,14 @@
     "active_doc_file_links": "RESOLVE",
     "frozen_contract_matches_original": true,
     "sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
+  },
+  "inn_funding_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETED ACCEPTANCE HISTORY",
+    "candidate_sha": "8a9e10c8bfe328ef31b133a776a42a770c10a13d",
+    "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_inn_funding.py' --tb=short",
+    "passed": 1,
+    "seconds": 0.93,
+    "log": "pxe1-inn-funding-repaired-diagnostic-pytest.log",
+    "provenance": "Whole-copy failed current history; unchanged earned state, actual Shop preview/confirmation sale (1..99), 12g Inn charge, restored effective HP and original location verified. No synthetic resources/progression."
   }
 }

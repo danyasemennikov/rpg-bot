@@ -777,6 +777,31 @@ file links resolve, and the contract SHA256 still exactly matches the original.
 The report names retained version-zero pair adapter symbols and current PvP
 content-policy checks for independent review. The fresh 41-test history continues.
 
+## Confirmed Inn funding in the earned history
+
+The fresh vitals-repaired run completed normally: **1 passed / 40 errors,
+1575.50s (26m15s)**. Actual damaged HP now persists and triggers legitimate Inn
+recovery. During tier-three crafting, the older recovery funding helper exhausted
+gold and submitted an immediate All material sale. The current valuable-sale guard
+correctly returned `confirmation_required`; the helper incorrectly expected `sold`.
+The raw result remains in `pxe1-earned-vitals-repaired-fresh-pytest.log` and its whole
+failed DB/failure text in workspace `acceptance-recovery/ca4331e-partial-earned`.
+No completed acceptance or RAV execution is claimed.
+
+The creator now uses its existing actual Shop preview/explicit confirmation helper,
+with a quantity of 1..99, to fund Inn recovery. No production behavior or assertions
+were weakened. Whole-copy failing-state diagnostic: **1 passed, 0.93s**, verifying
+confirmed sale receipt, exact sale income minus 12g Inn charge, restored effective
+HP and original location. Exact external-path command is in JSON and the output is
+`pxe1-inn-funding-repaired-diagnostic-pytest.log`; this is diagnostic only.
+
+The harness repair is committed at `8a9e10c8bfe328ef31b133a776a42a770c10a13d`.
+Because the creator changed, session 85414 now runs another fresh 41-test history
+from registration, with no checkpoint override, logged in
+`pxe1-earned-confirmed-recovery-fresh-pytest.log`. The prior 37/341 production
+regressions retain their recorded candidate; their production dependencies did not
+change. Fresh integrated history and final broad acceptance remain pending.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83
