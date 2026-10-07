@@ -708,6 +708,30 @@ No partial history is accepted, and the creator changed, so the next profession/
 acceptance must rebuild fresh from registration. Logs retain the failed broad and
 diagnostic results. The final broad command remains required on the repaired candidate.
 
+The repaired candidate is `fb89ec23bcbfc09a1d46224cf905f26d3f78bdba`. A fresh
+41-test earned acceptance is active with
+`python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short`,
+logged in `pxe1-earned-repaired-fresh-pytest.log`. No source from the incomplete
+previous history is reused. Its completed result and the repaired broad run remain pending.
+
+## Work-limit preservation while acceptance continues
+
+At the user's request, coherent code and test repairs are preserved at
+`fb89ec23bcbfc09a1d46224cf905f26d3f78bdba`. Session 47464 continues the fresh
+41-test command above; no completed result or PASS is claimed. Raw acceptance
+output remains in `pxe1-earned-repaired-fresh-pytest.log`, and the first failed
+broad result remains in `pxe1-final-broad-pytest.log`.
+
+A consistent read-only SQLite backup was saved outside pytest rotation in the
+workspace's `acceptance-recovery/fb89ec2-partial-earned/earned.sqlite3`, with
+`partial-provenance.json`, at 2026-10-07T17:15:28.765203+00:00. Its SHA256 is
+`e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4`.
+It is explicitly partial, diagnostic only, and cannot load as a completed earned
+checkpoint. At backup, five gathering professions and six crafting professions
+had reached 20; medium armor remained 16. Final recipe/forge/consumable/locale
+checks and the 39 regional branches were still pending. The workspace checkpoint
+records the exact continuation step. Work continues while tools remain available.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83
