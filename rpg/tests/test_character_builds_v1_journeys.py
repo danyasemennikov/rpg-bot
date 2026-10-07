@@ -1,6 +1,7 @@
 """Ordinary earned Character Builds V1 journeys through production handlers.
 
-The only accelerated rule is the world respawn clock.  Registration, the
+Controlled world deadlines and the immediate travel-control clock are the only
+time accelerators. Registration, the
 45-gold vendor purchase, instance equip, skill receipts, combat orders, combat
 resolution, rewards, and mastery all use their production authorities.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -477,12 +479,15 @@ class ProductionJourney:
                     after=dict(get_player(self.player_id))
                     assert (after['exp'],after['gold'])==(before['exp'],before['gold'])
                     assert get_active_pve_encounter_id_for_player(player_id=self.player_id,ensure_schema=False) is None
-            origin = get_player(self.player_id)['location_id']
-            await self.callback(f"goto_{destination}", handle_location_buttons)
-            assert get_player(self.player_id)['location_id'] == origin
-            start = next(c for c in _callbacks(self.messages[-1][1]) if c.startswith('px:travel:'))
-            await self.callback(start, handle_activity_buttons)
-            session = _rows("SELECT * FROM player_travel_sessions WHERE player_id=? AND status='running'", (self.player_id,))[0]
+            # These two controls represent one immediate player choice. A host
+            # suspension must not expire the preview between mocked callbacks.
+            with patch('time.time', return_value=time.time()):
+                origin = get_player(self.player_id)['location_id']
+                await self.callback(f"goto_{destination}", handle_location_buttons)
+                assert get_player(self.player_id)['location_id'] == origin
+                start = next(c for c in _callbacks(self.messages[-1][1]) if c.startswith('px:travel:'))
+                await self.callback(start, handle_activity_buttons)
+                session = _rows("SELECT * FROM player_travel_sessions WHERE player_id=? AND status='running'", (self.player_id,))[0]
             run_world_activity_tick(now_ms=session['next_due_ms'])
             assert get_player(self.player_id)['location_id'] == destination
 
@@ -965,3 +970,37 @@ def test_twenty_ordinary_branch_loops_reach_m8_and_named_four_reach_m14(
     assert result["mastery"]["level"] == (14 if identity in DEEP_IDENTITIES else 8)
     expected_encounters = 91 if identity in DEEP_IDENTITIES else 29
     assert expected_encounters <= result["earned_encounters"] <= expected_encounters + 7
+
+
+def test_immediate_journey_travel_survives_host_pause_between_controls():
+    """Host suspension must not age a synthetic immediate preview/start pair."""
+    async def scenario():
+        journey = ProductionJourney(989302)
+        await journey.register(primary='strength', name='Clock Traveler')
+        before = dict(get_player(journey.player_id))
+        clock = [time.time()]
+        preview_time = clock[0]
+        original_callback = journey.callback
+
+        async def paused_callback(data, handler):
+            result = await original_callback(data, handler)
+            if data.startswith('goto_'):
+                clock[0] += 3600
+            return result
+
+        journey.callback = paused_callback
+        with patch('time.time', side_effect=lambda: clock[0]):
+            await journey.travel('westwild_n1')
+        after = dict(get_player(journey.player_id))
+        session = _rows('SELECT * FROM player_travel_sessions WHERE player_id=?',
+                        (journey.player_id,))[0]
+        intent = _rows("SELECT * FROM player_ui_actions WHERE player_id=? AND kind='pxe1_travel'",
+                       (journey.player_id,))[0]
+        assert session['status'] == 'arrived'
+        assert session['started_ms'] == int(preview_time * 1000)
+        assert session['updated_ms'] == session['started_ms'] + 15000
+        assert intent['used'] == 1 and intent['expires_at'] == int(preview_time) + 900
+        assert after['location_id'] == 'westwild_n1'
+        assert (after['gold'], after['exp']) == (before['gold'], before['exp'])
+
+    asyncio.run(scenario())
