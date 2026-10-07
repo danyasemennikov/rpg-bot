@@ -268,6 +268,23 @@ Focused evidence:
   `python -m pytest -q tests/test_pxe1_combat_order_replay.py tests/test_pxe1_combat_ui.py tests/test_character_builds_v1_durability.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_pvp_group_runtime.py`
   **43 passed, 9.02s**. Full suite remains NOT RUN.
 
+## Active PvE recovery continuation, candidate based on 5aac389
+
+Malformed PXE1 active snapshots are now isolated by their existing encounter
+owner. Invalid JSON, locked identities, actor/enemy state or deadlines terminate
+as state_lost, preserve snapshot bytes and historical receipts, release only
+owned activity flags, return owned anchored sources to their 30-second respawn,
+and record personal recovery notices. Invalid terminal outcomes follow the same
+path; transient settlement failures remain retryable. No reward, death penalty,
+player build or inventory state is reconstructed or granted.
+
+Focused evidence:
+
+- Final combat guard hardening: **10 passed, 2.51s**.
+- Active PvE quarantine and adjacent runtime/recovery: **44 passed, 9.72s**.
+- `python -m pytest -q tests/test_pxe1_activity_quarantine.py tests/test_pxe1_pve_world_tick.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_combat_result_recovery.py tests/test_pxe1_combat_order_replay.py tests/test_itemization_fix_packet_pr230.py --tb=short`
+  **91 passed, 23.92s**. Full suite remains NOT RUN.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

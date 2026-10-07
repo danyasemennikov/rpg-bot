@@ -110,3 +110,36 @@ def test_corrupt_formation_interrupts_locally_without_private_runtime_or_rewards
     assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE source_kind='pve' AND source_id=?",(encounter,)).fetchone()[0]==1
     assert process_due_pve_formations(now_ms=deadline+999999)==[]
     conn.close()
+
+
+@pytest.mark.parametrize('corruption',['json','roster','actor','enemy','deadline'])
+def test_corrupt_active_pve_interrupts_with_owned_respawn_and_preserves_player_state(corruption):
+    from tests.test_pxe1_pve_world_tick import started
+    from game.pve_live import process_due_pve_world_sides
+    encounter,source=started()
+    conn=get_connection()
+    row=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()
+    if corruption=='json': raw='not-json'
+    else:
+        state=json.loads(row['battle_state_json'])
+        if corruption=='actor': del state['participant_states_v1']['1']
+        elif corruption=='enemy': state['enemy_states_v1']=[7]
+        elif corruption=='deadline': state['side_deadline_at']='invalid-date'
+        raw=json.dumps(state)
+    conn.execute('UPDATE pve_encounters SET battle_state_json=? WHERE encounter_id=?',(raw,encounter))
+    if corruption=='roster': conn.execute("UPDATE pve_encounters SET locked_roster_json='[]' WHERE encounter_id=?",(encounter,))
+    conn.commit()
+    before=tuple(conn.execute('SELECT hp,mana,location_id,exp,gold,build_revision,gear_revision FROM players WHERE telegram_id=1').fetchone())
+    results=process_due_pve_world_sides(now_ms=1013000)
+    assert results==[{'encounter_id':encounter,'phase':'state_lost'}]
+    row=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()
+    assert row['status']=='state_lost' and row['battle_state_json']==raw
+    assert before==tuple(conn.execute('SELECT hp,mana,location_id,exp,gold,build_revision,gear_revision FROM players WHERE telegram_id=1').fetchone())
+    assert conn.execute('SELECT in_battle FROM players WHERE telegram_id=1').fetchone()[0]==0
+    assert not conn.execute('SELECT 1 FROM pve_reward_settlements WHERE encounter_id=?',(encounter,)).fetchone()
+    spawn=conn.execute('SELECT * FROM pve_spawn_instances WHERE spawn_instance_id=?',(source['spawn_instance_id'],)).fetchone()
+    assert spawn['state']=='respawning' and spawn['linked_encounter_id'] is None
+    assert spawn['respawn_available_at']=='1970-01-01 00:17:23'
+    assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE source_kind='pve' AND source_id=? AND event_kind='recovery'",(encounter,)).fetchone()[0]==1
+    assert process_due_pve_world_sides(now_ms=1014000)==[]
+    conn.close()

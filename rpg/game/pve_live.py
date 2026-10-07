@@ -1829,6 +1829,7 @@ def _transition_anchored_spawns_for_encounters(
     state: str,
     clear_link: bool,
     respawn_seconds: int | None = None,
+    now: datetime | None = None,
 ) -> None:
     if not encounter_ids:
         return
@@ -1837,7 +1838,7 @@ def _transition_anchored_spawns_for_encounters(
     placeholders = ','.join('?' for _ in encounter_ids)
     available_at = None
     if clear_link and respawn_seconds and respawn_seconds > 0:
-        available_at = (datetime.now(timezone.utc) + timedelta(seconds=respawn_seconds)).strftime('%Y-%m-%d %H:%M:%S')
+        available_at = ((now or datetime.now(timezone.utc)) + timedelta(seconds=respawn_seconds)).strftime('%Y-%m-%d %H:%M:%S')
 
     if clear_link:
         conn.execute(
@@ -3862,12 +3863,70 @@ def apply_pxe1_pve_death(player_id: int, encounter_id: str, *, now_ms: int) -> d
         conn.close()
 
 
+def _validate_pxe1_active_state(row):
+    """Check saved identities; never rebuild an active combat snapshot."""
+    try:
+        state=json.loads(row['battle_state_json'])
+        roster=json.loads(row['locked_roster_json'])['player_ids']
+        if (not isinstance(state,dict) or state['rules_version']!=RULES_VERSION
+                or not isinstance(roster,list) or not roster or len(set(roster))!=len(roster)
+                or any(not isinstance(p,int) or isinstance(p,bool) for p in roster)
+                or not isinstance(state['participant_states_v1'],dict)
+                or set(state['participant_states_v1'])!={str(p) for p in roster}
+                or not isinstance(state['enemy_states_v1'],list) or not state['enemy_states_v1']):
+            raise ValueError()
+        for actor_id in roster:
+            actor=state['participant_states_v1'][str(actor_id)]
+            if (not isinstance(actor,dict) or actor['actor_id']!=actor_id
+                    or not isinstance(actor['effects'],list) or not isinstance(actor['cooldowns'],dict)
+                    or not isinstance(actor['skill_ranks'],dict)
+                    or any(not isinstance(actor[key],int) or isinstance(actor[key],bool) for key in ('hp','max_hp','mana','max_mana'))
+                    or not 0<=actor['hp']<=actor['max_hp'] or not 0<=actor['mana']<=actor['max_mana']):
+                raise ValueError()
+        from game.mobs import get_mob
+        enemies=state['enemy_states_v1']
+        for enemy in enemies:
+            if (not isinstance(enemy,dict) or not isinstance(enemy['unit_id'],str)
+                    or not get_mob(enemy['mob_id']) or not isinstance(enemy['effects'],list)
+                    or any(not isinstance(enemy[key],int) or isinstance(enemy[key],bool) for key in ('hp','max_hp'))
+                    or not 0<=enemy['hp']<=enemy['max_hp']):
+                raise ValueError()
+        if len({enemy['unit_id'] for enemy in enemies})!=len(enemies):
+            raise ValueError()
+        if not state.get('mob_dead') and any(a['hp']>0 for a in state['participant_states_v1'].values()):
+            datetime.fromisoformat(state['side_deadline_at'])
+        return state
+    except (ValueError,TypeError,KeyError,AttributeError):
+        raise ValueError('corrupt_live_state')
+
+
+def _quarantine_pxe1_active_encounter(conn,row,*,now_ms,reason):
+    if not conn.in_transaction:
+        raise RuntimeError('PvE quarantine requires a caller-owned writer')
+    encounter_id=row['encounter_id']
+    members=[r['player_id'] for r in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(encounter_id,))]
+    # Keep malformed source/snapshot bytes and every historical receipt intact.
+    conn.execute("UPDATE pve_encounters SET status='state_lost',finished_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND status='active'",(encounter_id,))
+    conn.execute("UPDATE pve_encounter_participants SET status='state_lost',updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND status='active'",(encounter_id,))
+    _transition_anchored_spawns_for_encounters(conn,encounter_ids=[encounter_id],state=SPAWN_STATE_RESPAWNING,
+        clear_link=True,respawn_seconds=DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS,now=datetime.fromtimestamp(now_ms/1000,timezone.utc))
+    from game.player_experience_schema import _recovery_notice
+    from game.player_activity import player_activity
+    for actor_id in members:
+        activity=player_activity(conn,actor_id,exclude_pve=encounter_id)
+        if not activity or activity['kind'] not in {'pve','pvp'}:
+            conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?',(actor_id,))
+        _recovery_notice(conn,actor_id,domain='pve',ref=encounter_id,reason='state_lost',now_ms=now_ms)
+    import logging
+    logging.getLogger(__name__).error('PXE1 quarantined active encounter %s: %s',encounter_id,reason)
+
+
 def process_due_pve_world_sides(*,now_ms: int,limit: int=100,encounter_id: str | None=None) -> list[dict]:
     """Drive the existing evaluator/T1/T2 without Telegram callback state."""
     from game.pve_reward_settlement import prepare_victory_settlement,apply_prepared_settlement
     conn = get_connection()
     try:
-        rows = conn.execute('''SELECT encounter_id,owner_player_id FROM pve_encounters
+        rows = conn.execute('''SELECT * FROM pve_encounters
             WHERE lifecycle_version=1 AND runtime_started_ms IS NOT NULL AND status='active'
             AND (? IS NULL OR encounter_id=?)
             ORDER BY CASE WHEN json_valid(battle_state_json) THEN json_extract(battle_state_json,'$.side_deadline_at') ELSE '' END,encounter_id LIMIT ?''',
@@ -3878,6 +3937,22 @@ def process_due_pve_world_sides(*,now_ms: int,limit: int=100,encounter_id: str |
     for row in rows:
         encounter_id,owner = row['encounter_id'],row['owner_player_id']
         try:
+            if row['rules_version']==RULES_VERSION:
+                conn=get_connection()
+                try:
+                    conn.execute('BEGIN IMMEDIATE')
+                    current=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+                    if current['status']!='active':
+                        conn.rollback();continue
+                    try: _validate_pxe1_active_state(current)
+                    except ValueError as exc:
+                        _quarantine_pxe1_active_encounter(conn,current,now_ms=now_ms,reason=str(exc))
+                        conn.commit()
+                        clear_solo_pve_runtime(player_id=owner,encounter_id=encounter_id)
+                        results.append({'encounter_id':encounter_id,'phase':'state_lost'})
+                        continue
+                    conn.rollback()
+                finally: conn.close()
             restored = load_active_pve_encounter(encounter_id=encounter_id)
             if not restored:
                 continue
@@ -3921,6 +3996,18 @@ def process_due_pve_world_sides(*,now_ms: int,limit: int=100,encounter_id: str |
                 if prepared['status'] in {'prepared','applied'}:
                     settlement = apply_prepared_settlement(encounter_id)
                     results.append({'encounter_id':encounter_id,'phase':'victory','settlement':settlement})
+                elif prepared['status']=='invalid_outcome':
+                    conn=get_connection()
+                    try:
+                        conn.execute('BEGIN IMMEDIATE')
+                        current=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+                        if current['status']=='active':
+                            _quarantine_pxe1_active_encounter(conn,current,now_ms=now_ms,reason=prepared['reason'])
+                            conn.commit()
+                            clear_solo_pve_runtime(player_id=owner,encounter_id=encounter_id)
+                            results.append({'encounter_id':encounter_id,'phase':'state_lost'})
+                        else: conn.rollback()
+                    finally: conn.close()
             else:
                 results.append({'encounter_id':encounter_id,'phase':'active','battle':state})
         except Exception:
