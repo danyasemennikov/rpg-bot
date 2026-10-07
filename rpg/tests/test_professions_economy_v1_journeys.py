@@ -297,9 +297,9 @@ async def _recover(journey: ProductionJourney, *, force: bool = False) -> None:
         finally:
             conn.close()
         assert row
-        payload = f"{row['id']}:{row['quantity']}"
-        token = issue_actions(journey.player_id, 'sell', [payload])[payload]
-        assert try_sell_inventory_item(journey.player_id, token)['status'] == 'sold'
+        # Inn funding uses the same explicit quantity/valuable-sale confirmation
+        # as other earned sales, rather than the obsolete immediate All intent.
+        await _sell_owned(journey, f"i{row['id']}", min(99, int(row['quantity'])))
     await journey.rest_at_current_inn()
     await _move(journey, origin)
 
