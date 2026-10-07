@@ -111,8 +111,8 @@ def build_overview(player: dict, page: int = 0, *, group=None):
     lang, player_id = player.get('lang', 'ru'), int(player['telegram_id'])
     gathering, crafting, _ = _state(player_id)
     if group not in {'gathering','crafting'}:
-        rows = [[InlineKeyboardButton(t('pxe1.gathering_professions',lang),callback_data='pe_group:gathering:0')],
-                [InlineKeyboardButton(t('pxe1.crafting_professions',lang),callback_data='pe_group:crafting:0')],
+        rows = [[InlineKeyboardButton(t('pxe1.profession.gathering',lang),callback_data='pe_group:gathering:0')],
+                [InlineKeyboardButton(t('pxe1.profession.crafting',lang),callback_data='pe_group:crafting:0')],
                 [InlineKeyboardButton(t('pxe1.tools',lang),callback_data='px:tools'),
                  InlineKeyboardButton(t('professions.receipts',lang),callback_data='pe_h:0')],
                 [InlineKeyboardButton(t('professions.back',lang),callback_data='px:home')]]
@@ -122,7 +122,7 @@ def build_overview(player: dict, page: int = 0, *, group=None):
             objective = next((o for o in state['contract'].objectives if o.action=='craft' and state.get('objective_progress',{}).get(o.key,0)<o.required),None)
             recipe = next((r for r in ACTIVE_RECIPES if objective and r.output_spec.item_id==objective.target),None)
             if recipe:
-                rows.insert(0,[InlineKeyboardButton(t('pxe1.required_recipe',lang),callback_data='pe_r:'+recipe.recipe_id)])
+                rows.insert(0,[InlineKeyboardButton(t('pxe1.profession.required_recipe',lang),callback_data='pe_r:'+recipe.recipe_id)])
         return t('professions.title',lang),_kb(rows)
     keys = list(GATHERING_PROFESSION_KEYS if group=='gathering' else CRAFTING_PROFESSION_KEYS)
     rows_on_page, page, pages = _page(keys, page)
@@ -132,7 +132,7 @@ def build_overview(player: dict, page: int = 0, *, group=None):
         state = gathering.get(key) or crafting.get(key)
         name = t(f'professions.names.{key}', lang)
         needed = int(state['level']) * 50 if int(state['level']) < 20 else '—'
-        lines.append(f"• {escape(name)} — {t('professions.level', lang, level=state['level'], exp=state['exp'], needed=needed)}")
+        lines.append(f"• {escape(name)} — {t('pxe1.profession.level_xp', lang, level=state['level'], exp=state['exp'], needed=needed)}")
         rows.append([InlineKeyboardButton(name, callback_data=f'pe_p:{key}')])
     nav = []
     if page:
@@ -153,8 +153,8 @@ def build_profession(player: dict, key: str):
         return build_overview(player)
     name = t(f'professions.names.{key}', lang)
     level, exp = int(state['level']), int(state['exp'])
-    progress = (t('professions.cap', lang) if level >= 20
-                else t('professions.level', lang, level=level, exp=exp, needed=level * 50))
+    progress = (t('pxe1.profession.at_cap', lang) if level >= 20
+                else t('pxe1.profession.level_xp', lang, level=level, exp=exp, needed=level * 50))
     milestones = _milestone_rows(key)
     unlocked = [row for row in milestones if row[0] <= level]
     future = [row for row in milestones if row[0] > level]
@@ -310,7 +310,7 @@ def _legacy_recipe(player: dict, recipe_id: str):
     elif int(state['level']) >= recipe.required_level:
         payload = recipe_intent_payload(recipe_id)
         token = issue_actions(player_id, 'learn', [payload]).get(payload)
-        if token: rows.append([InlineKeyboardButton(t('professions.learn', lang), callback_data=f'pe_a:{token}')])
+        if token: rows.append([InlineKeyboardButton(t('pxe1.profession.learn', lang), callback_data=f'pe_a:{token}')])
     rows.append([InlineKeyboardButton(t('professions.back', lang), callback_data=f'pe_p:{recipe.profession_key}')])
     return '\n'.join(lines), _kb(rows)
 
@@ -450,7 +450,7 @@ def build_mutation_result(player: dict, receipt: dict, recipe_id: str = ''):
             from game.profession_tools import TOOL_NAMES
             name = t('pxe1.tool.'+TOOL_NAMES[output['profession_key']],lang)
             lines.append(escape(name)+' · '+t('pxe1.tool.tier.'+str(output['tool_tier']),lang))
-            lines.append(t('pxe1.tool_output',lang,capacity=60*output['tool_tier']))
+            lines.append(t('pxe1.profession.tool_output',lang,capacity=60*output['tool_tier']))
         else:
             lines.append(escape(get_item_name(output['item_id'],lang))+f" ×{output['quantity']}")
             if output.get('instance_ids'):

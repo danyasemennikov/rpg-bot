@@ -833,3 +833,6 @@ STRINGS['gear'] = {
     'page': 'Страница {page}/{pages}', 'buy_here_btn': 'Купить здесь за {gold}',
     'ownership': 'Ваш экземпляр #{id}{equipped}', 'equipped_suffix': ' (надет: {slot})',
 }
+
+from locales.pxe1_surface_keys import install_surface_keys
+install_surface_keys(STRINGS, 'ru')

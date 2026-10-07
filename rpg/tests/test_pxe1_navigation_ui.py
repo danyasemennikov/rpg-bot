@@ -16,6 +16,30 @@ from handlers.activities import build_activities,tool_card,tool_list,travel_prev
 from locales.pxe1 import PXE1_STRINGS
 
 
+def test_integrated_frozen_families_have_real_locales_without_fallback():
+    from game.i18n import validate_pxe1_surface_locales
+    assert validate_pxe1_surface_locales()
+    for lang in ('ru','en','es'):
+        for suffix,legacy in (('location','keyboard.location'),('map','keyboard.map'),
+                ('journal','chapter.journal'),('inventory','keyboard.inventory'),
+                ('character','keyboard.profile'),('activities','keyboard.activities')):
+            assert t('pxe1.menu.'+suffix,lang)==t(legacy,lang)
+        assert t('pxe1.command.activities',lang)==t('pxe1.commands.activities',lang)
+
+
+@pytest.mark.parametrize('corruption',['missing','placeholders','not_text'])
+def test_integrated_frozen_family_validation_detects_missing_or_mismatched_translation(corruption):
+    from copy import deepcopy
+    from game.i18n import _load_lang,validate_pxe1_surface_locales
+    locales={lang:deepcopy(_load_lang(lang)) for lang in ('en','ru','es')}
+    character=locales['es']['pxe1']['character']
+    if corruption=='missing': del character['rank']
+    elif corruption=='placeholders': character['rank']='Rango {other}/3'
+    else: character['rank']=3
+    with pytest.raises(RuntimeError,match='PXE1'):
+        validate_pxe1_surface_locales(locales)
+
+
 @pytest.mark.parametrize('lang',['ru','en','es'])
 def test_six_fixed_entries_no_location_context(lang):
     expected = [[t('keyboard.location',lang),t('keyboard.map',lang)],

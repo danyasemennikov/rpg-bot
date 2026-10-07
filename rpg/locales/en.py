@@ -791,3 +791,6 @@ STRINGS['gear'] = {
     'page': 'Page {page}/{pages}', 'buy_here_btn': 'Buy here for {gold}',
     'ownership': 'Owned instance #{id}{equipped}', 'equipped_suffix': ' (equipped: {slot})',
 }
+
+from locales.pxe1_surface_keys import install_surface_keys
+install_surface_keys(STRINGS, 'en')

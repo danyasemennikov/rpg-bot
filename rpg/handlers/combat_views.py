@@ -63,7 +63,7 @@ def home(player,mob,state):
                         (t('battle.potions_btn',lang),{'view':'supplies','page':0}),
                         (t('battle.flee_btn',lang),{'view':'action','action_id':'flee'})]
     else: lines.append(t('pxe1.combat.waiting',lang))
-    definitions.append((t('pxe1.details',lang),{'view':'details'}))
+    definitions.append((t('pxe1.common.details',lang),{'view':'details'}))
     from handlers.battle import _render_v1_event
     for event in state.get('combat_events_v1',[])[-2:]:
         rendered = _render_v1_event(event,state,lang)
@@ -144,7 +144,7 @@ def skills_card(player,state,page=0):
     actor = state['participant_states_v1'][str(player['telegram_id'])]
     skills = [s for s in legal_actions(actor) if s not in {'normal','guard'}]
     pages = max(1,(len(skills)+5)//6); page = max(0,min(int(page),pages-1))
-    lines = [t('pxe1.weapon_skills',lang),t('gear.page',lang,page=page+1,pages=pages)]
+    lines = [t('pxe1.character.weapon_skills',lang),t('gear.page',lang,page=page+1,pages=pages)]
     definitions = []
     for skill in skills[page*6:page*6+6]:
         label = skill_label(actor,skill,lang)
@@ -202,7 +202,7 @@ def details_card(player,state,section=None,page=0):
     lang=player.get('lang','ru')
     definitions=[]
     if section not in {'enemies','allies','log'}:
-        text=t('pxe1.details',lang)
+        text=t('pxe1.common.details',lang)
         definitions=[(t('pxe1.combat.'+group,lang),{'view':'details','section':group,'page':0}) for group in ('enemies','allies','log')]
         definitions.append((t('common.back',lang),{'view':'home'}))
     else:
@@ -220,7 +220,7 @@ def details_card(player,state,section=None,page=0):
                     ('physical_defense','pdef'),('magic_defense','mdef'),('accuracy','accuracy'),('evasion','evasion')) if key in entity]
                 if stats: lines.append(' · '.join(stats))
                 for effect in entity.get('effects',[]):
-                    label=_V1_EFFECT_COPY.get(lang,_V1_EFFECT_COPY['en']).get(effect.get('kind'),t('pxe1.details',lang))
+                    label=_V1_EFFECT_COPY.get(lang,_V1_EFFECT_COPY['en']).get(effect.get('kind'),t('pxe1.common.details',lang))
                     lines.append(escape(label)+f" · {effect.get('value',effect.get('raw_tick',''))} · ⏳{effect.get('duration',0)}")
                 entries.append('\n'.join(lines))
         pages=[[]]

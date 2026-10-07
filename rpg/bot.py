@@ -85,7 +85,7 @@ async def register_pxe1_commands(application):
     from game.i18n import t
     names = ('start','location','map','journal','inventory','profile','activities','stats','skills','build','settings','help')
     for language_code,lang in ((None,'en'),('ru','ru'),('en','en'),('es','es')):
-        commands = [BotCommand(name,t('pxe1.commands.'+name,lang)) for name in names]
+        commands = [BotCommand(name,t('pxe1.command.'+name,lang)) for name in names]
         try:
             await application.bot.set_my_commands(commands,language_code=language_code)
         except Exception:

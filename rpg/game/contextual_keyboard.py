@@ -15,9 +15,9 @@ LOWER_TRAVEL_PREFIX = '🧭 '
 
 def _baseline_keyboard_rows(lang: str) -> list[list[str]]:
     return [
-        [t('keyboard.location', lang), t('keyboard.map', lang)],
-        [t('chapter.journal', lang), t('keyboard.inventory', lang)],
-        [t('keyboard.profile', lang), t('keyboard.activities', lang)],
+        [t('pxe1.menu.location', lang), t('pxe1.menu.map', lang)],
+        [t('pxe1.menu.journal', lang), t('pxe1.menu.inventory', lang)],
+        [t('pxe1.menu.character', lang), t('pxe1.menu.activities', lang)],
     ]
 
 

@@ -338,13 +338,13 @@ def _load_model(player_id: int) -> dict[str, Any]:
 def build_main_view(player_id: int, lang: str):
     model = _load_model(player_id)
     player, snapshot = model['player'], model['snapshot']
-    lines = [t('pxe1.build_equipment',lang),_family_name(snapshot['family'],lang)]
+    lines = [t('pxe1.character.build_equipment',lang),_family_name(snapshot['family'],lang)]
     if player['stat_points']>0:
-        lines.append(t('pxe1.free_points',lang,count=player['stat_points']))
-    rows = [[InlineKeyboardButton(t('pxe1.attributes',lang),callback_data='bv_attr'),InlineKeyboardButton(t('pxe1.weapon_skills',lang),callback_data='bv_equipped_skills')],
+        lines.append(t('pxe1.character.free_points',lang,count=player['stat_points']))
+    rows = [[InlineKeyboardButton(t('pxe1.character.attributes',lang),callback_data='bv_attr'),InlineKeyboardButton(t('pxe1.character.weapon_skills',lang),callback_data='bv_equipped_skills')],
         [InlineKeyboardButton(_c(lang,'equipment'),callback_data='inv_tab_weapon')],
         [InlineKeyboardButton(t('pxe1.reset_options',lang),callback_data='bv_reset_options')],
-        [InlineKeyboardButton(t('pxe1.details',lang),callback_data='bv_character_details'),InlineKeyboardButton(t('common.back',lang),callback_data='bv_character')]]
+        [InlineKeyboardButton(t('pxe1.common.details',lang),callback_data='bv_character_details'),InlineKeyboardButton(t('common.back',lang),callback_data='bv_character')]]
     return '\n'.join(lines),InlineKeyboardMarkup(rows)
 
 

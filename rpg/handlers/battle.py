@@ -1911,6 +1911,10 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 from handlers.world_views import location_card
                 text,keyboard=location_card(p)
             await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            if current:
+                from game.player_ui import record_surface
+                record_surface(user.id,kind='pve',ref=current[0]['pve_encounter_id'],
+                    revision=current[0]['turn_revision'],chat_id=query.message.chat_id,message_id=query.message.message_id)
             return
     if data.startswith('battle_px_'):
         from handlers.combat_views import handle_read_selection

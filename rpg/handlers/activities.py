@@ -97,7 +97,7 @@ def gathering_preview_card(player,profession):
     for entry in snapshot['entries'][:4]:
         lines.append(t('pxe1.gather_source_line',lang,name=escape(get_item_name(entry['item_id'],lang)),
                        chance=entry['chance_bp']/100,level=entry['required_level'],tier=entry['required_tool_tier']))
-    if tool: lines.append(t('pxe1.tool_durability',lang,current=tool['durability'],maximum=60*tool['tier']))
+    if tool: lines.append(t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier']))
     rows = []
     if reason: lines.append(t('pxe1.'+reason,lang))
     else:
@@ -167,18 +167,18 @@ def tool_card(player,profession):
         conn.close()
     lang = player.get('lang','ru')
     lines = [t('pxe1.tool.'+TOOL_NAMES[profession],lang)+' · '+t('pxe1.tool.tier.'+str(tool['tier']),lang),
-             t('pxe1.tool_durability',lang,current=tool['durability'],maximum=60*tool['tier'])]
+             t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier'])]
     rows = []
     location = get_location(player['location_id']) or {}
     if quote and quote['restored']:
         lines.append(t('pxe1.repair_materials',lang))
         for item in quote['consumed']:
             lines.append(t('pxe1.repair_input',lang,name=escape(get_item_name(item,lang)),owned=quote['consumed'][item],supplied=quote['supplied'][item]))
-        lines.append(t('pxe1.repair_gold',lang,gold=quote['gold']))
+        lines.append(t('pxe1.tool.repair_cost',lang,gold=quote['gold']))
         if 'craftsmen_guild' in location.get('services',[]):
             payload = encoded(quote)
             token = issue_actions(player['telegram_id'],'tool_repair_pxe1',[payload])[payload]
-            rows.append([InlineKeyboardButton(t('pxe1.repair_assisted' if quote['repair_mode']=='assisted' else 'pxe1.repair',lang),callback_data='px:repair:'+token)])
+            rows.append([InlineKeyboardButton(t('pxe1.tool.assisted_repair' if quote['repair_mode']=='assisted' else 'pxe1.tool.repair',lang),callback_data='px:repair:'+token)])
     elif tool['tier']==1 and location.get('is_regional_safe_hub'):
         quote = {'schema_version':1,'profession_key':profession,'tool_revision':tool['revision'],'gold':12}
         payload = encoded(quote)

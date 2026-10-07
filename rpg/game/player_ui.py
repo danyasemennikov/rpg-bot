@@ -40,7 +40,7 @@ async def install_menu_on_message(message,player):
     lang = player.get('lang','ru')
     if not needs_menu(player['telegram_id'],lang):
         return False
-    text = t('pxe1.menu_home',lang,name=escape(player['name']),location=escape(get_location_name(player['location_id'],lang)))
+    text = t('pxe1.menu.welcome_status',lang,name=escape(player['name']),location=escape(get_location_name(player['location_id'],lang)))
     await message.reply_text(text,parse_mode='HTML',reply_markup=build_contextual_main_keyboard(lang=lang))
     mark_menu_installed(player['telegram_id'],lang)  # Failed transport leaves a retry.
     return True

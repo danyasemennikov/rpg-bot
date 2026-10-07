@@ -349,6 +349,37 @@ Focused evidence:
 
 Full suite remains NOT RUN. Human Telegram validation remains NOT RUN.
 
+## Canonical locale-family integration, candidate based on bd40fde
+
+Added explicit canonical families for Menu, Common, Combat, Character, Command,
+Tool, Profession, Inventory and Shop. Existing translated semantics are reused
+through checked aliases; missing surface copy is authored separately in en/ru/es.
+The installer runs after each complete locale has loaded. Legacy flat aliases
+remain readable, and integrated controls now use canonical keys. The validator
+checks every required suffix of these nine declared families directly, without
+the runtime Russian fallback, and rejects missing/non-text values and unequal
+placeholder sets. It intentionally does not claim coverage of the eight other
+frozen families: Location, Map, Travel, Encounter, Gather, Quest, Journal and
+Chapter. Their integration and numeric-aware wording remain outstanding.
+
+Consumed PvE order refreshes now remember their successfully edited surface.
+Failed transport leaves prior coordinates intact and never executes another
+side. The existing receipt remains the acknowledgment authority.
+
+Focused evidence:
+
+- Initial canonical surfaces: **37 passed, 12.32s**.
+- With strict missing/placeholder checks and combat replay: **51 passed, 14.30s**.
+- A command named a nonexistent tools test file: **no tests ran, 0.00s**;
+  corrected the filename rather than treating that command as acceptance.
+- Canonical Tool/Profession + recipe/navigation/build/combat: **66 passed, 18.94s**.
+- Adjacent tool/recipe/inventory/delivery/result recovery: **48 passed, 11.57s**.
+- `python -m pytest -q tests/test_pxe1_navigation_ui.py tests/test_pxe1_tools_economy.py tests/test_pxe1_recipe_surfaces.py tests/test_pxe1_inventory_surfaces.py tests/test_pxe1_shop_transactions.py tests/test_pxe1_combat_ui.py tests/test_pxe1_character_spending.py tests/test_character_builds_v1_language_journeys.py tests/test_pxe1_combat_order_replay.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_combat_result_recovery.py --tb=short`
+  **116 passed, 28.74s**.
+- Added failed-transport coordinate regression:
+  `python -m pytest -q tests/test_pxe1_combat_order_replay.py tests/test_pxe1_navigation_ui.py --tb=short`
+  **26 passed, 4.83s**.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

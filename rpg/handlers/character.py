@@ -16,8 +16,8 @@ def character_card(player_id,lang):
     lines = [f"👤 <b>{escape(player['name'])}</b> · {t('common.level',lang)} {player['level']}",
              f"📍 {escape(get_location_name(player['location_id'],lang))} · 💰 {player['gold']}",
              f"❤️ {player['hp']}/{snapshot['max_hp']} · 🔵 {player['mana']}/{snapshot['max_mana']}",
-             f"{t('common.exp',lang)}: {player['exp']}/{exp_to_next_level(player['level'])} · {t('pxe1.free_points',lang,count=player['stat_points'])}",
-             f"{escape(_family_name(snapshot['family'],lang))} · {t('pxe1.mastery_level',lang,level=snapshot['mastery_level'])}"]
+             f"{t('common.exp',lang)}: {player['exp']}/{exp_to_next_level(player['level'])} · {t('pxe1.character.free_points',lang,count=player['stat_points'])}",
+             f"{escape(_family_name(snapshot['family'],lang))} · {t('pxe1.character.mastery_level',lang,level=snapshot['mastery_level'])}"]
     conn = get_connection()
     try:
         travel = conn.execute("SELECT * FROM player_travel_sessions WHERE player_id=? AND status='running'",(player_id,)).fetchone()
@@ -28,9 +28,9 @@ def character_card(player_id,lang):
         from handlers.activities import duration
         remaining = max(0,(travel['next_due_ms']-int(time.time()*1000)+999)//1000)+18*max(0,len(json.loads(travel['path_json']))-travel['edge_index']-2)
         lines.append(t('pxe1.travel_destination',lang,name=escape(get_location_name(travel['destination_location_id'],lang)))+' · '+duration(remaining))
-    rows = [[InlineKeyboardButton(t('pxe1.attributes',lang),callback_data='bv_attr'),InlineKeyboardButton(t('pxe1.weapon_skills',lang),callback_data='bv_equipped_skills')],
-            [InlineKeyboardButton(t('pxe1.build_equipment',lang),callback_data='bv_main')],
-            [InlineKeyboardButton(t('pxe1.details',lang),callback_data='bv_character_details'),InlineKeyboardButton(t('pxe1.more',lang),callback_data='bv_character_more')]]
+    rows = [[InlineKeyboardButton(t('pxe1.character.attributes',lang),callback_data='bv_attr'),InlineKeyboardButton(t('pxe1.character.weapon_skills',lang),callback_data='bv_equipped_skills')],
+            [InlineKeyboardButton(t('pxe1.character.build_equipment',lang),callback_data='bv_main')],
+            [InlineKeyboardButton(t('pxe1.common.details',lang),callback_data='bv_character_details'),InlineKeyboardButton(t('pxe1.common.more',lang),callback_data='bv_character_more')]]
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines),keyboard)
     return '\n'.join(lines),keyboard
@@ -42,11 +42,11 @@ def spending_card(player_id,lang,*,selected=None,deltas=None):
     deltas = dict(deltas or {})
     labels = _ATTRIBUTE_LABELS.get(lang,_ATTRIBUTE_LABELS['en'])
     remaining = player['stat_points']-sum(deltas.values())
-    lines = [t('pxe1.attributes',lang),t('pxe1.free_points',lang,count=remaining)]
+    lines = [t('pxe1.character.attributes',lang),t('pxe1.character.free_points',lang,count=remaining)]
     if selected in ATTRIBUTE_KEYS:
         lines.append(f"{labels[selected]}: {player[selected]} → {player[selected]+deltas.get(selected,0)}")
-        rows = [[InlineKeyboardButton('+1',callback_data='bv_spend_add_1'),InlineKeyboardButton(t('pxe1.spend_all',lang),callback_data='bv_spend_add_all')],
-                [InlineKeyboardButton(t('pxe1.preview',lang),callback_data='bv_spend_preview'),InlineKeyboardButton(t('pxe1.choose_attribute',lang),callback_data='bv_spend_choose')]]
+        rows = [[InlineKeyboardButton('+1',callback_data='bv_spend_add_1'),InlineKeyboardButton(t('pxe1.character.spend_available',lang),callback_data='bv_spend_add_all')],
+                [InlineKeyboardButton(t('pxe1.character.spend_preview',lang),callback_data='bv_spend_preview'),InlineKeyboardButton(t('pxe1.choose_attribute',lang),callback_data='bv_spend_choose')]]
     else:
         for key in ATTRIBUTE_KEYS:
             lines.append(f"{labels[key]}: {player[key]}"+(f" (+{deltas[key]})" if deltas.get(key) else ''))
@@ -64,11 +64,11 @@ def spending_preview_card(player_id,lang,deltas):
     if not preview.get('success'):
         return preview,None
     labels = _ATTRIBUTE_LABELS.get(lang,_ATTRIBUTE_LABELS['en'])
-    lines = [t('pxe1.preview',lang)]
+    lines = [t('pxe1.character.spend_preview',lang)]
     for key in ATTRIBUTE_KEYS:
         if deltas.get(key):
             lines.append(f"{labels[key]}: {preview['before'][key]} → {preview['attributes'][key]}")
-    lines.append(t('pxe1.free_points',lang,count=preview['unspent']))
+    lines.append(t('pxe1.character.free_points',lang,count=preview['unspent']))
     lines.append(f"❤️ {preview['max_hp']} · 🔵 {preview['max_mana']} · 🎒 {preview['carry_weight']}")
     lines.append(t('pxe1.no_refill',lang))
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('common.confirm',lang),callback_data='bv_spend_apply_'+preview['token'])],
@@ -102,12 +102,12 @@ def weapon_family_card(player_id,family,lang,*,branch=None):
     from handlers.build import _load_model,_family_name,_BRANCH_COPY,_c
     model = _load_model(player_id)
     if family not in FAMILIES:
-        return t('pxe1.weapon_skills',lang)+'\n'+t('pxe1.unarmed_skills',lang),InlineKeyboardMarkup([
+        return t('pxe1.character.weapon_skills',lang)+'\n'+t('pxe1.unarmed_skills',lang),InlineKeyboardMarkup([
             [InlineKeyboardButton(t('pxe1.other_families',lang),callback_data='bv_families')],
             [InlineKeyboardButton(t('common.back',lang),callback_data='bv_character')]])
     mastery = model['masteries'].get(family) or {'level':1,'skill_points':2}
-    lines = [t('pxe1.weapon_skills',lang)+' · '+escape(_family_name(family,lang)),
-             t('pxe1.mastery_level',lang,level=mastery['level'])+' · '+str(mastery['skill_points'])+' '+_c(lang,'points')]
+    lines = [t('pxe1.character.weapon_skills',lang)+' · '+escape(_family_name(family,lang)),
+             t('pxe1.character.mastery_level',lang,level=mastery['level'])+' · '+str(mastery['skill_points'])+' '+_c(lang,'points')]
     rows = []
     if branch in {'A','B'}:
         conn = get_connection()
@@ -125,11 +125,11 @@ def weapon_family_card(player_id,family,lang,*,branch=None):
             if rank>=MAX_SKILL_RANK:
                 reason = _c(lang,'max')
             elif mastery['level']<required:
-                reason = t('pxe1.requires_mastery',lang,family=_family_name(family,lang),level=required)
+                reason = t('pxe1.character.mastery_required',lang,family=_family_name(family,lang),level=required)
             elif rank==0 and spec.position==4 and spent<8:
-                reason = t('pxe1.requires_branch',lang,spent=spent)
+                reason = t('pxe1.character.branch_points_required',lang,spent=spent)
             elif mastery['skill_points']<1:
-                reason = t('pxe1.requires_point',lang)
+                reason = t('pxe1.character.skill_points_required',lang)
             else:
                 reason = _c(lang,'ready')
             label = get_skill_name(skill_id,lang)
@@ -171,11 +171,11 @@ def skill_card(player_id,skill_id,lang,*,details=False):
     reasons = []
     if rank<MAX_SKILL_RANK:
         if mastery['level']<required:
-            reasons.append(t('pxe1.requires_mastery',lang,family=_family_name(spec.family,lang),level=required))
+            reasons.append(t('pxe1.character.mastery_required',lang,family=_family_name(spec.family,lang),level=required))
         if rank==0 and spec.position==4 and spent<8:
-            reasons.append(t('pxe1.requires_branch',lang,spent=spent))
+            reasons.append(t('pxe1.character.branch_points_required',lang,spent=spent))
         if mastery['skill_points']<1:
-            reasons.append(t('pxe1.requires_point',lang))
+            reasons.append(t('pxe1.character.skill_points_required',lang))
     current_rank = max(1,rank)
     lines = [f"<b>{escape(get_skill_name(skill_id,lang))}</b> · {rank}/3",
              escape(_label(_KIND_LABELS,lang,spec.kind)),
@@ -193,7 +193,7 @@ def skill_card(player_id,skill_id,lang,*,details=False):
         lines.append(escape(_skill_profile(spec,lang,current_rank)))
         rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='bv_skill_'+skill_id)])
     else:
-        rows.append([InlineKeyboardButton(t('pxe1.details',lang),callback_data='bv_skilldetails_'+skill_id)])
+        rows.append([InlineKeyboardButton(t('pxe1.common.details',lang),callback_data='bv_skilldetails_'+skill_id)])
         rows.append([InlineKeyboardButton(t('common.back',lang),callback_data=f'bv_branch_{spec.family}:{spec.branch}')])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines),keyboard,long_detail=details)
@@ -207,11 +207,11 @@ def redistribution_card(player_id,lang,*,draft=None,selected=None):
     draft = dict(draft or {key:player[key] for key in ATTRIBUTE_KEYS})
     labels = _ATTRIBUTE_LABELS.get(lang,_ATTRIBUTE_LABELS['en'])
     remaining = player['attribute_budget']-sum(draft[key]-1 for key in ATTRIBUTE_KEYS)
-    lines = [t('pxe1.redistribute',lang),t('pxe1.free_points',lang,count=remaining)]
+    lines = [t('pxe1.redistribute',lang),t('pxe1.character.free_points',lang,count=remaining)]
     rows = []
     if selected in ATTRIBUTE_KEYS:
         lines.append(f'{labels[selected]}: {player[selected]} → {draft[selected]}')
-        lines.append(t('pxe1.reset_only_hubs',lang))
+        lines.append(t('pxe1.character.reset_hub',lang))
         rows.append([InlineKeyboardButton('−1',callback_data='bv_ad_'+selected),InlineKeyboardButton('+1',callback_data='bv_ai_'+selected)])
         rows.append([InlineKeyboardButton(t('pxe1.choose_attribute',lang),callback_data='bv_reset_attr_choose')])
     else:
@@ -219,7 +219,7 @@ def redistribution_card(player_id,lang,*,draft=None,selected=None):
             lines.append(f'{labels[key]}: {draft[key]}')
         buttons = [InlineKeyboardButton(labels[key],callback_data='bv_reset_attr_'+key) for key in ATTRIBUTE_KEYS]
         rows = [buttons[i:i+2] for i in range(0,len(buttons),2)]
-    rows.append([InlineKeyboardButton(t('pxe1.preview',lang),callback_data='bv_attr_preview'),InlineKeyboardButton(t('common.back',lang),callback_data='bv_attr')])
+    rows.append([InlineKeyboardButton(t('pxe1.character.spend_preview',lang),callback_data='bv_attr_preview'),InlineKeyboardButton(t('common.back',lang),callback_data='bv_attr')])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines),keyboard)
     return '\n'.join(lines),keyboard,draft
@@ -261,12 +261,12 @@ async def handle_character_buttons(update,context):
     elif data in {'bv_spend_choose','bv_attr'}:
         text,keyboard = spending_card(player_id,lang,deltas=draft)
     elif data=='bv_reset_options':
-        text = t('pxe1.reset_only_hubs',lang)
+        text = t('pxe1.character.reset_hub',lang)
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('pxe1.redistribute',lang),callback_data='bv_attr_reset')],
-            [InlineKeyboardButton(t('pxe1.weapon_skills',lang),callback_data='bv_equipped_skills')],
+            [InlineKeyboardButton(t('pxe1.character.weapon_skills',lang),callback_data='bv_equipped_skills')],
             [InlineKeyboardButton(t('common.back',lang),callback_data='bv_attr')]])
     elif data=='bv_character_more':
-        text = t('pxe1.more',lang)
+        text = t('pxe1.common.more',lang)
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.settings',lang),callback_data='bv_settings'),InlineKeyboardButton(t('keyboard.help',lang),callback_data='bv_help')],
             [InlineKeyboardButton(t('common.back',lang),callback_data='bv_character')]])
     elif data=='bv_character_details':

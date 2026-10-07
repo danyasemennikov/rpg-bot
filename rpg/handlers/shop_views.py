@@ -113,7 +113,7 @@ def sell_categories(player):
     lang = player.get('lang','ru')
     rows = [modes(lang,'sell')]
     for category in ('all','gear','supplies','material','tools'):
-        rows.append([button(t(f'pxe1.inventory_categories.{category}',lang),f'px:shop:sell:{category}:0')])
+        rows.append([button(t(f'pxe1.inventory.{category}',lang),f'px:shop:sell:{category}:0')])
     rows[-1].append(button(t('gear.back_btn',lang),'px:local:home:0'))
     return surface([title(player),t('pxe1.categories',lang)],rows)
 
@@ -133,7 +133,7 @@ def sell_list(player,category='all',page=0):
         filtered.append((kind,row))
     filtered.sort(key=lambda e:(e[1]['item_id'],e[0],e[1]['id']))
     pages = max(1,(len(filtered)+5)//6); page = max(0,min(int(page),pages-1))
-    lines,rows = [title(player),t(f'pxe1.inventory_categories.{category}',lang)],[modes(lang,'sell')]
+    lines,rows = [title(player),t(f'pxe1.inventory.{category}',lang)],[modes(lang,'sell')]
     for kind,row in filtered[page*6:page*6+6]:
         name = get_item_name(row['item_id'],lang)
         qty = row.get('quantity',1)
@@ -173,7 +173,7 @@ def sale_preview(player,entry_token,quantity=1,*,confirmation_quote=None):
              t('pxe1.shop.quantity',lang,quantity=quote['quantity'],owned=quote['stack_count']),
              t('pxe1.shop.unit_price',lang,gold=quote['unit_price']),
              t('pxe1.shop.total',lang,gold=quote['total']),
-             t('pxe1.shop.sale_remaining',lang,count=quote['remaining'])]
+             t('pxe1.shop.remaining',lang,count=quote['remaining'])]
     rows = []
     if confirmation_quote is not None:
         lines.append(t('pxe1.shop.confirm_sale',lang))
@@ -203,7 +203,7 @@ def result_card(player,result,*,buy=False):
                name=escape(get_item_name(result['item_id'],lang)),quantity=result.get('quantity',1)),
              f"{'−' if buy else '+'}{abs(result.get('gold_delta',result.get('price',result.get('gold',0))))} 🪙"]
     if 'gold_after' in result: lines.append(t('pxe1.shop.balance',lang,gold=result['gold_after']))
-    if 'remaining' in result: lines.append(t('pxe1.shop.sale_remaining',lang,count=result['remaining']))
+    if 'remaining' in result: lines.append(t('pxe1.shop.remaining',lang,count=result['remaining']))
     text = '\n'.join(lines)
     keys = []
     if not result.get('recovered'):

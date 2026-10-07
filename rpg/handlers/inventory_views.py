@@ -13,7 +13,7 @@ LEGACY_CATEGORIES = {'weapon':'gear','armor':'gear','accessory':'gear','potion':
 
 
 def category_card(lang):
-    rows = [[InlineKeyboardButton(t('pxe1.inventory_categories.'+key,lang),callback_data='inv_tab_'+key)] for key in CATEGORIES]
+    rows = [[InlineKeyboardButton(t('pxe1.inventory.'+key,lang),callback_data='inv_tab_'+key)] for key in CATEGORIES]
     rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='inv_tab_all')])
     return t('pxe1.categories',lang),InlineKeyboardMarkup(rows)
 
@@ -70,7 +70,7 @@ def inventory_card(player_id,category,lang,page=0):
     entries.sort(key=lambda row:row[:3])
     pages = max(1,(len(entries)+5)//6)
     page = min(max(0,int(page)),pages-1)
-    lines = [t('inventory.title',lang)+' · '+t('pxe1.inventory_categories.'+category,lang)]
+    lines = [t('inventory.title',lang)+' · '+t('pxe1.inventory.'+category,lang)]
     if pages>1:
         lines.append(t('gear.page',lang,page=page+1,pages=pages))
     rows = []
@@ -89,7 +89,7 @@ def inventory_card(player_id,category,lang,page=0):
         nav.append(InlineKeyboardButton('▶️',callback_data=f'inv_tab_{category}~{page+1}'))
     if nav:
         rows.append(nav)
-    rows.append([InlineKeyboardButton(t('pxe1.categories',lang),callback_data='inv_categories'),InlineKeyboardButton(t('pxe1.more',lang),callback_data='inv_more_home')])
+    rows.append([InlineKeyboardButton(t('pxe1.categories',lang),callback_data='inv_categories'),InlineKeyboardButton(t('pxe1.common.more',lang),callback_data='inv_more_home')])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines),keyboard,list_view=True)
     return '\n'.join(lines),keyboard
@@ -115,7 +115,7 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
     resolved = resolve_gear_instance_item_data(entry['instance']) if entry['entry_type']=='gear_instance' else item
     gear = item['item_type'] in {'weapon','armor','accessory'}
     kind = 'gear' if gear else 'supplies' if item['item_type']=='potion' else 'material'
-    lines = [f"<b>{escape(get_item_name(entry['item_id'],lang))}</b> ×{entry['quantity']} · "+t('pxe1.inventory_categories.'+kind,lang)]
+    lines = [f"<b>{escape(get_item_name(entry['item_id'],lang))}</b> ×{entry['quantity']} · "+t('pxe1.inventory.'+kind,lang)]
     if gear:
         rarity = resolved.get('instance_rarity',item['rarity'])
         from handlers.inventory import RARITY_NAME
@@ -137,7 +137,7 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
     elif item['item_type']=='potion':
         effects = json.loads(item['stat_bonus_json'] or '{}')
         lines.append(f"❤️ +{effects.get('heal',0)} · 🔵 +{effects.get('mana',0)}")
-        lines.append(t('pxe1.supplies_restrictions',lang))
+        lines.append(t('pxe1.inventory.supplies_restrictions',lang))
     usable = True
     if item['item_type']=='potion':
         from game.action_receipts import ActionRejected,peaceful_player
@@ -157,7 +157,7 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
             rows.append(buttons)
     if item['item_type']=='material':
         rows.append([InlineKeyboardButton(t('pxe1.sources',lang),callback_data=f"pe_m:{entry['item_id']}:0")])
-    rows.append([InlineKeyboardButton(t('pxe1.more',lang),callback_data=f'inv_more_{entry_token}_{category}'),InlineKeyboardButton(t('common.back',lang),callback_data='inv_tab_'+category)])
+    rows.append([InlineKeyboardButton(t('pxe1.common.more',lang),callback_data=f'inv_more_{entry_token}_{category}'),InlineKeyboardButton(t('common.back',lang),callback_data='inv_tab_'+category)])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines),keyboard)
     return '\n'.join(lines),keyboard

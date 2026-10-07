@@ -91,7 +91,7 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
     ingredients = [f'{escape(get_item_name(item,lang))}: {inventory.get(item,0)}/{quantity}' for item,quantity in required.items()]
     lines.extend(' · '.join(ingredients[i:i+3]) for i in range(0,len(ingredients),3))
     if recipe.output_spec.kind=='tool':
-        lines.append(t('pxe1.tool_output',lang,capacity=60*recipe.output_spec.tool_tier))
+        lines.append(t('pxe1.profession.tool_output',lang,capacity=60*recipe.output_spec.tool_tier))
     else:
         from game.items_data import get_item
         output = get_item(recipe.output_spec.item_id)
@@ -109,9 +109,9 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
     lines.append(t('professions.recipe_xp_award',lang,xp=xp)+' · '+t('location.service_craftsmen_guild',lang))
     if commission:
         if reason:
-            lines.append(t('pxe1.commission_reasons.'+reason,lang))
+            lines.append(t('pxe1.tool.'+reason,lang))
         else:
-            lines.append(t('pxe1.commission_cost',lang,gold=gold))
+            lines.append(t('pxe1.tool.commission_cost',lang,gold=gold))
             if supplied:
                 lines.append(t('pxe1.commission_supplied',lang,items=', '.join(get_item_name(item,lang)+f' ×{quantity}' for item,quantity in supplied.items())))
     enough = all(inventory.get(item,0)>=quantity for item,quantity in required.items()) and player['gold']>=gold
@@ -134,7 +134,7 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
         else:
             token = issue_actions(player_id,'craft',[payload])[payload]
             callback = 'pe_a:'+token
-        rows.append([InlineKeyboardButton(t('pxe1.commission' if commission else 'professions.craft',lang),callback_data=callback)])
+        rows.append([InlineKeyboardButton(t('pxe1.tool.commission' if commission else 'professions.craft',lang),callback_data=callback)])
     elif not known and state['level']>=recipe.required_level and _peaceful_guild_access(player_id):
         payload = recipe_intent_payload(recipe_id)
         token = issue_actions(player_id,'learn',[payload])[payload]
@@ -146,10 +146,10 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
             destination = guild_route(player_id)
             rows.append([InlineKeyboardButton(t('pxe1.route_guild',lang),callback_data='goto_'+destination if destination else 'px:map')])
         elif blocker=='recipe_need_inputs':
-            rows.append([InlineKeyboardButton(t('pxe1.recipe_find_inputs',lang),callback_data=f'pe_inputs:{recipe_id}:0')])
+            rows.append([InlineKeyboardButton(t('pxe1.profession.find_inputs',lang),callback_data=f'pe_inputs:{recipe_id}:0')])
     if recipe.output_spec.kind=='tool' and recipe.output_spec.profession_key in {'woodcutting','mining'} and recipe.output_spec.tool_tier>1 and not commission:
-        rows.append([InlineKeyboardButton(t('pxe1.commission',lang),callback_data='pe_commission:'+recipe_id)])
-    rows.append([InlineKeyboardButton(t('pxe1.sources',lang),callback_data=f'pe_inputs:{recipe_id}:0'),InlineKeyboardButton(t('pxe1.details',lang),callback_data='pe_details:'+recipe_id)])
+        rows.append([InlineKeyboardButton(t('pxe1.tool.commission',lang),callback_data='pe_commission:'+recipe_id)])
+    rows.append([InlineKeyboardButton(t('pxe1.sources',lang),callback_data=f'pe_inputs:{recipe_id}:0'),InlineKeyboardButton(t('pxe1.common.details',lang),callback_data='pe_details:'+recipe_id)])
     rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='pe_p:'+recipe.profession_key)])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines),keyboard)
@@ -181,11 +181,11 @@ def tool_craft_confirmation(player,token):
     payload = json.dumps(intent,sort_keys=True,separators=(',',':'))
     mutation = issue_actions(player_id,'craft',[payload])[payload]
     lines = [f'<b>{escape(_recipe_name(recipe,lang))}</b>',
-             t('pxe1.tool_replace_warning',lang,tier=tool['tier'],current=tool['durability'],maximum=60*tool['tier']),
-             t('pxe1.tool_output',lang,capacity=60*recipe.output_spec.tool_tier)]
+             t('pxe1.tool.replace_confirm',lang,tier=tool['tier'],current=tool['durability'],maximum=60*tool['tier']),
+             t('pxe1.profession.tool_output',lang,capacity=60*recipe.output_spec.tool_tier)]
     consumed = [escape(get_item_name(item,lang))+f' ×{quantity}' for item,quantity in intent['required'].items()]
     lines += [' · '.join(consumed[i:i+3]) for i in range(0,len(consumed),3)]
-    if intent['gold']: lines.append(t('pxe1.commission_cost',lang,gold=intent['gold']))
+    if intent['gold']: lines.append(t('pxe1.tool.commission_cost',lang,gold=intent['gold']))
     if intent['guild_supplied']:
         lines.append(t('pxe1.commission_supplied',lang,items=', '.join(get_item_name(item,lang)+f' ×{quantity}' for item,quantity in intent['guild_supplied'].items())))
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('common.confirm',lang),callback_data='pe_a:'+mutation)],

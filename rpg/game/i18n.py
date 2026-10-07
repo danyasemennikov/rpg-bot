@@ -292,3 +292,24 @@ def _fallback_skill(skill_id: str, field: str) -> str:
     from game.skills import get_skill
     skill = get_skill(skill_id)
     return skill.get(field, skill_id) if skill else skill_id
+
+
+def validate_pxe1_surface_locales(locales=None):
+    """Check the explicitly integrated frozen families, without fallback."""
+    from locales.pxe1_surface_keys import COVERED_FAMILIES,value_at
+    locales=locales if locales is not None else {lang:_load_lang(lang) for lang in ('en','ru','es')}
+    if set(locales)!={'en','ru','es'}:
+        raise RuntimeError('PXE1 requires en/ru/es locales')
+    formatter=string.Formatter()
+    for family,suffixes in COVERED_FAMILIES.items():
+        for suffix in suffixes.split():
+            key='pxe1.'+family+'.'+suffix
+            try:
+                values={lang:value_at(strings,key) for lang,strings in locales.items()}
+                fields={lang:{field for _,field,_,_ in formatter.parse(text) if field is not None}
+                        for lang,text in values.items()}
+            except (KeyError,TypeError,ValueError) as exc:
+                raise RuntimeError('Invalid PXE1 locale key: '+key) from exc
+            if fields['en']!=fields['ru'] or fields['en']!=fields['es']:
+                raise RuntimeError('PXE1 placeholder mismatch: '+key)
+    return True

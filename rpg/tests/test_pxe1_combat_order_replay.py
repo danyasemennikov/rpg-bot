@@ -93,6 +93,10 @@ def test_consumed_callback_acknowledges_without_executing_another_side_or_cleari
     query.answer.assert_awaited_once()
     assert not query.answer.call_args.kwargs.get('show_alert')
     validate_surface(query.edit_message_text.call_args.args[0],query.edit_message_text.call_args.kwargs['reply_markup'])
+    if kind=='pve':
+        surface=conn.execute('SELECT * FROM player_pxe1_ui WHERE player_id=?',(actor,)).fetchone()
+        assert surface['surface_kind']=='pve' and surface['surface_ref']==encounter
+        assert surface['chat_id']==actor and surface['message_id']==80
     conn.close()
 
 
@@ -130,4 +134,24 @@ def test_pve_order_revalidates_snapshot_resources_and_explicit_target_under_writ
     assert not conn.execute('SELECT 1 FROM combat_orders_v1 WHERE encounter_id=?',(encounter,)).fetchone()
     assert conn.execute('SELECT used FROM player_ui_actions WHERE token=?',(token,)).fetchone()[0]==0
     assert json.loads(conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0])==state
+    conn.close()
+
+
+def test_consumed_order_refresh_keeps_prior_delivery_coordinates_when_transport_fails():
+    from game.player_ui import record_surface
+    from handlers.battle import handle_battle_buttons
+    encounter,actor,second,token=issue('pve')
+    assert consume(actor,token,second)['accepted']
+    record_surface(actor,kind='pve',ref=encounter,revision=1,chat_id=actor,message_id=35)
+    conn=get_connection()
+    before=tuple(conn.execute('SELECT * FROM player_pxe1_ui WHERE player_id=?',(actor,)).fetchone())
+    query=SimpleNamespace(from_user=SimpleNamespace(id=actor),data='battle_v1_'+token,
+        answer=AsyncMock(),edit_message_text=AsyncMock(side_effect=RuntimeError('offline')),
+        message=SimpleNamespace(chat_id=actor,message_id=80))
+    with patch('time.time',return_value=second):
+        with pytest.raises(RuntimeError,match='offline'):
+            asyncio.run(handle_battle_buttons(SimpleNamespace(callback_query=query),SimpleNamespace(user_data={})))
+    assert before==tuple(conn.execute('SELECT * FROM player_pxe1_ui WHERE player_id=?',(actor,)).fetchone())
+    assert conn.execute('SELECT COUNT(*) FROM combat_orders_v1 WHERE encounter_id=?',(encounter,)).fetchone()[0]==1
+    assert not conn.execute('SELECT 1 FROM combat_turn_results_v1 WHERE encounter_id=?',(encounter,)).fetchone()
     conn.close()
