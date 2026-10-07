@@ -45,16 +45,16 @@ def board_card(player, location, *, category=None, page=0):
                 done = sum(state.get('objective_progress', {}).get(o.key, 0) >= o.required for o in contract.objectives)
                 done += int(bool(contract.required_kills and state['progress_kills'] >= contract.required_kills))
                 total = len(contract.objectives) + int(bool(contract.required_kills))
-                lines.append(t('pxe1.objectives_count', lang, done=done, total=total))
+                lines.append(t('pxe1.quest.all_objectives', lang, done=done, total=total))
             else:
                 lines.append(f"{state['progress_kills']}/{contract.required_kills}")
             if state['status'] == 'completed':
                 places = contract.claim_locations or contract.board_locations
                 if resolve_location_id(location['id']) in {resolve_location_id(k) for k in places}:
                     token = issue_actions(player['telegram_id'], 'contract_claim', [contract.contract_key])[contract.contract_key]
-                    rows.append([InlineKeyboardButton(t('location.quest_board_claim_btn', lang), callback_data=f'quest_board_claim_{token}')])
+                    rows.append([InlineKeyboardButton(t('pxe1.quest.turn_in', lang), callback_data=f'quest_board_claim_{token}')])
                 else:
-                    rows.append([InlineKeyboardButton(t('pxe1.route_to', lang, name=get_location_name(places[0], lang)), callback_data=f'goto_{places[0]}')])
+                    rows.append([InlineKeyboardButton(t('pxe1.quest.route_to_turn_in', lang, name=get_location_name(places[0], lang)), callback_data=f'goto_{places[0]}')])
             rows.append([InlineKeyboardButton(t('pxe1.open_assignment', lang), callback_data='alpha_assignment')])
         else:
             chapter = next((c for c in split['available'] if c.chapter_order), None)
@@ -93,7 +93,7 @@ def board_detail(player, location, contract_key):
         if not state or state['status'] not in {'active', 'completed'}:
             rows.append([InlineKeyboardButton(t('pxe1.accept_assignment', lang), callback_data=f'quest_board_accept_{contract_key}')])
         else:
-            text += '\n' + t('pxe1.chapter_slot_busy', lang)
+            text += '\n' + t('pxe1.quest.slot_occupied', lang)
     rows.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data='quest_board')])
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface(text, keyboard, long_detail=True)

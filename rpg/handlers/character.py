@@ -27,7 +27,7 @@ def character_card(player_id,lang):
         import json,time
         from handlers.activities import duration
         remaining = max(0,(travel['next_due_ms']-int(time.time()*1000)+999)//1000)+18*max(0,len(json.loads(travel['path_json']))-travel['edge_index']-2)
-        lines.append(t('pxe1.travel_destination',lang,name=escape(get_location_name(travel['destination_location_id'],lang)))+' · '+duration(remaining))
+        lines.append(t('pxe1.travel.destination',lang,name=escape(get_location_name(travel['destination_location_id'],lang)))+' · '+duration(remaining))
     rows = [[InlineKeyboardButton(t('pxe1.character.attributes',lang),callback_data='bv_attr'),InlineKeyboardButton(t('pxe1.character.weapon_skills',lang),callback_data='bv_equipped_skills')],
             [InlineKeyboardButton(t('pxe1.character.build_equipment',lang),callback_data='bv_main')],
             [InlineKeyboardButton(t('pxe1.common.details',lang),callback_data='bv_character_details'),InlineKeyboardButton(t('pxe1.common.more',lang),callback_data='bv_character_more')]]
@@ -180,7 +180,7 @@ def skill_card(player_id,skill_id,lang,*,details=False):
     lines = [f"<b>{escape(get_skill_name(skill_id,lang))}</b> · {rank}/3",
              escape(_label(_KIND_LABELS,lang,spec.kind)),
              _c(lang,'target')+': '+escape(_label(_TARGET_LABELS,lang,spec.target)),
-             t('pxe1.passive_skill',lang) if spec.passive else t('pxe1.skill_cost',lang,mana=rank_mana_cost(spec,current_rank),cooldown=spec.cooldown if spec.cooldown is not None else 0),
+             t('pxe1.passive_skill',lang) if spec.passive else t('pxe1.character.skill_cost',lang,mana=rank_mana_cost(spec,current_rank),cooldown=spec.cooldown if spec.cooldown is not None else 0),
              _c(lang,'available_pvp') if skill_id in PVP_SKILL_ALLOWLIST else _c(lang,'pve_only')]
     if reasons:
         lines.extend(reasons)

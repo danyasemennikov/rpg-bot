@@ -18,6 +18,8 @@ from locales.pxe1 import PXE1_STRINGS
 
 def test_integrated_frozen_families_have_real_locales_without_fallback():
     from game.i18n import validate_pxe1_surface_locales
+    from locales.pxe1_surface_keys import COVERED_FAMILIES
+    assert len(COVERED_FAMILIES)==17
     assert validate_pxe1_surface_locales()
     for lang in ('ru','en','es'):
         for suffix,legacy in (('location','keyboard.location'),('map','keyboard.map'),
@@ -38,6 +40,27 @@ def test_integrated_frozen_family_validation_detects_missing_or_mismatched_trans
     else: character['rank']=3
     with pytest.raises(RuntimeError,match='PXE1'):
         validate_pxe1_surface_locales(locales)
+
+
+@pytest.mark.parametrize('family',['location','map','travel','encounter','gather','quest','journal','chapter'])
+def test_remaining_families_require_each_translation(family):
+    from copy import deepcopy
+    from game.i18n import _load_lang,validate_pxe1_surface_locales
+    from locales.pxe1_surface_keys import COVERED_FAMILIES
+    locales={lang:deepcopy(_load_lang(lang)) for lang in ('en','ru','es')}
+    del locales['es']['pxe1'][family][COVERED_FAMILIES[family].split()[0]]
+    with pytest.raises(RuntimeError,match='PXE1'):
+        validate_pxe1_surface_locales(locales)
+
+
+@pytest.mark.parametrize('number,ru_word',[(0,'очков'),(1,'очко'),(2,'очка'),(5,'очков'),(21,'очко')])
+def test_numeric_copy_uses_language_rules(number,ru_word):
+    assert t('pxe1.character.free_points','ru',count=number)==f'{number} свободн'+('ое ' if ru_word=='очко' else 'ых ')+ru_word
+    assert t('pxe1.character.free_points','en',count=number)==f'{number} free '+('point' if number==1 else 'points')
+    assert t('pxe1.character.free_points','es',count=number)==f'{number} '+('punto libre' if number==1 else 'puntos libres')
+    for lang in ('ru','en','es'):
+        assert '{' not in t('pxe1.character.skill_cost',lang,mana=5,cooldown=number)
+        assert isinstance(t('pxe1.gather.action_label',lang,profession='🌿'),str)
 
 
 @pytest.mark.parametrize('lang',['ru','en','es'])

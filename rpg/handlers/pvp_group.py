@@ -28,7 +28,7 @@ def preparation_or_live_card(row, player):
             conn.close()
         return live_card(current, context, player_id, lang)
     if state != 'pending':
-        return t('location.pvp_battle_finished', lang), InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.location', lang), callback_data='px:local:home:0')]])
+        return t('pxe1.encounter.finished', lang), InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.location', lang), callback_data='px:local:home:0')]])
     conn = get_connection()
     try:
         principals = [conn.execute('SELECT name FROM players WHERE telegram_id=?', (pid,)).fetchone()['name'] for pid in (row['attacker_id'], row['defender_id'])]
@@ -37,12 +37,12 @@ def preparation_or_live_card(row, player):
         conn.close()
     from game.pvp_world import milliseconds
     left = max(0,(milliseconds(row['engagement_ready_at'])-int(time.time()*1000)+999)//1000)
-    lines = [t('location.pvp_pending', lang), escape(principals[0])+' ↔ '+escape(principals[1]),
-             t('pxe1.remaining', lang, time=f'{left//60}:{left%60:02d}')]
+    lines = [t('pxe1.encounter.pvp_preparing', lang), escape(principals[0])+' ↔ '+escape(principals[1]),
+             t('pxe1.travel.remaining', lang, time=f'{left//60}:{left%60:02d}')]
     for side,name in zip(('initiator','defender'),principals):
         count=1+sum(m['side']==side and m['status']=='accepted' for m in members)
         invited=sum(m['side']==side and m['status']=='pending' for m in members)
-        lines.append(t('pxe1.membership.side_count',lang,name=escape(name),count=count,invited=invited))
+        lines.append(t('pxe1.encounter.pvp_side_count',lang,name=escape(name),count=count,invited=invited))
     rows = []
     membership_choices = []
     for member in members:
@@ -51,22 +51,22 @@ def preparation_or_live_card(row, player):
     if player_id in {row['attacker_id'], row['defender_id']}:
         payload = encoded({'schema_version':1,'catalog_version':2,'engagement_id':row['id'],'state_revision':row['state_revision']})
         token = issue_actions(player_id, 'pvp_prep_escape', [payload])[payload]
-        rows.append([InlineKeyboardButton(t('location.pvp_escape_btn', lang), callback_data=f"pvp_escape_{row['id']}_{token}")])
+        rows.append([InlineKeyboardButton(t('pxe1.encounter.pvp_escape_attempt', lang), callback_data=f"pvp_escape_{row['id']}_{token}")])
         own_side='initiator' if player_id==row['attacker_id'] else 'defender'
         if not any(m['side']==own_side and m['status'] in {'pending','accepted'} for m in members):
-            rows.append([InlineKeyboardButton(t('pxe1.membership.invite',lang),callback_data=f"pvp_allies_{row['id']}_0")])
+            rows.append([InlineKeyboardButton(t('pxe1.encounter.pvp_invite',lang),callback_data=f"pvp_allies_{row['id']}_0")])
         for member in members:
             if member['inviter_id'] == player_id and member['status'] == 'pending':
-                membership_choices.append((t('pxe1.revoke_invitation',lang),
+                membership_choices.append((t('pxe1.encounter.pvp_revoke',lang),
                     {'operation':'revoke','ally_id':member['ally_id'],'reinforcement_id':member['id']}))
     else:
         member = next((m for m in members if m['ally_id'] == player_id and m['status'] in {'pending','accepted'}), None)
         if member and member['status'] == 'pending':
-            warning='pxe1.pvp_ally_crime_warning' if member['side']=='initiator' and context.get('illegal_aggression') else 'pxe1.membership.attacking' if member['side']=='initiator' else 'pxe1.pvp_ally_defence'
+            warning='pxe1.encounter.pvp_illegal_assist_warning' if member['side']=='initiator' and context.get('illegal_aggression') else 'pxe1.membership.attacking' if member['side']=='initiator' else 'pxe1.pvp_ally_defence'
             lines.append(t(warning,lang))
             side_name=principals[0] if member['side']=='initiator' else principals[1]
-            membership_choices += [(t('pxe1.membership.join_side',lang,name=side_name),{'operation':'accept','reinforcement_id':member['id']}),
-                                   (t('location.pvp_reinforcement_decline_btn',lang),{'operation':'decline','reinforcement_id':member['id']})]
+            membership_choices += [(t('pxe1.encounter.pvp_join_named_side',lang,name=side_name),{'operation':'accept','reinforcement_id':member['id']}),
+                                   (t('pxe1.encounter.pvp_decline',lang),{'operation':'decline','reinforcement_id':member['id']})]
         elif member:
             membership_choices.append((t('location.pvp_leave_prep',lang),{'operation':'leave','reinforcement_id':member['id']}))
     payloads=[encoded({'schema_version':1,'catalog_version':2,'engagement_id':row['id'],
@@ -366,7 +366,7 @@ def allies_card(row,player,page=0):
     payloads=[encoded({'schema_version':1,'catalog_version':2,'engagement_id':row['id'],
         'state_revision':row['state_revision'],'operation':'invite','ally_id':ally['telegram_id']}) for ally in visible]
     tokens=issue_actions(player_id,'pvp_membership_pxe1',payloads)
-    lines=[t('pxe1.membership.invite',lang),t('gear.page',lang,page=page+1,pages=pages)]
+    lines=[t('pxe1.encounter.pvp_invite',lang),t('gear.page',lang,page=page+1,pages=pages)]
     rows=[]
     for ally,payload in zip(visible,payloads):
         label=ally['name']+' · '+t('common.level',lang)+' '+str(ally['level'])

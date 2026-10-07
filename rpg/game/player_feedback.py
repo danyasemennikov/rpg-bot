@@ -42,8 +42,8 @@ def render_feedback(events,lang):
     from telegram import InlineKeyboardButton,InlineKeyboardMarkup
     finale = next((e for e in events if e['event_kind']=='chapter_finale'),None)
     if finale:
-        text = t('pxe1.finale',lang)+'\n\n'+t('chapter.epilogue',lang)
-        buttons = [[InlineKeyboardButton(t('rav1.nav.opportunities',lang),callback_data='px:finale:opportunities'),
+        text = t('pxe1.chapter.complete',lang)+'\n\n'+t('pxe1.chapter.epilogue_intro',lang)
+        buttons = [[InlineKeyboardButton(t('pxe1.journal.opportunities',lang),callback_data='px:finale:opportunities'),
                     InlineKeyboardButton(t('keyboard.map',lang),callback_data='px:finale:map')],
                    [InlineKeyboardButton(t('chapter.journal',lang),callback_data='px:finale:journal'),
                     InlineKeyboardButton(t('location.quests_btn',lang),callback_data='px:finale:local')]]
@@ -55,17 +55,17 @@ def render_feedback(events,lang):
         if kind in {'progress','objective_complete'}:
             name = (get_mob_name(payload['target'],lang) if payload.get('action')=='kill'
                     else get_item_name(payload['target'],lang) if payload.get('target')!='*' else t('chapter.journal',lang))
-            lines.append(t('pxe1.objective_feedback',lang,name=name,done=payload['progress'],required=payload['required']))
+            lines.append(t('pxe1.quest.progress',lang,name=name,done=payload['progress'],required=payload['required']))
         elif kind=='ready':
-            lines.append(t('pxe1.assignment_ready',lang))
+            lines.append(t('pxe1.quest.ready',lang))
         elif kind=='level_up':
             lines.append(t('pxe1.profession_level',lang,name=t('professions.names.'+payload['profession_key'],lang),level=payload['new_level'])
                          if payload.get('profession_key') else t('pxe1.character_level',lang,level=payload['new_level']))
         elif kind=='claim':
-            lines.append(t('pxe1.assignment_claimed',lang,gold=payload['reward_gold'],xp=payload['reward_exp']))
+            lines.append(t('pxe1.quest.claimed',lang,gold=payload['reward_gold'],xp=payload['reward_exp']))
         elif kind=='recovery':
-            key={'reinvite_required':'pxe1.pvp_reinvite_required','cancelled':'pxe1.pvp_cancelled',
-                 'start_failed':'pxe1.start_failed'}.get(payload.get('reason'),'pxe1.recovery')
+            key={'reinvite_required':'pxe1.encounter.pvp_reinvite_required','cancelled':'pxe1.encounter.pvp_cancelled',
+                 'start_failed':'pxe1.encounter.start_failed'}.get(payload.get('reason'),'pxe1.recovery')
             lines.append(t(key,lang))
     return '\n'.join(lines),InlineKeyboardMarkup([[InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')]])
 

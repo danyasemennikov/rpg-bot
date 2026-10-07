@@ -2205,7 +2205,7 @@ async def run_live_pvp_tick(bot) -> None:
                 winner_id = int(row['defender_id'])
             for player_id in (int(row['attacker_id']), int(row['defender_id'])):
                 lang = get_player_lang(player_id)
-                msg_key = 'location.pvp_win_notice' if winner_id == player_id else 'location.pvp_battle_finished'
+                msg_key = 'location.pvp_win_notice' if winner_id == player_id else 'pxe1.encounter.finished'
                 try:
                     await bot.send_message(player_id,t(msg_key,lang))
                 except Exception:

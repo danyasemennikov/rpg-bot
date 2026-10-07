@@ -44,7 +44,7 @@ def local_entries(player):
                 callback = 'pvp_refresh'
             else:
                 callback = 'px:home'
-            priority.append((t('pxe1.resume_activity', lang), callback))
+            priority.append((t('pxe1.encounter.resume', lang), callback))
         near_players = [dict(r) for r in conn.execute('SELECT telegram_id,name,level FROM players WHERE location_id=? AND telegram_id<>? ORDER BY level DESC,telegram_id', (player['location_id'], player_id))]
     finally:
         conn.close()
@@ -53,7 +53,7 @@ def local_entries(player):
         contract = state['contract']
         claim_places = {resolve_location_id(k) for k in (contract.claim_locations or contract.board_locations)}
         if state['status'] == 'completed' and resolve_location_id(player['location_id']) in claim_places:
-            priority.append((t('location.quest_board_claim_btn', lang), 'alpha_assignment'))
+            priority.append((t('pxe1.quest.turn_in', lang), 'alpha_assignment'))
         categories['more'].append((t('pxe1.open_assignment', lang), 'alpha_assignment'))
     if harvestable_victory_page(player_id)[0]:
         priority.append((t('chapter.harvest', lang), 'alpha_harvest'))
@@ -65,7 +65,7 @@ def local_entries(player):
         conn.close()
     for encounter in sorted(encounters, key=lambda r: (deadlines.get(r['encounter_id'], 0), r['encounter_id'])):
         label = get_mob_name(encounter['mob_id'], lang)
-        entry = (t('pxe1.encounter_open', lang, name=label, count=encounter['participant_count']), f"pve_enter_{encounter['encounter_id']}")
+        entry = (t('pxe1.encounter.open_label', lang, name=label, count=encounter['participant_count']), f"pve_enter_{encounter['encounter_id']}")
         categories['encounters'].append(entry)
         if encounter.get('joinable'):
             priority.append(entry)
@@ -105,7 +105,7 @@ def local_entries(player):
     for row in nearby(player):
         from handlers.regional import _title, _detail_kind
         if row['kind'] == 'work_link':
-            entry = (t('rav1.nav.work',lang),'rv:v:w:0:all')
+            entry = (t('pxe1.journal.local_work',lang),'rv:v:w:0:all')
         else:
             entry = (_title(row['kind'], row['content_id'], lang), f"rv:d:{_detail_kind(row)}:{row['content_id']}")
         categories['more'].append(entry)
@@ -115,10 +115,12 @@ def local_entries(player):
 
 
 def location_card(player, *, category=None, page=0):
+    from game.locations import get_location_security_tier
     lang = player.get('lang', 'ru')
     priority, categories = local_entries(player)
     lines = [f"📍 <b>{escape(get_location_name(player['location_id'], lang))}</b>",
-             f"❤️ {player['hp']}/{player['max_hp']} · 🔵 {player['mana']}/{player['max_mana']} · 💰 {player['gold']}"]
+             f"❤️ {player['hp']}/{player['max_hp']} · 🔵 {player['mana']}/{player['max_mana']} · 💰 {player['gold']}",
+             t('pxe1.location.security.'+get_location_security_tier(player['location_id']),lang)]
     rows = []
     if category:
         visible, page, pages = _page(categories.get(category, []), page)
@@ -127,7 +129,7 @@ def location_card(player, *, category=None, page=0):
             lines.append('• '+escape(label))
             rows.append(_button(label, callback))
         if not visible:
-            lines.append(t('pxe1.local_empty', lang))
+            lines.append(t('pxe1.location.nothing_actionable', lang))
         nav = []
         if page:
             nav.append(InlineKeyboardButton('◀️', callback_data=f'px:local:{category}:{page-1}'))
@@ -162,7 +164,7 @@ def current_region(player):
 def map_card(player, *, region=None, page=0, world=False):
     lang = player.get('lang', 'ru')
     current = resolve_location_id(player['location_id'])
-    lines = [t('keyboard.map', lang), f'📍 {escape(get_location_name(current, lang))}']
+    lines = [t('keyboard.map', lang), t('pxe1.map.you_are_here',lang,name=escape(get_location_name(current,lang)))]
     if world:
         entries = [(get_location_name(row['hub_location_id'] or row['entry_location_id'], lang), f'px:mapregion:{key}:0')
                    for key, row in WORLD_ROUTES.items() if key != 'route_old_mine_stub']
@@ -195,7 +197,7 @@ def map_card(player, *, region=None, page=0, world=False):
     if nav:
         rows.append(nav)
     if not world:
-        rows.append(_button(t('pxe1.world_map', lang), 'px:world:0'))
+        rows.append(_button(t('pxe1.map.world', lang), 'px:world:0'))
     rows.append(_button(t('gear.back_btn', lang), 'px:local:home:0'))
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines), keyboard, list_view=True)

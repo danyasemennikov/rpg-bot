@@ -38,15 +38,15 @@ def _assignment_rows(player, contract, state):
         from game.locations import resolve_location_id
         if resolve_location_id(player['location_id']) in {resolve_location_id(k) for k in destinations}:
             token = issue_actions(player['telegram_id'], 'contract_claim', [contract.contract_key])[contract.contract_key]
-            rows.append(_button(t('location.quest_board_claim_btn', lang), f'quest_board_claim_{token}'))
+            rows.append(_button(t('pxe1.quest.turn_in', lang), f'quest_board_claim_{token}'))
         else:
-            rows.append(_button(t('pxe1.route_to', lang, name=get_location_name(destinations[0], lang)), f'goto_{destinations[0]}'))
+            rows.append(_button(t('pxe1.quest.route_to_turn_in', lang, name=get_location_name(destinations[0], lang)), f'goto_{destinations[0]}'))
     elif not state:
         from game.locations import resolve_location_id
         if resolve_location_id(player['location_id']) in {resolve_location_id(k) for k in contract.board_locations}:
             rows.append(_button(t('pxe1.accept_assignment', lang), f'quest_board_accept_{contract.contract_key}'))
         else:
-            rows.append(_button(t('pxe1.route_to', lang, name=get_location_name(contract.board_locations[0], lang)), f'goto_{contract.board_locations[0]}'))
+            rows.append(_button(t('pxe1.quest.route_to_turn_in', lang, name=get_location_name(contract.board_locations[0], lang)), f'goto_{contract.board_locations[0]}'))
     if state:
         from game.profession_recipes import ACTIVE_RECIPES
         recipe = next((r for o in contract.objectives if o.action == 'craft'
@@ -71,15 +71,15 @@ def build_journal(player: dict, *, show_completed_history: bool = False):
     if state:
         lines.extend(build_objective_lines(state, lang))
         if not contract.chapter_order:
-            lines.append(t('pxe1.chapter_slot_busy', lang))
+            lines.append(t('pxe1.quest.slot_occupied', lang))
     else:
         lines.append(t('pxe1.assignment_available', lang))
     places = ' / '.join(get_location_name(k, lang) for k in (contract.claim_locations or contract.board_locations))
     lines.append(t('chapter.report_to', lang, places=escape(places)))
     rows = [_button(t('pxe1.open_assignment', lang), 'alpha_assignment')]
     rows.extend(_assignment_rows(player, contract, state)[:2])
-    rows.append([InlineKeyboardButton(t('rav1.nav.opportunities', lang), callback_data='rv:v:h:0:all'),
-                 InlineKeyboardButton(t('rav1.nav.history', lang), callback_data='alpha_history')])
+    rows.append([InlineKeyboardButton(t('pxe1.journal.opportunities', lang), callback_data='rv:v:h:0:all'),
+                 InlineKeyboardButton(t('pxe1.journal.history', lang), callback_data='alpha_history')])
     from game.player_ui import validate_surface
     keyboard = InlineKeyboardMarkup(rows)
     validate_surface('\n'.join(lines), keyboard)
@@ -182,7 +182,7 @@ def build_history(player, page=0, *, chapter_story=False):
         for contract in contracts:
             lines += [escape(build_contract_title(contract, lang)), t(f'chapter.story_{contract.chapter_order}', lang)]
         if 'chapter_homecoming' in history:
-            lines.append(t('chapter.epilogue', lang))
+            lines.append(t('pxe1.chapter.epilogue_intro', lang))
         return '\n\n'.join(lines), InlineKeyboardMarkup([_button(t('gear.back_btn', lang), 'alpha_history')])
     conn = get_connection()
     try:
@@ -198,11 +198,11 @@ def build_history(player, page=0, *, chapter_story=False):
     archive.sort(key=lambda r: (r['claimed_at'] or '', r['contract_key']), reverse=True)
     pages = max(1, (len(archive)+5)//6)
     page = min(max(0, int(page)), pages-1)
-    lines, rows = [t('rav1.nav.history', lang)], []
+    lines, rows = [t('pxe1.journal.history', lang)], []
     for record in archive[page*6:(page+1)*6]:
         contract = get_hunt_contract(record['contract_key'])
-        label = t('chapter.title', lang) if record['contract_key'] == 'chapter' else build_contract_title(contract, lang) if contract else t('pxe1.earlier_assignment', lang)
-        lines.append(f'✓ {escape(label)}')
+        label = t('chapter.title', lang) if record['contract_key'] == 'chapter' else build_contract_title(contract, lang) if contract else t('pxe1.journal.earlier_records', lang)
+        lines.append(f"✓ {escape(label)}"+(f" · {escape(str(record['claimed_at'])[:16])}" if record['claimed_at'] else ''))
         if record['contract_key'] == 'chapter':
             rows.append(_button(label, 'alpha_history_chapter'))
     if not archive:
@@ -214,7 +214,7 @@ def build_history(player, page=0, *, chapter_story=False):
         nav.append(InlineKeyboardButton('▶️', callback_data=f'alpha_history:{page+1}'))
     if nav:
         rows.append(nav)
-    rows.append(_button(t('rav1.nav.resolved', lang), 'rv:v:s:0:all'))
+    rows.append(_button(t('pxe1.journal.regional_completed', lang), 'rv:v:s:0:all'))
     rows.append(_button(t('gear.back_btn', lang), 'alpha_home'))
     return '\n'.join(lines), InlineKeyboardMarkup(rows)
 

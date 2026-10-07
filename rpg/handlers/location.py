@@ -487,8 +487,8 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
             left = max(0,(int(detail['formation_deadline_ms'])-int(time.time()*1000)+999)//1000)
             lines += [t('pxe1.combat.formation',lang,seconds=left),t('pxe1.combat.forming_hint',lang)]
             can_join,_ = can_join_open_world_pve_encounter(encounter_id=encounter_id,player_id=int(player['telegram_id']))
-            if can_join: rows.append([InlineKeyboardButton(t('location.pve_join_btn',lang),callback_data='pve_join_'+encounter_id)])
-            if member: rows.append([InlineKeyboardButton(t('location.pve_leave_btn',lang),callback_data='pve_leave_'+encounter_id)])
+            if can_join: rows.append([InlineKeyboardButton(t('pxe1.encounter.join',lang),callback_data='pve_join_'+encounter_id)])
+            if member: rows.append([InlineKeyboardButton(t('pxe1.encounter.leave',lang),callback_data='pve_leave_'+encounter_id)])
         else: lines.append(t('location.pve_status_locked',lang))
         rows.append([InlineKeyboardButton(t('pxe1.combat.participants',lang),callback_data='pve_people_'+encounter_id+'_0')])
         rows.append([InlineKeyboardButton(t('common.refresh',lang),callback_data='pve_view_'+encounter_id),
@@ -534,12 +534,12 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
 
     if can_join:
         keyboard_rows.append([InlineKeyboardButton(
-            t('location.pve_join_btn', lang),
+            t('pxe1.encounter.join', lang),
             callback_data=f"pve_join_{detail['encounter_id']}",
         )])
     if is_participant and bool(detail.get('joinable')):
         keyboard_rows.append([InlineKeyboardButton(
-            t('location.pve_leave_btn', lang),
+            t('pxe1.encounter.leave', lang),
             callback_data=f"pve_leave_{detail['encounter_id']}",
         )])
     if is_participant:
@@ -829,7 +829,7 @@ def _legacy_location_message(
             int(engagement_row['defender_id']),
         }
         if state == 'pending':
-            text += t('location.pvp_pending', lang) + '\n'
+            text += t('pxe1.encounter.pvp_preparing', lang) + '\n'
             reinforcement_state = get_engagement_reinforcement_state(engagement_id=int(engagement_row['id']))
             initiator_state = reinforcement_state.get('initiator') or {}
             defender_state = reinforcement_state.get('defender') or {}
@@ -852,7 +852,7 @@ def _legacy_location_message(
                 else:
                     escape_callback = f"pvp_escape_{engagement_row['id']}"
                 keyboard.append([InlineKeyboardButton(
-                    t('location.pvp_escape_btn', lang),
+                    t('pxe1.encounter.pvp_escape_attempt', lang),
                     callback_data=escape_callback,
                 )])
                 candidates = list_reinforcement_candidates(
@@ -877,7 +877,7 @@ def _legacy_location_message(
                         callback_data=f"pvp_reinf_accept_{engagement_row['id']}",
                     ),
                     InlineKeyboardButton(
-                        t('location.pvp_reinforcement_decline_btn', lang),
+                        t('pxe1.encounter.pvp_decline', lang),
                         callback_data=f"pvp_reinf_decline_{engagement_row['id']}",
                     ),
                 ])
@@ -1686,7 +1686,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         from html import escape
         illegal = is_aggression_illegal(attacker=dict(p),defender=dict(defender),location_id=p['location_id'])
         text = escape(defender['name'])+' · '+t('common.level',lang)+' '+str(defender['level'])
-        text += '\n'+t('pxe1.pvp_ally_crime_warning' if illegal else 'pxe1.pvp_attack_preview',lang)
+        text += '\n'+t('pxe1.encounter.pvp_illegal_assist_warning' if illegal else 'pxe1.pvp_attack_preview',lang)
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('location.pvp_action_attack_btn',lang),callback_data=f'pvp_attack_{target_id}')],
             [InlineKeyboardButton(t('common.back',lang),callback_data='px:local:encounters:0')]])
         await query.answer()
@@ -2094,7 +2094,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         ) if engagement_row and action_id else ('invalid_action', {})
         status_key = {
             'waiting': 'location.pvp_wait_turn_timeout', 'invalid_action': 'location.pvp_action_not_ready',
-            'not_your_turn': 'location.pvp_not_your_turn', 'finished': 'location.pvp_battle_finished',
+            'not_your_turn': 'location.pvp_not_your_turn', 'finished': 'pxe1.encounter.finished',
         }.get(status, 'location.pvp_action_done')
         await query.answer(t(status_key, lang))
         if engagement_row and engagement_row['world_model_version']==1:
@@ -2151,7 +2151,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         elif status == 'not_your_turn':
             await query.answer(t('location.pvp_not_your_turn', lang), show_alert=True)
         elif status == 'finished':
-            await query.answer(t('location.pvp_battle_finished', lang), show_alert=True)
+            await query.answer(t('pxe1.encounter.finished', lang), show_alert=True)
         else:
             await query.answer(t('location.pvp_action_done', lang), show_alert=True)
         location = get_location(get_player(user.id)['location_id'])

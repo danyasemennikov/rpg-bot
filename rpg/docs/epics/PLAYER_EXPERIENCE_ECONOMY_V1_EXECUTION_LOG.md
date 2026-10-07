@@ -380,13 +380,31 @@ Focused evidence:
   `python -m pytest -q tests/test_pxe1_combat_order_replay.py tests/test_pxe1_navigation_ui.py --tb=short`
   **26 passed, 4.83s**.
 
+## 2026-10-07 — full locale families and numeric wording
+
+Completed all seventeen frozen families with explicit ru/en/es strings. Strict
+validation now checks every required suffix and all four numeric variants,
+including missing keys, non-text values and placeholder parity without fallback.
+Live gathering uses the canonical nested family; its former flat action label
+is preserved as `gather.action_label`. Journal, encounter, quest, travel and
+personal-result surfaces use the canonical paths. Added safe/guarded/frontier/
+war-zone labels, validated route flavor with neutral fallback, gathering M:SS
+remaining time and dates on completed assignment history.
+
+Evidence: two initial focused batches exposed missing Spanish legacy aliases
+(16 failed / 22 passed, 8.87s and 8.77s); added explicit Spanish text after checking
+all alias sources. Navigation/recipes/combat then **38 passed, 8.53s**. A mistyped
+feedback filename ran no tests (0.00s), then the discovered navigation/gather/travel
+files **40 passed, 6.11s**. Journal/feedback/PvP membership/personal results and all
+Chapter variants: **41 passed, 45.80s**. Numeric checks include 0/1/2/5/21.
+
 ## Remaining work
 
-Phase 6 remains in progress. Finish inventory/recipe presentation details and
-combat integration; repair known
-runtime/recovery compatibility gaps before Phase 7 integrated ru/en/es journeys.
-Reconcile older journey fixtures to actual timed domain owners without weakening
-rollback, replay, reward, mastery, or actor-membership checks. Run the full suite
-only on the near-final coherent implementation candidate. Final report, schema
-inventory, docs reconciliation, human NOT RUN artifact, push and one Draft PR
-remain outstanding. No deviation has been accepted and no completion is claimed.
+Continue profession and RAV earned journeys against 22 starter recipes, all 83
+active recipes, real timed sessions, tool upgrades/commissions/wear/maintenance
+and XP policy 2. Resolve remaining recovery/stale-action edges and verify generic
+side-turn runtime with arbitrary actor collections; max two per side belongs to
+PXE1 PvP content policy. Complete Phase 7 integration, run focused final checks,
+then the full suite on the near-final coherent candidate. Reconcile final docs,
+schema inventory and evidence, record human Telegram validation NOT RUN, push the
+same branch and create exactly one Draft PR. No merge or completion is claimed.

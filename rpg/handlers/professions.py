@@ -479,7 +479,7 @@ def build_mutation_result(player: dict, receipt: dict, recipe_id: str = ''):
     from game.quest_board import get_player_hunt_contract_state
     state = get_player_hunt_contract_state(player['telegram_id'])
     if state and state['status']=='completed':
-        rows.append([InlineKeyboardButton(t('pxe1.assignment_ready',lang),callback_data='alpha_assignment')])
+        rows.append([InlineKeyboardButton(t('pxe1.quest.ready',lang),callback_data='alpha_assignment')])
     from game.player_ui import validate_surface
     keyboard = _kb(rows)
     validate_surface('\n'.join(lines),keyboard)

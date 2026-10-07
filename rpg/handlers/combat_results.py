@@ -50,7 +50,7 @@ def result_card(event,player,*,details=False,page=0):
     else:
         for grant in group['grants']:
             if grant['recipient_id']==player_id: items[grant['item_id']]+=grant['quantity']
-        lines=[t('pxe1.result.draw' if group['winner_side'] is None else 'pxe1.result.victory' if group['winner_side']==own_side else 'location.pvp_battle_finished',lang),
+        lines=[t('pxe1.encounter.pvp_draw' if group['winner_side'] is None else 'pxe1.encounter.pvp_victory' if group['winner_side']==own_side else 'pxe1.encounter.finished',lang),
             t('location.pvp_personal_result',lang,hp=actor['hp'],mana=actor['mana'],quantity=sum(items.values()))]
     given=sum(int(sources.get(str(player_id),0)) for sources in battle.get('damage_by_source',{}).values())
     taken=sum(int(n) for n in battle.get('damage_by_source',{}).get(str(player_id),{}).values())
@@ -59,9 +59,9 @@ def result_card(event,player,*,details=False,page=0):
     if death:
         given=death.get('damage_dealt',given);taken=death.get('damage_taken',taken)
         infamy=death.get('personal_infamy_delta',infamy)
-    lines += [t('pxe1.result.damage',lang,given=given,taken=taken),t('pxe1.result.infamy',lang,delta=infamy)]
+    lines += [t('pxe1.result.damage',lang,given=given,taken=taken),t('pxe1.encounter.pvp_personal_infamy',lang,delta=infamy)]
     item_lines=[escape(get_item_name(item,lang))+f' ×{quantity}' for item,quantity in sorted(items.items())]
-    if item_lines: lines.append(t('pxe1.result.lost' if death else 'pxe1.result.received',lang))
+    if item_lines: lines.append(t('pxe1.encounter.pvp_personal_loss' if death else 'pxe1.encounter.pvp_personal_loot',lang))
     definitions=[]
     if details:
         pages=max(1,(len(item_lines)+5)//6);page=max(0,min(int(page),pages-1))

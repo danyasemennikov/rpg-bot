@@ -214,7 +214,7 @@ def result_card(player,result,*,buy=False):
     from game.quest_board import get_player_hunt_contract_state
     state = get_player_hunt_contract_state(player['telegram_id'])
     if state and state['status']=='completed':
-        rows.append([button(t('pxe1.assignment_ready',lang),'alpha_assignment')])
+        rows.append([button(t('pxe1.quest.ready',lang),'alpha_assignment')])
     rows.append([button(t('gear.back_btn',lang),'px:local:home:0')])
     validate_surface(text,InlineKeyboardMarkup(rows))
     return text,InlineKeyboardMarkup(rows),keys

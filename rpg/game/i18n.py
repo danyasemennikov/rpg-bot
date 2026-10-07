@@ -42,6 +42,11 @@ def t(key: str, lang: str = 'ru', **kwargs) -> str:
     Ключи вложенные через точку: t('battle.attack_hit', lang, damage=24)
     """
     strings = _load_lang(lang)
+    if key.startswith('pxe1.'):
+        from locales.pxe1_surface_keys import PLURALS,plural_form
+        plural=PLURALS.get(key[5:])
+        if plural and plural[0] in kwargs:
+            key+='_'+plural_form(lang,kwargs[plural[0]])
 
     # Ищем по вложенному ключу
     parts = key.split('.')
@@ -295,21 +300,22 @@ def _fallback_skill(skill_id: str, field: str) -> str:
 
 
 def validate_pxe1_surface_locales(locales=None):
-    """Check the explicitly integrated frozen families, without fallback."""
-    from locales.pxe1_surface_keys import COVERED_FAMILIES,value_at
+    """Check all frozen families and numeric variants without fallback."""
+    from locales.pxe1_surface_keys import COVERED_FAMILIES,PLURALS,PLURAL_FORMS,value_at
     locales=locales if locales is not None else {lang:_load_lang(lang) for lang in ('en','ru','es')}
     if set(locales)!={'en','ru','es'}:
         raise RuntimeError('PXE1 requires en/ru/es locales')
     formatter=string.Formatter()
-    for family,suffixes in COVERED_FAMILIES.items():
-        for suffix in suffixes.split():
-            key='pxe1.'+family+'.'+suffix
-            try:
-                values={lang:value_at(strings,key) for lang,strings in locales.items()}
-                fields={lang:{field for _,field,_,_ in formatter.parse(text) if field is not None}
-                        for lang,text in values.items()}
-            except (KeyError,TypeError,ValueError) as exc:
-                raise RuntimeError('Invalid PXE1 locale key: '+key) from exc
-            if fields['en']!=fields['ru'] or fields['en']!=fields['es']:
-                raise RuntimeError('PXE1 placeholder mismatch: '+key)
+    paths=[family+'.'+suffix for family,suffixes in COVERED_FAMILIES.items() for suffix in suffixes.split()]
+    paths += [path+'_'+form for path in PLURALS for form in PLURAL_FORMS]
+    for path in paths:
+        key='pxe1.'+path
+        try:
+            values={lang:value_at(strings,key) for lang,strings in locales.items()}
+            fields={lang:{field for _,field,_,_ in formatter.parse(text) if field is not None}
+                    for lang,text in values.items()}
+        except (KeyError,TypeError,ValueError) as exc:
+            raise RuntimeError('Invalid PXE1 locale key: '+key) from exc
+        if fields['en']!=fields['ru'] or fields['en']!=fields['es']:
+            raise RuntimeError('PXE1 placeholder mismatch: '+key)
     return True

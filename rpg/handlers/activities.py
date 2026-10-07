@@ -28,22 +28,25 @@ def activity_card(player,session,kind,*,now_ms=None):
     lines = [t('pxe1.'+kind+'_title',lang),t('pxe1.status.'+status,lang)]
     if kind=='travel':
         path = json.loads(session['path_json'])
-        lines += [t('pxe1.travel_position',lang,name=escape(get_location_name(player['location_id'],lang))),
-                  t('pxe1.travel_destination',lang,name=escape(get_location_name(session['destination_location_id'],lang))),
-                  t('pxe1.travel_progress',lang,done=session['edge_index'],total=len(path)-1)]
+        lines += [t('pxe1.travel.position',lang,name=escape(get_location_name(player['location_id'],lang))),
+                  t('pxe1.travel.destination',lang,name=escape(get_location_name(session['destination_location_id'],lang))),
+                  t('pxe1.travel.progress',lang,done=session['edge_index'],total=len(path)-1)]
         if status=='running':
             remaining = max(0,(session['next_due_ms']-now_ms+999)//1000)+18*max(0,len(path)-session['edge_index']-2)
-            lines.append(t('pxe1.remaining',lang,time=duration(remaining)))
+            lines.append(t('pxe1.travel.remaining',lang,time=duration(remaining)))
     else:
         accounting = json.loads(session['result_json'])
         lines += [t('professions.names.'+session['profession_key'],lang),
-                  t('pxe1.gather_progress',lang,done=session['last_tick'],total=accounting['max_attempts'],quantity=session['yield_total']),
-                  t('pxe1.gather_xp',lang,xp=accounting['xp'])]
+                  t('pxe1.gather.attempts',lang,done=session['last_tick'],total=accounting['max_attempts'],quantity=session['yield_total']),
+                  t('pxe1.gather.xp_total',lang,xp=accounting['xp'])]
         for item,quantity in list(accounting['items'].items())[:4]:
             lines.append(f'{escape(get_item_name(item,lang))} ×{quantity}')
+        if status=='running':
+            remaining=max(0,(session['next_due_ms']-now_ms+999)//1000)+8*max(0,accounting['max_attempts']-session['last_tick']-1)
+            lines.append(t('pxe1.gather.remaining',lang,time=duration(remaining)))
     rows = []
     if status=='running':
-        rows.append([InlineKeyboardButton(t('pxe1.stop',lang),callback_data=f"px:stop:{kind}:{session['session_id']}")])
+        rows.append([InlineKeyboardButton(t('pxe1.'+kind+'.stop',lang),callback_data=f"px:stop:{kind}:{session['session_id']}")])
     rows.append([InlineKeyboardButton(t('keyboard.activities',lang),callback_data='px:home'),InlineKeyboardButton(t('keyboard.location',lang),callback_data='pvp_refresh')])
     keyboard = _kb(rows)
     validate_surface('\n'.join(lines),keyboard)
@@ -62,7 +65,7 @@ def build_activities(player):
     finally:
         conn.close()
     lines = [t('keyboard.activities',lang),'📍 '+escape(get_location_name(player['location_id'],lang))]
-    buttons = [InlineKeyboardButton(t('pxe1.gather',lang,profession=t('professions.names.'+source.profession_key,lang)),callback_data='px:gatherpreview:'+source.profession_key)
+    buttons = [InlineKeyboardButton(t('pxe1.gather.action_label',lang,profession=t('professions.names.'+source.profession_key,lang)),callback_data='px:gatherpreview:'+source.profession_key)
         for source in build_location_gather_source_profiles(player['location_id']) if source.profession_key!='hunting'][:4]
     buttons += [InlineKeyboardButton(t('professions.title',lang),callback_data='pe_o:0'),
         InlineKeyboardButton(t('pxe1.tools',lang),callback_data='px:tools'),
@@ -92,10 +95,10 @@ def gathering_preview_card(player,profession):
         if not tool or not tool['durability']: reason = 'gather_broken'
         elif not any(e['required_level']<=level and e['required_tool_tier']<=tool['tier'] for e in snapshot['entries']):
             reason = 'gather_locked'
-    lines = [t('pxe1.gather',lang,profession=t('professions.names.'+profession,lang)),
-             t('pxe1.gather_preview',lang),t('pxe1.gather_tool_hint',lang)]
+    lines = [t('pxe1.gather.action_label',lang,profession=t('professions.names.'+profession,lang)),
+             t('pxe1.gather.preview',lang),t('pxe1.gather.tool_hint',lang)]
     for entry in snapshot['entries'][:4]:
-        lines.append(t('pxe1.gather_source_line',lang,name=escape(get_item_name(entry['item_id'],lang)),
+        lines.append(t('pxe1.gather.source_probability',lang,name=escape(get_item_name(entry['item_id'],lang)),
                        chance=entry['chance_bp']/100,level=entry['required_level'],tier=entry['required_tool_tier']))
     if tool: lines.append(t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier']))
     rows = []
@@ -104,7 +107,7 @@ def gathering_preview_card(player,profession):
         payload = encoded({'schema_version':1,'catalog_version':2,'profession_key':profession,
                            'location_id':player['location_id'],'tool_revision':tool['revision'],'source_snapshot':snapshot})
         token = issue_actions(player['telegram_id'],'pxe1_gather_start',[payload])[payload]
-        rows.append([InlineKeyboardButton(t('pxe1.gather_start',lang),callback_data='px:gatherstart:'+token)])
+        rows.append([InlineKeyboardButton(t('pxe1.gather.start',lang),callback_data='px:gatherstart:'+token)])
     rows.append([InlineKeyboardButton(t('pxe1.tools',lang),callback_data='px:tools'),
                  InlineKeyboardButton(t('gear.back_btn',lang),callback_data='px:local:home:0')])
     keyboard = _kb(rows)
@@ -124,9 +127,14 @@ def travel_preview_card(player,destination):
     payload = encoded({'schema_version':1,'catalog_version':2,'preview':preview})
     token = issue_actions(player['telegram_id'],'pxe1_travel',[payload])[payload]
     lang = player.get('lang','ru')
-    text = '\n'.join([t('pxe1.travel_title',lang),
-        t('pxe1.travel_destination',lang,name=escape(get_location_name(preview['destination_location_id'],lang))),
-        t('pxe1.route_preview',lang,hops=len(preview['path'])-1,time=duration(preview['duration_seconds']))])
+    text = '\n'.join([t('pxe1.travel.title',lang),
+        t('pxe1.travel.destination',lang,name=escape(get_location_name(preview['destination_location_id'],lang))),
+        t('pxe1.map.route_preview',lang,hops=len(preview['path'])-1,time=duration(preview['duration_seconds']))])
+    from game.locations import get_location
+    from locales.pxe1_surface_keys import COPY
+    route_id=(get_location(preview['destination_location_id']) or {}).get('route_id')
+    flavor='travel.flavor.'+str(route_id)
+    text+='\n'+t('pxe1.'+(flavor if flavor in COPY else 'travel.flavor.neutral'),lang)
     rows = []
     if activity and activity['kind'] in {'travel','gather'}:
         rows.append([InlineKeyboardButton(t('pxe1.stop',lang),callback_data=f"px:stop:{activity['kind']}:{activity['ref']}")])
@@ -134,7 +142,7 @@ def travel_preview_card(player,destination):
     elif activity:
         text += '\n'+t('location.in_battle_move',lang)
     else:
-        rows.append([InlineKeyboardButton(t('pxe1.start_travel',lang),callback_data='px:travel:'+token)])
+        rows.append([InlineKeyboardButton(t('pxe1.travel.start',lang),callback_data='px:travel:'+token)])
     rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='px:map')])
     keyboard = _kb(rows)
     validate_surface(text,keyboard)
