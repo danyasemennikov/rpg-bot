@@ -628,6 +628,26 @@ retained tick/yield totals, uses the emitted legal prelock Leave control with no
 XP/gold change, and continues earning the missing material through a new session.
 Production threat priority and gathering behavior are unchanged.
 
+Retained group/survival/mixed/PvP/token/travel/Chapter regression: **13 failed /
+127 passed / 113 subtests passed, 95.95s**. Twelve failures were old synthetic
+Location renderers missing current player location data; these explicitly exercise
+the retained legacy projection now, keeping advanced snapshot routing and stale
+command assertions. Current compact public surfaces retain their PXE1 coverage.
+The earned PvP journey now uses the preparation's real 128-bit seed and collection
+side ownership, follows current action→target controls (including token replacement)
+and short resolved toasts. All original numerical skill effects, cooldowns, pair
+relationship count, durable-order restart and finalization checks are retained.
+A copied row marked dead no longer substitutes for authority; the journey earns a
+real terminal defeat and verifies the stale action cannot charge or add orders.
+Deterministic seeds were selected for successful hits through the unchanged pure
+evaluator, with no snapshot/progression/win injection into the earned database.
+
+Intermediate affected runs: **1 failed / 22 passed, 7.19s**; individual PvP repairs
+reported **1 failed** at 2.43s, 2.58s, 2.63s, 3.80s, 7.49s, 7.80s and 8.76s.
+Final affected regression: **23 passed, 20.98s**, using
+`python -m pytest -q tests/test_character_builds_v1_pvp_journey.py tests/test_location_action_tokens.py --tb=short`.
+The current earned profession/RAV history is still building; full suite is NOT RUN.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

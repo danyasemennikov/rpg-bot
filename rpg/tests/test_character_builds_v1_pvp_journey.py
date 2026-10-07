@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import json
 from datetime import datetime, timedelta
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from database import get_connection, get_player
 from game.build_contract import RULES_VERSION
 from game.build_progression import migrate_character_builds_v1
-from game.combat_identity import cooldown_remaining
+from game.combat_identity import cooldown_remaining, legal_actions
 from game.combat_orders import consume_combat_intent, load_combat_orders
 from game.field_catalog import FIELD_ITEMS
+from game.i18n import t
 from game.pvp_live import (
     _LIVE_PVP_RUNTIME_STORE,
     advance_engagement_to_live_battle_if_ready,
-    issue_manual_pvp_action_labels,
     process_live_pvp_due_events,
     resolve_live_battle_turn,
 )
@@ -82,9 +82,14 @@ async def _begin_pvp(
         "SELECT COUNT(*) AS total FROM pvp_engagements WHERE attacker_id=? AND defender_id=?",
         (attacker.player_id, defender.player_id),
     )[0]["total"]
-    callback = await attacker.callback(
-        f"pvp_attack_{defender.player_id}", handle_location_buttons,
-    )
+    from game.pvp_world import create_preparation
+    combat_seed=hashlib.sha256(combat_seed.encode('utf-8')).hexdigest()[:32]
+    def seeded_preparation(*args,**kwargs):
+        return create_preparation(*args,**kwargs,seed=combat_seed)
+    with patch('game.pvp_world.create_preparation',side_effect=seeded_preparation):
+        callback = await attacker.callback(
+            f"pvp_attack_{defender.player_id}", handle_location_buttons,
+        )
     assert callback.answer.await_args.kwargs.get("show_alert") is True
     rows = _rows(
         "SELECT * FROM pvp_engagements WHERE attacker_id=? AND defender_id=? ORDER BY id DESC",
@@ -93,13 +98,9 @@ async def _begin_pvp(
     assert len(rows) == before + 1
     row = rows[0]
     ready_at = datetime.fromisoformat(str(row["engagement_ready_at"]))
-    with patch(
-        "game.pvp_live.uuid.uuid4",
-        return_value=SimpleNamespace(hex=combat_seed),
-    ):
-        state, payload = advance_engagement_to_live_battle_if_ready(
-            row, now=ready_at + timedelta(seconds=1),
-        )
+    state, payload = advance_engagement_to_live_battle_if_ready(
+        row, now=ready_at + timedelta(seconds=1),
+    )
     assert state == "converted_to_battle"
     assert payload["battle"]["rules_version"] == RULES_VERSION
     assert payload["battle"]["combat_seed"] == combat_seed
@@ -113,30 +114,31 @@ def _issued_actions(
     battle: dict,
     attacker_id: int,
     defender_id: int,
+    selected_action_id: str,
 ) -> dict[str, str]:
-    labels = issue_manual_pvp_action_labels(
-        engagement_id=engagement_id,
-        player_id=player_id,
-        lang="en",
-        battle=battle,
-        attacker_id=attacker_id,
-        defender_id=defender_id,
-    )
+    from handlers.pvp_group import target_card
+    row=_engagement(engagement_id)
     actions: dict[str, str] = {}
-    for token, _label in labels:
-        stored = _rows(
-            "SELECT payload FROM player_ui_actions WHERE player_id=? AND kind='combat_v1' AND token=?",
-            (player_id, token),
-        )[0]
-        action = json.loads(stored["payload"])["action"]
-        kind = str(action["kind"])
-        action_id = (
-            "normal_attack" if kind == "normal"
-            else "guard" if kind == "guard"
-            else f"skill:{action['skill_id']}" if kind == "skill"
-            else kind
-        )
-        actions[action_id] = token
+    chosen=selected_action_id.removeprefix('skill:')
+    if chosen=='normal_attack': chosen='normal'
+    available=legal_actions(battle['participants_v1'][str(player_id)],pvp=True)
+    # Opening another action replaces pending tokens. Read each immediately,
+    # and leave the chosen action's actual target surface open last.
+    ordered=[action for action in available if action!=chosen]+[chosen]
+    for action_id in ordered:
+        _,keyboard=target_card(row,player_id,action_id,battle['turn_revision'],'en')
+        for line in keyboard.inline_keyboard:
+            for button in line:
+                if not button.callback_data.startswith('pvp_v1_'): continue
+                token=button.callback_data.removeprefix('pvp_v1_')
+                stored = _rows(
+                    "SELECT payload FROM player_ui_actions WHERE player_id=? AND kind='combat_v1' AND token=?",
+                    (player_id, token),
+                )[0]
+                action = json.loads(stored['payload'])['action']
+                kind=str(action['kind'])
+                key='normal_attack' if kind=='normal' else 'guard' if kind=='guard' else 'skill:'+action['skill_id']
+                actions[key]=token
     return actions
 
 
@@ -150,20 +152,24 @@ async def _act(
 ) -> tuple[dict, dict, list[dict], dict[str, str]]:
     before_row = _engagement(engagement_id)
     before = _payload(before_row)["battle"]
-    assert int(before["turn_owner"]) == journey.player_id
+    roster=json.loads(before_row['locked_roster_json'])
+    assert journey.player_id in {member['player_id'] for member in roster[before['active_side']]}
     issued = _issued_actions(
         engagement_id=engagement_id,
         player_id=journey.player_id,
         battle=before,
         attacker_id=attacker_id,
         defender_id=defender_id,
+        selected_action_id=action_id,
     )
     assert action_id in issued, (action_id, issued)
     before_events = len(before.get("events_v1") or [])
     response = await journey.callback(
         f"pvp_v1_{issued[action_id]}", handle_location_buttons,
     )
-    assert response.answer.await_args.kwargs.get("show_alert") is True
+    assert response.answer.await_args.args[0] in {
+        t('location.pvp_action_done','en'),t('pxe1.encounter.finished','en')}
+    assert not response.answer.await_args.kwargs.get('show_alert')
     after = _payload(_engagement(engagement_id))["battle"]
     return before, after, list(after.get("events_v1") or [])[before_events:], issued
 
@@ -192,7 +198,7 @@ async def _run_pvp_journey() -> dict:
     )
 
     sword_engagement, sword_payload = await _begin_pvp(
-        sword, holy, combat_seed="pvp-earned-sword-holy-2",
+        sword, holy, combat_seed="pvp-earned-sword-holy-4",
     )
     assert sword_payload["illegal_aggression"] is False
     opening_row = _engagement(sword_engagement)
@@ -301,7 +307,9 @@ async def _run_pvp_journey() -> dict:
         if row["engagement_state"] == "cancelled":
             break
         battle = _payload(row)["battle"]
-        actor_id = int(battle["turn_owner"])
+        members=json.loads(row['locked_roster_json'])[battle['active_side']]
+        assert len(members)==1  # This earned journey deliberately exercises 1v1.
+        actor_id = members[0]['player_id']
         actor = sword if actor_id == SWORD_ID else holy
         await _act(
             actor,
@@ -319,7 +327,7 @@ async def _run_pvp_journey() -> dict:
     assert len(_rows(
         "SELECT * FROM pvp_log WHERE attacker_id=? AND defender_id=?",
         (SWORD_ID, HOLY_ID),
-    )) == 1
+    )) == 1  # Pair relationship excludes the additional self-summary row.
     assert process_live_pvp_due_events() == []
     assert len(_rows(
         "SELECT * FROM pvp_log WHERE attacker_id=? AND defender_id=?",
@@ -331,7 +339,7 @@ async def _run_pvp_journey() -> dict:
         assert player["infamy"] == 0 and player["red_flag"] == 0
 
     bow_engagement, _ = await _begin_pvp(
-        bow, staff, combat_seed="pvp-earned-bow-staff-1",
+        bow, staff, combat_seed="pvp-earned-bow-staff-3",
     )
     before_quick, after_quick, quick_events, _ = await _act(
         bow,
@@ -356,6 +364,7 @@ async def _run_pvp_journey() -> dict:
         battle=fire_before,
         attacker_id=BOW_ID,
         defender_id=STAFF_ID,
+        selected_action_id='skill:fireball',
     )
     consumed = consume_combat_intent(STAFF_ID, fire_tokens["skill:fireball"])
     assert consumed["accepted"] is True
@@ -399,29 +408,39 @@ async def _run_pvp_journey() -> dict:
     assert burn["amount"] > 0
     assert after_burn["participants_v1"][str(BOW_ID)]["hp"] < before_burn["participants_v1"][str(BOW_ID)]["hp"]
 
-    # Reject a target already dead before submission without creating an
-    # order. The pure evaluator's post-commit target-loss Guard remains intact.
+    # Earn an actual terminal death. A copied UI projection is no longer
+    # combat authority, so merely marking a copied row dead cannot test this.
+    for _ in range(80):
+        row=_engagement(bow_engagement)
+        if row['engagement_state']=='cancelled': break
+        current=_payload(row)['battle']
+        members=json.loads(row['locked_roster_json'])[current['active_side']]
+        assert len(members)==1
+        actor=bow if members[0]['player_id']==BOW_ID else staff
+        await _act(actor,engagement_id=bow_engagement,action_id='normal_attack',
+                   attacker_id=BOW_ID,defender_id=STAFF_ID)
+    else:
+        raise AssertionError('earned bow/staff PvP exceeded 80 turns')
     dead_row = _engagement(bow_engagement)
     dead_payload = _payload(dead_row)
-    dead_payload["battle"]["attacker_hp"] = 0
-    dead_target = dead_payload["battle"]["participants_v1"][str(BOW_ID)]
-    dead_target["hp"] = 0
-    dead_target["dead"] = True
-    dead_row["reason_context"] = json.dumps(dead_payload)
-    dead_revision = int(dead_payload["battle"]["turn_revision"])
+    assert dead_payload['battle']['state']=='finished'
+    assert any(actor['hp']==0 and actor['dead'] for actor in dead_payload['battle']['participants_v1'].values())
+    dead_revision = int(dead_payload['battle']['turn_revision'])
     dead_orders_before = len(_rows(
         "SELECT * FROM combat_orders_v1 WHERE encounter_kind='pvp' AND encounter_id=?",
         (str(bow_engagement),),
     ))
+    players_before={pid:dict(get_player(pid)) for pid in (BOW_ID,STAFF_ID)}
     status, _ = resolve_live_battle_turn(
-        dead_row, actor_id=STAFF_ID, selected_action_id="normal_attack",
+        dead_row, actor_id=STAFF_ID, selected_action_id='normal_attack',
     )
-    assert status == "invalid_action"
-    assert _payload(_engagement(bow_engagement))["battle"]["turn_revision"] == dead_revision
+    assert status == 'not_live'
+    assert _payload(_engagement(bow_engagement))['battle']['turn_revision'] == dead_revision
     assert len(_rows(
         "SELECT * FROM combat_orders_v1 WHERE encounter_kind='pvp' AND encounter_id=?",
         (str(bow_engagement),),
     )) == dead_orders_before
+    assert {pid:dict(get_player(pid)) for pid in (BOW_ID,STAFF_ID)}==players_before
 
     return {
         "sword_engagement": sword_engagement,

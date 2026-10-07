@@ -71,6 +71,24 @@
       "seconds": 221.6,
       "status": "PASSED",
       "log": "pxe1-group-focused.log"
+    },
+    {
+      "candidate": "d59ce04 + current journey fixtures",
+      "command": "python -m pytest -q tests/test_group_pve_runtime_enablement.py tests/test_character_builds_v1_durability.py tests/test_character_builds_v1_mixed_encounters.py tests/test_character_builds_v1_pvp_journey.py tests/test_pvp_live_flow_v1.py tests/test_location_live_pvp_view.py tests/test_location_action_tokens.py tests/test_location_discovery_travel_migration.py tests/test_playable_alpha_v1.py --tb=short",
+      "passed": 127,
+      "failed": 13,
+      "subtests_passed": 113,
+      "seconds": 95.95,
+      "status": "FAILED",
+      "finding": "legacy synthetic Location projection fixtures and obsolete singleton/seeding PvP journey assumptions"
+    },
+    {
+      "candidate": "d59ce04 + current journey fixtures",
+      "command": "python -m pytest -q tests/test_character_builds_v1_pvp_journey.py tests/test_location_action_tokens.py --tb=short",
+      "passed": 23,
+      "seconds": 20.98,
+      "status": "PASSED",
+      "log": "pxe1-retained-repair-focused.log"
     }
   ],
   "limitations": [
@@ -132,7 +150,24 @@
       "idx_pxe1_pvp_seat",
       "idx_pxe1_pvp_commitment",
       "idx_pxe1_pvp_membership"
-    ]
+    ],
+    "versions": {
+      "travel_schema": 1,
+      "travel_route": 1,
+      "gathering_schema": 1,
+      "gathering_rng": 1,
+      "gathering_source": 1,
+      "tool_schema": 1,
+      "threat_schema": 1,
+      "feedback_schema": 1,
+      "ui_schema": 1,
+      "pvp_membership": 1,
+      "pvp_participant_settlement": 1,
+      "pvp_group_settlement": 1,
+      "catalogue": 2,
+      "craft_xp_policy": 2,
+      "legacy_live_pvp": 0
+    }
   },
   "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
   "historical_focused_evidence": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md",
