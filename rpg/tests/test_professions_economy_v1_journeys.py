@@ -315,7 +315,7 @@ async def _fight_and_harvest(
         (('skill', 'defensive_stance'), ('skill', 'shield_bash'), ('skill', 'sword_rush'))
         if mob_id == 'troll' else ()
     )
-    fight = await journey.fight(mob_id, opening=opening, use_potions=mob_id == 'troll')
+    fight = await journey.fight(mob_id, opening=opening, use_potions=True)
     encounter_id = fight['encounter_id']
     choice = next(
         row for row in list_harvestable_victories(journey.player_id, page_size=20)
