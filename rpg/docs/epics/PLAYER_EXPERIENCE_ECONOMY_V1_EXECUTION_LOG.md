@@ -824,6 +824,45 @@ Session 53588 runs the required fresh 41-test history with no checkpoint overrid
 logged in `pxe1-earned-battle-recovery-fresh-pytest.log`. Final history/39 RAV
 branches and the repaired full broad command remain pending.
 
+## Immediate travel clock and protected Chapter sale reconciliation
+
+The fresh `d6453a5` run completed normally: **1 passed / 40 errors, 3730.28s**,
+log `pxe1-earned-battle-recovery-fresh-pytest.log`. Its whole failed database is
+preserved as workspace `acceptance-recovery/d6453a5-partial-earned`. An unused
+travel token was issued at 22:21 UTC, expired after its real 900-second lifetime,
+and was consumed only after the host resumed around 22:49 UTC. Production
+correctly rejected it. This is a terminal failed run, not an inferred PASS or a
+resumable partial history.
+
+Only the synthetic immediate travel preview/start sequence now freezes its clock.
+A one-hour host-pause regression first reproduces the same IndexError (1 failed,
+1.24s), then passes together with all six production travel tests: **7 passed,
+2.56s**. Actual 900-second token expiry, the 15-second edge, gold/XP conservation
+and all existing journey assertions remain intact. Committed at
+`2db8a7f526e241b5b5133dd72efd27318dbfef9a`. Three affected earned group journeys
+also pass: **3 passed, 170.76s**, `pxe1-travel-clock-group-pytest.log`.
+
+The next fresh history completed **1 passed / 40 errors, 12.81s** at its Chapter
+sale (`pxe1-earned-clock-stable-fresh-pytest.log`). Its whole failed database is
+preserved as `acceptance-recovery/2db8a7f-partial-earned`. The Chapter helper used
+the obsolete immediate sale path; production correctly protected the last owned
+small health potion. The helper now uses its existing actual Shop preview and
+explicit confirmation flow. No production guard or acceptance assertion changed.
+Committed at `0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e`.
+
+A copied-state diagnostic verifies `last_consumable`, actual confirmed sale and
+real Homecoming claim/all four Chapter assignments: **1 passed, 0.66s** in
+`pxe1-chapter-protected-sale-diagnostic-pytest.log`. An earlier scratch diagnostic
+incorrectly assumed a >=25g stack and failed while 18 unrelated focused checks
+passed (14.09s); that result is retained separately. Clean fresh Chapter/potion,
+Shop, clock-pause and travel regressions on the final helper candidate:
+**25 passed, 13.44s**, `pxe1-clock-chapter-shop-focused-pytest.log`.
+
+Session 28082 now runs another fresh two-module 41-test history from registration,
+with `PXE1_EARNED_CHECKPOINT` absent, logged in
+`pxe1-earned-protected-sale-fresh-pytest.log`. No failed partial database is reused.
+Final profession/RAV acceptance and the final exact broad command remain pending.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

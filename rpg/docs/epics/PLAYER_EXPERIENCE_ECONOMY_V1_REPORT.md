@@ -129,8 +129,17 @@ failed to follow (1 passed / 40 setup errors, 1575.50s). That helper now uses th
 real quantity/confirmation Shop flow; its failing-state diagnostic passes and another
 fresh history exposed an early wolf-pack defeat while carried recovery potions
 were unused. Harvesting now enables its existing battle-potion path for all mobs;
-a clean four-assignment Chapter/potion journey passes (9.66s), and the full fresh
-history runs again. No final pass is claimed. The earned profession
+a clean four-assignment Chapter/potion journey passes (9.66s). The subsequent
+fresh history failed normally (1 passed / 40 errors, 3730.28s) after a host pause
+aged an immediate travel preview past its real 900-second expiry. Only the test
+clock across that immediate preview/start pair is held fixed; its regression
+reproduces the failure and preserves token expiry and actual 15-second travel.
+A later fresh Chapter exposed the protected last-consumable sale guard (1 passed /
+40 errors, 12.81s); the helper now follows actual Shop confirmation, as verified on
+its whole failed state. The final helper candidate passes 25 fresh Chapter/Shop/
+travel checks (13.44s); the changed common travel path also passes three earned
+group journeys (170.76s). Full fresh history runs again. No final pass is claimed.
+The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
 No old PEV1 checkpoint substitutes for current PXE1 history. Optional focused-repair

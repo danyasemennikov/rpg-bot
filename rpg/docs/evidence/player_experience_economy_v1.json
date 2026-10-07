@@ -3,26 +3,26 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "IMPLEMENTING",
-  "candidate_sha": "d6453a54bbe9cd617750851f1e5d660c2238f030",
+  "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
   "draft_pr": null,
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
   "independent_review": "NOT RUN",
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "NOT RUN ON BATTLE-RECOVERY CANDIDATE",
+    "status": "NOT RUN ON CLOCK/PROTECTED-SALE CANDIDATE",
     "command": "python -m pytest -q",
-    "candidate_sha": "d6453a54bbe9cd617750851f1e5d660c2238f030"
+    "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e"
   },
   "earned_profession_rav_journeys": {
     "status": "RUNNING",
-    "candidate_sha": "d6453a54bbe9cd617750851f1e5d660c2238f030",
+    "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
     "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
-    "log": "pxe1-earned-battle-recovery-fresh-pytest.log",
-    "session_id": 53588,
+    "log": "pxe1-earned-protected-sale-fresh-pytest.log",
+    "session_id": 28082,
     "collected_tests": 41,
-    "earned_history": "fresh registration; no PXE1_EARNED_CHECKPOINT override; no partial state reused",
-    "observed_utc": "2026-10-07T21:49:55.444959+00:00"
+    "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; no partial state reused",
+    "observed_utc": "2026-10-07T22:56:18.072432+00:00"
   },
   "focused_runs": [
     {
@@ -203,6 +203,33 @@
       "seconds": 9.66,
       "log": "pxe1-chapter-potions-focused-pytest.log",
       "coverage": "fresh registration, field weapon purchase/equip, all four real Chapter claims, actual battle potion recovery; no synthetic progress/goods/gold/wins"
+    },
+    {
+      "candidate": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
+      "command": "python -m pytest -q tests/test_character_builds_v1_journeys.py::test_immediate_journey_travel_survives_host_pause_between_controls tests/test_pxe1_travel.py --tb=short",
+      "status": "PASSED",
+      "passed": 7,
+      "seconds": 2.56,
+      "log": "pxe1-travel-clock-focused-pytest.log",
+      "coverage": "Simulated one-hour host pause reproduced failure before repair; immediate test control clock held fixed, real token expiry and 15-second edge preserved"
+    },
+    {
+      "candidate": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
+      "command": "python -m pytest -q tests/test_character_builds_v1_group_journeys.py --tb=short",
+      "status": "PASSED",
+      "passed": 3,
+      "seconds": 170.76,
+      "log": "pxe1-travel-clock-group-pytest.log",
+      "coverage": "Actual earned group journeys on repaired common travel helper; later creator-only Chapter-sale change does not change these dependencies"
+    },
+    {
+      "candidate": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+      "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_chapter_recovery.py' tests/test_pxe1_shop_transactions.py tests/test_character_builds_v1_journeys.py::test_immediate_journey_travel_survives_host_pause_between_controls tests/test_pxe1_travel.py --tb=short",
+      "status": "PASSED",
+      "passed": 25,
+      "seconds": 13.44,
+      "log": "pxe1-clock-chapter-shop-focused-pytest.log",
+      "coverage": "Fresh four-assignment Chapter and earned potion proof, protected Shop owners, controlled immediate travel pair and production travel regressions; not full profession history"
     }
   ],
   "limitations": [
@@ -363,18 +390,19 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "FRESH BATTLE-RECOVERY ACCEPTANCE RUNNING; ALL PRIOR HISTORY RUNS TERMINAL FAILED",
-    "observed_utc": "2026-10-07T17:20:23.805057+00:00",
-    "code_candidate_sha": "d6453a54bbe9cd617750851f1e5d660c2238f030",
-    "active_session_id": 53588,
+    "status": "FRESH CLOCK/PROTECTED-SALE ACCEPTANCE RUNNING; PRIOR RUNS TERMINAL FAILED",
+    "observed_utc": "2026-10-07T22:56:18.072432+00:00",
+    "code_candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+    "active_session_id": 28082,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
     "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
     "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
     "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
     "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
-    "final_broad_status": "NOT RUN ON BATTLE-RECOVERY CANDIDATE",
+    "final_broad_status": "NOT RUN ON CLOCK/PROTECTED-SALE CANDIDATE",
     "human_validation": "NOT RUN",
-    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\8a9e10c-partial-earned"
+    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\2db8a7f-partial-earned",
+    "latest_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned"
   },
   "earned_journey_attempts": [
     {
@@ -420,6 +448,30 @@
       "seconds": 13.01,
       "finding": "A real three-wolf Chapter pack defeated the early character while five earned health potions were carried; harvesting helper enabled battle potion use only for trolls. No death assertion relaxed.",
       "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\8a9e10c-partial-earned"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "d6453a54bbe9cd617750851f1e5d660c2238f030",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-battle-recovery-fresh-pytest.log",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 3730.28,
+      "earned_history": "fresh registration; no checkpoint override",
+      "finding": "Host clock pause aged the immediate travel preview beyond its 900-second expiry; production correctly rejected the unused token. No RAV branches executed.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d6453a5-partial-earned"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-clock-stable-fresh-pytest.log",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 12.81,
+      "earned_history": "fresh registration; no checkpoint override",
+      "finding": "Chapter helper used obsolete immediate sale of the last owned health_potion_small. Current last_consumable guard correctly required confirmation; shared fixture stopped before RAV execution.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\2db8a7f-partial-earned"
     }
   ],
   "remaining_output_diagnostic": {
@@ -450,5 +502,22 @@
     "seconds": 0.93,
     "log": "pxe1-inn-funding-repaired-diagnostic-pytest.log",
     "provenance": "Whole-copy failed current history; unchanged earned state, actual Shop preview/confirmation sale (1..99), 12g Inn charge, restored effective HP and original location verified. No synthetic resources/progression."
+  },
+  "chapter_sale_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETE HISTORY",
+    "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+    "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_chapter_sale.py' --tb=short",
+    "passed": 1,
+    "seconds": 0.66,
+    "log": "pxe1-chapter-protected-sale-diagnostic-pytest.log",
+    "provenance": "Whole failed 2db8a7f Chapter state; exact last_consumable risk verified, actual Shop confirmation commits sale and real Homecoming claim completes all four Chapter assignments; no injected progress",
+    "prior_diagnostic_attempt": {
+      "status": "FAILED DIAGNOSTIC ASSERTION; 18 FOCUSED CHECKS PASSED",
+      "failed": 1,
+      "passed": 18,
+      "seconds": 14.09,
+      "log": "pxe1-chapter-sale-focused-pytest.log",
+      "finding": "Scratch diagnostic wrongly assumed protected stack required >=25g total; actual guard is last_consumable"
+    }
   }
 }
