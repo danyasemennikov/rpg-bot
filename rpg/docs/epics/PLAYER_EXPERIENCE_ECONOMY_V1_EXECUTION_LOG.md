@@ -732,6 +732,42 @@ had reached 20; medium armor remained 16. Final recipe/forge/consumable/locale
 checks and the 39 regional branches were still pending. The workspace checkpoint
 records the exact continuation step. Work continues while tools remain available.
 
+## Earned terminal result and atomic PvE vitals repair
+
+The fresh `fb89ec2` 41-test run reached normal completion: **1 passed / 40 errors,
+6526.18s (1h48m46s)**. This is FAILED, not platform-interrupted or acceptance PASS.
+All twelve professions reached 20, all 83 recipes were crafted and the crafted
+weapon was enhanced/advanced; the inventory consumable proof then failed. Its
+shared setup error prevented 39 RAV branches from executing. The complete raw
+output remains in `pxe1-earned-repaired-fresh-pytest.log`. A consistent whole failed
+DB and `failure.txt` are preserved outside pytest rotation in the workspace's
+`acceptance-recovery/fb89ec2-partial-earned-latest`; it is diagnostic only.
+
+Diagnostics showed a real production defect: accepted combat actor HP fell during
+wolf/troll fights, but the player's HP/MP row stayed at its prebattle values. The
+PXE1 resolution branch bypassed the older continuing-handler write. The repaired
+PvE owner projects each living active participant's HP/MP in the same transaction
+as accepted encounter CAS writes and side-result receipts. Stale/duplicate results
+do not write resources; failed transactions roll back both; defeated actors remain
+owned by their individual death receipts. Current PvP/legacy rules do not change.
+
+The repair is committed at `ca4331e47dee41a5256431f8116d9a3856609140`.
+Focused acceptance: **37 passed, 8.47s**, using
+`python -m pytest -q tests/test_pxe1_pve_world_tick.py tests/test_pxe1_combat_order_replay.py tests/test_pxe1_combat_result_recovery.py tests/test_character_builds_v1_durability.py --tb=short`,
+log `pxe1-vitals-focused-pytest.log`.
+
+A whole-copy diagnostic replenished missing previously consumed outputs through
+real learned recipes, then executed all eight unchanged positive recovery effects
+and ru/en/es navigation checks: **1 passed, 21.95s**, with the exact external-path
+command in JSON and `pxe1-consumables-locale-repaired-diagnostic-pytest.log`.
+This is not a completed acceptance history. Earlier guard/troll diagnostics and
+their failures remain in workspace logs; no assertion was weakened.
+
+Because production changed, session 98396 now runs a fresh registration-based
+41-test history with the same two-module command and no checkpoint override,
+logged in `pxe1-earned-vitals-repaired-fresh-pytest.log`. Its final result, the
+39 regional branches and the repaired full broad run remain pending.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

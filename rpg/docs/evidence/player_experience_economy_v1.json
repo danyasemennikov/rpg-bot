@@ -3,25 +3,26 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "IMPLEMENTING",
-  "candidate_sha": "fb89ec23bcbfc09a1d46224cf905f26d3f78bdba",
+  "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
   "draft_pr": null,
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
   "independent_review": "NOT RUN",
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "NOT RUN ON REPAIRED CANDIDATE",
+    "status": "NOT RUN ON VITALS-REPAIRED CANDIDATE",
     "command": "python -m pytest -q",
-    "candidate_sha": "fb89ec23bcbfc09a1d46224cf905f26d3f78bdba"
+    "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140"
   },
   "earned_profession_rav_journeys": {
     "status": "RUNNING",
-    "provenance": "one current registration/Chapter/profession history, SHA-256 whole DB clones; no old PEV1 history",
-    "collected_tests": 41,
-    "candidate_sha": "fb89ec23bcbfc09a1d46224cf905f26d3f78bdba",
+    "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
     "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
-    "log": "pxe1-earned-repaired-fresh-pytest.log",
-    "earned_history": "fresh from registration; no checkpoint override"
+    "log": "pxe1-earned-vitals-repaired-fresh-pytest.log",
+    "session_id": 98396,
+    "earned_history": "fresh from registration; PXE1_EARNED_CHECKPOINT explicitly absent; no partial backup reused",
+    "collected_tests": 41,
+    "observed_utc": "2026-10-07T21:15:12.430900+00:00"
   },
   "focused_runs": [
     {
@@ -140,6 +141,14 @@
       "passed": 16,
       "seconds": 5.1,
       "log": "pxe1-broad-fixture-repairs-pytest.log"
+    },
+    {
+      "candidate": "ca4331e47dee41a5256431f8116d9a3856609140",
+      "command": "python -m pytest -q tests/test_pxe1_pve_world_tick.py tests/test_pxe1_combat_order_replay.py tests/test_pxe1_combat_result_recovery.py tests/test_character_builds_v1_durability.py --tb=short",
+      "status": "PASSED",
+      "passed": 37,
+      "seconds": 8.47,
+      "log": "pxe1-vitals-focused-pytest.log"
     }
   ],
   "limitations": [
@@ -300,16 +309,42 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "RUNNING; PRESERVED BEFORE WORK LIMIT; NO FINAL PASS",
+    "status": "FRESH REPAIRED ACCEPTANCE RUNNING; PRIOR RUN TERMINAL FAILED",
     "observed_utc": "2026-10-07T17:20:23.805057+00:00",
-    "code_candidate_sha": "fb89ec23bcbfc09a1d46224cf905f26d3f78bdba",
-    "active_session_id": 47464,
+    "code_candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
+    "active_session_id": 98396,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
     "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
     "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
     "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
     "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
-    "final_broad_status": "NOT RUN ON REPAIRED CANDIDATE",
-    "human_validation": "NOT RUN"
+    "final_broad_status": "NOT RUN ON VITALS-REPAIRED CANDIDATE",
+    "human_validation": "NOT RUN",
+    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned-latest"
+  },
+  "earned_journey_attempts": [
+    {
+      "status": "FAILED",
+      "provenance": "one current registration/Chapter/profession history, SHA-256 whole DB clones; no old PEV1 history",
+      "collected_tests": 41,
+      "candidate_sha": "fb89ec23bcbfc09a1d46224cf905f26d3f78bdba",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-repaired-fresh-pytest.log",
+      "earned_history": "fresh from registration; no checkpoint override",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 6526.18,
+      "finding": "All 83 recipes and twelve professions reached 20; crafted gear enhanced/advanced. Consumable inventory proof exposed stale player HP/MP: combat actor lost HP but player row retained full prebattle resources. Shared fixture failure prevented 39 RAV branches from executing.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned-latest"
+    }
+  ],
+  "remaining_output_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETED HISTORY ACCEPTANCE",
+    "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
+    "command": "python -m pytest -q -s 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_outputs.py' --tb=short",
+    "passed": 1,
+    "seconds": 21.95,
+    "log": "pxe1-consumables-locale-repaired-diagnostic-pytest.log",
+    "provenance": "Whole copy of failed fb89ec2 history; missing previously consumed outputs replenished by real learned recipes, then all eight unchanged consumable effects and three unchanged locale assertions executed. This copy is not reusable final acceptance."
   }
 }
