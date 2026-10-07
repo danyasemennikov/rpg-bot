@@ -82,6 +82,11 @@ def test_preparation_cards_principal_pending_ally_and_accepted_ally(lang):
     from tests.test_pxe1_pvp_membership import prepare
     from game.pvp_world import invite,respond,iso
     from handlers.pvp_group import preparation_or_live_card
+    import json
+    def choices(keyboard):
+        return [json.loads(conn.execute('SELECT payload FROM player_ui_actions WHERE token=?',
+            (value.removeprefix('pvp_member_'),)).fetchone()[0])
+            for value in callbacks(keyboard) if value.startswith('pvp_member_')]
     conn,e = prepare()
     now = int(time.time()*1000)
     conn.execute('UPDATE pvp_engagements SET engagement_started_at=?,engagement_ready_at=? WHERE id=?',(iso(now),iso(now+300000),e))
@@ -93,10 +98,11 @@ def test_preparation_cards_principal_pending_ally_and_accepted_ally(lang):
     row = dict(conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(e,)).fetchone())
     text,keyboard = preparation_or_live_card(row,dict(get_player(1)))
     validate_surface(text,keyboard)
-    assert any(c.startswith('pvp_revoke_') for c in callbacks(keyboard))
+    assert any(choice['operation']=='revoke' and choice['ally_id']==2 for choice in choices(keyboard))
     text,keyboard = preparation_or_live_card(row,dict(get_player(2)))
     validate_surface(text,keyboard)
-    assert f'pvp_reinf_accept_{e}' in callbacks(keyboard)
+    assert {choice['operation'] for choice in choices(keyboard)}=={'accept','decline'}
+    assert all(choice['engagement_id']==e for choice in choices(keyboard))
     assert not any(c.startswith('pvp_escape_') for c in callbacks(keyboard))
     conn.execute('BEGIN IMMEDIATE')
     respond(conn,engagement_id=e,ally_id=2,accepted=True,now_ms=now+1)
@@ -104,6 +110,6 @@ def test_preparation_cards_principal_pending_ally_and_accepted_ally(lang):
     row = dict(conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(e,)).fetchone())
     text,keyboard = preparation_or_live_card(row,dict(get_player(2)))
     validate_surface(text,keyboard)
-    assert f'pvp_leaveprep_{e}' in callbacks(keyboard)
+    assert [choice['operation'] for choice in choices(keyboard)]==['leave']
     assert not any(c.startswith('pvp_join_') for c in callbacks(keyboard))
     conn.close()

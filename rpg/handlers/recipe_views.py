@@ -106,7 +106,7 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
             effects = json.loads(output['stat_bonus_json'] or '{}')
             lines.append(f"❤️ +{effects.get('heal',0)} · 🔵 +{effects.get('mana',0)}")
     xp = crafting_xp_for_success(current_level=state['level'],current_exp=state['exp'],recipe_level=recipe.required_level,material_value=recipe.material_value)
-    lines.append(t('professions.recipe_xp_award',lang,xp=xp)+' · '+t('location.service_craftsmen_guild',lang))
+    lines.append((t('professions.recipe_xp_award',lang,xp=xp) if xp else t('pxe1.profession.no_xp',lang))+' · '+t('pxe1.location.guild',lang))
     if commission:
         if reason:
             lines.append(t('pxe1.tool.'+reason,lang))

@@ -398,6 +398,95 @@ feedback filename ran no tests (0.00s), then the discovered navigation/gather/tr
 files **40 passed, 6.11s**. Journal/feedback/PvP membership/personal results and all
 Chapter variants: **41 passed, 45.80s**. Numeric checks include 0/1/2/5/21.
 
+## 2026-10-07 — history, maintenance, escape and collection recovery
+
+Candidate based on `0d25bc8`. Profession receipts now use six-entry pages,
+actual historical dates, translated timed-gather/tool action labels, and explicit
+unavailable-detail copy for unknown historical action/status IDs. Regional
+Journal retains its eight destinations inside the frozen budget; lists preserve
+all entries through paging and show recorded dates. Retired regional IDs use
+Earlier records rather than raw IDs. Guild labels and zero-XP craft wording use
+canonical locale keys.
+
+An earned journey exposed a real production gap: tier-one replacement excluded
+Aster because a regional-only hub helper was used. Replacement and its controls
+now share the exact six safe build hubs; six menu-to-commit/replay cases prove
+12 gold, full 60 durability and no duplicate debit.
+
+Successful preparation escape writes recovery facts for principals, accepted
+allies and pending invitees in the same transaction. Unseen invitees receive a
+localized closure, delivery failures retain pending facts, and successful retry
+acknowledges once. Escape at the deadline reports expiry and locks combat without
+claiming a roll or creating an escape receipt.
+
+Startup validates current active snapshots before assigning ownership. Frozen
+reward plans and legacy combat are preserved. Current live fights reserve all
+living committed actors in stable roster-lock order; later overlaps are locally
+quarantined without rewriting receipts or resources. Unstarted commitments then
+reserve actors in stable preparation order. Only an overlapping accepted ally
+is expired where both principals remain valid. Repeat recovery is idempotent.
+
+Generic combat audit: LiveCombatRuntime has no actor-count cap. Tests cover
+3/7 and 17/23 side rosters, stable complete batches, independently defeated
+actors, timeout order and resolve-once behavior. A nine-actor actual PvE journey
+covers formation, authorization, resolution and T1/T2 victory settlement; all
+nine recipients release correctly and replay does not grant again. Target and
+detail pages cover 23 enemies and 17 allies in ru/en/es without changing combat
+state or deadlines. The two-per-side checks remain solely in PXE1 PvP policy.
+Historical version-zero PvP retains principal-pair authorization and terminal
+winner/loser ownership by contract. Single-target fallback indices, source anchor
+indices and bounded summary representatives are not roster caps; full actor
+resolution and detail navigation iterate collections.
+
+Focused evidence (separate runs, not a combined acceptance total):
+
+- Existing profession/RAV fixtures initially exposed obsolete grouping, recipe
+  ingredient routing and XP-policy assumptions: 4 failed / 25 passed, 5.92s;
+  then 1 failed / 37 passed, 7.62s; 1 failed / 43 passed, 8.64s;
+  1 failed / 43 passed, 8.54s. Corrected fixtures preserve actual ingredient
+  navigation and exact clipped policy-2 XP; **59 passed, 12.92s**.
+- Foundation/navigation/profession/regional history: **56 passed, 9.46s**.
+- Escape unseen-invitee retry: **26 passed, 6.03s**.
+- Nine-actor fixture initially expected arrival rather than canonical order:
+  1 failed / 17 passed, 5.50s; corrected **5 passed, 1.91s**.
+- Large roster UI and historical profession labels: **16 passed, 4.95s**.
+- Activity recovery/schema/travel: **40 passed, 7.22s**.
+- Duplicate ownership plus escape/feedback: **42 passed, 9.28s**.
+- Legacy transactions/tools/regional UI: 2 failed / 27 passed, 6.81s;
+  old instant-gather fixtures were replaced with explicit catalogue-one receipt
+  replay and current no-instant-yield session assertions. Corrected transaction
+  and regional-history suite: **15 passed, 6.92s**.
+- Catalogue-one craft XP replay plus current XP/catalogue: **22 passed, 10.27s**.
+
+Earned profession/RAV journey reconciliation is still running. It uses finite
+SHA-derived sessions, real wear, repairs/replacements, physical source visits,
+paid commissions, paid recipe learning and policy-2 crafts. No materials, gold,
+knowledge or progression is injected. Initial runs failed at 12.62s (Aster
+replacement), 13.68s (tier-two bootstrap) and 407.63s (repair consumed previously
+collected ingredients). Production replacement was fixed; the journey now stages
+all 20 tools and rechecks its full ingredient set after maintenance. The current
+run is not yet acceptance evidence. Future tests share one current-run, hash-
+verified earned checkpoint; old PEV1 checkpoint hashes cannot substitute for PXE1.
+
+
+Further focused evidence: after validating saved snapshots before overlap
+selection, quarantine **24 passed, 13.68s**. All 25 discovered PXE1 files ran
+**3 failed / 274 passed, 123.67s**: three local-surface fixtures expected obsolete
+raw PvP callbacks. They now inspect the actor-bound immutable membership
+payloads; local surfaces/membership/quarantine **57 passed, 27.74s**.
+
+Equipment catalogue pages now contain six entries. Category switching, receipts,
+clear-goal and the existing gear-goal pin live behind More with two-column rows.
+Tracked pursuits continues to show pinned regional projects and the active board
+contract as frozen; gear pin mechanics remain accessible through Inventory.
+Affected inventory/metadata/transition run exposed five older fixtures skipping
+the first content row and expecting obsolete category/expanded-detail layout:
+**5 failed / 32 passed, 23.08s**. Fixtures now read all emitted content rows,
+canonical Gear routes and the actual More detail layer, retaining cross-model
+exclusivity and enhancement/secondary metadata assertions. Catalogue controls,
+gear-goal pin callback, inventory and transition: **33 passed, 24.87s**.
+
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

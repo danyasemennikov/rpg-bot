@@ -111,3 +111,17 @@ def test_t1_no_repair_and_ordinary_integer_formula():
         repair_costs(1,0)
     assert repair_costs(2,24)=={'materials':{'wood_common':4,'iron_ore':2,'coal':1},'gold':10,'restored':96}
     assert repair_costs(4,240)['gold']==0
+
+
+@pytest.mark.parametrize('hub',['capital_city','hub_westwild','hub_frostspine','hub_ashen_ruins','hub_mireveil','hub_sunscar'])
+def test_t1_replacement_service_covers_all_six_safe_hubs(hub):
+    from handlers.activities import tool_card
+    conn=prepare(1,0)
+    conn.execute('UPDATE players SET location_id=? WHERE telegram_id=1',(hub,))
+    conn.commit();conn.close()
+    _,keyboard=tool_card(dict(database.get_player(1)),'mining')
+    callback=next(b.callback_data for row in keyboard.inline_keyboard for b in row if b.callback_data.startswith('px:replace:'))
+    result=commit_tool_maintenance(1,action_token=callback.removeprefix('px:replace:'),replace=True)
+    assert result['status']=='replaced' and result['gold_delta']==-12
+    assert result['details']['tool']['durability']==60
+    assert commit_tool_maintenance(1,action_token=callback.removeprefix('px:replace:'),replace=True)['recovered']

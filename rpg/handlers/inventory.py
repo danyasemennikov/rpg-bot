@@ -818,10 +818,7 @@ def build_field_catalog(player: dict, category: str = 'weapon', page: int = 0) -
     lines = [t('gear.catalog_title', lang), t('gear.catalog_intro', lang), '',
              t('gear.goal_current', lang, name=get_item_name(goal, lang)) if goal else t('gear.goal_none', lang),
              t('gear.page', lang, page=view['page'] + 1, pages=view['page_count'])]
-    rows = [[
-        InlineKeyboardButton(t(f'gear.category_{key}', lang), callback_data=f'inv_cat_{key}_0')
-        for key in ('weapon', 'armor', 'offhand', 'accessories')
-    ]]
+    rows = []
     for item_id in view['item_ids']:
         index = FIELD_ITEM_IDS.index(item_id)
         marker = '🎯 ' if goal == item_id else ''
@@ -836,12 +833,34 @@ def build_field_catalog(player: dict, category: str = 'weapon', page: int = 0) -
         nav.append(InlineKeyboardButton('▶️', callback_data=f"inv_cat_{view['category']}_{view['page'] + 1}"))
     if nav:
         rows.append(nav)
-    if goal:
-        rows.append([InlineKeyboardButton(t('gear.goal_clear_btn', lang), callback_data=f"inv_gclear_{view['category']}_{view['page']}")])
-    rows.append([InlineKeyboardButton(t('gear.refresh_btn', lang), callback_data=f"inv_cat_{view['category']}_{view['page']}")])
-    rows.append([InlineKeyboardButton(t('gear.receipts_btn', lang), callback_data='inv_receipts')])
-    rows.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data='inv_tab_weapon')])
-    return '\n'.join(lines), InlineKeyboardMarkup(rows)
+    rows.append([InlineKeyboardButton(t('pxe1.common.more',lang),callback_data=f"inv_cmore_{view['category']}_{view['page']}"),
+                 InlineKeyboardButton(t('gear.back_btn', lang), callback_data='inv_tab_weapon')])
+    keyboard=InlineKeyboardMarkup(rows)
+    from game.player_ui import validate_surface
+    validate_surface('\n'.join(lines),keyboard,list_view=True)
+    return '\n'.join(lines),keyboard
+
+
+def build_field_catalog_controls(player,category='weapon',page=0):
+    from game.regional_adventures import issue_regional_action,list_pins
+    from game.player_ui import validate_surface
+    lang=player.get('lang','ru')
+    categories=[InlineKeyboardButton(t(f'gear.category_{key}',lang),callback_data=f'inv_cat_{key}_0')
+                for key in ('weapon','armor','offhand','accessories')]
+    rows=[categories[:2],categories[2:]]
+    if get_equipment_goal(player['telegram_id']):
+        pinned=any(pin['owner_kind']=='gear' and pin['owner_id']=='current' for pin in list_pins(player['telegram_id']))
+        token=issue_regional_action(player['telegram_id'],'journal','pin',
+            pin={'owner_kind':'gear','owner_id':'current','remove':pinned})
+        actions=[InlineKeyboardButton(t('gear.goal_clear_btn',lang),callback_data=f'inv_gclear_{category}_{page}')]
+        if token: actions.append(InlineKeyboardButton(t('rav1.actions.unpin' if pinned else 'rav1.actions.pin',lang),callback_data='rv:a:'+token))
+        rows.append(actions)
+    rows.append([InlineKeyboardButton(t('gear.receipts_btn',lang),callback_data='inv_receipts'),
+                 InlineKeyboardButton(t('gear.back_btn',lang),callback_data=f'inv_cat_{category}_{page}')])
+    text=t('gear.catalog_title',lang)
+    keyboard=InlineKeyboardMarkup(rows)
+    validate_surface(text,keyboard)
+    return text,keyboard
 
 
 def build_field_catalog_detail(player: dict, item_id: str, category: str, page: int) -> tuple:
@@ -1087,6 +1106,16 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     if data == 'inv_catalog':
         text, keyboard = build_field_catalog(p, 'weapon', 0)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('inv_cmore_'):
+        parts=data.split('_')
+        if len(parts)!=4 or not parts[3].isdigit() or parts[2] not in {'weapon','armor','offhand','accessories'}:
+            await query.answer(t('gear.state_changed',lang),show_alert=True)
+            return
+        text,keyboard=build_field_catalog_controls(dict(p),parts[2],int(parts[3]))
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
         await query.answer()
         return
 

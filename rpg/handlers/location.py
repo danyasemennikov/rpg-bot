@@ -1774,10 +1774,21 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         except ActionRejected:
             await query.answer(t('location.pvp_not_allowed',lang),show_alert=True)
             return
-        if state == 'escaped':
-            await query.answer(t('location.pvp_escape_success', lang), show_alert=True)
+        rolled = engagement_row['world_model_version'] == 0
+        if engagement_row['world_model_version'] == 1:
+            conn = get_connection()
+            try:
+                receipt = conn.execute('SELECT result_json FROM economy_action_receipts WHERE player_id=? AND request_id=? AND action_kind=?',
+                    (user.id, 'ui:'+parts[1], 'pvp_prep_escape_pxe1')).fetchone()
+                rolled = bool(receipt and json.loads(receipt['result_json']).get('rolled'))
+            finally:
+                conn.close()
+        if rolled and state == 'escaped':
+            await query.answer(t('pxe1.encounter.pvp_escape_success', lang), show_alert=True)
+        elif rolled:
+            await query.answer(t('pxe1.encounter.pvp_escape_failed', lang), show_alert=True)
         else:
-            await query.answer(t('location.pvp_escape_fail', lang), show_alert=True)
+            await query.answer(t('pxe1.combat.turn_expired', lang), show_alert=True)
         location = get_location(get_player(user.id)['location_id'])
         refreshed_player = dict(get_player(user.id))
         text, keyboard = _build_location_message_with_snapshot(

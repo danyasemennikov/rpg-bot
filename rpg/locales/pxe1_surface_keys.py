@@ -109,6 +109,7 @@ ALIASES.update({
     'location.services':'pxe1.local_categories.services', 'location.exits':'pxe1.local_categories.exits',
     'location.nothing_actionable':'pxe1.local_empty', 'location.more_nearby':'pxe1.local_categories.more',
     'location.current_location':'location.title',
+    'location.guild':'keyboard.service_craftsmen_guild',
     'map.world':'pxe1.world_map', 'map.route_preview':'pxe1.route_preview',
     'map.no_known_route':'location.long_route_unknown', 'map.source_lead':'pxe1.source_map_hint',
     'travel.start':'pxe1.start_travel', 'travel.stop':'pxe1.stop', 'travel.remaining':'pxe1.remaining',

@@ -12,6 +12,35 @@ from handlers.inventory_views import CATEGORIES,category_card
 
 
 @pytest.mark.parametrize('lang',['ru','en','es'])
+def test_catalog_pages_and_more_preserve_categories_goal_pin_and_receipts(lang):
+    from game.gear_ui import catalog_page
+    from game.gear_progression import set_equipment_goal
+    from game.regional_adventures import list_pins
+    from handlers.regional import handle_regional_buttons
+    player=dict(get_player(1));player['lang']=lang
+    conn=get_connection();conn.execute('UPDATE players SET lang=? WHERE telegram_id=1',(lang,));conn.commit();conn.close()
+    assert set_equipment_goal(1,'field_sword_1h')
+    query=SimpleNamespace(from_user=SimpleNamespace(id=1),data='inv_catalog',answer=AsyncMock(),edit_message_text=AsyncMock())
+    context=SimpleNamespace(user_data={})
+    asyncio.run(handle_inventory_buttons(SimpleNamespace(callback_query=query),context))
+    text=query.edit_message_text.call_args.args[0];kb=query.edit_message_text.call_args.kwargs['reply_markup']
+    validate_surface(text,kb,list_view=True)
+    buttons=[b for row in kb.inline_keyboard for b in row]
+    assert len([b for b in buttons if b.callback_data.startswith('inv_citem_')])==6
+    more=next(b.callback_data for b in buttons if b.callback_data.startswith('inv_cmore_'))
+    query.data=more
+    asyncio.run(handle_inventory_buttons(SimpleNamespace(callback_query=query),context))
+    text=query.edit_message_text.call_args.args[0];kb=query.edit_message_text.call_args.kwargs['reply_markup']
+    validate_surface(text,kb)
+    buttons=[b for row in kb.inline_keyboard for b in row]
+    assert {'inv_cat_weapon_0','inv_cat_armor_0','inv_cat_offhand_0','inv_cat_accessories_0','inv_receipts','inv_gclear_weapon_0'}<={b.callback_data for b in buttons}
+    query.data=next(b.callback_data for b in buttons if b.callback_data.startswith('rv:a:'))
+    asyncio.run(handle_regional_buttons(SimpleNamespace(callback_query=query),context))
+    assert any(pin['owner_kind']=='gear' and pin['owner_id']=='current' for pin in list_pins(1))
+    assert catalog_page('weapon',1)['page']==1
+
+
+@pytest.mark.parametrize('lang',['ru','en','es'])
 def test_similar_gear_rolls_are_distinct_and_more_keeps_all_actions(lang):
     import json
     from game.gear_instances import create_gear_instance

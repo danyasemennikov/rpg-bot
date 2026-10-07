@@ -75,18 +75,29 @@ def recover_activity_overlaps(conn,*,now_ms):
 def _recover_combat_preparation_overlaps(conn,*,now_ms):
     """An existing live fight owns its actors before unstarted commitments."""
     import json
-    from game.pve_live import pve_world_phase,_interrupt_pxe1_formation
-    from game.pvp_world import cancel_preparation,iso
+    from game.pve_live import pve_world_phase,_interrupt_pxe1_formation,_quarantine_pxe1_active_encounter,_validate_pxe1_active_state
+    from game.pvp_world import cancel_preparation,iso,milliseconds
+    from game.pvp_group_runtime import quarantine_live_group,validate_live_group
+    from game.build_contract import RULES_VERSION
     from game.player_experience_schema import _recovery_notice
     if not conn.in_transaction:
         raise RuntimeError('activity recovery requires a caller-owned writer')
     live_actors=set()
+    live_candidates=[]
     for row in conn.execute("SELECT * FROM pve_encounters WHERE status IN ('active','resolving_victory')").fetchall():
         live=(row['status']=='resolving_victory' or row['runtime_started_ms'] is not None
               or row['lifecycle_version']==0 and pve_world_phase(conn,row['encounter_id'])=='active')
         if live:
-            live_actors.update(r['player_id'] for r in conn.execute(
-                "SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(row['encounter_id'],)))
+            members={r['player_id'] for r in conn.execute(
+                "SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(row['encounter_id'],))}
+            if row['status']=='resolving_victory' or row['lifecycle_version']!=1 or row['rules_version']!=RULES_VERSION:
+                live_actors.update(members)
+            else:
+                try: _validate_pxe1_active_state(row)
+                except ValueError as exc:
+                    _quarantine_pxe1_active_encounter(conn,row,now_ms=now_ms,reason=str(exc))
+                    continue
+                live_candidates.append((int(row['runtime_started_ms'] or 0),'pve',row['encounter_id'],row,members))
     for row in conn.execute("SELECT * FROM pvp_engagements WHERE engagement_state IN ('active','converted_to_battle')").fetchall():
         try:
             context=json.loads(row['reason_context'])
@@ -101,13 +112,43 @@ def _recover_combat_preparation_overlaps(conn,*,now_ms):
         if row['world_model_version']==1:
             members.difference_update(r['player_id'] for r in conn.execute(
                 'SELECT player_id FROM pvp_participant_settlements_pxe1 WHERE engagement_id=?',(row['id'],)))
-        live_actors.update(members)
+        if row['world_model_version']!=1 or row['engagement_state']!='converted_to_battle' or row['rules_version']!=RULES_VERSION:
+            live_actors.update(members)
+        else:
+            try: validate_live_group(conn,row)
+            except ActionRejected as exc:
+                quarantine_live_group(conn,row,now_ms=now_ms,reason=str(exc))
+                continue
+            live_candidates.append((int(row['roster_locked_ms'] or 0),'pvp',str(row['id']),row,members))
+    # A frozen reward plan and legacy authority are preserved. Among current
+    # live fights, the earliest committed roster keeps ownership of its actors.
+    for _,kind,ref,row,members in sorted(live_candidates,key=lambda item:item[:3]):
+        if members & live_actors:
+            if kind=='pve':
+                _quarantine_pxe1_active_encounter(conn,row,now_ms=now_ms,reason='activity_overlap')
+            else:
+                quarantine_live_group(conn,row,now_ms=now_ms,reason='activity_overlap')
+        else:
+            live_actors.update(members)
+    preparations=[]
     for row in conn.execute("SELECT encounter_id FROM pve_encounters WHERE status='active' AND lifecycle_version=1 AND runtime_started_ms IS NULL").fetchall():
+        full=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(row['encounter_id'],)).fetchone()
         members={r['player_id'] for r in conn.execute(
             "SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(row['encounter_id'],))}
-        if members & live_actors:
-            _interrupt_pxe1_formation(conn,row['encounter_id'],now_ms=now_ms,reason='activity_overlap')
+        try: started=int(full['formation_deadline_ms'])-12000
+        except (ValueError,TypeError): started=now_ms
+        preparations.append((started,'pve',row['encounter_id'],full,members))
     for row in conn.execute("SELECT * FROM pvp_engagements WHERE world_model_version=1 AND engagement_state='pending'").fetchall():
+        try: started=milliseconds(row['engagement_started_at'])
+        except (ValueError,TypeError): started=now_ms
+        preparations.append((started,'pvp',str(row['id']),row,set()))
+    for _,kind,ref,row,members in sorted(preparations,key=lambda item:item[:3]):
+        if kind=='pve':
+            if members & live_actors:
+                _interrupt_pxe1_formation(conn,ref,now_ms=now_ms,reason='activity_overlap')
+            else:
+                live_actors.update(members)
+            continue
         if {row['attacker_id'],row['defender_id']} & live_actors:
             cancel_preparation(conn,row,reason='activity_overlap',now_ms=now_ms)
             continue
@@ -116,3 +157,6 @@ def _recover_combat_preparation_overlaps(conn,*,now_ms):
                 conn.execute("UPDATE pvp_engagement_reinforcements SET status='expired',responded_at=? WHERE id=?",(iso(now_ms),ally['id']))
                 conn.execute('UPDATE pvp_engagements SET state_revision=state_revision+1 WHERE id=?',(row['id'],))
                 _recovery_notice(conn,ally['ally_id'],domain='pvp',ref=row['id'],reason='activity_overlap',now_ms=now_ms)
+        live_actors.update((row['attacker_id'],row['defender_id']))
+        live_actors.update(r['ally_id'] for r in conn.execute(
+            "SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1 AND status='accepted'",(row['id'],)))

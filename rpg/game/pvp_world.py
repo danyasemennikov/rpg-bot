@@ -356,8 +356,13 @@ def attempt_escape(conn, *, engagement_id, actor_id, token, now_ms):
         raise ActionRejected('stale_action')
     success = escape_roll(row['combat_seed'], token)
     if success:
+        recipients={row['attacker_id'],row['defender_id'],*(r['ally_id'] for r in conn.execute(
+            "SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1 AND status IN ('pending','accepted')",(engagement_id,)))}
         conn.execute("UPDATE pvp_engagements SET engagement_state='escaped',state_revision=state_revision+1 WHERE id=?", (engagement_id,))
         conn.execute("UPDATE pvp_engagement_reinforcements SET status='expired',responded_at=? WHERE engagement_id=? AND membership_version=1 AND status IN ('pending','accepted')", (iso(now_ms), engagement_id))
+        from game.player_experience_schema import _recovery_notice
+        for recipient in sorted(recipients):
+            _recovery_notice(conn,recipient,domain='pvp',ref=engagement_id,reason='escaped',now_ms=now_ms)
         state = 'escaped'
     else:
         state, _ = lock_preparation(conn, engagement_id=engagement_id, now_ms=now_ms, failed_escape=True)

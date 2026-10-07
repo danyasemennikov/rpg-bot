@@ -163,6 +163,8 @@ def tool_list(player):
 
 
 def tool_card(player,profession):
+    from game.build_contract import SAFE_BUILD_HUBS
+    from game.locations import resolve_location_id
     from game.profession_tools import TOOL_NAMES,get_tool,repair_quote
     from game.locations import get_location
     conn = get_connection()
@@ -187,7 +189,7 @@ def tool_card(player,profession):
             payload = encoded(quote)
             token = issue_actions(player['telegram_id'],'tool_repair_pxe1',[payload])[payload]
             rows.append([InlineKeyboardButton(t('pxe1.tool.assisted_repair' if quote['repair_mode']=='assisted' else 'pxe1.tool.repair',lang),callback_data='px:repair:'+token)])
-    elif tool['tier']==1 and location.get('is_regional_safe_hub'):
+    elif tool['tier']==1 and resolve_location_id(player['location_id']) in SAFE_BUILD_HUBS:
         quote = {'schema_version':1,'profession_key':profession,'tool_revision':tool['revision'],'gold':12}
         payload = encoded(quote)
         token = issue_actions(player['telegram_id'],'tool_replace_pxe1',[payload])[payload]

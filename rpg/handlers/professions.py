@@ -91,13 +91,26 @@ def _peaceful_guild_access(player_id: int) -> bool:
 def _receipt_action_label(receipt: dict, lang: str) -> str:
     if receipt.get('action_kind')=='combat_order_ack_pxe1':
         return t('pxe1.combat.order_label',lang)
-    return t('professions.action_' + str(receipt.get('action_kind') or 'unknown'), lang)
+    key={'gather_tick_pxe1':'pxe1.gather.collecting',
+         'tool_craft_pxe1':'pxe1.profession.craft_one', 'tool_commission_pxe1':'pxe1.tool.commission',
+         'tool_repair_pxe1':'pxe1.tool.repair','tool_replace_pxe1':'pxe1.tool.replace'}.get(receipt.get('action_kind'))
+    return _historical_label(key or 'professions.action_'+str(receipt.get('action_kind') or 'unknown'),lang)
+
+
+def _historical_label(key,lang):
+    from game.i18n import _load_lang
+    from locales.pxe1_surface_keys import value_at
+    try: return value_at(_load_lang(lang),key)
+    except (KeyError,TypeError,ValueError): return t('pxe1.common.unknown_historical',lang)
 
 
 def _receipt_status_label(receipt: dict, lang: str) -> str:
     if receipt.get('action_kind')=='combat_order_ack_pxe1':
         return t('pxe1.combat.order_ack',lang)
-    return t('professions.' + str(receipt.get('status') or 'unknown'), lang)
+    status=receipt.get('status')
+    key=('pxe1.status.'+status if status in {'running','completed','cancelled','interrupted','broken'} else
+         'pxe1.gather.locked_result' if status in {'repaired','replaced'} else 'professions.'+str(status or 'unknown'))
+    return _historical_label(key,lang)
 
 
 def _receipt_list_label(receipt: dict, lang: str) -> str:
@@ -356,10 +369,10 @@ def build_receipts(player: dict, page: int = 0):
         ).fetchone()['count'])
     finally:
         conn.close()
-    pages = max(1, ceil(total / 5))
+    pages = max(1, ceil(total / PAGE_SIZE))
     page = min(max(0, int(page)), pages - 1)
-    values = list_receipts(player_id, page=page, page_size=5)
-    receipts, has_next = values[:5], len(values) > 5
+    values = list_receipts(player_id, page=page, page_size=PAGE_SIZE)
+    receipts, has_next = values[:PAGE_SIZE], len(values) > PAGE_SIZE
     payloads = [str(receipt['request_id']) for receipt in receipts]
     tokens = issue_actions(player_id, 'receipt', payloads) if payloads else {}
     lines = [t('professions.receipts', lang)]
@@ -375,13 +388,18 @@ def build_receipts(player: dict, page: int = 0):
     if nav:
         rows.append(nav)
     rows.append([InlineKeyboardButton(t('professions.back', lang), callback_data='pe_o:0')])
-    return '\n'.join(lines), _kb(rows)
+    from game.player_ui import validate_surface
+    keyboard=_kb(rows)
+    validate_surface('\n'.join(lines),keyboard,list_view=True)
+    return '\n'.join(lines), keyboard
 
 
 def _receipt_lines(receipt: dict, lang: str) -> list[str]:
     lines = [t('professions.receipt_detail', lang),
              f"{escape(_receipt_action_label(receipt, lang))} · {escape(_receipt_status_label(receipt, lang))}",
              t('professions.gold_result', lang, delta=receipt.get('gold_delta', 0), after=receipt.get('gold_after', 0))]
+    if receipt.get('created_at'):
+        lines.insert(1,escape(str(receipt['created_at'])[:16]))
     for key in ('consumed', 'granted'):
         values = receipt.get(key) or []
         lines.append(t(f'professions.receipt_{key}', lang))

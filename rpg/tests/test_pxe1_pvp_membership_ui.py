@@ -25,6 +25,26 @@ def bot():
 
 
 @pytest.mark.parametrize('lang',['ru','en','es'])
+def test_escape_at_deadline_reports_expiry_without_claiming_a_roll(lang):
+    from game.action_receipts import issue_actions
+    from game.pvp_world import encoded
+    from handlers.location import handle_location_buttons
+    conn,e=prepare()
+    conn.execute('UPDATE players SET lang=?',(lang,));conn.commit()
+    payload=encoded({'schema_version':1,'catalog_version':2,'engagement_id':e,'state_revision':1})
+    token=issue_actions(1,'pvp_prep_escape',[payload])[payload]
+    q=query(1,f'pvp_escape_{e}_{token}')
+    context=SimpleNamespace(user_data={},bot=bot())
+    with patch('time.time',return_value=1300),patch('game.pvp_live._utc_now',return_value=datetime.fromtimestamp(1300,timezone.utc)):
+        asyncio.run(handle_location_buttons(SimpleNamespace(callback_query=q),context))
+    assert q.answer.call_args.args[0]==t('pxe1.combat.turn_expired',lang)
+    assert conn.execute('SELECT engagement_state FROM pvp_engagements WHERE id=?',(e,)).fetchone()[0]=='converted_to_battle'
+    assert not conn.execute('SELECT 1 FROM economy_action_receipts WHERE request_id=?',('ui:'+token,)).fetchone()
+    assert conn.execute('SELECT used FROM player_ui_actions WHERE token=?',(token,)).fetchone()[0]==0
+    conn.close()
+
+
+@pytest.mark.parametrize('lang',['ru','en','es'])
 def test_real_invite_accept_leave_callbacks_and_receipt_replay(lang):
     conn,e=prepare()
     conn.execute('UPDATE players SET lang=?',(lang,));conn.commit()
@@ -143,4 +163,50 @@ def test_due_pvp_isolates_invalid_durable_order_and_advances_healthy_engagement(
     assert conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?',(e,)).fetchone()[0]==before
     assert conn.execute("SELECT COUNT(*) FROM combat_turn_results_v1 WHERE encounter_id=?",(str(e),)).fetchone()[0]==0
     assert json.loads(conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?',(second,)).fetchone()[0])['battle']['turn_revision']==2
+    conn.close()
+
+
+@pytest.mark.parametrize('lang',['ru','en','es'])
+def test_escape_closure_recovers_for_unseen_invited_and_accepted_allies(lang):
+    from game.action_receipts import issue_actions
+    from game.pvp_world import attempt_escape,encoded,escape_roll,invite,respond
+    conn,e=prepare()
+    conn.execute('BEGIN IMMEDIATE')
+    invite(conn,engagement_id=e,principal_id=1,ally_id=2,now_ms=1001000)
+    respond(conn,engagement_id=e,ally_id=2,accepted=True,now_ms=1002000)
+    invite(conn,engagement_id=e,principal_id=777,ally_id=3,now_ms=1003000)
+    conn.execute('UPDATE players SET lang=?',(lang,));conn.commit()
+    revision=conn.execute('SELECT state_revision FROM pvp_engagements WHERE id=?',(e,)).fetchone()[0]
+    payload=encoded({'schema_version':1,'catalog_version':2,'engagement_id':e,'state_revision':revision})
+    for _ in range(256):
+        token=issue_actions(1,'pvp_prep_escape',[payload])[payload]
+        if escape_roll('01'*16,token): break
+    assert escape_roll('01'*16,token)
+    before=[tuple(r) for r in conn.execute('SELECT * FROM players ORDER BY telegram_id')]
+    conn.execute('BEGIN IMMEDIATE')
+    result=attempt_escape(conn,engagement_id=e,actor_id=1,token=token,now_ms=1004000)
+    conn.commit()
+    assert result['success']
+    assert before==[tuple(r) for r in conn.execute('SELECT * FROM players ORDER BY telegram_id')]
+    assert {r[0] for r in conn.execute("SELECT player_id FROM player_feedback_events WHERE event_key=?",(f'recovery:pvp:{e}:escaped',))}=={1,2,3,777}
+    assert not conn.execute('SELECT 1 FROM player_pxe1_ui').fetchone()
+    transport=bot()
+    async def fail_one(chat_id,text,**kwargs):
+        assert text==t('pxe1.encounter.pvp_escape_success',lang)
+        if chat_id==2: raise RuntimeError('blocked ally')
+        return SimpleNamespace(message_id=88)
+    transport.send_message.side_effect=fail_one
+    asyncio.run(retry_preparation_delivery(transport))
+    assert conn.execute('SELECT state FROM player_feedback_events WHERE player_id=2 AND event_key=?',(f'recovery:pvp:{e}:escaped',)).fetchone()[0]=='pending'
+    assert not conn.execute('SELECT 1 FROM player_pxe1_ui WHERE player_id=2').fetchone()
+    transport.send_message.side_effect=None
+    asyncio.run(retry_preparation_delivery(transport))
+    assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE event_key=? AND state='pending'",(f'recovery:pvp:{e}:escaped',)).fetchone()[0]==0
+    delivered=transport.send_message.await_count
+    asyncio.run(retry_preparation_delivery(transport))
+    assert transport.send_message.await_count==delivered
+    conn.execute('BEGIN IMMEDIATE')
+    assert attempt_escape(conn,engagement_id=e,actor_id=1,token=token,now_ms=999999999)==result
+    conn.commit()
+    assert conn.execute('SELECT COUNT(*) FROM player_feedback_events WHERE event_key=?',(f'recovery:pvp:{e}:escaped',)).fetchone()[0]==4
     conn.close()

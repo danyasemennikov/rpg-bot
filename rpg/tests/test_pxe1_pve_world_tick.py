@@ -18,6 +18,93 @@ def started():
     return encounter,spawn
 
 
+def test_nine_actor_formation_authorization_resolution_and_settlement():
+    from database import create_player
+    from game.combat_orders import issue_combat_intents
+    from game.pve_live import join_open_world_pve_encounter
+    from game.pve_reward_settlement import get_settlement
+    from tests.test_pxe1_combat_order_replay import consume
+    roster=[1,777,*range(101,108)]
+    for actor in roster[2:]:
+        create_player(actor,'large_party',f'Actor {actor}',
+            dict.fromkeys(('strength','agility','intuition','vitality','wisdom','luck'),10))
+    conn=get_connection()
+    conn.execute("UPDATE players SET location_id='westwild_n1'")
+    conn.commit()
+    migrate_character_builds_v1()
+    encounter,_=prepare()
+    with patch('time.time',return_value=1001):
+        for actor in roster[1:]:
+            assert join_open_world_pve_encounter(encounter_id=encounter,player_id=actor)==(True,'joined')
+    roster=sorted(roster)
+    assert process_due_pve_formations(now_ms=1012000)[0]['player_ids']==roster
+    state,_=load_active_pve_encounter(encounter_id=encounter)
+    assert set(state['participant_states_v1'])=={str(actor) for actor in roster}
+    enemy=state['enemy_states_v1'][0]['unit_id']
+    # Arrival order differs from the immutable formation order.
+    for actor in reversed(roster):
+        with patch('time.time',return_value=1013):
+            token=next(iter(issue_combat_intents(actor,encounter_id=encounter,
+                turn_revision=state['turn_revision'],deadline_at=state['side_deadline_at'],
+                actions=[{'kind':'basic_attack','target_info':{'id':enemy}}]).values()))
+        assert consume(actor,token,1013)['accepted']
+    with patch('game.pve_live._utc_now',return_value=datetime.fromtimestamp(1013,timezone.utc)):
+        result=process_due_pve_world_sides(now_ms=1013000,encounter_id=encounter)
+    assert result[0]['phase']=='victory'
+    settlement=get_settlement(encounter)
+    assert settlement['status']=='applied'
+    assert settlement['plan']['eligible_recipient_ids']==roster
+    assert conn.execute('SELECT COUNT(*) FROM pve_encounter_participants WHERE encounter_id=? AND status=?',
+                        (encounter,'victory')).fetchone()[0]==9
+    assert all(not conn.execute('SELECT in_battle FROM players WHERE telegram_id=?',(actor,)).fetchone()[0]
+               for actor in roster)
+    before=[tuple(conn.execute('SELECT exp,gold,hp FROM players WHERE telegram_id=?',(actor,)).fetchone()) for actor in roster]
+    assert process_due_pve_world_sides(now_ms=9999999,encounter_id=encounter)==[]
+    assert before==[tuple(conn.execute('SELECT exp,gold,hp FROM players WHERE telegram_id=?',(actor,)).fetchone()) for actor in roster]
+    conn.close()
+
+
+def test_generic_target_and_detail_pages_cover_twenty_three_enemies_and_seventeen_allies():
+    from copy import deepcopy
+    from database import get_player
+    from game.player_ui import validate_surface
+    from handlers.combat_views import action_card,details_card
+    encounter,_=started()
+    state,_=load_active_pve_encounter(encounter_id=encounter)
+    actor=state['participant_states_v1']['1']
+    state['participant_states_v1']={str(i):{**deepcopy(actor),'actor_id':str(i),'name':f'Actor {i}'} for i in range(1,18)}
+    enemy=state['enemy_states_v1'][0]
+    state['enemy_states_v1']=[{**deepcopy(enemy),'unit_id':f'enemy-{i}'} for i in range(23)]
+    snapshot=deepcopy(state)
+    conn=get_connection()
+    durable=conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0]
+    player=dict(get_player(1))
+    for lang in ('ru','en','es'):
+        player['lang']=lang
+        selected=[]
+        with patch('time.time',return_value=1013):
+            for page in range(4):
+                text,kb=action_card(player,state,'normal',page)
+                validate_surface(text,kb,list_view=True)
+                targets=[b for row in kb.inline_keyboard for b in row if b.callback_data.startswith('battle_v1_')]
+                assert len(targets)==(6 if page<3 else 5)
+                for button in targets:
+                    action=json.loads(conn.execute('SELECT payload FROM player_ui_actions WHERE token=?',
+                        (button.callback_data.removeprefix('battle_v1_'),)).fetchone()[0])
+                    selected.append(action['action']['target_info']['id'])
+            assert selected==[f'enemy-{i}' for i in range(23)]
+            for section,count in (('enemies',23),('allies',17)):
+                pages=[details_card(player,state,section,page) for page in range((count+5)//6)]
+                for text,kb in pages: validate_surface(text,kb,long_detail=True)
+                if section=='allies':
+                    combined='\n'.join(text for text,_ in pages)
+                    assert all(f'Actor {i} ·' in combined for i in range(1,18))
+    assert state==snapshot
+    assert conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0]==durable
+    assert not conn.execute('SELECT 1 FROM combat_orders_v1 WHERE encounter_id=?',(encounter,)).fetchone()
+    conn.close()
+
+
 def test_background_timeout_uses_actual_engine_and_durable_orders_without_context():
     encounter,_ = started()
     with patch('game.pve_live._utc_now',return_value=datetime.fromtimestamp(1027,timezone.utc)):

@@ -96,7 +96,7 @@ def local_entries(player):
     for profession in professions:
         categories['gathering'].append((t('professions.names.'+profession, lang), f'px:gatherpreview:{profession}'))
     service_keys = [('shop', 'location.shop_btn', 'shop'), ('quest_board', 'location.quests_btn', 'quest_board'),
-                    ('craftsmen_guild', 'location.service_craftsmen_guild', 'craftsmen_guild'), ('inn', 'location.inn_btn', 'inn')]
+                    ('craftsmen_guild', 'pxe1.location.guild', 'craftsmen_guild'), ('inn', 'location.inn_btn', 'inn')]
     for service, key, callback in service_keys:
         if service in location.get('services', []):
             categories['services'].append((t(key, lang), callback))

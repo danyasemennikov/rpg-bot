@@ -227,7 +227,9 @@ def commit_tool_maintenance(player_id: int, *, action_token: str, replace: bool=
         profession = quote['profession_key']
         tool = get_tool(conn,player_id,profession)
         if replace:
-            if not (get_location(player['location_id']) or {}).get('is_regional_safe_hub'):
+            from game.build_contract import SAFE_BUILD_HUBS
+            from game.locations import resolve_location_id
+            if resolve_location_id(player['location_id']) not in SAFE_BUILD_HUBS:
                 raise ActionRejected('safe_hub_required')
             if not tool or tool['tier']>1:
                 raise ActionRejected('tool_no_downgrade')

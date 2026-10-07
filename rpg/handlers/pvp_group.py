@@ -313,6 +313,10 @@ async def deliver_preparation_updates(bot,engagement_id,*,skip_player=None,invit
         members=[dict(r) for r in conn.execute('SELECT * FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1',(engagement_id,))]
         recipients={row['attacker_id'],row['defender_id']}
         recipients.update(m['ally_id'] for m in members)
+        closure_facts={r['player_id']:r['event_key'] for r in conn.execute(
+            "SELECT player_id,event_key FROM player_feedback_events WHERE source_kind='pvp' AND source_id=? AND event_key=? AND state='pending'",
+            (str(engagement_id),f'recovery:pvp:{engagement_id}:escaped'))}
+        recipients.update(closure_facts)
         if invited_player: recipients.add(invited_player)
     finally: conn.close()
     for player_id in sorted(recipients):
@@ -322,18 +326,25 @@ async def deliver_preparation_updates(bot,engagement_id,*,skip_player=None,invit
         if row['engagement_state']=='converted_to_battle' and player_id in {row['attacker_id'],row['defender_id'],*(m['ally_id'] for m in members if m['status']=='locked')}: continue
         member=next((m for m in members if m['ally_id']==player_id),None)
         closed=member and member['status'] not in {'pending','accepted'}
-        if closed and (prior.get('surface_ref')!=str(engagement_id) or prior.get('surface_kind') not in {'pvp','pvp_result'}): continue
+        if closed and player_id not in closure_facts and (prior.get('surface_ref')!=str(engagement_id) or prior.get('surface_kind') not in {'pvp','pvp_result'}): continue
         kind='pvp_result' if closed or row['engagement_state']!='pending' else 'pvp'
         revision=1_000_000_000+row['state_revision']
-        if prior.get('surface_kind')==kind and prior.get('surface_ref')==str(engagement_id) and prior.get('surface_revision')==revision: continue
+        if player_id not in closure_facts and prior.get('surface_kind')==kind and prior.get('surface_ref')==str(engagement_id) and prior.get('surface_revision')==revision: continue
         try:
-            if closed:
+            if player_id in closure_facts:
+                lang=get_player(player_id)['lang']
+                text=t('pxe1.encounter.pvp_escape_success',lang)
+                keyboard=InlineKeyboardMarkup([[InlineKeyboardButton(t('pxe1.menu.location',lang),callback_data='px:local:home:0')]])
+            elif closed:
                 lang=get_player(player_id)['lang']
                 text=t('pxe1.membership.'+member['status'],lang)
                 keyboard=InlineKeyboardMarkup([[InlineKeyboardButton(t('keyboard.location',lang),callback_data='px:local:home:0')]])
             else:
                 text,keyboard=preparation_or_live_card(row,dict(get_player(player_id)))
             await present_surface(bot,player_id,text,keyboard,kind=kind,ref=str(engagement_id),revision=revision)
+            if player_id in closure_facts:
+                from game.player_feedback import acknowledge_presented_facts
+                acknowledge_presented_facts(player_id,[closure_facts[player_id]])
         except Exception:
             logging.getLogger(__name__).exception('PvP preparation delivery retry for player %s',player_id)
 
@@ -344,6 +355,9 @@ async def retry_preparation_delivery(bot):
     try:
         ids=[r[0] for r in conn.execute("""SELECT e.id FROM pvp_engagements e
             WHERE e.world_model_version=1 AND (e.engagement_state='pending' OR EXISTS(
+                SELECT 1 FROM player_feedback_events f WHERE f.source_kind='pvp'
+                    AND f.source_id=CAST(e.id AS TEXT) AND f.state='pending'
+                    AND f.event_key='recovery:pvp:'||e.id||':escaped') OR EXISTS(
                 SELECT 1 FROM player_pxe1_ui u WHERE u.surface_kind='pvp'
                     AND u.surface_ref=CAST(e.id AS TEXT) AND u.surface_revision>=1000000000))
             ORDER BY e.id LIMIT 100""")]

@@ -8,6 +8,42 @@ from game.pvp_world import create_preparation,lock_preparation,encoded
 from tests.test_pxe1_pvp_group_runtime import locked,submit
 
 
+@pytest.mark.parametrize('live',[False,True])
+def test_restart_duplicate_pvp_ownership_preserves_earliest_commit_and_all_resources(live):
+    from game.player_activity import recover_activity_overlaps
+    from tests.test_pxe1_pvp_membership import prepare
+    conn,first=prepare()
+    conn.execute('BEGIN IMMEDIATE')
+    if live: lock_preparation(conn,engagement_id=first,now_ms=1300000)
+    state='converted_to_battle' if live else 'pending'
+    conn.execute("UPDATE pvp_engagements SET engagement_state='cancelled' WHERE id=?",(first,))
+    conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id IN (1,777)')
+    second=create_preparation(conn,attacker_id=1,defender_id=777,location_id='westwild_n4',now_ms=1301000,seed='02'*16)
+    if live: lock_preparation(conn,engagement_id=second,now_ms=1601000)
+    conn.execute('UPDATE pvp_engagements SET engagement_state=? WHERE id=?',(state,first))
+    conn.commit()
+    original=tuple(conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(first,)).fetchone())
+    later=conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?',(second,)).fetchone()[0]
+    players=[tuple(r) for r in conn.execute('SELECT * FROM players ORDER BY telegram_id')]
+    receipts=[tuple(r) for r in conn.execute('SELECT * FROM economy_action_receipts')]
+    conn.execute('BEGIN IMMEDIATE')
+    recover_activity_overlaps(conn,now_ms=1602000)
+    conn.commit()
+    assert original==tuple(conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(first,)).fetchone())
+    cancelled=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(second,)).fetchone()
+    assert cancelled['engagement_state']=='cancelled'
+    context=json.loads(cancelled['reason_context'])
+    assert context['terminal_reason']=='activity_overlap'
+    if live: assert context['quarantined_reason_context']==later
+    assert players==[tuple(r) for r in conn.execute('SELECT * FROM players ORDER BY telegram_id')]
+    assert receipts==[tuple(r) for r in conn.execute('SELECT * FROM economy_action_receipts')]
+    assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE source_kind='pvp' AND source_id=?",(str(second),)).fetchone()[0]==2
+    before=tuple(cancelled)
+    conn.execute('BEGIN IMMEDIATE');recover_activity_overlaps(conn,now_ms=1603000);conn.commit()
+    assert before==tuple(conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(second,)).fetchone())
+    conn.close()
+
+
 @pytest.mark.parametrize('corruption',['json','roster','missing_actor','missing_ally','deadline'])
 def test_corrupt_active_pvp_releases_owned_members_preserves_death_and_advances_neighbor(corruption):
     conn,e=locked()

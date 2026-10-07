@@ -65,7 +65,8 @@ def render_feedback(events,lang):
             lines.append(t('pxe1.quest.claimed',lang,gold=payload['reward_gold'],xp=payload['reward_exp']))
         elif kind=='recovery':
             key={'reinvite_required':'pxe1.encounter.pvp_reinvite_required','cancelled':'pxe1.encounter.pvp_cancelled',
-                 'start_failed':'pxe1.encounter.start_failed'}.get(payload.get('reason'),'pxe1.recovery')
+                 'start_failed':'pxe1.encounter.start_failed','escaped':'pxe1.encounter.pvp_escape_success',
+                 'restart':'pxe1.gather.restart_stopped' if event['source_kind']=='gather_session' else 'pxe1.recovery'}.get(payload.get('reason'),'pxe1.recovery')
             lines.append(t(key,lang))
     return '\n'.join(lines),InlineKeyboardMarkup([[InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')]])
 
