@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import database
 from database import get_connection, init_db
 from game.locations import get_location
+from game.regional_schema import ensure_regional_schema
 from handlers.location import INN_REST_COST_GOLD, handle_location_buttons
 from handlers.location import build_inn_message
 
@@ -18,6 +19,7 @@ class InnPhase1Tests(unittest.IsolatedAsyncioTestCase):
         database.DB_PATH = os.path.join(self._tmpdir.name, 'test_game.db')
         init_db()
         conn = get_connection()
+        ensure_regional_schema(conn)
         conn.execute(
             '''
             INSERT INTO players (

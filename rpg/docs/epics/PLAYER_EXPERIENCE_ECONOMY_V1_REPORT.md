@@ -104,7 +104,10 @@ fix that preserves them. There is no destructive down-migration.
 
 ## Validation and limitations
 
-Final automated acceptance is pending. Full suite is NOT RUN. The earned profession
+The first broad attempt on `ce2f51dd5e4c7c45faef107e38657099039ebdc5` completed with
+2186 passed, 276 subtests passed, 5 failed and 40 setup errors. Retained fixture
+repairs pass; the earned gear harness is repaired and a fresh rebuild remains
+required. No final pass is claimed. The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
 No old PEV1 checkpoint substitutes for current PXE1 history. Optional focused-repair

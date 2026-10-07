@@ -667,6 +667,47 @@ in another preliminary run. Final documentation/results and the one Draft remain
 Affected same-location/crafting/travel regression: **28 passed, 6.20s**, using
 `python -m pytest -q tests/test_map_and_long_route_phase1_5.py tests/test_crafting_runtime_phase7.py tests/test_pxe1_travel.py --tb=short`.
 
+The near-final coherent candidate is `ce2f51dd5e4c7c45faef107e38657099039ebdc5`. The exact
+`python -m pytest -q` full run is active, redirected to
+`pxe1-final-broad-pytest.log`, with a fresh earned checkpoint and no reuse override.
+No final result is claimed until this process completes. Code/test blob and tree
+identities are retained in JSON so later evidence-only commits are distinguishable.
+
+The unchanged final broad candidate reported four failures before the earned-history
+setup. Diagnostic reproduction: **4 failed / 11 passed, 5.26s**, using
+`python -m pytest -q tests/test_formation_metadata_rollout_pr2c2.py tests/test_inn_phase1.py --tb=short`.
+Three retained formation mocks reference obsolete equipment reads or omit current
+source reservation fields. The Inn test replaces the autouse database with a private
+one but omits its regional migration. Candidate repairs remain pending until the
+broad process completes; no final pass is claimed.
+
+The proposed four fixture repairs were verified in copies outside the repository:
+**15 passed, 4.02s**. Exact scratch-path command is recorded in JSON. Those copies
+do not change the in-flight `ce2f51d` candidate and are not final acceptance; the
+original test files will be repaired and rerun after the full process completes.
+
+The first exact full command finished: **5 failed / 2186 passed / 40 errors /
+276 subtests passed, 3492.79s (58m12s)** on `ce2f51d`. One earned setup failure
+propagated to all 39 regional branches; those branches did not execute. Funding
+sales consumed future unequipped armor, and the delayed equipment loop then
+expected Equip on its already-equipped surviving weapon. The harness now equips
+each strongest earned piece promptly, verifies its persisted slot and honors
+already-equipped cards. Missing pieces are earned through normal crafts. No
+production combat, funding, progression or equipment rule changed.
+
+The fifth assertion failure assumed every recipe output had an NPC item record.
+The unchanged strict-negative resale test now includes all 83 recipes and treats
+dedicated tool slots as zero-resale outputs, checking their absent inventory item.
+Diagnostic reproduction: **1 failed, 1.19s**. The applied formation/Inn/resale
+regression passes: **16 passed, 5.10s**, using
+`python -m pytest -q tests/test_formation_metadata_rollout_pr2c2.py tests/test_inn_phase1.py tests/test_professions_economy_v1_economy.py --tb=short`.
+
+An attempted whole-copy gear diagnostic could not open the failed database after
+pytest had rotated its temporary directory; it exited before backup or gear actions.
+No partial history is accepted, and the creator changed, so the next profession/RAV
+acceptance must rebuild fresh from registration. Logs retain the failed broad and
+diagnostic results. The final broad command remains required on the repaired candidate.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

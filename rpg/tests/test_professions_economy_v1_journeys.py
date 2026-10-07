@@ -566,17 +566,51 @@ async def _complete_aster_elmor_chapter(
     return history
 
 
+async def _equip_best_earned_piece(journey: ProductionJourney, item_id: str):
+    conn = get_connection()
+    try:
+        row = conn.execute('''SELECT id, equipped_slot FROM gear_instances
+            WHERE telegram_id=? AND base_item_id=?
+            ORDER BY item_tier DESC, (equipped_slot IS NOT NULL) DESC, id DESC LIMIT 1''',
+            (journey.player_id, item_id)).fetchone()
+        piece = dict(row) if row else None
+    finally:
+        conn.close()
+    if not piece:
+        return None
+    if piece['equipped_slot'] is None:
+        _, markup = build_item_detail(journey.player_id, f"g{piece['id']}", 'armor', 'en')
+        callback = next(button.callback_data for row in markup.inline_keyboard for button in row
+                        if button.callback_data and button.callback_data.startswith('inv_gequip_'))
+        await journey.callback(callback, handle_inventory_buttons)
+    conn = get_connection()
+    try:
+        assert conn.execute('SELECT equipped_slot FROM gear_instances WHERE id=? AND telegram_id=?',
+                            (piece['id'], journey.player_id)).fetchone()['equipped_slot'] is not None
+    finally:
+        conn.close()
+    return piece['id']
+
+
 async def _equip_regional_combat_gear(journey: ProductionJourney) -> None:
+    from game.profession_recipes import get_recipe
     await _move(journey, 'capital_city')
     for profession, first, second, regional in (
         ('blacksmith', 'pe_sword_1h_01', 'pe_shield_06', 'pe_sword_1h_12'),
         ('heavy_armor', 'pe_heavy_chest_01', 'pe_heavy_helmet_06', 'pe_heavy_legs_12'),
     ):
-        while _crafting_level(journey.player_id, profession) < 6:
-            await _learn_and_craft(journey, first)
-        while _crafting_level(journey.player_id, profession) < 12:
-            await _learn_and_craft(journey, second)
+        for recipe_id, target in ((first, 6), (second, 12)):
+            item_id = get_recipe(recipe_id).output_spec.item_id
+            while _crafting_level(journey.player_id, profession) < target:
+                await _learn_and_craft(journey, recipe_id)
+                # Equip as soon as earned: later funding sales protect equipped
+                # pieces, but may consume an unequipped future combat loadout.
+                assert await _equip_best_earned_piece(journey, item_id)
+            if not await _equip_best_earned_piece(journey, item_id):
+                await _learn_and_craft(journey, recipe_id)
+                assert await _equip_best_earned_piece(journey, item_id)
         await _learn_and_craft(journey, regional)
+        assert await _equip_best_earned_piece(journey, get_recipe(regional).output_spec.item_id)
     while _crafting_level(journey.player_id, 'alchemy') < 6:
         await _learn_and_craft(journey, 'field_tonic')
     while _crafting_level(journey.player_id, 'alchemy') < 12:
@@ -587,25 +621,9 @@ async def _equip_regional_combat_gear(journey: ProductionJourney) -> None:
         await _learn_and_craft(journey, 'pe_alchemy_health_06')
     for _ in range(5):
         await _learn_and_craft(journey, 'field_mana')
-    conn = get_connection()
-    try:
-        instances = [dict(row) for row in conn.execute('''SELECT id, base_item_id FROM gear_instances
-            WHERE telegram_id=? AND base_item_id IN
-            ('field_sword_1h','field_shield','field_heavy_chest','field_heavy_helmet','field_heavy_legs')
-            ORDER BY item_tier DESC, id DESC''', (journey.player_id,))]
-    finally:
-        conn.close()
-    selected = {}
-    for row in instances:
-        selected.setdefault(row['base_item_id'], row['id'])
     for item_id in ('field_sword_1h', 'field_shield', 'field_heavy_chest', 'field_heavy_helmet', 'field_heavy_legs'):
-        instance_id = selected[item_id]
-        _, markup = build_item_detail(journey.player_id, f'g{instance_id}', 'weapon', 'en')
-        callback = next(
-            button.callback_data for row in markup.inline_keyboard for button in row
-            if button.callback_data and button.callback_data.startswith('inv_gequip_')
-        )
-        await journey.callback(callback, handle_inventory_buttons)
+        instance_id = await _equip_best_earned_piece(journey, item_id)
+        assert instance_id
         _, enhanced_markup = build_item_detail(journey.player_id, f'g{instance_id}', 'weapon', 'en')
         enhance = next((
             button.callback_data for row in enhanced_markup.inline_keyboard for button in row
