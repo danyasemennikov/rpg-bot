@@ -756,12 +756,13 @@ def _prune_expired_forming_encounters(
     try:
         filters = [
             "e.status='active'",
-            "e.lifecycle_version=0",
             "e.anchor_spawn_instance_id IS NOT NULL",
             "s.linked_encounter_id = e.encounter_id",
             "s.state=?",
             "e.created_at <= datetime('now', ?)",
         ]
+        if _table_has_column(conn, 'pve_encounters', 'lifecycle_version'):
+            filters.append('e.lifecycle_version=0')
         params: list[object] = [
             SPAWN_STATE_FORMING,
             f'-{FORMING_ENCOUNTER_TTL_SECONDS} seconds',
@@ -922,12 +923,18 @@ def get_open_world_pve_encounter_detail(*, encounter_id: str) -> dict | None:
         'e.location_id',
         'e.anchor_spawn_instance_id',
         'e.battle_state_json',
-        'e.lifecycle_version',
-        'e.formation_deadline_ms',
-        'e.formation_revision',
-        'e.runtime_started_ms',
         's.state AS spawn_state',
     ]
+    for column, legacy_default in (
+        ('lifecycle_version', '0'),
+        ('formation_deadline_ms', 'NULL'),
+        ('formation_revision', '0'),
+        ('runtime_started_ms', 'NULL'),
+    ):
+        select_fields.append(
+            f'e.{column}' if _table_has_column(conn, 'pve_encounters', column)
+            else f'{legacy_default} AS {column}'
+        )
     if has_spawn_profile_column:
         select_fields.append('s.spawn_profile')
     if has_special_key_column:

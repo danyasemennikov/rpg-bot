@@ -401,7 +401,7 @@ def _region_detail(player: dict, content_id: str) -> tuple[str, list[list[Inline
              t(f"rav1.regions.{content_id}.risk", lang)]
     rows: list[list[InlineKeyboardButton]] = []
     for project in PROJECTS_BY_ID.values():
-        if project.region_id == summary["region_id"] and project.public:
+        if project.region_id == summary["region_id"] and (project.public or get_project_state(player['telegram_id'],project.project_id)):
             rows.append(_button(_title("project", project.project_id, lang), f"rv:d:p:{project.project_id}"))
 
     # Public work is always readable.  Private discoveries become region links

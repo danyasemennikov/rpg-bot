@@ -33,7 +33,8 @@ def _buy_and_equip_bow() -> int:
     result = try_buy_curated_shop_item(
         1, 'capital_city', 1, 'field_bow', action_token=token,
     )
-    assert result == {'ok': True, 'price': 45}
+    assert result['ok'] is True and result['price'] == 45
+    assert result['status'] == 'purchased' and result['gold_delta'] == -45
     instance = _rows(
         "SELECT * FROM gear_instances WHERE telegram_id=1 AND base_item_id='field_bow'",
     )[0]

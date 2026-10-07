@@ -33,7 +33,9 @@ def snapshot():
     return {table: rows(f'SELECT * FROM {table} ORDER BY 1,2') for table in (
         'players', 'inventory', 'gear_instances', 'player_crafting_professions',
         'player_gathering_professions', 'player_contract_objectives', 'player_contract_history',
-        'player_starter_kits', 'player_action_receipts', 'player_ui_actions', 'pve_harvest_claims')}
+        'player_starter_kits', 'player_action_receipts', 'player_ui_actions', 'pve_harvest_claims',
+        'economy_action_receipts','player_profession_tools','player_gathering_sessions',
+        'player_feedback_events','player_travel_sessions','player_location_discovery','player_location_threats')}
 
 
 def grant_then_fail(*args, **kwargs):
@@ -95,23 +97,36 @@ def test_gather_transaction_rolls_back_item_xp_objective_and_receipt_then_retrie
     from game.quest_board import accept_hunt_contract
     assert accept_hunt_contract(player_id=PID, location_id='capital_city', contract_key='chapter_first_watch')[0]
     move('westwild_n1')
-    before = snapshot()
-    with patch('game.gathering_runtime.random.random', return_value=0.0):
-        with patch('game.gathering_runtime.add_gathering_profession_exp', side_effect=RuntimeError('progress failure')):
-            with pytest.raises(RuntimeError):
-                gather_resource(PID, 'herbalism', location_id='westwild_n1', request_id='gather:99')
-        assert snapshot() == before
-        assert gather_resource(PID, 'herbalism', location_id='westwild_n1', request_id='gather:99')['status'] == 'gathered'
-        before = snapshot()
-        replay = gather_resource(PID, 'herbalism', location_id='westwild_n1', request_id='gather:99')
-        assert replay['status'] == 'gathered' and replay['recovered']
-        assert snapshot() == before
-    assert get_gathering_profession_state(PID, 'herbalism')['exp'] == 10
+    from game.gathering_runtime import _source_snapshot,gather_tick_roll,start_gathering_session,commit_gathering_tick
+    source=_source_snapshot('westwild_n1','herbalism')
+    seed=next(f'{n:032x}' for n in range(100000)
+        if (gather_tick_roll(f'{n:032x}',1,source) or {}).get('item_id')=='herb_common')
+    conn=get_connection();conn.execute('BEGIN IMMEDIATE')
+    session=start_gathering_session(conn,PID,'herbalism',request_id='fault-tick',location_id='westwild_n1',now_ms=0,seed=seed)
+    conn.commit()
+    session_id=session['session']['session_id']
+    before=snapshot()
+    with patch('game.gathering_runtime.add_gathering_profession_exp',side_effect=RuntimeError('progress failure')):
+        conn.execute('BEGIN IMMEDIATE')
+        with pytest.raises(RuntimeError):
+            commit_gathering_tick(conn,session_id,now_ms=8000)
+        conn.rollback()
+    assert snapshot()==before
+    conn.execute('BEGIN IMMEDIATE')
+    result=commit_gathering_tick(conn,session_id,now_ms=8000)
+    assert result['granted'][0]['item_id']=='herb_common'
+    conn.commit()
+    before=snapshot()
+    # Duplicate delivery at the same deadline cannot advance the next tick.
+    commit_gathering_tick(conn,session_id,now_ms=8000)
+    conn.commit();conn.close()
+    assert snapshot()==before
+    assert get_gathering_profession_state(PID,'herbalism')['exp']==10
 
 
 def test_craft_locked_missing_materials_rollback_restart_duplicate_and_travel_stale():
     player()
-    grant_item_to_player(PID, 'herb_common', 20, source='test_fixture')
+    grant_item_to_player(PID, 'herb_common', 500, source='test_fixture')
     assert craft_recipe(PID, 'field_mana', {'alchemy': 99}).status == 'profession_level_too_low'
     assert craft_recipe(PID, 'trail_vest').status == 'missing_materials'
     payload = recipe_intent_payload('field_tonic')
@@ -131,8 +146,8 @@ def test_craft_locked_missing_materials_rollback_restart_duplicate_and_travel_st
     move('westwild_n1')
     move('capital_city')
     assert craft_recipe(PID, '', action_token=token).status == 'stale_action'
-    for _ in range(2):
-        assert craft_recipe(PID, 'field_tonic').status == 'crafted'
+    while rows("SELECT level FROM player_crafting_professions WHERE player_id=? AND profession_key='alchemy'",(PID,))[0]['level']<6:
+        assert craft_recipe(PID,'field_tonic').status=='crafted'
     assert craft_recipe(PID, 'field_mana').status == 'crafted'
     assert rows("SELECT level FROM player_crafting_professions WHERE player_id=? AND profession_key='alchemy'", (PID,))[0]['level'] == 6
 
@@ -192,8 +207,11 @@ def test_pending_live_pvp_blocks_crafting_even_without_pve_flag():
     from game.pvp_live import create_live_engagement
     player()
     grant_item_to_player(PID, 'herb_common', 3, source='test_fixture')
-    create_live_engagement(attacker=dict(get_player(PID)), defender=dict(get_player(1)),
-                           location_id='capital_city', illegal_aggression=False)
+    conn=get_connection()
+    conn.execute("UPDATE players SET location_id='westwild_n4',level=20 WHERE telegram_id IN (?,1)",(PID,))
+    conn.commit();conn.close()
+    create_live_engagement(attacker=dict(get_player(PID)),defender=dict(get_player(1)),
+                           location_id='westwild_n4',illegal_aggression=False)
     before = snapshot()
     assert get_player(PID)['in_battle'] == 0
     assert craft_recipe(PID, 'field_tonic').status == 'in_battle'
@@ -215,18 +233,26 @@ def test_shop_purchase_receipt_and_delivery_rollback():
 
 
 def test_travel_discovery_failure_keeps_previous_location_and_revision():
-    import asyncio
-    from unittest.mock import AsyncMock
-    from tests.test_playable_alpha_v1 import Journey, PLAYER
-    from handlers.location import handle_location_buttons
-    create_player(PLAYER, 'traveler', 'Traveler', dict(strength=4, vitality=4, agility=1, intuition=1, wisdom=1, luck=1))
-    before = snapshot()
-    with patch('handlers.location.asyncio.sleep', new=AsyncMock()), patch(
-        'handlers.location.ensure_player_location_discovered', side_effect=RuntimeError('discovery failure')
-    ):
+    from game.travel_runtime import preview_travel,start_travel_session,advance_travel_edge
+    player()
+    conn=get_connection();conn.execute('BEGIN IMMEDIATE')
+    session=start_travel_session(conn,PID,preview_travel(conn,PID,'westwild_n1'),request_id='fault-arrival',now_ms=0)
+    conn.commit()
+    before=snapshot()
+    conn.execute('BEGIN IMMEDIATE')
+    with patch('database.ensure_player_location_discovered',side_effect=RuntimeError('discovery failure')):
         with pytest.raises(RuntimeError):
-            asyncio.run(Journey('en').callback('goto_westwild_n1', handle_location_buttons))
-    assert snapshot() == before
+            advance_travel_edge(conn,session['session_id'],now_ms=15000)
+    conn.rollback()
+    assert snapshot()==before
+    conn.execute('BEGIN IMMEDIATE')
+    assert advance_travel_edge(conn,session['session_id'],now_ms=15000)['status']=='arrived'
+    conn.commit()
+    after=snapshot()
+    advance_travel_edge(conn,session['session_id'],now_ms=15000)
+    conn.commit();conn.close()
+    assert snapshot()==after
+    assert get_player(PID)['location_id']=='westwild_n1'
 
 
 def test_old_abandon_token_cannot_remove_a_new_contract():

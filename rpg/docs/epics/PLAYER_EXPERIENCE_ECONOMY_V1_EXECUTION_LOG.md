@@ -525,6 +525,65 @@ preserves the recipe reserve. The corrected current-run shared profession/RAV
 checkpoint is being rebuilt from registration and all four actual Chapter claims;
 no prior PEV1 database or progression grant substitutes for that history.
 
+## 2026-10-07 — current UX and adjacent transaction reconciliation
+
+Candidate based on `a819e7b`; source changes and fixtures were uncommitted during
+these runs. Skill Details retain all original effect descriptions and current/next
+rank structured profiles. The compact board retains hunter rank/points. Accepted
+private regional projects remain reachable after unpinning; fresh characters still
+see no hidden project link. Catalogue pages use six entries and bounded UTF-16 cards.
+
+Adjacent fixtures now follow actual nested routes for assignments, recipe branches,
+More controls, services and history. Real PvE formations wait to their saved deadline;
+legacy TTL/read presentation fixtures identify their historical authority explicitly.
+Partial old PvE detail schemas use read-only default projections with no hot DDL.
+Denied creation cannot fall through an empty encounter ID into legacy victory rewards.
+Gathering fault injection verifies item, XP, objective, tool wear, session accounting,
+feedback and receipt rollback in the real tick writer; arrival failure verifies the
+whole travel/discovery/threat transaction and exactly-once retry.
+
+Focused history retained, including failed intermediate fixture runs:
+
+- Fifteen adjacent combat/itemization/profession files: **1 failed / 220 passed,
+  135.95s**; catalogue expectation corrected; affected inventory/catalogue:
+  **50 passed, 35.56s**.
+- Initial regional/quest/guild/build reconciliation: **45 failed / 128 passed,
+  124.72s**. Build detail follow-up: **2 failed / 35 passed, 22.29s**; regional/build
+  subset: **1 failed / 76 passed / 15 deselected, 50.61s**; regional UI selection:
+  **15 failed / 67 deselected, 11.86s**; regional/build full: **7 failed / 85 passed,
+  50.72s**. After current-profile, locale, handler-context and private-project fixes:
+  **102 passed, 64.36s**.
+- Quest board, guild, PXE1 Journal/local: **85 passed, 61.89s**.
+- Initial critical source/alpha batch: **46 failed / 96 passed / 84 subtests passed,
+  151.56s**. Context subset: **18 passed / 5 deselected, 12.29s**; tick/refresh
+  selection: **2 failed / 1 passed / 20 deselected, 2.18s**.
+- Source + lower menu after partial-schema fix: **23 failed / 62 passed, 16.43s**;
+  due/legacy fixture reconciliation: **1 failed / 58 passed, 11.46s**.
+- Actual alpha fault suite intermediate: **2 failed / 13 passed, 5.27s** (missing
+  required location argument and a nonexistent unit-fixture column; corrected).
+- Source/alpha/menu current run: **104 passed, 21.25s**.
+- All 25 PXE1 files plus alpha release, solo handler, itemization repair, regional
+  review and build UI: **1 failed / 475 passed, 104.22s**. An earlier invocation
+  used a nonexistent test filename and collected no tests; it is not pass evidence.
+- Durable threat handler follow-up: **1 failed / 58 passed, 11.96s** (fixture chose
+  a non-aggressive wolf); corrected to the real eligible aggressive goblin hunter.
+  Threat/current PvE/alpha regression: **59 passed, 12.04s**.
+
+The previous process session disappeared at the actual execution boundary, with no
+recoverable final journey result; no pass is claimed. A redirected restart revealed
+that importing a session fixture into both modules caused two separately built
+histories. That run was explicitly interrupted without acceptance evidence. The
+checkpoint fixture is now defined once in conftest, calls one current earned-history
+builder, and records any setup failure beside the temporary database. Profession and
+RAV share its whole-db hash; current long acceptance is still running.
+
+The source contract SHA-256 is `0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3`; the repository copy matches byte-for-byte. Changed/new documentation links resolve locally.
+
+Required documentation and human-plan artifacts are prepared with pending statuses.
+PR236 merge/base was reverified via GitHub, and historical RAV interrupted human
+status is distinguished from PXE1 human validation, which remains NOT RUN. No broad
+suite, branch push, Draft PR, independent approval, merge or deployment is claimed.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

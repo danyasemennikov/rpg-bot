@@ -189,8 +189,12 @@ def skill_card(player_id,skill_id,lang,*,details=False):
         rows.append([InlineKeyboardButton(_c(lang,'learn'),callback_data='bv_buy_'+skill_id)])
     if details:
         from handlers.build import _SCHOOL_LABELS
+        from game.i18n import get_skill_desc
+        lines.append(escape(get_skill_desc(skill_id,lang)))
         lines.append(_c(lang,'school')+': '+escape(_label(_SCHOOL_LABELS,lang,spec.school or 'support')))
         lines.append(escape(_skill_profile(spec,lang,current_rank)))
+        if rank and rank<MAX_SKILL_RANK:
+            lines.append(_c(lang,'rank_effect')+f' {rank+1}: '+escape(_skill_profile(spec,lang,rank+1)))
         rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='bv_skill_'+skill_id)])
     else:
         rows.append([InlineKeyboardButton(t('pxe1.common.details',lang),callback_data='bv_skilldetails_'+skill_id)])

@@ -37,6 +37,10 @@ def board_card(player, location, *, category=None, page=0):
             rows.append(nav)
         rows.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data='quest_board')])
     else:
+        from game.quest_board import get_player_hunter_progress
+        hunter = get_player_hunter_progress(player['telegram_id'])
+        lines.append(t('location.quest_board_hunter_rank_line',lang,
+                       rank=t(hunter['rank_i18n_key'],lang),points=hunter['hunter_points']))
         if active:
             contract = state['contract']
             status = t('location.quest_board_status_ready' if state['status'] == 'completed' else 'location.quest_board_status_active', lang)

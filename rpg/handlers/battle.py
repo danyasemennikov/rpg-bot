@@ -1023,6 +1023,9 @@ async def _handle_victory_cleanup(
 ):
     """Общий post-victory cleanup для обычной атаки и скиллов."""
     encounter_id = str(battle_state.get('pve_encounter_id') or '')
+    if 'pve_encounter_id' in battle_state and not encounter_id:
+        await safe_edit(query, t('battle.already_over', lang), parse_mode='HTML')
+        return
     if encounter_id:
         from game.pve_reward_settlement import prepare_victory_settlement, apply_prepared_settlement
         try:

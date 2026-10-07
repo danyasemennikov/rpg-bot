@@ -265,7 +265,7 @@ def test_shop_and_catalog_ui_are_bounded_preview_driven_and_callbacks_fit():
     assert len(item_rows) <= 8 and len(text) <= 4096
     catalog_text, catalog_keyboard = build_field_catalog(player, 'armor', 0)
     catalog_rows = [row for row in catalog_keyboard.inline_keyboard if row and row[0].callback_data.startswith('inv_citem_')]
-    assert len(catalog_rows) == 8 and len(catalog_text) <= 4096
+    assert len(catalog_rows) == 6 and len(catalog_text.encode('utf-16-le')) // 2 <= 900
     for row in keyboard.inline_keyboard + catalog_keyboard.inline_keyboard:
         for button in row:
             assert len(button.callback_data.encode()) <= 64
