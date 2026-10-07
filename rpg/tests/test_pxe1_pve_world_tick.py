@@ -1,6 +1,9 @@
 import json
+from copy import deepcopy
 from datetime import datetime,timezone
 from unittest.mock import patch
+
+import pytest
 
 from database import get_connection
 from game.build_progression import migrate_character_builds_v1
@@ -117,6 +120,48 @@ def test_background_timeout_uses_actual_engine_and_durable_orders_without_contex
     conn = get_connection()
     assert conn.execute("SELECT COUNT(*) FROM combat_turn_results_v1 WHERE encounter_kind='pve'").fetchone()[0]==2
     assert not conn.execute('SELECT 1 FROM pve_reward_settlements WHERE encounter_id=?',(encounter,)).fetchone()
+    actor = state['participant_states_v1']['1']
+    assert tuple(conn.execute('SELECT hp,mana FROM players WHERE telegram_id=1').fetchone()) == (actor['hp'],actor['mana'])
+    conn.close()
+
+
+def test_accepted_side_resources_are_atomic_and_duplicate_results_do_not_restore_them():
+    from game.combat_orders import persist_turn_result
+    from game.pve_live import join_open_world_pve_encounter
+    migrate_character_builds_v1()
+    encounter,_=prepare()
+    with patch('time.time',return_value=1001):
+        assert join_open_world_pve_encounter(encounter_id=encounter,player_id=777)[0]
+    process_due_pve_formations(now_ms=1012000)
+    state,_=load_active_pve_encounter(encounter_id=encounter)
+    state['participant_states_v1']['1'].update(hp=71,mana=23)
+    state['participant_states_v1']['777'].update(hp=62,mana=14)
+    revision=state['turn_revision']+1
+    conn=get_connection()
+    before=[tuple(r) for r in conn.execute('SELECT telegram_id,hp,mana FROM players ORDER BY telegram_id')]
+    durable=tuple(conn.execute('SELECT battle_state_json,state_revision FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone())
+    from game.pve_live import persist_pxe1_participant_vitals
+    def fail_after_vitals(connection,ref,snapshot):
+        persist_pxe1_participant_vitals(connection,ref,snapshot)
+        raise RuntimeError('after vitals')
+    with patch('game.pve_live.persist_pxe1_participant_vitals',side_effect=fail_after_vitals):
+        with pytest.raises(RuntimeError,match='after vitals'):
+            persist_turn_result(encounter_kind='pve',encounter_id=encounter,
+                turn_revision=revision,result={},complete_state=deepcopy(state))
+    assert before==[tuple(r) for r in conn.execute('SELECT telegram_id,hp,mana FROM players ORDER BY telegram_id')]
+    assert durable==tuple(conn.execute('SELECT battle_state_json,state_revision FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone())
+    assert not conn.execute('SELECT 1 FROM combat_turn_results_v1 WHERE encounter_id=?',(encounter,)).fetchone()
+    assert persist_turn_result(encounter_kind='pve',encounter_id=encounter,
+        turn_revision=revision,result={},complete_state=deepcopy(state))['applied']
+    assert [tuple(r) for r in conn.execute('SELECT telegram_id,hp,mana FROM players ORDER BY telegram_id')]==[(1,71,23),(777,62,14)]
+    conn.execute('UPDATE players SET hp=80,mana=40 WHERE telegram_id=1');conn.commit()
+    assert persist_turn_result(encounter_kind='pve',encounter_id=encounter,
+        turn_revision=revision,result={},complete_state=deepcopy(state))['duplicate']
+    assert tuple(conn.execute('SELECT hp,mana FROM players WHERE telegram_id=1').fetchone())==(80,40)
+    stale=deepcopy(state);stale['participant_states_v1']['1'].update(hp=1,mana=0)
+    assert not persist_turn_result(encounter_kind='pve',encounter_id=encounter,
+        turn_revision=revision+1,result={},complete_state=stale)['applied']
+    assert tuple(conn.execute('SELECT hp,mana FROM players WHERE telegram_id=1').fetchone())==(80,40)
     conn.close()
 
 

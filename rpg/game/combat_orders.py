@@ -380,6 +380,9 @@ def persist_turn_result(
                 ))
         if updated.rowcount != 1:
             raise RuntimeError("combat_result_cas_conflict")
+        if encounter_kind == "pve":
+            from game.pve_live import persist_pxe1_participant_vitals
+            persist_pxe1_participant_vitals(conn, encounter_id, complete_state)
         if owns:
             conn.commit()
         return {"applied": True, "duplicate": False, "result": result, "state": complete_state}

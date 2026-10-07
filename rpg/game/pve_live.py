@@ -2595,6 +2595,22 @@ def load_active_solo_pve_encounter(*, player_id: int) -> tuple[dict, dict] | Non
     return load_active_pve_encounter(player_id=player_id)
 
 
+def persist_pxe1_participant_vitals(conn, encounter_id: str, battle_state: dict) -> None:
+    """Project accepted living actor resources in the encounter transaction."""
+    if battle_state.get('pxe1_lifecycle_version') != 1:
+        return
+    for raw_id, actor in (battle_state.get('participant_states_v1') or {}).items():
+        if int(actor.get('hp', 0)) <= 0:
+            # The individual death receipt owns revived HP and remaining MP.
+            continue
+        conn.execute('''UPDATE players SET hp=?, mana=? WHERE telegram_id=?
+            AND EXISTS (SELECT 1 FROM pve_encounter_participants p
+                JOIN pve_encounters e ON e.encounter_id=p.encounter_id
+                WHERE p.encounter_id=? AND p.player_id=players.telegram_id
+                  AND p.status='active' AND e.status='active' AND e.lifecycle_version=1)''',
+            (int(actor['hp']), int(actor['mana']), int(raw_id), encounter_id))
+
+
 def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, mob: dict | None = None) -> bool:
     if not encounter_id:
         return False
@@ -2644,6 +2660,8 @@ def persist_solo_pve_encounter_state(*, encounter_id: str, battle_state: dict, m
                     _serialize_payload(battle_state), _serialize_payload(mob or {}),
                     str(battle_state.get('mob_id') or (mob or {}).get('id') or ''), encounter_id,
                 ))
+        if updated.rowcount == 1 and battle_state.get('rules_version') == RULES_VERSION:
+            persist_pxe1_participant_vitals(conn, encounter_id, battle_state)
         conn.commit()
         return updated.rowcount == 1
     finally:
