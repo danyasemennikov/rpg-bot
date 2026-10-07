@@ -802,6 +802,28 @@ from registration, with no checkpoint override, logged in
 regressions retain their recorded candidate; their production dependencies did not
 change. Fresh integrated history and final broad acceptance remain pending.
 
+## Earned Chapter pack recovery
+
+The confirmed-funding fresh history completed normally: **1 passed / 40 errors,
+13.01s**, in `pxe1-earned-confirmed-recovery-fresh-pytest.log`. An early real
+three-wolf pack defeated the character while five earned health potions remained
+in inventory. The harvesting helper had enabled existing battle potion use only
+for trolls. The unchanged no-death assertion correctly failed. Failed whole DB,
+source provenance and failure text are saved in workspace
+`acceptance-recovery/8a9e10c-partial-earned`; they are diagnostic only.
+
+Harvesting fights now enable the existing earned battle-potion flow for every mob.
+No equipment, goods, progression, HP or victories are injected and no assertion is
+weakened. Focused clean Chapter history: **1 passed, 9.66s**, completing registration,
+field weapon purchase/equip, all four Chapter claims and real battle potion proof.
+Exact external-path command is recorded in JSON; output is
+`pxe1-chapter-potions-focused-pytest.log`. This is not the full profession history.
+
+The creator repair is committed at `d6453a54bbe9cd617750851f1e5d660c2238f030`.
+Session 53588 runs the required fresh 41-test history with no checkpoint override,
+logged in `pxe1-earned-battle-recovery-fresh-pytest.log`. Final history/39 RAV
+branches and the repaired full broad command remain pending.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

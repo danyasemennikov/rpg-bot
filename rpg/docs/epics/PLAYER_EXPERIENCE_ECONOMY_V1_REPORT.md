@@ -127,7 +127,10 @@ The atomic resource projection repair passes 37 focused checks; a new clean hist
 reached a correct valuable-sale confirmation that the older Inn funding helper
 failed to follow (1 passed / 40 setup errors, 1575.50s). That helper now uses the
 real quantity/confirmation Shop flow; its failing-state diagnostic passes and another
-fresh history is running. No final pass is claimed. The earned profession
+fresh history exposed an early wolf-pack defeat while carried recovery potions
+were unused. Harvesting now enables its existing battle-potion path for all mobs;
+a clean four-assignment Chapter/potion journey passes (9.66s), and the full fresh
+history runs again. No final pass is claimed. The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
 No old PEV1 checkpoint substitutes for current PXE1 history. Optional focused-repair
