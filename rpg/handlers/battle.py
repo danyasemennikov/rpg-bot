@@ -248,10 +248,10 @@ def apply_death(telegram_id: int, player: dict, *, encounter_id: str | None=None
     if encounter_id:
         conn = get_connection()
         try:
-            row = conn.execute('SELECT lifecycle_version FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+            row = conn.execute('SELECT lifecycle_version,rules_version FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
         finally:
             conn.close()
-        if row and row['lifecycle_version']==1:
+        if row and row['lifecycle_version']==1 and row['rules_version']==RULES_VERSION:
             import time
             from game.pve_live import apply_pxe1_pve_death
             return apply_pxe1_pve_death(telegram_id,encounter_id,now_ms=int(time.time()*1000))

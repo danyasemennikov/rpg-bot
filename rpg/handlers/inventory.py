@@ -136,7 +136,7 @@ WEAPON_PROFILE_NAME = {
     'es': {'sword_1h': 'Espada 1M', 'sword_2h': 'Espada 2M', 'axe_2h': 'Hacha 2M', 'daggers': 'Dagas', 'bow': 'Arco', 'magic_staff': 'Bastón mágico', 'holy_staff': 'Bastón sagrado', 'wand': 'Varita', 'holy_rod': 'Vara sagrada', 'tome': 'Tomo', 'unarmed': 'Sin arma'},
 }
 
-INVENTORY_PAGE_SIZE = 8
+INVENTORY_PAGE_SIZE = 6
 
 def get_inventory(telegram_id: int, item_type: str = None) -> list:
     conn = get_connection()

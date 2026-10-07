@@ -219,6 +219,33 @@ Focused evidence:
   `python -m pytest -q tests/test_pxe1_activity_quarantine.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_combat_result_recovery.py tests/test_pxe1_pvp_membership_ui.py tests/test_pxe1_encounter_lifecycle.py tests/test_character_builds_v1_mixed_encounters.py tests/test_regional_adventures_combat.py`
   **49 passed, 11.69s**.
 
+## Existing itemization journeys, candidate based on 7533f4d
+
+PR230 anchored fixtures now advance the actual due formation owner before
+runtime/terminalization, while preserving source-tamper, rollback, reward,
+participant exclusion, mastery and restart assertions. Old corrupt-overlap PvP
+fixtures explicitly create version 0. Inventory traverses all 17 owned entries
+as 6/6/5 and preserves exact page routing. Advanced sale uses the current Shop
+preview/result flow, and Chapter acceptance opens the current board Details.
+Regional chase opens Travel preview, explicitly starts, then advances its real
+due session; no sleep simulates movement. Mocks now include the actual Bot
+transport interface used for recovered results/finale. The pack fixture also
+waits for its actual formation deadline. Paginated inventory shows Page N/M and
+exports the six-entry constant. A legacy-rules battle uses its existing death
+owner, avoiding an invalid attempt to read V1 actor state from a legacy snapshot.
+
+Focused evidence:
+
+- First PR230/pack/inventory reconciliation: **7 failed / 67 passed, 19.37s**;
+  exposed legacy death-owner selection and old board/sale/travel/Bot fixtures.
+- Expanded affected result run: **1 failed / 80 passed, 20.53s** (old Chapter
+  material sale menu traversal). Corrected traversal: **1 failed / 80 passed,
+  20.83s** (finale transport mock missing Bot). Corrected actual interface.
+- Latest command:
+  `python -m pytest -q tests/test_itemization_fix_packet_pr230.py tests/test_pack_runtime_pr2b1.py tests/test_pxe1_inventory_surfaces.py tests/test_pxe1_combat_result_recovery.py`
+  **81 passed, 20.40s**. The earlier 28-failure adjacent run is not converted
+  into a pass; only these specifically repaired suites have new evidence.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

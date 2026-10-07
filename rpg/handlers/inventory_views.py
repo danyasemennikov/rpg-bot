@@ -71,6 +71,8 @@ def inventory_card(player_id,category,lang,page=0):
     pages = max(1,(len(entries)+5)//6)
     page = min(max(0,int(page)),pages-1)
     lines = [t('inventory.title',lang)+' · '+t('pxe1.inventory_categories.'+category,lang)]
+    if pages>1:
+        lines.append(t('gear.page',lang,page=page+1,pages=pages))
     rows = []
     for _,_,_,label,callback in entries[page*6:(page+1)*6]:
         if not callback.startswith('px:'):
