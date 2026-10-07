@@ -67,10 +67,22 @@ async def deliver_pve_updates(bot,results=(),*,now_ms=None,limit=100):
     changed = {r['encounter_id'] for r in results if r.get('encounter_id')}
     conn = get_connection()
     try:
-        # Include failed terminal delivery on the prior surface after a restart.
+        # Apply the bound after excluding already delivered revisions, so older
+        # unchanged cards cannot starve newer players' failed initial delivery.
         encounters = [dict(r) for r in conn.execute("""SELECT e.* FROM pve_encounters e WHERE lifecycle_version=1
-            AND (status='active' OR EXISTS(SELECT 1 FROM player_pxe1_ui u WHERE u.surface_kind='pve' AND u.surface_ref=e.encounter_id))
-            ORDER BY e.created_at,e.encounter_id LIMIT ?""",(limit,))]
+            AND status='active' AND EXISTS(SELECT 1 FROM pve_encounter_participants p
+                WHERE p.encounter_id=e.encounter_id AND p.status='active'
+                AND NOT EXISTS(SELECT 1 FROM economy_action_receipts d WHERE d.player_id=p.player_id
+                    AND d.request_id='pve_death:'||e.encounter_id||':'||p.player_id)
+                AND NOT EXISTS(SELECT 1 FROM player_pxe1_ui u WHERE u.player_id=p.player_id
+                    AND u.surface_kind='pve' AND u.surface_ref=e.encounter_id AND u.message_id IS NOT NULL
+                    AND u.surface_revision=CASE WHEN e.runtime_started_ms IS NULL THEN
+                        1000000000+e.formation_revision*4+CASE
+                            WHEN e.formation_deadline_ms-?>8000 THEN 0
+                            WHEN e.formation_deadline_ms-?>4000 THEN 1
+                            WHEN e.formation_deadline_ms-?>0 THEN 2 ELSE 3 END
+                        ELSE e.turn_revision END))
+            ORDER BY e.created_at,e.encounter_id LIMIT ?""",(now_ms,now_ms,now_ms,limit))]
         known = {e['encounter_id'] for e in encounters}
         for eid in sorted(changed-known):
             row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=? AND lifecycle_version=1',(eid,)).fetchone()

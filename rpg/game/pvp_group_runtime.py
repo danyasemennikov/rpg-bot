@@ -17,6 +17,9 @@ from game.pvp_world import encoded, engagement, iso, milliseconds, player
 def locked_sides(row):
     try:
         roster = json.loads(row['locked_roster_json'])
+        if any(not isinstance(m['player_id'],int) or isinstance(m['player_id'],bool)
+               for side in ('side_a','side_b') for m in roster[side]):
+            raise ValueError()
         sides = {side: [int(m['player_id']) for m in roster[side]] for side in ('side_a','side_b')}
         if roster['schema_version'] != 1 or any(not 1 <= len(ids) <= 2 for ids in sides.values()):
             raise ValueError()
@@ -25,8 +28,83 @@ def locked_sides(row):
         if len(set(sides['side_a']+sides['side_b'])) != len(sides['side_a']+sides['side_b']):
             raise ValueError()
         return sides
-    except (TypeError,ValueError,KeyError):
+    except (TypeError,ValueError,KeyError,IndexError):
         raise ActionRejected('corrupt_roster')
+
+
+def validate_live_group(conn,row):
+    """Validate persisted identities and timing without rebuilding snapshots."""
+    try:
+        sides = locked_sides(row)
+        context = json.loads(row['reason_context'])
+        battle = context['battle']
+        ids = sides['side_a']+sides['side_b']
+        if (not isinstance(context,dict) or not isinstance(battle,dict)
+                or battle['state']!='live' or battle['rules_version']!=row['rules_version']
+                or battle['world_model_version']!=1 or battle['combat_seed']!=row['combat_seed']
+                or len(row['combat_seed'])!=32 or any(c not in '0123456789abcdef' for c in row['combat_seed'])
+                or battle['active_side'] not in sides or battle['turn_revision'] not in {row['turn_revision'],row['turn_revision']+1}
+                or not isinstance(battle['participants_v1'],dict)
+                or set(battle['participants_v1'])!={str(p) for p in ids}
+                or not isinstance(battle['manual_actor_ids'],list)
+                or not set(battle['manual_actor_ids'])<=set(ids)
+                or not isinstance(battle['damage_by_source'],dict)):
+            raise ValueError()
+        milliseconds(battle['side_deadline_at'])
+        for actor_id in ids:
+            actor = battle['participants_v1'][str(actor_id)]
+            if (not isinstance(actor,dict) or actor['actor_id']!=actor_id
+                    or actor['rules_version']!=row['rules_version']
+                    or not isinstance(actor['effects'],list) or not isinstance(actor['cooldowns'],dict)
+                    or any(not isinstance(actor[key],int) or isinstance(actor[key],bool)
+                           for key in ('hp','max_hp','mana','max_mana'))
+                    or not 0<=actor['hp']<=actor['max_hp'] or not 0<=actor['mana']<=actor['max_mana']):
+                raise ValueError()
+        roster = json.loads(row['locked_roster_json'])
+        locked_allies = {r['ally_id'] for r in conn.execute("SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1 AND status='locked'",(row['id'],))}
+        if locked_allies!=set(sides['side_a'][1:]+sides['side_b'][1:]):
+            raise ValueError()
+        for side,principal,member_side in (('side_a',row['attacker_id'],'initiator'),('side_b',row['defender_id'],'defender')):
+            for member in roster[side][1:]:
+                if not conn.execute("""SELECT 1 FROM pvp_engagement_reinforcements WHERE id=?
+                    AND engagement_id=? AND ally_id=? AND inviter_id=? AND side=?
+                    AND membership_version=1 AND status='locked'""",
+                    (member['reinforcement_id'],row['id'],member['player_id'],principal,member_side)).fetchone():
+                    raise ValueError()
+        return context
+    except (ActionRejected,ValueError,TypeError,KeyError,IndexError,AttributeError):
+        raise ActionRejected('corrupt_live_state')
+
+
+def quarantine_live_group(conn,row,*,reason,now_ms):
+    """Interrupt this engagement; immutable losses and orders remain evidence."""
+    if not conn.in_transaction:
+        raise RuntimeError('PvP quarantine requires a caller-owned writer')
+    if row['world_model_version']!=1 or row['engagement_state']!='converted_to_battle':
+        return
+    recipients = {row['attacker_id'],row['defender_id']}
+    recipients.update(r['ally_id'] for r in conn.execute("""SELECT ally_id FROM pvp_engagement_reinforcements
+        WHERE engagement_id=? AND membership_version=1 AND status IN ('accepted','locked')""",(row['id'],)))
+    context = {'quarantined_reason_context':row['reason_context'],'terminal_reason':reason}
+    conn.execute("UPDATE pvp_engagements SET engagement_state='cancelled',reason_context=?,state_revision=state_revision+1 WHERE id=?",
+                 (encoded(context),row['id']))
+    conn.execute("""UPDATE pvp_engagement_reinforcements SET status='expired',responded_at=?
+        WHERE engagement_id=? AND membership_version=1 AND status IN ('accepted','locked','pending')""",(iso(now_ms),row['id']))
+    from game.player_experience_schema import _recovery_notice
+    for actor_id in recipients:
+        other_pve = conn.execute("""SELECT 1 FROM pve_encounter_participants p JOIN pve_encounters e
+            ON e.encounter_id=p.encounter_id WHERE p.player_id=? AND p.status='active'
+            AND e.status IN ('active','forming','resolving_victory')""",(actor_id,)).fetchone()
+        other_pvp = conn.execute("""SELECT 1 FROM pvp_engagements e WHERE e.id<>?
+            AND e.engagement_state IN ('pending','active','converted_to_battle') AND
+            (e.attacker_id=? OR e.defender_id=? OR EXISTS(SELECT 1 FROM pvp_engagement_reinforcements r
+                WHERE r.engagement_id=e.id AND r.ally_id=? AND r.status IN ('accepted','locked')))""",
+            (row['id'],actor_id,actor_id,actor_id)).fetchone()
+        if not other_pve and not other_pvp:
+            conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?',(actor_id,))
+        _recovery_notice(conn,actor_id,domain='pvp',ref=row['id'],reason='cancelled',now_ms=now_ms)
+    import logging
+    logging.getLogger(__name__).error('PXE1 quarantined live PvP engagement %s: %s',row['id'],reason)
 
 
 def living(battle, ids):
@@ -250,6 +328,8 @@ def resolve_group_turn(conn, *, engagement_id, actor_id=None, action=None, now_m
     battle = context.get('battle') or {}
     if battle.get('state') != 'live':
         return 'not_live',context
+    context = validate_live_group(conn,row)
+    battle = context['battle']
     sides = locked_sides(row)
     active = battle['active_side']
     opposite = 'side_b' if active=='side_a' else 'side_a'

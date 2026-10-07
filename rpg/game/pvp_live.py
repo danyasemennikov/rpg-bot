@@ -2108,11 +2108,13 @@ def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
         SELECT * FROM pvp_engagements
         WHERE engagement_state IN (?, ?, ?)
           AND ((engagement_state IN ('pending','active') AND julianday(engagement_ready_at)<=julianday(?))
-               OR (engagement_state='converted_to_battle' AND json_valid(reason_context)
-                   AND julianday(COALESCE(json_extract(reason_context,'$.battle.side_deadline_at'),
-                       datetime(json_extract(reason_context,'$.battle.turn_started_at'),'+15 seconds')))<=julianday(?)))
+               OR (engagement_state='converted_to_battle' AND CASE WHEN json_valid(reason_context) THEN
+                   (julianday(COALESCE(json_extract(reason_context,'$.battle.side_deadline_at'),
+                       datetime(json_extract(reason_context,'$.battle.turn_started_at'),'+15 seconds')))<=julianday(?)
+                    OR (world_model_version=1 AND julianday(json_extract(reason_context,'$.battle.side_deadline_at')) IS NULL))
+                   ELSE world_model_version=1 END))
         ORDER BY CASE WHEN engagement_state IN ('pending','active') THEN engagement_ready_at
-                 ELSE json_extract(reason_context,'$.battle.side_deadline_at') END,id ASC LIMIT 100
+                 WHEN json_valid(reason_context) THEN json_extract(reason_context,'$.battle.side_deadline_at') END,id ASC LIMIT 100
         ''',
         (ENGAGEMENT_STATE_PENDING, 'active', ENGAGEMENT_STATE_CONVERTED_TO_BATTLE,check_now.isoformat(),check_now.isoformat()),
     ).fetchall()
@@ -2126,6 +2128,22 @@ def process_live_pvp_due_events(*, now: datetime | None = None) -> list[dict]:
                     events.append({'type': 'engagement_live', 'row': row, 'payload': payload})
                 continue
 
+            if row['world_model_version']==1:
+                from game.pvp_group_runtime import validate_live_group,quarantine_live_group
+                from game.action_receipts import ActionRejected
+                conn=get_connection()
+                try:
+                    conn.execute('BEGIN IMMEDIATE')
+                    current=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(row['id'],)).fetchone()
+                    if current['engagement_state']!='converted_to_battle':
+                        conn.rollback();continue
+                    try:
+                        validate_live_group(conn,current)
+                    except ActionRejected as exc:
+                        quarantine_live_group(conn,current,reason=str(exc),now_ms=int(check_now.timestamp()*1000))
+                        conn.commit();continue
+                    conn.rollback()
+                finally: conn.close()
             payload = _deserialize_reason_context(row['reason_context'])
             battle = payload.get('battle') or {}
             if battle.get('state') != PVP_BATTLE_STATE_LIVE:
@@ -2199,12 +2217,25 @@ async def run_live_pvp_tick(bot) -> None:
     await deliver_pending_results(bot,domain='pvp')
     # Failed live delivery retries from the same persisted revision, including
     # the initial roster lock; a missing Telegram card never stops the battle.
+    for row in pending_pvp_live_delivery():
+        await _deliver_pxe1_pvp_event(bot,{'row':row,'payload':json.loads(row['reason_context'])})
+
+
+def pending_pvp_live_delivery(*,limit=100):
     conn=get_connection()
     try:
-        retry_rows=conn.execute("SELECT * FROM pvp_engagements WHERE world_model_version=1 AND engagement_state='converted_to_battle' AND json_valid(reason_context) ORDER BY id LIMIT 100").fetchall()
+        return conn.execute("""SELECT e.* FROM pvp_engagements e WHERE e.world_model_version=1
+            AND e.engagement_state='converted_to_battle'
+            AND NOT EXISTS(SELECT 1 FROM pvp_group_settlements_pxe1 s WHERE s.engagement_id=e.id)
+            AND EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(e.reason_context)
+                THEN e.reason_context ELSE '{}' END,'$.battle.participants_v1') a
+                WHERE NOT EXISTS(SELECT 1 FROM pvp_participant_settlements_pxe1 d
+                    WHERE d.engagement_id=e.id AND d.player_id=CAST(a.key AS INTEGER))
+                AND NOT EXISTS(SELECT 1 FROM player_pxe1_ui u WHERE u.player_id=CAST(a.key AS INTEGER)
+                    AND u.surface_kind='pvp' AND u.surface_ref=CAST(e.id AS TEXT) AND u.message_id IS NOT NULL
+                    AND u.surface_revision=json_extract(e.reason_context,'$.battle.turn_revision')))
+            ORDER BY e.id LIMIT ?""",(limit,)).fetchall()
     finally: conn.close()
-    for row in retry_rows:
-        await _deliver_pxe1_pvp_event(bot,{'row':row,'payload':json.loads(row['reason_context'])})
 
 
 async def _deliver_pxe1_pvp_event(bot,event):

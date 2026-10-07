@@ -185,6 +185,40 @@ Focused evidence:
   `python -m pytest -q tests/test_pxe1_inventory_surfaces.py tests/test_pxe1_recipe_surfaces.py tests/test_pxe1_shop_transactions.py tests/test_pxe1_travel.py`
   **48 passed, 11.71s**. `git diff --check` passed.
 
+## Corrupt activity / delivery bound continuation, candidate based on 5600224
+
+The due PvP owner now includes malformed version-1 JSON or missing/invalid live
+deadlines instead of silently skipping busy actors. It validates stored roster,
+locked invitation proof, participant identities and timing, then locally cancels
+unverifiable live state. Quarantine preserves exact raw payload, committed death
+receipts, inventory, HP/MP/location/progression, and other owned combat; it never
+creates a victory, refund or loot share. Known members receive typed recovery
+facts and an operator diagnostic is logged. Valid version-0 battles retain their
+old path. Invalid durable orders remain unapplied and isolated from healthy due
+engagements under the existing fail-closed policy.
+
+Malformed due formations (payload, deadline, missing reservation) become
+start_failed with owned forming sources released and no private runtime/reward.
+Running gathers without a deadline interrupt with no new yield/wear, including
+the Stop path. Combat delivery filters already successful revisions before its
+batch bound, preventing old unchanged cards from starving newer failed delivery.
+
+Focused evidence:
+
+- Initial multiplayer/legacy validation: **50 passed, 10.04s**.
+- Initial corruption + gathering/travel/runtime: **33 passed, 6.78s**.
+- Expanded formation/result run: **9 failed / 33 passed, 8.35s**. The new
+  validator incorrectly required enemy_units for supported solo projections and
+  equated the collecting PvP revision with the last-applied row revision. Both
+  were corrected to the established owner conventions; no fixture was weakened.
+- Corrected expanded runtime/legacy run: **86 passed, 17.34s**.
+- Added bounded-delivery regressions: **1 failed / 48 passed, 12.01s**; the new
+  test called the real formation owner with player_id rather than owner_player_id.
+  Fixed its signature and supplied the actual initial battle projection.
+- Latest affected command:
+  `python -m pytest -q tests/test_pxe1_activity_quarantine.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_combat_result_recovery.py tests/test_pxe1_pvp_membership_ui.py tests/test_pxe1_encounter_lifecycle.py tests/test_character_builds_v1_mixed_encounters.py tests/test_regional_adventures_combat.py`
+  **49 passed, 11.69s**.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

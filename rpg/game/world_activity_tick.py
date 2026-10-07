@@ -19,8 +19,8 @@ def reconcile_player_due_events(conn, player_id: int, *, now_ms: int, recovering
             for row in conn.execute("SELECT * FROM player_travel_sessions WHERE player_id=? AND status='running' AND next_due_ms<=?", (player_id,now_ms)):
                 events.append((row['next_due_ms'],1,row['session_id'],'travel',dict(row)))
         if not recovering:
-            for row in conn.execute("SELECT * FROM player_gathering_sessions WHERE player_id=? AND status='running' AND next_due_ms<=?", (player_id,now_ms)):
-                events.append((row['next_due_ms'],2,row['session_id'],'gather',dict(row)))
+            for row in conn.execute("SELECT * FROM player_gathering_sessions WHERE player_id=? AND status='running' AND (next_due_ms IS NULL OR next_due_ms<=?)", (player_id,now_ms)):
+                events.append((row['next_due_ms'] or 0,2,row['session_id'],'gather',dict(row)))
         if not events:
             break
         _,_,_,kind,row = min(events,key=lambda e:e[:3])
@@ -43,7 +43,7 @@ def run_world_activity_tick(*, now_ms: int, limit: int=100, recovering: bool=Fal
         players = conn.execute('''SELECT player_id FROM (
             SELECT player_id,due_ms AS due FROM player_location_threats WHERE status='pending'
             UNION ALL SELECT player_id,next_due_ms FROM player_travel_sessions WHERE status='running'
-            UNION ALL SELECT player_id,next_due_ms FROM player_gathering_sessions WHERE status='running')
+            UNION ALL SELECT player_id,COALESCE(next_due_ms,0) FROM player_gathering_sessions WHERE status='running')
             WHERE due<=? GROUP BY player_id ORDER BY MIN(due),player_id LIMIT ?''', (now_ms,limit)).fetchall()
     finally:
         conn.close()

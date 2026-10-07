@@ -167,13 +167,17 @@ def commit_gathering_tick(conn, session_id: str, *, now_ms: int) -> dict:
     session = conn.execute('SELECT * FROM player_gathering_sessions WHERE session_id=?', (session_id,)).fetchone()
     if not session:
         raise ActionRejected('session_missing')
-    if session['status']!='running' or now_ms<int(session['next_due_ms']):
+    if session['status']!='running':
         return {'status':session['status'],'session':dict(session)}
     tick = int(session['last_tick'])+1
     player_id = int(session['player_id'])
     request_id = f'gather:{session_id}:{tick}'
     request_hash = intent_hash('gather_tick_pxe1',player_id,{'session_id':session_id,'tick':tick,'seed':session['seed']})
     try:
+        if not isinstance(session['next_due_ms'],int):
+            raise ValueError('invalid_gather_deadline')
+        if now_ms<session['next_due_ms']:
+            return {'status':session['status'],'session':dict(session)}
         # A future receipt beside an older session counter cannot occur in the
         # atomic tick. Quarantine it rather than repeatedly granting/replaying.
         if find_receipt(conn,player_id,request_id,'gather_tick_pxe1',request_hash):
@@ -265,7 +269,7 @@ def stop_gathering_session(conn, player_id: int, session_id: str, *, now_ms: int
     from game.world_activity_tick import reconcile_player_due_events
     reconcile_player_due_events(conn,player_id,now_ms=now_ms)
     session = conn.execute('SELECT * FROM player_gathering_sessions WHERE session_id=?', (session_id,)).fetchone()
-    while session['status']=='running' and session['next_due_ms']<=now_ms:
+    while session['status']=='running' and (session['next_due_ms'] is None or session['next_due_ms']<=now_ms):
         commit_gathering_tick(conn,session_id,now_ms=now_ms)
         session = conn.execute('SELECT * FROM player_gathering_sessions WHERE session_id=?', (session_id,)).fetchone()
     if session['status']=='running':

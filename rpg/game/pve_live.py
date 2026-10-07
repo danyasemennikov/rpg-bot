@@ -1354,30 +1354,55 @@ def _repair_forming_owner(conn, encounter_id: str) -> list[int]:
     return [owner] + [pid for pid in ids if pid != owner]
 
 
+def _interrupt_pxe1_formation(conn,encounter_id,*,now_ms,reason):
+    from game.player_experience_schema import _recovery_notice
+    for member in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(encounter_id,)).fetchall():
+        _recovery_notice(conn,member['player_id'],domain='pve',ref=encounter_id,reason='start_failed',now_ms=now_ms)
+    conn.execute("UPDATE pve_encounters SET status='start_failed',finished_at=CURRENT_TIMESTAMP WHERE encounter_id=?",(encounter_id,))
+    conn.execute("UPDATE pve_encounter_participants SET status='left' WHERE encounter_id=? AND status='active'",(encounter_id,))
+    conn.execute("UPDATE pve_spawn_instances SET state='idle',linked_encounter_id=NULL,respawn_available_at=NULL WHERE linked_encounter_id=? AND state='forming'",(encounter_id,))
+    import logging
+    logging.getLogger(__name__).error('PXE1 quarantined formation %s: %s',encounter_id,reason)
+    return {'phase':'start_failed','player_ids':[],'encounter_id':encounter_id}
+
+
 def start_due_pve_formation(conn, *, encounter_id: str, now_ms: int) -> dict:
     """Freeze roster/snapshots/first phase in the caller's IMMEDIATE transaction."""
     if not conn.in_transaction:
         raise RuntimeError('formation start requires caller transaction')
     row = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,)).fetchone()
     phase = pve_world_phase(conn,encounter_id)
-    if not row or phase != 'forming' or row['lifecycle_version'] != 1:
+    if not row or row['status']!='active' or row['runtime_started_ms'] is not None or row['lifecycle_version'] != 1:
         return {'phase':phase,'player_ids':json.loads(row['locked_roster_json'] or '{}').get('player_ids',[]) if row else []}
+    if not isinstance(row['formation_deadline_ms'],int):
+        return _interrupt_pxe1_formation(conn,encounter_id,now_ms=now_ms,reason='invalid_deadline')
     if now_ms < int(row['formation_deadline_ms']):
         return {'phase':'forming','player_ids':[]}
     sources = conn.execute('SELECT * FROM pve_spawn_instances WHERE linked_encounter_id=?', (encounter_id,)).fetchall()
-    declared = _deserialize_payload(row['source_units_json']).get('units') or []
+    try:
+        declaration = json.loads(row['source_units_json'])
+        state = json.loads(row['battle_state_json'])
+        declared = declaration['units']
+        if (not isinstance(state,dict) or not isinstance(declared,list) or not declared
+                or any(not isinstance(u,dict) or not isinstance(u.get('spawn_instance_id'),str)
+                       or not isinstance(u.get('unit_id'),str) for u in declared)
+                or not isinstance(state.get('enemy_units',[]),list)
+                or any(not isinstance(u,dict) for u in state.get('enemy_units',[]))
+                or (not state.get('enemy_units') and (len(declared)!=1 or state.get('mob_id')!=declared[0].get('mob_id')))):
+            raise ValueError('invalid_formation_payload')
+    except (ValueError,TypeError,KeyError):
+        return _interrupt_pxe1_formation(conn,encounter_id,now_ms=now_ms,reason='invalid_formation_payload')
     source_ids = {s['spawn_instance_id'] for s in sources}
     valid = (sources and row['anchor_spawn_instance_id'] in source_ids
              and source_ids == {u.get('spawn_instance_id') for u in declared}
+             and len(source_ids)==len(declared)
              and all(s['state']=='forming' and s['location_id']==row['location_id'] for s in sources))
+    by_source={u['spawn_instance_id']:u for u in declared}
+    valid = valid and all(by_source[s['spawn_instance_id']].get('mob_id')==s['mob_id']
+                         and by_source[s['spawn_instance_id']].get('spawn_profile')==s['spawn_profile']
+                         and by_source[s['spawn_instance_id']].get('location_id')==row['location_id'] for s in sources)
     if not valid:
-        from game.player_experience_schema import _recovery_notice
-        for member in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(encounter_id,)).fetchall():
-            _recovery_notice(conn,member['player_id'],domain='pve',ref=encounter_id,reason='start_failed',now_ms=now_ms)
-        conn.execute("UPDATE pve_encounters SET status='start_failed',finished_at=CURRENT_TIMESTAMP WHERE encounter_id=?", (encounter_id,))
-        conn.execute("UPDATE pve_encounter_participants SET status='left' WHERE encounter_id=? AND status='active'", (encounter_id,))
-        conn.execute("UPDATE pve_spawn_instances SET state='idle',linked_encounter_id=NULL WHERE linked_encounter_id=? AND state='forming'", (encounter_id,))
-        return {'phase':'start_failed','player_ids':[],'encounter_id':encounter_id}
+        return _interrupt_pxe1_formation(conn,encounter_id,now_ms=now_ms,reason='invalid_source_reservation')
     from game.player_activity import require_available
     from game.action_receipts import ActionRejected
     from game.locations import resolve_location_id
@@ -1448,7 +1473,7 @@ def process_due_pve_formations(*, now_ms: int, limit: int = 100) -> list[dict]:
     conn = get_connection()
     try:
         rows = conn.execute('''SELECT encounter_id FROM pve_encounters WHERE lifecycle_version=1
-            AND runtime_started_ms IS NULL AND status='active' AND formation_deadline_ms<=?
+            AND runtime_started_ms IS NULL AND status='active' AND (formation_deadline_ms<=? OR formation_deadline_ms IS NULL)
             ORDER BY formation_deadline_ms,encounter_id LIMIT ?''', (now_ms,limit)).fetchall()
     finally:
         conn.close()

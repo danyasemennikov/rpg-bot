@@ -15,6 +15,44 @@ def bot():
     return SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=80)),edit_message_text=AsyncMock(return_value=SimpleNamespace(message_id=80)))
 
 
+def test_delivery_bound_excludes_unchanged_formations_before_selecting_new_member():
+    from game.pve_live import list_location_available_spawn_instances,create_or_load_open_world_pve_encounter
+    from game.mobs import get_mob
+    from game.combat import init_battle
+    from database import get_player
+    from game.player_ui import record_surface
+    from handlers.combat_delivery import formation_revision
+    first,_=prepare()
+    conn=get_connection()
+    row=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(first,)).fetchone()
+    record_surface(1,kind='pve',ref=first,revision=formation_revision(row,1001000),chat_id=1,message_id=10)
+    conn.close()
+    source=next(s for s in list_location_available_spawn_instances(location_id='westwild_n1'))
+    with patch('time.time',return_value=1001):
+        mob=get_mob(source['mob_id'])
+        second,_=create_or_load_open_world_pve_encounter(owner_player_id=777,location_id='westwild_n1',
+            mob_id=source['mob_id'],mob=mob,battle_state=init_battle(dict(get_player(777)),mob),spawn_instance_id=source['spawn_instance_id'])
+        transport=bot()
+        asyncio.run(deliver_pve_updates(transport,now_ms=1001000,limit=1))
+    assert transport.send_message.await_count==1
+    assert transport.send_message.call_args.args[0]==777
+    assert transport.edit_message_text.await_count==0
+
+
+def test_pvp_delivery_bound_excludes_unchanged_engagement_before_selecting_new_members():
+    from tests.test_pxe1_pvp_group_runtime import locked
+    from game.pvp_world import create_preparation,lock_preparation
+    from game.pvp_live import pending_pvp_live_delivery
+    from game.player_ui import record_surface
+    conn,e=locked()
+    for player_id in (1,2,3,777):
+        record_surface(player_id,kind='pvp',ref=str(e),revision=1,chat_id=player_id,message_id=10)
+    conn.execute('BEGIN IMMEDIATE')
+    second=create_preparation(conn,attacker_id=4,defender_id=5,location_id='westwild_n4',now_ms=1000000)
+    lock_preparation(conn,engagement_id=second,now_ms=1300000);conn.commit();conn.close()
+    assert [r['id'] for r in pending_pvp_live_delivery(limit=1)]==[second]
+
+
 def test_formation_delivery_only_creation_eight_four_and_start_and_no_token_churn():
     from game.build_progression import migrate_character_builds_v1
     migrate_character_builds_v1()
