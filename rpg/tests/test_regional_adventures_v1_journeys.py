@@ -337,18 +337,19 @@ async def _inspect(journey: ProductionJourney, fact_id: str, location_id: str) -
 
 async def _fight_spawn(journey: ProductionJourney, callback: str) -> str:
     await journey.callback(callback, handle_combat_buttons)
-    enter = next(value for value in _callbacks(journey.messages[-1][1]) if value.startswith('pve_enter_'))
-    encounter_id = enter.removeprefix('pve_enter_')
-    await journey.callback(enter, handle_location_buttons)
+    enter = next(value for value in _callbacks(journey.messages[-1][1]) if value.startswith('pve_view_'))
+    encounter_id = enter.removeprefix('pve_view_')
+    journey.start_due_formation(encounter_id)
+    await journey.callback(f'pve_enter_{encounter_id}', handle_location_buttons)
     opening = (('skill', 'defensive_stance'), ('skill', 'shield_bash'), ('skill', 'sword_rush'))
     for turn in range(90):
         if 'battle' not in journey.context.user_data:
             break
         kind, skill = opening[turn] if turn < len(opening) else ('basic_attack', None)
         try:
-            action = journey._find_combat_action(kind=kind, skill_id=skill)
+            action = await journey._find_combat_action(kind=kind, skill_id=skill)
         except AssertionError:
-            action = journey._find_combat_action(kind='basic_attack', skill_id=None)
+            action = await journey._find_combat_action(kind='basic_attack', skill_id=None)
         await journey.callback(action, __import__('handlers.battle', fromlist=['handle_battle_buttons']).handle_battle_buttons)
     else:
         raise AssertionError(('battle did not finish', encounter_id))
@@ -393,9 +394,10 @@ async def _leave_real_prepared_settlement(
     spawn_id = journey._accelerate_respawn(mob_id)
     await journey.callback(f'fight_spawn_{spawn_id}', handle_combat_buttons)
     enter = next(value for value in _callbacks(journey.messages[-1][1])
-                 if value.startswith('pve_enter_'))
-    encounter_id = enter.removeprefix('pve_enter_')
-    await journey.callback(enter, handle_location_buttons)
+                 if value.startswith('pve_view_'))
+    encounter_id = enter.removeprefix('pve_view_')
+    journey.start_due_formation(encounter_id)
+    await journey.callback(f'pve_enter_{encounter_id}', handle_location_buttons)
     battle_handler = __import__('handlers.battle', fromlist=['handle_battle_buttons'])
     with patch(
         'game.pve_reward_settlement.apply_prepared_settlement',
@@ -408,9 +410,9 @@ async def _leave_real_prepared_settlement(
             opening = (('skill', 'defensive_stance'), ('skill', 'shield_bash'), ('skill', 'sword_rush'))
             kind, skill = opening[turn] if turn < len(opening) else ('basic_attack', None)
             try:
-                action = journey._find_combat_action(kind=kind, skill_id=skill)
+                action = await journey._find_combat_action(kind=kind, skill_id=skill)
             except AssertionError:
-                action = journey._find_combat_action(kind='basic_attack', skill_id=None)
+                action = await journey._find_combat_action(kind='basic_attack', skill_id=None)
             await journey.callback(action, battle_handler.handle_battle_buttons)
         else:
             raise AssertionError(('prepared settlement not reached', encounter_id))
@@ -1501,8 +1503,8 @@ def test_j14_busy_shared_sources(earned_party):
                                if source_by_callback.get(value, {}).get('mob_id') == 'giant_leech')
         await holder.callback(source_callback, handle_combat_buttons)
         held_enter = next(value for value in _callbacks(holder.messages[-1][1])
-                          if value.startswith('pve_enter_'))
-        held_id = held_enter.removeprefix('pve_enter_')
+                          if value.startswith('pve_view_'))
+        held_id = held_enter.removeprefix('pve_view_')
         held_projection = next(row for row in nearby(dict(get_player(pursuer.player_id)))
                                if row['content_id']=='rav1_mireveil_n6_crosscurrent')
         assert held_projection['status'] == 'busy'
@@ -1522,8 +1524,8 @@ def test_j14_busy_shared_sources(earned_party):
         await holder.callback(
             'fight_mixed_rav1_mireveil_n6_crosscurrent', handle_combat_buttons)
         enter = next(value for value in _callbacks(holder.messages[-1][1])
-                     if value.startswith('pve_enter_'))
-        forming_id = enter.removeprefix('pve_enter_')
+                     if value.startswith('pve_view_'))
+        forming_id = enter.removeprefix('pve_view_')
         rows = nearby(dict(get_player(pursuer.player_id)))
         mixed = next(row for row in rows if row['content_id']=='rav1_mireveil_n6_crosscurrent')
         assert mixed['status'] == 'busy'
@@ -1584,8 +1586,8 @@ def test_j14_busy_shared_sources(earned_party):
             await _move(member, 'westwild_n3')
         await holder.callback('fight_special_greyfang', handle_combat_buttons)
         grey_enter = next(value for value in _callbacks(holder.messages[-1][1])
-                          if value.startswith('pve_enter_'))
-        grey_id = grey_enter.removeprefix('pve_enter_')
+                          if value.startswith('pve_view_'))
+        grey_id = grey_enter.removeprefix('pve_view_')
         grey_busy = next(row for row in nearby(dict(get_player(pursuer.player_id)))
                          if row['content_id'] == 'greyfang')
         assert grey_busy['status'] == 'busy'
@@ -1608,8 +1610,8 @@ def test_j14_busy_shared_sources(earned_party):
         conn.commit(); conn.close()
         ensure_location_pve_spawn_instances(location_id='westwild_n3')
         await holder.callback('fight_special_greyfang', handle_combat_buttons)
-        active_enter = next(value for value in _callbacks(holder.messages[-1][1]) if value.startswith('pve_enter_'))
-        active_id = active_enter.removeprefix('pve_enter_')
+        active_enter = next(value for value in _callbacks(holder.messages[-1][1]) if value.startswith('pve_view_'))
+        active_id = active_enter.removeprefix('pve_view_')
         assert lock_open_world_pve_roster_for_runtime_start(encounter_id=active_id) == [holder.player_id]
         conn = get_connection()
         conn.execute("UPDATE pve_encounters SET created_at=datetime('now','-10 minutes') WHERE encounter_id=?", (active_id,))
@@ -2218,8 +2220,8 @@ def test_j19_localized_real_handlers(earned_party, lang):
         await holder.callback(
             'fight_mixed_rav1_mireveil_n6_crosscurrent', handle_combat_buttons)
         enter = next(value for value in _callbacks(holder.messages[-1][1])
-                     if value.startswith('pve_enter_'))
-        encounter_id = enter.removeprefix('pve_enter_')
+                     if value.startswith('pve_view_'))
+        encounter_id = enter.removeprefix('pve_view_')
         await earned.callback(
             'rv:d:e:rav1_mireveil_n6_crosscurrent', handle_regional_buttons)
         assert t('rav1.errors.busy_target', lang) in earned.messages[-1][0]

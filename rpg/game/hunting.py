@@ -72,7 +72,7 @@ def harvestable_victory_page(player_id: int, *, page: int = 0,
             LEFT JOIN pve_harvest_claims h ON h.encounter_id=e.encounter_id AND h.player_id=?
             WHERE e.owner_player_id=? AND e.status='victory' AND s.status='applied'
               AND h.encounter_id IS NULL AND e.finished_at >= datetime('now', '-30 minutes')
-              ORDER BY e.finished_at DESC, e.encounter_id DESC''', (player_id, player_id)).fetchall()
+              ORDER BY e.finished_at ASC, e.encounter_id ASC''', (player_id, player_id)).fetchall()
         eligible_encounters = []
         for row in rows:
             if resolve_location_id(row['location_id']) != resolve_location_id(player['location_id']):

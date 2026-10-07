@@ -305,6 +305,50 @@ Focused evidence:
 - `python -m pytest -q tests/test_pxe1_activity_quarantine.py tests/test_pxe1_travel.py tests/test_pxe1_pvp_membership.py tests/test_pxe1_encounter_lifecycle.py tests/test_pxe1_pve_world_tick.py tests/test_pxe1_combat_order_replay.py --tb=short`
   **60 passed, 11.86s**.
 
+## Earned build and Chapter integration continuation
+
+The shared earned-build harness uses actual travel preview/Start/world ticks,
+automatic formation deadlines, read-only action selection followed by explicit
+target/scope commitment, and the actual Bot send/edit interface. Turn evidence
+reads committed snapshots rather than a discarded projection. All twenty
+weapon branches retain actual earned M8/M14, skill-effect, reward, provenance,
+mastery, actor, and reverse-join assertions. Regional callers of the shared
+selector now await it and use current formation controls; their entire RAV1
+history is still not validated because its PEV1 prerequisite needs repair.
+
+Chapter journeys retain four original assignments/rewards, actual equip/craft,
+claim and harvest rollback/replay. Gathering pins only a legal RNG seed, then
+commits real 8-second ticks against unchanged SHA probabilities and stops the
+session. No items, XP or objectives are injected. Shop uses its current preview
+and receipt route. All three languages and four required builds complete
+Chapter I. Skill Details restores the localized damage/support school. Harvest
+lists now order eligible entitlements by earliest expiry, with stable ID ties.
+The consumable proof creates its deficit within combat, avoiding a false
+assumption that a level-up after victory leaves HP missing.
+
+Focused evidence:
+
+- Initial shared-harness reconciliation: **4 failed, 21 deselected, 2.01s**
+  (old purchase dispatch/formation controls); then **2 failed, 2 passed,
+  21 deselected, 5.92s** (stale evidence snapshot and edit mock signature).
+  Corrected Guardian/Ranger/group subset: **4 passed, 21 deselected, 56.71s**.
+- `python -m pytest -q tests/test_character_builds_v1_journeys.py tests/test_character_builds_v1_group_journeys.py --tb=short`
+  **25 passed, 619.15s**.
+- Language runs: **3 failed, 1.53s** (old title), **3 failed, 2.16s**
+  (missing school), **3 failed / 15 passed, 6.72s** (nullable support school).
+  Final language + character spending: **18 passed, 9.34s**.
+- English Chapter: **1 passed, 6 deselected, 4.59s**.
+- `python -m pytest -q tests/test_playable_alpha_v1.py tests/test_character_builds_v1_gear_journey.py tests/test_character_builds_v1_language_journeys.py --tb=short`
+  **11 passed, 53.65s**.
+- Earliest-expiry hunting + tool checks: **6 passed, 1.85s**.
+- PEV1 history/consumable probe: **2 failed, 5.21s** (old 17 starter recipes;
+  invalid post-level-up deficit assumption). Corrected actual combat consumable:
+  **1 passed, 1 deselected, 2.28s**. The history test still fails on 17 versus
+  frozen 22 starters; timed gathering/tool progression, 83 recipes and policy-2
+  history remain to be reconciled without weakening earned-state assertions.
+
+Full suite remains NOT RUN. Human Telegram validation remains NOT RUN.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

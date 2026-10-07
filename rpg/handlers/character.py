@@ -188,6 +188,8 @@ def skill_card(player_id,skill_id,lang,*,details=False):
     if rank<MAX_SKILL_RANK and not reasons:
         rows.append([InlineKeyboardButton(_c(lang,'learn'),callback_data='bv_buy_'+skill_id)])
     if details:
+        from handlers.build import _SCHOOL_LABELS
+        lines.append(_c(lang,'school')+': '+escape(_label(_SCHOOL_LABELS,lang,spec.school or 'support')))
         lines.append(escape(_skill_profile(spec,lang,current_rank)))
         rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='bv_skill_'+skill_id)])
     else:

@@ -236,15 +236,14 @@ async def _fight_and_harvest(
 async def _prove_battle_consumable(journey: ProductionJourney) -> None:
     """Create a deficit in real combat, then consume through the battle path."""
     await _move(journey, 'westwild_n2')
-    for _ in range(4):
-        await journey.fight('forest_boar')
-        player = get_player(journey.player_id)
-        if int(player['hp']) < int(player['max_hp']):
-            break
-    player = get_player(journey.player_id)
-    assert int(player['hp']) < int(player['max_hp'])
-    proof = await journey.fight('forest_boar', use_potions=True)
-    assert proof['battle_potions_used'] > 0
+    # A level-up may refill HP after victory. Create the deficit inside the
+    # battle being tested, then let the existing consumable owner use the potion.
+    for _ in range(8):
+        proof = await journey.fight('forest_boar', opening=(('guard', None),) * 3, use_potions=True)
+        if proof['battle_potions_used']:
+            assert any(result['heal'] > 0 for result in proof['potion_results'])
+            return
+    raise AssertionError('Eight real encounters did not produce a consumable deficit')
 
 
 async def _learn_and_craft(journey: ProductionJourney, recipe_id: str) -> None:
