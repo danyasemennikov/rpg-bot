@@ -86,6 +86,7 @@ def _recover_combat_preparation_overlaps(conn,*,now_ms):
     live_candidates=[]
     for row in conn.execute("SELECT * FROM pve_encounters WHERE status IN ('active','resolving_victory')").fetchall():
         live=(row['status']=='resolving_victory' or row['runtime_started_ms'] is not None
+              or row['lifecycle_version']==1 and row['locked_roster_json'] is not None
               or row['lifecycle_version']==0 and pve_world_phase(conn,row['encounter_id'])=='active')
         if live:
             members={r['player_id'] for r in conn.execute(

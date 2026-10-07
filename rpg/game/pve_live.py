@@ -3868,7 +3868,8 @@ def _validate_pxe1_active_state(row):
     try:
         state=json.loads(row['battle_state_json'])
         roster=json.loads(row['locked_roster_json'])['player_ids']
-        if (not isinstance(state,dict) or state['rules_version']!=RULES_VERSION
+        if (not isinstance(row['runtime_started_ms'],int) or row['runtime_started_ms']<0
+                or not isinstance(state,dict) or state['rules_version']!=RULES_VERSION
                 or not isinstance(roster,list) or not roster or len(set(roster))!=len(roster)
                 or any(not isinstance(p,int) or isinstance(p,bool) for p in roster)
                 or not isinstance(state['participant_states_v1'],dict)

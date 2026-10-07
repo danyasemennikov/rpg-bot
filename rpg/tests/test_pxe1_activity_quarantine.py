@@ -280,3 +280,45 @@ def test_active_pve_recovery_failure_rolls_back_every_owned_transition_and_retri
     assert before=={table:[tuple(r) for r in conn.execute('SELECT * FROM '+table)] for table in tables}
     assert process_due_pve_world_sides(now_ms=1014000)==[{'encounter_id':encounter,'phase':'state_lost'}]
     conn.close()
+
+
+@pytest.mark.parametrize('domain',['pve','pvp'])
+@pytest.mark.parametrize('invalid_timestamp',[None,'invalid-time',-1])
+def test_startup_quarantines_missing_or_invalid_live_commit_time_without_changing_resources(domain,invalid_timestamp):
+    from game.player_activity import recover_activity_overlaps
+    if domain=='pve':
+        from tests.test_pxe1_pve_world_tick import started
+        ref,_=started()
+        conn=get_connection()
+        conn.execute('UPDATE pve_encounters SET runtime_started_ms=? WHERE encounter_id=?',(invalid_timestamp,ref))
+        original=conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(ref,)).fetchone()[0]
+    else:
+        conn,ref=locked()
+        conn.execute('UPDATE pvp_engagements SET roster_locked_ms=? WHERE id=?',(invalid_timestamp,ref))
+        original=conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?',(ref,)).fetchone()[0]
+    conn.commit()
+    resources=[tuple(r) for r in conn.execute('SELECT telegram_id,hp,mana,location_id,exp,gold,infamy,build_revision,gear_revision FROM players ORDER BY telegram_id')]
+    receipts=[tuple(r) for r in conn.execute('SELECT * FROM economy_action_receipts')]
+    inventory=[tuple(r) for r in conn.execute('SELECT * FROM inventory')]
+    conn.execute('BEGIN IMMEDIATE')
+    recover_activity_overlaps(conn,now_ms=1600000)
+    conn.commit()
+    assert resources==[tuple(r) for r in conn.execute('SELECT telegram_id,hp,mana,location_id,exp,gold,infamy,build_revision,gear_revision FROM players ORDER BY telegram_id')]
+    assert receipts==[tuple(r) for r in conn.execute('SELECT * FROM economy_action_receipts')]
+    assert inventory==[tuple(r) for r in conn.execute('SELECT * FROM inventory')]
+    if domain=='pve':
+        row=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(ref,)).fetchone()
+        assert row['status']=='state_lost' and row['battle_state_json']==original
+        assert not conn.execute('SELECT 1 FROM pve_reward_settlements WHERE encounter_id=?',(ref,)).fetchone()
+    else:
+        row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(ref,)).fetchone()
+        assert row['engagement_state']=='cancelled'
+        assert json.loads(row['reason_context'])['quarantined_reason_context']==original
+        assert not conn.execute('SELECT 1 FROM pvp_group_settlements_pxe1 WHERE engagement_id=?',(ref,)).fetchone()
+    notices=[tuple(r) for r in conn.execute('SELECT * FROM player_feedback_events')]
+    assert notices and not any(r[0] for r in conn.execute('SELECT in_battle FROM players'))
+    conn.execute('BEGIN IMMEDIATE')
+    recover_activity_overlaps(conn,now_ms=1601000)
+    conn.commit()
+    assert notices==[tuple(r) for r in conn.execute('SELECT * FROM player_feedback_events')]
+    conn.close()

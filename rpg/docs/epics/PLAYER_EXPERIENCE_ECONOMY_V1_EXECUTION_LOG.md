@@ -487,6 +487,44 @@ exclusivity and enhancement/secondary metadata assertions. Catalogue controls,
 gear-goal pin callback, inventory and transition: **33 passed, 24.87s**.
 
 
+## 2026-10-07 — adjacent routes and malformed commit timestamps
+
+All 25 discovered PXE1 test files passed on `6948487`: **280 passed,
+179.35s**. This focused run is not the final broad-suite result.
+
+Adjacent PR227/228 gathering tests now confirm a finite session and commit a
+real eight-second SHA-derived tick, retaining XP scaling, level gates, cap,
+empty-roll and grant-failure rollback checks. They no longer expect an instant
+menu-click grant. Travel migration tests follow the emitted preview/Start
+intent and actual due arrival; discovery changes only on arrival. Legacy PvP
+presentation fixtures explicitly identify version zero, while movement guards
+create real current pending/locked engagements. `/location` resumes a current
+PvE encounter rather than expecting the obsolete blanket combat block.
+
+These adjacent suites initially reported **35 failed / 57 passed / 101 subtests
+passed, 73.00s**. Gathering reconciliation passed **25 tests, 12.42s**.
+Travel/PvP reconciliation then reported **7 failed / 26 passed / 113 subtests
+passed, 25.20s**, followed by legacy-PvP **5 failed / 13 passed, 11.33s**;
+missing explicit fixture versions and the start-plus-arrival revision expectation
+were corrected. Combined travel/PvP/gathering result: **58 passed / 113 subtests
+passed, 34.54s**.
+
+Startup now recognizes a locked PvE roster even when its commit timestamp is
+missing. Current PvE/PvP validators reject null, malformed and negative commit
+times before overlap sorting can throw. Six startup cases prove local quarantine,
+unchanged resources/inventory/receipts, no synthetic settlement and idempotent
+notices. Recovery/actual-side/settlement suite: **49 passed, 42.27s**.
+
+Two in-flight profession journey runs were explicitly interrupted as superseded,
+not reported as passed: the first retained expensive repeated tool-training
+crafts; both loaded a funding helper that incorrectly sold the entire bark stack
+on every requested-unit iteration. Current training uses ordinary recipes with
+the same earned XP and a real finite session per batch. Funding now sells exactly
+the requested amount through quantity-capped Shop previews/confirmation and
+preserves the recipe reserve. The corrected current-run shared profession/RAV
+checkpoint is being rebuilt from registration and all four actual Chapter claims;
+no prior PEV1 database or progression grant substitutes for that history.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

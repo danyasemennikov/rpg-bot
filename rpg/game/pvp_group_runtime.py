@@ -39,7 +39,8 @@ def validate_live_group(conn,row):
         context = json.loads(row['reason_context'])
         battle = context['battle']
         ids = sides['side_a']+sides['side_b']
-        if (not isinstance(context,dict) or not isinstance(battle,dict)
+        if (not isinstance(row['roster_locked_ms'],int) or row['roster_locked_ms']<0
+                or not isinstance(context,dict) or not isinstance(battle,dict)
                 or battle['state']!='live' or battle['rules_version']!=row['rules_version']
                 or battle['world_model_version']!=1 or battle['combat_seed']!=row['combat_seed']
                 or len(row['combat_seed'])!=32 or any(c not in '0123456789abcdef' for c in row['combat_seed'])
