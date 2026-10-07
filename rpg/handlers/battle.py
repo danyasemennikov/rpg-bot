@@ -1891,6 +1891,27 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     user  = query.from_user
     p     = dict(get_player(user.id))
     lang  = p.get('lang', 'ru')
+    if data.startswith('battle_v1_'):
+        from game.action_receipts import ActionRejected
+        from game.combat_orders import recover_combat_intent
+        token=data.removeprefix('battle_v1_')
+        try: recovered=recover_combat_intent(user.id,token)
+        except ActionRejected: recovered=None
+        conn=get_connection()
+        try:
+            token_exists=conn.execute("SELECT 1 FROM player_ui_actions WHERE token=? AND player_id=? AND kind='combat_v1' AND used=0",(token,user.id)).fetchone()
+        finally: conn.close()
+        if recovered or not token_exists:
+            await query.answer(t('pxe1.combat.order_ack' if recovered else 'battle.turn_not_ready',lang))
+            current=load_active_pve_encounter(player_id=user.id)
+            if current:
+                from handlers.combat_views import home
+                text,keyboard=home(p,current[1],current[0])
+            else:
+                from handlers.world_views import location_card
+                text,keyboard=location_card(p)
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            return
     if data.startswith('battle_px_'):
         from handlers.combat_views import handle_read_selection
         await handle_read_selection(update,context)

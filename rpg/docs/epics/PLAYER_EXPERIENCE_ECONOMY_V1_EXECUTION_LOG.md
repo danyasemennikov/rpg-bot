@@ -246,6 +246,28 @@ Focused evidence:
   **81 passed, 20.40s**. The earlier 28-failure adjacent run is not converted
   into a pass; only these specifically repaired suites have new evidence.
 
+## Combat acknowledgment continuation, candidate based on 46294a3
+
+PXE1 manual combat orders retain a bound schema-1/catalogue-2 acknowledgment in
+the existing action-receipt owner, in the same writer as token consumption and
+the authoritative combat order. It contains no grants, XP or gold change and
+never evaluates/applies another side on replay. Consumed callbacks recover the
+original acknowledgment before movement, deadline, turn or token-cleanup checks;
+legacy version-0/V1 pre-PXE behavior is preserved. PvE consumption revalidates
+the durable actor, explicit target/pattern, rank/family, MP and cooldown under the
+writer using the shared pure evaluator, discarding its copies. Old missing
+battle tokens now refresh a read view without clearing another combat or
+cooldowns. Combat receipt history has localized action/status labels.
+
+Focused evidence:
+
+- New replay/transport/rollback + combat UI/durability/delivery:
+  **34 passed, 7.58s**.
+- Added under-writer no-MP/cooldown/vanished-target rejection + adjacent group
+  runtime:
+  `python -m pytest -q tests/test_pxe1_combat_order_replay.py tests/test_pxe1_combat_ui.py tests/test_character_builds_v1_durability.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_pvp_group_runtime.py`
+  **43 passed, 9.02s**. Full suite remains NOT RUN.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and

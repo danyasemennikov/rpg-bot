@@ -13,6 +13,7 @@ from game.build_progression import ensure_build_schema
 
 
 COMBAT_UI_ACTION_KIND = "combat_v1"
+COMBAT_ACK_KIND = 'combat_order_ack_pxe1'
 
 
 def _stable_json(value: Any) -> str:
@@ -51,6 +52,10 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
     try:
         conn.execute("BEGIN IMMEDIATE")
         ensure_build_schema(conn)
+        recovered = _recover_combat_ack(conn,player_id,token)
+        if recovered:
+            conn.rollback()
+            return recovered
         try:
             raw = consume_action(conn, player_id, COMBAT_UI_ACTION_KIND, token)
             payload = json.loads(raw)
@@ -67,7 +72,7 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
         encounter_id = str(payload.get("encounter_id") or "")
         revision = int(payload.get("turn_revision", -1))
         if encounter_kind == "pve":
-            encounter = conn.execute('''SELECT status, rules_version, turn_revision
+            encounter = conn.execute('''SELECT *
                 FROM pve_encounters WHERE encounter_id=?''', (encounter_id,)).fetchone()
             participant = conn.execute('''SELECT status FROM pve_encounter_participants
                 WHERE encounter_id=? AND player_id=?''', (encounter_id, player_id)).fetchone()
@@ -111,6 +116,8 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
             raise ActionRejected("stale_action")
         target_id = payload.get("target_id")
         if action.get("kind") != "flee":
+            if encounter_kind=='pve' and 'lifecycle_version' in encounter.keys() and encounter['lifecycle_version']==1:
+                _validate_pxe1_pve_order(conn,encounter,player_id,action)
             durable = submit_combat_order(
                 encounter_kind=encounter_kind, encounter_id=encounter_id,
                 turn_revision=revision, actor_id=player_id, action=action,
@@ -119,6 +126,15 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
             )
             if not durable.get("accepted"):
                 raise ActionRejected(str(durable.get("reason") or "stale_action"))
+            pxe1 = ('lifecycle_version' in encounter.keys() and encounter['lifecycle_version']==1) if encounter_kind=='pve' else ('world_model_version' in encounter.keys() and encounter['world_model_version']==1)
+            if pxe1:
+                from game.economy_actions import intent_hash,store_receipt
+                actor = conn.execute('SELECT location_id,gold FROM players WHERE telegram_id=?',(player_id,)).fetchone()
+                result = {'schema_version':1,'catalog_version':2,'action_kind':COMBAT_ACK_KIND,
+                    'status':'ordered','player_id':player_id,'location_id':actor['location_id'],'recipe_id':None,
+                    'consumed':[],'granted':[],'gold_delta':0,'gold_after':actor['gold'],'progression':[],
+                    'source':{'intent':payload},'details':{'accepted':True,**payload}}
+                store_receipt(conn,player_id,'ui:'+token,COMBAT_ACK_KIND,intent_hash(COMBAT_ACK_KIND,player_id,payload),result,catalog_version=2)
         conn.commit()
         return {"accepted": True, **payload}
     except ActionRejected as exc:
@@ -127,6 +143,81 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
     except Exception:
         conn.rollback()
         raise
+    finally:
+        conn.close()
+
+
+def _recover_combat_ack(conn,player_id,token):
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='economy_action_receipts'").fetchone():
+        return None
+    row = conn.execute('SELECT * FROM economy_action_receipts WHERE player_id=? AND request_id=? AND action_kind=?',
+                       (player_id,'ui:'+token,COMBAT_ACK_KIND)).fetchone()
+    if not row:
+        return None
+    from game.economy_actions import intent_hash
+    try:
+        result=json.loads(row['result_json'])
+        intent=result['source']['intent']
+        if (result['player_id']!=player_id or intent['actor_id']!=player_id
+                or result['action_kind']!=COMBAT_ACK_KIND or result['status']!='ordered'
+                or result['schema_version']!=1 or result['catalog_version']!=2
+                or row['request_hash']!=intent_hash(COMBAT_ACK_KIND,player_id,intent)
+                or result['details']!={'accepted':True,**intent}):
+            raise ValueError()
+        return {**result['details'],'already_applied':True}
+    except (ValueError,TypeError,KeyError):
+        raise ActionRejected('stale_action')
+
+
+def _validate_pxe1_pve_order(conn,encounter,player_id,action):
+    from game.build_contract import POWER_STRIKE,SKILL_SPECS
+    from game.combat_identity import evaluate_action
+    state=json.loads(encounter['battle_state_json'])
+    active_ids={str(r['player_id']) for r in conn.execute("SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(encounter['encounter_id'],))}
+    actors=state.get('participant_states_v1') or {}
+    actor=actors.get(str(player_id))
+    if not actor or state.get('active_side')!='side_a' or str(player_id) not in active_ids:
+        raise ActionRejected('not_your_turn')
+    allies=[entity for key,entity in actors.items() if key in active_ids]
+    enemies=state.get('enemy_states_v1') or []
+    kind=action.get('kind')
+    if action.get('target_info') is not None and not isinstance(action['target_info'],dict):
+        raise ActionRejected('invalid_target')
+    target=(action.get('target_info') or {}).get('id',action.get('target_id'))
+    target=str(target) if target is not None else None
+    live_allies={str(a['actor_id']) for a in allies if int(a['hp'])>0 and not a.get('dead')}
+    live_enemies={str(e['unit_id']) for e in enemies if int(e['hp'])>0 and not e.get('dead')}
+    if kind=='basic_attack':
+        if target not in live_enemies: raise ActionRejected('invalid_target')
+        selected={'kind':'normal','target_id':target,'manual':True}
+    elif kind=='guard':
+        if target not in {None,str(player_id)}: raise ActionRejected('invalid_target')
+        selected={'kind':'guard','target_id':player_id,'manual':True}
+    elif kind=='skill':
+        spec=POWER_STRIKE if action.get('skill_id')=='power_strike' else SKILL_SPECS.get(action.get('skill_id'))
+        if not spec: raise ActionRejected('invalid_action')
+        allowed=live_allies if spec.target=='Ally' else live_allies|live_enemies if spec.target=='AllyOrEnemy' else live_enemies
+        if spec.target in {'S','B','Ally','AllyOrEnemy'} and target not in allowed:
+            raise ActionRejected('invalid_target')
+        if spec.target=='Self' and target not in {None,str(player_id)}:
+            raise ActionRejected('invalid_target')
+        if spec.target in {'Party','F','A','2x2'} and target is not None:
+            raise ActionRejected('invalid_target')
+        selected={'kind':'skill','skill_id':action['skill_id'],'target_id':target,'manual':True}
+    else:
+        raise ActionRejected('invalid_action')
+    # The shared pure evaluator validates ranks, family, MP, cooldown and target
+    # pattern under this writer. Discard its copies; the side owner applies once.
+    result=evaluate_action(actor,allies,enemies,selected,rng_seed=0,side_index=state.get('turn_revision',0))
+    if not result['accepted']:
+        raise ActionRejected(result.get('reason','invalid_action'))
+
+
+def recover_combat_intent(player_id,token):
+    """Read the original acknowledgment before current combat or UI state."""
+    conn=get_connection()
+    try:
+        return _recover_combat_ack(conn,player_id,token)
     finally:
         conn.close()
 

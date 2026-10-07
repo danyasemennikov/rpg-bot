@@ -304,3 +304,10 @@ for _lang,_copy in {
           'protection':'Protección tras reaparecer: 8 minutos en el centro.','lost':'Tus materiales perdidos:','received':'Objetos que recibiste:',
           'draw':'Empate de PvP','victory':'Tu bando ganó'},
 }.items(): PXE1_STRINGS[_lang]['result']=_copy
+
+for _lang,_ack,_label in (
+    ('en','Your order was already recorded.','Combat order'),
+    ('ru','Ваше действие уже записано.','Действие в бою'),
+    ('es','Tu acción ya quedó registrada.','Acción de combate'),
+):
+    PXE1_STRINGS[_lang]['combat'].update(order_ack=_ack,order_label=_label)

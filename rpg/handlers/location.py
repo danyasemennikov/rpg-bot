@@ -2072,6 +2072,13 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         if not consumed.get('accepted'):
             await query.answer(t('location.pvp_action_not_ready', lang), show_alert=True)
             return
+        if consumed.get('already_applied'):
+            await query.answer(t('pxe1.combat.order_ack',lang))
+            refreshed_player=dict(get_player(user.id))
+            text,keyboard=_build_location_message_with_snapshot(context,refreshed_player,get_location(refreshed_player['location_id']),
+                pvp_only_view=_should_use_pvp_only_location_view(refreshed_player))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            return
         action = consumed.get('action') or {}
         kind = str(action.get('kind') or '')
         action_id = (

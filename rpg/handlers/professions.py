@@ -89,10 +89,14 @@ def _peaceful_guild_access(player_id: int) -> bool:
 
 
 def _receipt_action_label(receipt: dict, lang: str) -> str:
+    if receipt.get('action_kind')=='combat_order_ack_pxe1':
+        return t('pxe1.combat.order_label',lang)
     return t('professions.action_' + str(receipt.get('action_kind') or 'unknown'), lang)
 
 
 def _receipt_status_label(receipt: dict, lang: str) -> str:
+    if receipt.get('action_kind')=='combat_order_ack_pxe1':
+        return t('pxe1.combat.order_ack',lang)
     return t('professions.' + str(receipt.get('status') or 'unknown'), lang)
 
 
