@@ -768,6 +768,15 @@ Because production changed, session 98396 now runs a fresh registration-based
 logged in `pxe1-earned-vitals-repaired-fresh-pytest.log`. Its final result, the
 39 regional branches and the repaired full broad run remain pending.
 
+The affected repaired integration batch completed: **341 passed, 315.54s
+(5m15s)**, all 25 discovered PXE1 modules plus solo runtime, alpha integration
+and three actual earned group journeys. Exact expanded argv is recorded in JSON;
+output is `pxe1-vitals-integration-pytest.log`. Source/test candidate remains
+`ca4331e`; the observed `98f2eda` head adds evidence only. Active documentation
+file links resolve, and the contract SHA256 still exactly matches the original.
+The report names retained version-zero pair adapter symbols and current PvP
+content-policy checks for independent review. The fresh 41-test history continues.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

@@ -65,6 +65,17 @@ legacy replay compatibility, not a generic engine rule. Summary representatives,
 source anchors and single-target scopes do not constrain roster size; complete actor
 lists remain available through paginated details.
 
+Exact retained pair adapters for independent review are
+`game/pvp_live.py::_ensure_live_runtime_for_battle`, `_init_live_battle_payload`,
+`_runtime_side_for_player`, `_runtime_active_player_id` and
+`_finalize_pvp_battle`. `advance_engagement_to_live_battle_if_ready` and
+`resolve_live_battle_turn` dispatch world-model version 1 to collection-based
+preparation/group owners before reaching those version-zero paths.
+`game/combat_orders.py::consume_combat_intent` retains principal-only authorization
+for version-zero PvP and dispatches version 1 to group authorization.
+`game/pvp_group_runtime.py::locked_sides` enforces the frozen current-content
+maximum-two policy and principal identity; it does not constrain the shared runtime.
+
 Current PvP locks actual accepted allies, executes every actor's order once, preserves
 15-second deadlines, applies individual death receipts and terminal winning-side
 pool distributions, and does not grant PvE XP/gold/quest credit. Historical outer
@@ -76,6 +87,10 @@ Startup processes prepared rewards, interrupts running gathering, restores/valid
 active combat, resolves preparations, then reconciles at most one travel/threat edge.
 Malformed timestamps, snapshots and overlapping ownership quarantine locally without
 synthetic grants/refunds; notices and undelivered combat cards remain retryable.
+Accepted PvE actor HP/MP projects to each living active participant's player row
+inside the encounter CAS/side-result transaction, including background resolution.
+Rollback, stale and duplicate results cannot restore earlier resources; individual
+death receipts retain ownership of revived HP/MP.
 Legacy read helpers can project an old partial PvE schema without hot-path DDL.
 A denied encounter creation with an empty authoritative ID cannot enter legacy rewards.
 

@@ -149,6 +149,51 @@
       "passed": 37,
       "seconds": 8.47,
       "log": "pxe1-vitals-focused-pytest.log"
+    },
+    {
+      "candidate": "ca4331e47dee41a5256431f8116d9a3856609140",
+      "observed_head": "98f2edae604c308e333af7e0b3c5aaa0aa38d588",
+      "command": "python -m pytest -q tests\\test_pxe1_travel.py tests\\test_pxe1_tools_economy.py tests\\test_pxe1_shop_transactions.py tests\\test_pxe1_schema.py tests\\test_pxe1_recipe_surfaces.py tests\\test_pxe1_pvp_membership_ui.py tests\\test_pxe1_pvp_membership.py tests\\test_pxe1_pvp_group_runtime.py tests\\test_pxe1_pve_world_tick.py tests\\test_pxe1_progression.py tests\\test_pxe1_navigation_ui.py tests\\test_pxe1_local_surfaces.py tests\\test_pxe1_journal_surfaces.py tests\\test_pxe1_inventory_surfaces.py tests\\test_pxe1_hunting_tools.py tests\\test_pxe1_gathering_sessions.py tests\\test_pxe1_feedback_journal.py tests\\test_pxe1_encounter_lifecycle.py tests\\test_pxe1_combat_ui.py tests\\test_pxe1_combat_result_recovery.py tests\\test_pxe1_combat_order_replay.py tests\\test_pxe1_combat_delivery.py tests\\test_pxe1_character_spending.py tests\\test_pxe1_activity_quarantine.py tests\\test_pxe1_activity_conflicts.py tests/test_solo_pve_runtime_handler_flow.py tests/test_alpha_core_loop_integration_pr226.py tests/test_character_builds_v1_group_journeys.py --tb=short",
+      "argv": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests\\test_pxe1_travel.py",
+        "tests\\test_pxe1_tools_economy.py",
+        "tests\\test_pxe1_shop_transactions.py",
+        "tests\\test_pxe1_schema.py",
+        "tests\\test_pxe1_recipe_surfaces.py",
+        "tests\\test_pxe1_pvp_membership_ui.py",
+        "tests\\test_pxe1_pvp_membership.py",
+        "tests\\test_pxe1_pvp_group_runtime.py",
+        "tests\\test_pxe1_pve_world_tick.py",
+        "tests\\test_pxe1_progression.py",
+        "tests\\test_pxe1_navigation_ui.py",
+        "tests\\test_pxe1_local_surfaces.py",
+        "tests\\test_pxe1_journal_surfaces.py",
+        "tests\\test_pxe1_inventory_surfaces.py",
+        "tests\\test_pxe1_hunting_tools.py",
+        "tests\\test_pxe1_gathering_sessions.py",
+        "tests\\test_pxe1_feedback_journal.py",
+        "tests\\test_pxe1_encounter_lifecycle.py",
+        "tests\\test_pxe1_combat_ui.py",
+        "tests\\test_pxe1_combat_result_recovery.py",
+        "tests\\test_pxe1_combat_order_replay.py",
+        "tests\\test_pxe1_combat_delivery.py",
+        "tests\\test_pxe1_character_spending.py",
+        "tests\\test_pxe1_activity_quarantine.py",
+        "tests\\test_pxe1_activity_conflicts.py",
+        "tests/test_solo_pve_runtime_handler_flow.py",
+        "tests/test_alpha_core_loop_integration_pr226.py",
+        "tests/test_character_builds_v1_group_journeys.py",
+        "--tb=short"
+      ],
+      "status": "PASSED",
+      "passed": 341,
+      "seconds": 315.54,
+      "log": "pxe1-vitals-integration-pytest.log",
+      "coverage": "all 25 discovered PXE1 modules plus solo runtime, alpha integration and three actual earned group journeys"
     }
   ],
   "limitations": [
@@ -346,5 +391,16 @@
     "seconds": 21.95,
     "log": "pxe1-consumables-locale-repaired-diagnostic-pytest.log",
     "provenance": "Whole copy of failed fb89ec2 history; missing previously consumed outputs replenished by real learned recipes, then all eight unchanged consumable effects and three unchanged locale assertions executed. This copy is not reusable final acceptance."
+  },
+  "architecture_pair_adapters": {
+    "legacy_version_zero": "game/pvp_live.py::_ensure_live_runtime_for_battle, _init_live_battle_payload, _runtime_side_for_player, _runtime_active_player_id, _finalize_pvp_battle; game/combat_orders.py::consume_combat_intent principal-only branch",
+    "current_content_policy": "game/pvp_group_runtime.py::locked_sides; principal identity and maximum-two cap outside shared runtime",
+    "shared_engine": "generic participant collections; no fixed side size"
+  },
+  "static_verification": {
+    "utc": "2026-10-07T21:21:43.729636+00:00",
+    "active_doc_file_links": "RESOLVE",
+    "frozen_contract_matches_original": true,
+    "sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
   }
 }
