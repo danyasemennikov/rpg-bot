@@ -13,7 +13,7 @@
     "status": "NOT RUN"
   },
   "earned_profession_rav_journeys": {
-    "status": "RUNNING",
+    "status": "PENDING FINAL BROAD",
     "provenance": "one current registration/Chapter/profession history, SHA-256 whole DB clones; no old PEV1 history",
     "collected_tests": 41
   },
@@ -89,6 +89,24 @@
       "seconds": 20.98,
       "status": "PASSED",
       "log": "pxe1-retained-repair-focused.log"
+    },
+    {
+      "candidate": "08b8f9e + earned fixtures",
+      "command": "python -m pytest -q tests/test_map_and_long_route_phase1_5.py tests/test_quest_board_battle_bridge.py tests/test_alpha_ux_onboarding_recovery_pr3o.py tests/test_gathering_professions_foundation.py tests/test_crafting_professions_foundation.py tests/test_crafting_runtime_phase7.py tests/test_open_world_gameplay_rollout_phase1.py --tb=short",
+      "status": "FAILED",
+      "failed": 2,
+      "passed": 58,
+      "subtests_passed": 76,
+      "seconds": 28.36,
+      "finding": "current-location preview lost already-here response; synthetic recipe omitted XP-policy-2 static input value"
+    },
+    {
+      "candidate": "08b8f9e + final integration repairs",
+      "command": "python -m pytest -q tests/test_map_and_long_route_phase1_5.py tests/test_crafting_runtime_phase7.py tests/test_pxe1_travel.py --tb=short",
+      "status": "PASSED",
+      "passed": 28,
+      "seconds": 6.2,
+      "log": "pxe1-current-location-focused.log"
     }
   ],
   "limitations": [

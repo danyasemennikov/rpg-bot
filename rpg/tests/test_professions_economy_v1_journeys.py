@@ -1,4 +1,4 @@
-"""Shared PEV1 production history covering the eleven acceptance journeys.
+"""Shared PXE1 profession history retaining the eleven PEV1 acceptance journeys.
 
 The history uses production handlers/domain actions.  Its only accelerators are
 deterministic rolls, mocked Telegram transport, and the existing controlled
@@ -12,12 +12,15 @@ import asyncio
 from collections import Counter, deque
 import json
 import random
+import hashlib
 from unittest.mock import patch
+
+import pytest
+import database
 
 from database import get_connection, get_player
 from game.action_receipts import issue_actions
 from game.crafting_runtime import craft_recipe
-from game.gathering_runtime import gather_resource
 from game.gear_progression import (
     apply_gear_intent,
     exchange_enhancement_crystal,
@@ -52,14 +55,6 @@ from tests.test_character_builds_v1_journeys import ProductionJourney
 
 
 PLAYER_ID = 989301
-
-
-class FixedRoll:
-    def __init__(self, value: float):
-        self.value = value
-
-    def random(self) -> float:
-        return self.value
 
 
 def _route(origin: str, destination: str) -> list[str]:
@@ -123,46 +118,145 @@ def _environment_source(item_id: str) -> tuple[str, str, float]:
 
 
 async def _gather(journey: ProductionJourney, item_id: str, count: int, sequence: list[str]) -> None:
-    location_id, profession, roll = _environment_source(item_id)
-    await _move(journey, location_id)
-    before = _quantity(journey.player_id, item_id)
-    for index in range(count):
-        request_id = f'gather:pev1:{len(sequence)}:{index}:{item_id}'
-        result = gather_resource(
-            journey.player_id, profession, location_id=location_id,
-            request_id=request_id, rng=FixedRoll(roll),
-        )
-        assert result['status'] == 'gathered', (item_id, result)
-        sequence.append(request_id)
-    assert _quantity(journey.player_id, item_id) == before + count
+    location_id, _, _ = _environment_source(item_id)
+    await _gather_at(journey,item_id,location_id,count,sequence)
 
 
 async def _gather_at(
     journey: ProductionJourney, item_id: str, location_id: str, count: int,
     sequence: list[str],
 ) -> None:
-    resource = RESOURCES[item_id]
-    cumulative = 0.0
-    roll = None
-    for source_id, chance in ENVIRONMENTAL_SOURCES[location_id]:
-        if RESOURCES[source_id].profession_key != resource.profession_key:
-            continue
-        if source_id == item_id:
-            roll = cumulative + chance / 2
-            break
-        cumulative += chance
-    assert roll is not None, (location_id, item_id)
+    from handlers.activities import handle_activity_buttons
+    from game.gathering_runtime import _source_snapshot,gather_tick_roll,start_gathering_session
+    from game.world_activity_tick import run_world_activity_tick
+    from game.profession_tools import get_tool
+    profession=RESOURCES[item_id].profession_key
+    journey.profession_gather_ids=sequence
     await _move(journey, location_id)
     before = _quantity(journey.player_id, item_id)
-    for index in range(count):
-        request_id = f'gather:pev1:{len(sequence)}:{index}:{location_id}:{item_id}'
-        result = gather_resource(
-            journey.player_id, resource.profession_key, location_id=location_id,
-            request_id=request_id, rng=FixedRoll(roll),
-        )
-        assert result['status'] == 'gathered', (location_id, item_id, result)
-        sequence.append(request_id)
+    while _quantity(journey.player_id,item_id)<before+count:
+        await _maintain_tool(journey,profession)
+        conn=get_connection()
+        tool=get_tool(conn,journey.player_id,profession);conn.close()
+        attempts=min(4,before+count-_quantity(journey.player_id,item_id),tool['durability'])
+        snapshot=_source_snapshot(location_id,profession)
+        probability=next(entry['chance_bp']/10000 for entry in snapshot['entries'] if entry['item_id']==item_id)
+        while attempts>1 and 1000000*probability**attempts<10:
+            attempts-=1
+        cache=getattr(journey,'gather_seed_cache',{})
+        key=(location_id,item_id,attempts)
+        if key not in cache:
+            cache[key]=next(f'{n:032x}' for n in range(1000000)
+                if all((entry:=gather_tick_roll(f'{n:032x}',tick,snapshot)) and entry['item_id']==item_id
+                    for tick in range(1,attempts+1)))
+        journey.gather_seed_cache=cache
+        await journey.callback('px:gatherpreview:'+profession,handle_activity_buttons)
+        start=next(b.callback_data for row in journey.messages[-1][1].inline_keyboard for b in row
+                   if b.callback_data.startswith('px:gatherstart:'))
+        def seeded_start(*args,**kwargs): return start_gathering_session(*args,**kwargs,seed=cache[key])
+        with patch('game.gathering_runtime.start_gathering_session',side_effect=seeded_start):
+            await journey.callback(start,handle_activity_buttons)
+        conn=get_connection()
+        session=dict(conn.execute("SELECT * FROM player_gathering_sessions WHERE player_id=? AND status='running'",
+                                  (journey.player_id,)).fetchone());conn.close()
+        for tick in range(1,attempts+1):
+            run_world_activity_tick(now_ms=session['started_ms']+tick*8000)
+            request_id=f"gather:{session['session_id']}:{tick}"
+            conn=get_connection()
+            row=conn.execute('SELECT result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?',
+                             (journey.player_id,request_id)).fetchone();conn.close()
+            if not row:
+                # A due hostile visit interrupts before the next gather tick.
+                # Keep the real committed yields, then choose the legal prelock
+                # Leave action; stopping never manufactures the missing yield.
+                conn=get_connection()
+                stopped=dict(conn.execute('SELECT * FROM player_gathering_sessions WHERE session_id=?',
+                                          (session['session_id'],)).fetchone())
+                conn.close()
+                assert stopped['status']=='interrupted' and stopped['terminal_reason']=='hostile_encounter',stopped
+                assert stopped['last_tick']==tick-1 and stopped['yield_total']==tick-1
+                from game.pve_live import get_active_pve_encounter_id_for_player
+                from handlers.location import handle_location_buttons
+                active=get_active_pve_encounter_id_for_player(player_id=journey.player_id,ensure_schema=False)
+                assert active
+                before_leave=dict(get_player(journey.player_id))
+                await journey.callback('pve_enter_'+active,handle_location_buttons)
+                leave='pve_leave_'+active
+                assert any(b.callback_data==leave for row in journey.messages[-1][1].inline_keyboard for b in row)
+                await journey.callback(leave,handle_location_buttons)
+                after_leave=dict(get_player(journey.player_id))
+                assert (after_leave['gold'],after_leave['exp'])==(before_leave['gold'],before_leave['exp'])
+                assert get_active_pve_encounter_id_for_player(player_id=journey.player_id,ensure_schema=False) is None
+                break
+            result=json.loads(row['result_json'])
+            assert result['granted']==[{'item_id':item_id,'quantity':1,'instance_ids':[],'gear_specs':[]}],result
+            assert result['tool']['durability']==tool['durability']-tick
+            sequence.append(request_id)
+        with patch('handlers.activities.time.time',return_value=(session['started_ms']+attempts*8000)/1000):
+            await journey.callback('px:stop:gather:'+session['session_id'],handle_activity_buttons)
     assert _quantity(journey.player_id, item_id) == before + count
+
+
+async def _sell_owned(journey,entry,quantity=1):
+    from handlers.shop_views import handle_shop_buttons
+    await journey.callback(f'px:shop:saleview:{entry}:{quantity}',handle_shop_buttons)
+    for _ in range(2):
+        callback=next(b.callback_data for row in journey.messages[-1][1].inline_keyboard for b in row
+                      if b.callback_data.startswith('px:shop:commit:'))
+        await journey.callback(callback,handle_shop_buttons)
+        if not any(b.callback_data.startswith('px:shop:commit:') for row in journey.messages[-1][1].inline_keyboard for b in row):
+            return
+    raise AssertionError('Sale did not commit after explicit confirmation')
+
+
+async def _ensure_gold(journey,required,*,protected_materials=()):
+    origin=get_player(journey.player_id)['location_id']
+    await _move(journey,'capital_city')
+    for _ in range(200):
+        if get_player(journey.player_id)['gold']>=required: break
+        conn=get_connection()
+        gear=conn.execute('SELECT id FROM gear_instances WHERE telegram_id=? AND equipped_slot IS NULL ORDER BY id',
+                          (journey.player_id,)).fetchone()
+        exclusions=','.join('?' for _ in protected_materials)
+        protected_clause=f' AND inv.item_id NOT IN ({exclusions})' if exclusions else ''
+        material=conn.execute("SELECT inv.id,inv.quantity FROM inventory inv JOIN items i ON inv.item_id=i.item_id WHERE inv.telegram_id=? AND i.item_type='material' AND i.sell_price>0"+protected_clause+" ORDER BY i.sell_price DESC,inv.id",
+                              (journey.player_id,*protected_materials)).fetchone();conn.close()
+        if gear: await _sell_owned(journey,'g'+str(gear['id']))
+        elif material: await _sell_owned(journey,'i'+str(material['id']),min(99,material['quantity']))
+        else:
+            await _move(journey,'westwild_n1')
+            await journey.fight('westwild_rabbit')
+            await _move(journey,'capital_city')
+    assert get_player(journey.player_id)['gold']>=required
+    await _move(journey,origin)
+
+
+async def _maintain_tool(journey,profession):
+    from game.profession_tools import get_tool,repair_quote,commit_tool_maintenance
+    conn=get_connection();tool=get_tool(conn,journey.player_id,profession);conn.close()
+    assert tool,profession
+    if tool['durability']: return
+    origin=get_player(journey.player_id)['location_id']
+    await _move(journey,'capital_city')
+    if tool['tier']==1:
+        quote={'schema_version':1,'profession_key':profession,'tool_revision':tool['revision'],'gold':12}
+        kind='tool_replace_pxe1'
+    else:
+        conn=get_connection();quote=repair_quote(conn,journey.player_id,profession);conn.close()
+        kind='tool_repair_pxe1'
+    await _ensure_gold(journey,quote['gold'])
+    # Funding sales can change owned materials, so render a new exact repair quote.
+    if tool['tier']>1:
+        conn=get_connection();quote=repair_quote(conn,journey.player_id,profession);conn.close()
+        await _ensure_gold(journey,quote['gold'])
+        conn=get_connection();quote=repair_quote(conn,journey.player_id,profession);conn.close()
+    payload=json.dumps(quote,sort_keys=True,separators=(',',':'))
+    token=issue_actions(journey.player_id,kind,[payload])[payload]
+    result=commit_tool_maintenance(journey.player_id,action_token=token,replace=tool['tier']==1)
+    assert result['status'] in {'repaired','replaced'}
+    assert not result['granted'] and not result['progression']
+    assert commit_tool_maintenance(journey.player_id,action_token=token,replace=tool['tier']==1)['recovered']
+    await _move(journey,origin)
 
 
 async def _gather_to_level(
@@ -172,7 +266,18 @@ async def _gather_to_level(
     while _profession_level(
         journey.player_id, 'player_gathering_professions', 'telegram_id', profession,
     ) < target:
-        await _gather(journey, item_id, 1, sequence)
+        before=_profession_level(journey.player_id,'player_gathering_professions','telegram_id',profession)
+        assert before<=RESOURCES[item_id].required_level+5,(profession,item_id,target,'zero-XP source')
+        from game.gathering_progression import gathering_profession_xp_for_success
+        from game.profession_progression import xp_to_level
+        conn=get_connection()
+        state=conn.execute('SELECT level,exp FROM player_gathering_professions WHERE telegram_id=? AND profession_key=?',
+                           (journey.player_id,profession)).fetchone()
+        conn.close()
+        xp=gathering_profession_xp_for_success(current_profession_level=state['level'],
+                                              required_profession_level=RESOURCES[item_id].required_level)
+        needed=xp_to_level(state['level'],state['exp'],target)
+        await _gather(journey,item_id,min(4,(needed+xp-1)//xp),sequence)
 
 
 async def _recover(journey: ProductionJourney, *, force: bool = False) -> None:
@@ -204,6 +309,7 @@ async def _fight_and_harvest(
     encounter_ids: list[str],
 ) -> None:
     await _move(journey, location_id)
+    await _maintain_tool(journey,'hunting')
     await _recover(journey)
     opening = (
         (('skill', 'defensive_stance'), ('skill', 'shield_bash'), ('skill', 'sword_rush'))
@@ -246,14 +352,104 @@ async def _prove_battle_consumable(journey: ProductionJourney) -> None:
     raise AssertionError('Eight real encounters did not produce a consumable deficit')
 
 
-async def _learn_and_craft(journey: ProductionJourney, recipe_id: str) -> None:
+async def _learn_and_craft(journey: ProductionJourney, recipe_id: str, *, commission=False) -> str:
+    from game.profession_recipes import get_recipe
+    from game.profession_tools import get_tool
+    recipe=get_recipe(recipe_id)
+    assert recipe
+    sequence=getattr(journey,'profession_gather_ids',[])
+    await _move(journey,'capital_city')
+    if recipe_id not in set(known_recipe_ids(journey.player_id)):
+        await _ensure_gold(journey,recipe.learning_gold)
+    inputs=dict(recipe.requirements)
+    if commission:
+        # Own-tier materials are supplied only after a real visit. The lower
+        # inputs and 3x wood requirement remain earned and consumed normally.
+        for item in list(inputs):
+            if RESOURCES[item].resource_tier==recipe.output_spec.tool_tier:
+                await _move(journey,_environment_source(item)[0]);inputs.pop(item)
+        inputs['wood_common']*=3
+        await _ensure_gold(journey,20*recipe.output_spec.tool_tier**2+recipe.learning_gold)
+    environmental={item for rows in ENVIRONMENTAL_SOURCES.values() for item,_ in rows}
+    harvest_sources={'boar_meat':('forest_boar','westwild_n2'),'wolf_pelt':('forest_wolf','westwild_n3'),
+                     'wolf_fang':('forest_wolf','westwild_n3'),'spider_silk':('forest_spider','westwild_n5'),
+                     'bear_hide':('bear','westwild_n7'),'troll_sinew':('troll','frostspine_n7')}
+    for _ in range(20):
+        if all(_quantity(journey.player_id,item)>=quantity for item,quantity in inputs.items()): break
+        for item,quantity in inputs.items():
+            missing=max(0,quantity-_quantity(journey.player_id,item))
+            if missing and item in environmental: await _gather(journey,item,missing,sequence)
+            elif missing:
+                mob,place=harvest_sources[item]
+                for _ in range(missing):
+                    await _fight_and_harvest(journey,location_id=place,mob_id=mob,item_id=item,encounter_ids=[])
+    assert all(_quantity(journey.player_id,item)>=quantity for item,quantity in inputs.items()),(recipe_id,inputs)
+    await _move(journey,'capital_city')
+    learning_fee=recipe.learning_gold if recipe_id not in set(known_recipe_ids(journey.player_id)) else 0
+    final_fee=learning_fee+(20*recipe.output_spec.tool_tier**2 if commission else 0)
+    if final_fee:
+        # Gathering maintenance can spend the earlier fee reserve. Fund again
+        # after the ingredients are complete, without selling those ingredients.
+        await _ensure_gold(journey,final_fee,protected_materials=tuple(inputs))
     if recipe_id not in set(known_recipe_ids(journey.player_id)):
         payload = recipe_intent_payload(recipe_id)
         token = issue_actions(journey.player_id, 'learn', [payload])[payload]
         assert learn_recipe(journey.player_id, recipe_id, action_token=token)['status'] == 'learned'
-    payload = recipe_intent_payload(recipe_id)
+    if recipe.output_spec.kind=='tool':
+        conn=get_connection();tool=get_tool(conn,journey.player_id,recipe.output_spec.profession_key);conn.close()
+        payload=recipe_intent_payload(recipe_id,tool_revision=tool['revision'],commission=commission,replacement_confirmed=True)
+    else: payload = recipe_intent_payload(recipe_id)
     token = issue_actions(journey.player_id, 'craft', [payload])[payload]
-    assert craft_recipe(journey.player_id, recipe_id, action_token=token).status == 'crafted'
+    result=craft_recipe(journey.player_id, recipe_id, action_token=token)
+    assert result.status == 'crafted',(recipe_id,result)
+    replay=craft_recipe(journey.player_id,recipe_id,action_token=token)
+    assert replay.status=='crafted' and replay.recovered
+    return token
+
+
+async def _train_crafting(journey,profession,target,tier):
+    recipe={
+        'blacksmith':{1:'pe_sword_1h_01',2:'pe_shield_06',3:'pe_sword_2h_12'},
+        'arcane_engineer':{1:'pe_magic_staff_01',2:'pe_focus_06',3:'pe_holy_rod_12'},
+    }[profession][tier]
+    for _ in range(2000):
+        if _crafting_level(journey.player_id,profession)>=target: return
+        await _learn_and_craft(journey,recipe)
+    raise AssertionError((profession,target,'craft training failed to progress'))
+
+
+async def _earned_tool_ladders(journey,gather_ids,encounter_ids):
+    ladders={
+        'herbalism':(('herb_common',6),('marsh_herb',12),('desert_plant',18),('toxic_herb',20)),
+        'woodcutting':(('wood_common',6),('wood_dark',12),('frostpine_wood',18),('ancient_bark',20)),
+        'mining':(('iron_ore',6),('salt_crystal',12),('gem_common',18),('sunscar_ore',20)),
+        'fishing':(('shore_fish',6),('marsh_fish',12),('oasis_fish',18),('deep_marsh_fish',20)),
+    }
+    for profession in (*ladders,'hunting'):
+        await _learn_and_craft(journey,f'pxe_tool_{profession}_1')
+    for tier,target in ((1,6),(2,12),(3,18),(4,20)):
+        print(f'PXE1 earned tools: tier {tier}, target {target}',flush=True)
+        # Hunt before distant sources: these victories earn character power and
+        # the ordinary gear/materials used by subsequent crafts and repairs.
+        item,mob,place={1:('boar_meat','forest_boar','westwild_n2'),
+                       2:('spider_silk','forest_spider','westwild_n5'),
+                       3:('bear_hide','bear','westwild_n7'),
+                       4:('troll_sinew','troll','frostspine_n7')}[tier]
+        if tier==4: await _equip_regional_combat_gear(journey)
+        for _ in range(2000):
+            if _profession_level(journey.player_id,'player_gathering_professions','telegram_id','hunting')>=target: break
+            await _fight_and_harvest(journey,location_id=place,mob_id=mob,item_id=item,encounter_ids=encounter_ids)
+        assert _profession_level(journey.player_id,'player_gathering_professions','telegram_id','hunting')>=target
+        for profession,ladder in ladders.items():
+            item,target=ladder[tier-1]
+            await _gather_to_level(journey,profession,item,target,gather_ids)
+        if tier<4:
+            for crafting in ('blacksmith','arcane_engineer'):
+                await _train_crafting(journey,crafting,{1:6,2:12,3:18}[tier],tier)
+            for profession in ('woodcutting','mining'):
+                await _learn_and_craft(journey,f'pxe_tool_{profession}_{tier+1}',commission=True)
+            for profession in ('herbalism','fishing','hunting'):
+                await _learn_and_craft(journey,f'pxe_tool_{profession}_{tier+1}')
 
 
 async def _claim_chapter_contract(
@@ -467,7 +663,8 @@ async def _hunt_history(journey: ProductionJourney, encounter_ids: list[str]) ->
 
 async def _sell_bark_for_learning(journey: ProductionJourney, quantity: int) -> None:
     await _move(journey, 'capital_city')
-    for _ in range(quantity):
+    remaining = quantity
+    while remaining:
         conn = get_connection()
         try:
             row = conn.execute(
@@ -476,10 +673,10 @@ async def _sell_bark_for_learning(journey: ProductionJourney, quantity: int) -> 
             ).fetchone()
         finally:
             conn.close()
-        payload = f"{row['id']}:{row['quantity']}"
-        token = issue_actions(journey.player_id, 'sell', [payload])[payload]
-        result = try_sell_inventory_item(journey.player_id, token)
-        assert result['status'] == 'sold'
+        assert row and row['quantity'] >= remaining
+        amount = min(99, remaining)
+        await _sell_owned(journey, f"i{row['id']}", amount)
+        remaining -= amount
 
 
 def _crafting_level(player_id: int, key: str) -> int:
@@ -490,7 +687,11 @@ async def _craft_all(
     journey: ProductionJourney, action_ids: list[str], gather_ids: list[str],
 ) -> set[str]:
     await _move(journey, 'capital_city')
-    crafted: set[str] = set()
+    conn=get_connection()
+    crafted={json.loads(row['result_json'])['recipe_id'] for row in conn.execute(
+        "SELECT result_json FROM economy_action_receipts WHERE player_id=? AND action_kind IN ('craft','tool_craft_pxe1','tool_commission_pxe1')",
+        (journey.player_id,)) if json.loads(row['result_json']).get('status')=='crafted'}
+    conn.close()
     professions = sorted({recipe.profession_key for recipe in ACTIVE_RECIPES})
     for profession in professions:
         recipes = sorted(
@@ -502,33 +703,12 @@ async def _craft_all(
             recipe.recipe_id not in crafted for recipe in recipes
         ):
             safety += 1
-            assert safety < 80, profession
+            assert safety < 2000, profession
             level = _crafting_level(journey.player_id, profession)
-            known = set(known_recipe_ids(journey.player_id))
-            for recipe in recipes:
-                if recipe.required_level <= level and recipe.recipe_id not in known:
-                    payload = recipe_intent_payload(recipe.recipe_id)
-                    token = issue_actions(journey.player_id, 'learn', [payload])[payload]
-                    result = learn_recipe(journey.player_id, recipe.recipe_id, action_token=token)
-                    assert result['status'] in {'learned', 'already_known'}, result
-                    action_ids.append(f'ui:{token}')
-            known = set(known_recipe_ids(journey.player_id))
-            available = [recipe for recipe in recipes if recipe.required_level <= level and recipe.recipe_id in known]
-            candidate = next((recipe for recipe in available if recipe.recipe_id not in crafted), available[-1])
-            environmental_ids = {
-                item_id for sources in ENVIRONMENTAL_SOURCES.values() for item_id, _ in sources
-            }
-            for item_id, quantity in candidate.requirements:
-                missing = max(0, quantity - _quantity(journey.player_id, item_id))
-                if missing and item_id in environmental_ids:
-                    await _gather(journey, item_id, missing, gather_ids)
-            await _move(journey, 'capital_city')
-            payload = recipe_intent_payload(candidate.recipe_id)
-            token = issue_actions(journey.player_id, 'craft', [payload])[payload]
-            result = craft_recipe(journey.player_id, candidate.recipe_id, action_token=token)
-            assert result.status == 'crafted', (profession, candidate.recipe_id, result)
-            replay = craft_recipe(journey.player_id, candidate.recipe_id, action_token=token)
-            assert replay.status == 'crafted' and replay.recovered
+            available=[recipe for recipe in recipes if recipe.required_level<=level]
+            candidate=next((recipe for recipe in available if recipe.recipe_id not in crafted),
+                           next(r for r in reversed(available) if r.output_spec.kind!='tool'))
+            token=await _learn_and_craft(journey,candidate.recipe_id)
             action_ids.append(f'ui:{token}')
             crafted.add(candidate.recipe_id)
     return crafted
@@ -754,20 +934,13 @@ async def _production_history() -> dict:
     await journey.callback('alpha_kit_practice_sword', handle_chapter_buttons)
     vendor_instance = await journey.buy_and_equip_field_weapon('sword_1h')
     starter_recipe_count = len(known_recipe_ids(PLAYER_ID))
-    assert starter_recipe_count == 17
+    assert starter_recipe_count == 22
     gather_ids: list[str] = []
     encounter_ids: list[str] = []
     chapter_history = await _complete_aster_elmor_chapter(journey, gather_ids, encounter_ids)
     await _prove_battle_consumable(journey)
 
-    for profession, ladder in {
-        'herbalism': (('herb_common', 6), ('marsh_herb', 12), ('desert_plant', 18), ('toxic_herb', 20)),
-        'woodcutting': (('wood_common', 6), ('wood_dark', 12), ('frostpine_wood', 18), ('ancient_bark', 20)),
-        'mining': (('iron_ore', 6), ('salt_crystal', 12), ('gem_common', 18), ('sunscar_ore', 20)),
-        'fishing': (('shore_fish', 6), ('marsh_fish', 12), ('oasis_fish', 18), ('deep_marsh_fish', 20)),
-    }.items():
-        for item_id, target in ladder:
-            await _gather_to_level(journey, profession, item_id, target, gather_ids)
+    await _earned_tool_ladders(journey,gather_ids,encounter_ids)
     await _gather_at(journey, 'herb_magic', 'ashen_n3c1', 1, gather_ids)
 
     requirements = Counter()
@@ -816,10 +989,10 @@ async def _production_history() -> dict:
             json.loads(row['result_json']).get('location_id')
             for row in conn.execute(
                 "SELECT result_json FROM economy_action_receipts "
-                "WHERE player_id=? AND action_kind='gather'",
+                "WHERE player_id=? AND action_kind='gather_tick_pxe1'",
                 (PLAYER_ID,),
             )
-            if json.loads(row['result_json']).get('status') == 'gathered'
+            if json.loads(row['result_json']).get('granted')
         }
         receipt_count = conn.execute(
             'SELECT COUNT(*) AS count FROM economy_action_receipts WHERE player_id=?', (PLAYER_ID,)
@@ -847,7 +1020,7 @@ async def _production_history() -> dict:
     }
     production_checks = {
         'new_character_and_chapter': (
-            starter_recipe_count == 17
+            starter_recipe_count == 22
             and int(vendor_instance['id']) > 0
             and {'chapter_first_watch', 'chapter_caravan', 'chapter_outfitter', 'chapter_homecoming'}
                 <= chapter_history
@@ -906,11 +1079,83 @@ async def _production_history() -> dict:
     }
 
 
-def test_shared_production_history_covers_pev1_acceptance_matrix():
-    evidence = asyncio.run(_production_history())
+def _earned_source_hash():
+    from pathlib import Path
+    digest=hashlib.sha256()
+    paths=[Path('database.py'),Path('bot.py'),Path(__file__),
+           Path('tests/test_character_builds_v1_journeys.py'),
+           Path('tests/test_character_builds_v1_group_journeys.py')]
+    for folder in ('game','handlers','locales'):
+        paths.extend(Path(folder).rglob('*.py'))
+    for path in sorted(paths):
+        digest.update(str(path).encode());digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def load_recorded_pxe1_checkpoint(directory):
+    # Optional focused-repair accelerator: only this exact current earned
+    # source history, copied whole and verified by both source and DB hashes.
+    from pathlib import Path
+    directory=Path(directory)
+    data=json.loads((directory/'provenance.json').read_text(encoding='utf-8'))
+    assert data['source_sha256']==_earned_source_hash(),'earned source changed'
+    checkpoint=directory/'earned.sqlite3'
+    assert hashlib.sha256(checkpoint.read_bytes()).hexdigest()==data['sha256']
+    evidence=data['evidence']
+    assert all(evidence['production_checks'].values())
+    assert len(evidence['crafted'])==83
+    assert evidence['gathering']==dict.fromkeys(('herbalism','woodcutting','mining','fishing','hunting'),20)
+    assert evidence['crafting']==dict.fromkeys(('blacksmith','arcane_engineer','alchemy','cooking','heavy_armor','medium_armor','light_armor'),20)
+    for key in ('crafted','acquired','acquired_regions'):evidence[key]=set(evidence[key])
+    return {'path':checkpoint,'sha256':data['sha256'],'evidence':evidence,'player_id':data['player_id']}
+
+
+def build_pxe1_profession_checkpoint(tmp_path_factory):
+    """One current earned history, cloned whole by the independent RAV branches."""
+    from game.seed import seed_items
+    from game.pve_live import _ensure_pve_encounter_table,_ensure_world_spawn_table
+    source_sha256=_earned_source_hash()
+    checkpoint=tmp_path_factory.mktemp('pxe1-earned-professions')/'earned.sqlite3'
+    original=database.DB_PATH
+    database.DB_PATH=str(checkpoint)
+    try:
+        database.init_db()
+        seed_items()
+        _ensure_pve_encounter_table()
+        _ensure_world_spawn_table()
+        from game.regional_schema import ensure_regional_schema
+        conn = get_connection()
+        ensure_regional_schema(conn)
+        conn.close()
+        try:
+            evidence=asyncio.run(_production_history())
+        except Exception:
+            import traceback
+            (checkpoint.parent/'failure.txt').write_text(traceback.format_exc(),encoding='utf-8')
+            raise
+        assert all(evidence['production_checks'].values()),evidence['production_checks']
+        conn=get_connection();conn.execute('PRAGMA wal_checkpoint(TRUNCATE)');conn.close()
+    finally:
+        database.DB_PATH=original
+    result={'path':checkpoint,'sha256':hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+            'evidence':evidence,'player_id':PLAYER_ID}
+    import tempfile,shutil
+    from pathlib import Path
+    saved=Path(tempfile.mkdtemp(prefix='pxe1-earned-history-'))
+    shutil.copy2(checkpoint,saved/'earned.sqlite3')
+    assert _earned_source_hash()==source_sha256,'earned sources changed during history build'
+    metadata={'sha256':result['sha256'],'source_sha256':source_sha256,
+              'evidence':evidence,'player_id':PLAYER_ID}
+    (saved/'provenance.json').write_text(json.dumps(metadata,default=lambda value:sorted(value) if isinstance(value,set) else value,indent=2),encoding='utf-8')
+    print(f'PXE1 earned checkpoint: {saved}',flush=True)
+    return result
+
+
+def test_shared_production_history_covers_pev1_acceptance_matrix(pxe1_profession_checkpoint):
+    evidence=pxe1_profession_checkpoint['evidence']
     assert all(evidence['production_checks'].values()), evidence['production_checks']
     assert set(evidence['crafted']) == {recipe.recipe_id for recipe in ACTIVE_RECIPES}
-    assert len(evidence['crafted']) == 63
+    assert len(evidence['crafted']) == 83
     assert set(MANDATORY_RESOURCE_IDS) <= evidence['acquired']
     assert len(MANDATORY_RESOURCE_IDS) == 28
     assert evidence['gathering'] == {

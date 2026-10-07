@@ -1620,8 +1620,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
     if data.startswith('goto_'):
         from handlers.activities import travel_preview_card
         from game.action_receipts import ActionRejected
+        destination=resolve_location_id(data.removeprefix('goto_'))
+        if destination==resolve_location_id(p['location_id']):
+            await query.answer(t('location.already_here',lang),show_alert=True)
+            return
         try:
-            text,keyboard = travel_preview_card(dict(p),data.removeprefix('goto_'))
+            text,keyboard = travel_preview_card(dict(p),destination)
         except ActionRejected:
             await query.answer(t('location.long_route_unknown',lang),show_alert=True)
             return

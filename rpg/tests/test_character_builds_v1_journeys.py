@@ -461,6 +461,22 @@ class ProductionJourney:
         from handlers.activities import handle_activity_buttons
         from game.world_activity_tick import run_world_activity_tick
         for destination in destinations:
+            # Advancing world time for another party member can create a real
+            # hostile formation for a parked actor. Choose its legal prelock
+            # Leave control before attempting peaceful travel.
+            from game.pve_live import get_active_pve_encounter_id_for_player
+            active=get_active_pve_encounter_id_for_player(player_id=self.player_id,ensure_schema=False)
+            if active:
+                encounter=_rows('SELECT runtime_started_ms FROM pve_encounters WHERE encounter_id=?',(active,))[0]
+                if encounter['runtime_started_ms'] is None:
+                    before=dict(get_player(self.player_id))
+                    await self.callback('pve_enter_'+active,handle_location_buttons)
+                    leave='pve_leave_'+active
+                    assert leave in _callbacks(self.messages[-1][1])
+                    await self.callback(leave,handle_location_buttons)
+                    after=dict(get_player(self.player_id))
+                    assert (after['exp'],after['gold'])==(before['exp'],before['gold'])
+                    assert get_active_pve_encounter_id_for_player(player_id=self.player_id,ensure_schema=False) is None
             origin = get_player(self.player_id)['location_id']
             await self.callback(f"goto_{destination}", handle_location_buttons)
             assert get_player(self.player_id)['location_id'] == origin

@@ -648,6 +648,25 @@ Final affected regression: **23 passed, 20.98s**, using
 `python -m pytest -q tests/test_character_builds_v1_pvp_journey.py tests/test_location_action_tokens.py --tb=short`.
 The current earned profession/RAV history is still building; full suite is NOT RUN.
 
+The retained map/Chapter-bridge/onboarding/gathering/crafting/rollout batch reported
+**2 failed / 58 passed / 76 subtests passed, 28.36s**. A same-location Go request
+incorrectly mapped its preview rejection to an unknown-route answer; the handler
+now restores the localized already-here response without issuing a travel intent.
+The synthetic duplicate-input recipe now declares its fixed material value (four
+3g herbs plus one legacy25g venom), retaining aggregation/consumption assertions.
+An intermediate fixture value lookup used venom outside the current 28-resource
+catalogue: **1 failed / 27 passed, 9.67s**; corrected to the explicit static value.
+
+The in-flight earned history had reached all gathering level18 and all tier-three
+tools, but was explicitly stopped without pass evidence before the production UI
+repair. No checkpoint from it is accepted. All automated scope is now represented
+in the coherent candidate; the next full run builds a fresh current profession
+history and covers all regional branches, rather than duplicating that long setup
+in another preliminary run. Final documentation/results and the one Draft remain.
+
+Affected same-location/crafting/travel regression: **28 passed, 6.20s**, using
+`python -m pytest -q tests/test_map_and_long_route_phase1_5.py tests/test_crafting_runtime_phase7.py tests/test_pxe1_travel.py --tb=short`.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83
