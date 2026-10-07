@@ -60,6 +60,7 @@ def interrupt_peaceful_activity(conn, player_id: int, *, reason: str, now_ms: in
 
 def recover_activity_overlaps(conn,*,now_ms):
     """Preserve committed combat/location; stop lower-priority travel on restart."""
+    _recover_combat_preparation_overlaps(conn,now_ms=now_ms)
     from game.player_feedback import record_feedback
     for session in conn.execute("SELECT session_id,player_id FROM player_travel_sessions WHERE status='running'").fetchall():
         activity=player_activity(conn,session['player_id'],exclude_travel=session['session_id'])
@@ -69,3 +70,49 @@ def recover_activity_overlaps(conn,*,now_ms):
             record_feedback(conn,session['player_id'],event_key='recovery:travel:'+session['session_id'],
                 source_kind='travel_session',source_id=session['session_id'],event_kind='recovery',
                 payload={'reason':'activity_overlap'},now_ms=now_ms)
+
+
+def _recover_combat_preparation_overlaps(conn,*,now_ms):
+    """An existing live fight owns its actors before unstarted commitments."""
+    import json
+    from game.pve_live import pve_world_phase,_interrupt_pxe1_formation
+    from game.pvp_world import cancel_preparation,iso
+    from game.player_experience_schema import _recovery_notice
+    if not conn.in_transaction:
+        raise RuntimeError('activity recovery requires a caller-owned writer')
+    live_actors=set()
+    for row in conn.execute("SELECT * FROM pve_encounters WHERE status IN ('active','resolving_victory')").fetchall():
+        live=(row['status']=='resolving_victory' or row['runtime_started_ms'] is not None
+              or row['lifecycle_version']==0 and pve_world_phase(conn,row['encounter_id'])=='active')
+        if live:
+            live_actors.update(r['player_id'] for r in conn.execute(
+                "SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(row['encounter_id'],)))
+    for row in conn.execute("SELECT * FROM pvp_engagements WHERE engagement_state IN ('active','converted_to_battle')").fetchall():
+        try:
+            context=json.loads(row['reason_context'])
+            live=row['engagement_state']=='converted_to_battle' or context.get('battle',{}).get('state')=='live'
+        except (ValueError,TypeError,AttributeError):
+            live=row['engagement_state']=='converted_to_battle'
+        if not live:
+            continue
+        members={row['attacker_id'],row['defender_id']}
+        members.update(r['ally_id'] for r in conn.execute(
+            "SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND status='locked'",(row['id'],)))
+        if row['world_model_version']==1:
+            members.difference_update(r['player_id'] for r in conn.execute(
+                'SELECT player_id FROM pvp_participant_settlements_pxe1 WHERE engagement_id=?',(row['id'],)))
+        live_actors.update(members)
+    for row in conn.execute("SELECT encounter_id FROM pve_encounters WHERE status='active' AND lifecycle_version=1 AND runtime_started_ms IS NULL").fetchall():
+        members={r['player_id'] for r in conn.execute(
+            "SELECT player_id FROM pve_encounter_participants WHERE encounter_id=? AND status='active'",(row['encounter_id'],))}
+        if members & live_actors:
+            _interrupt_pxe1_formation(conn,row['encounter_id'],now_ms=now_ms,reason='activity_overlap')
+    for row in conn.execute("SELECT * FROM pvp_engagements WHERE world_model_version=1 AND engagement_state='pending'").fetchall():
+        if {row['attacker_id'],row['defender_id']} & live_actors:
+            cancel_preparation(conn,row,reason='activity_overlap',now_ms=now_ms)
+            continue
+        for ally in conn.execute("SELECT * FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1 AND status='accepted'",(row['id'],)).fetchall():
+            if ally['ally_id'] in live_actors:
+                conn.execute("UPDATE pvp_engagement_reinforcements SET status='expired',responded_at=? WHERE id=?",(iso(now_ms),ally['id']))
+                conn.execute('UPDATE pvp_engagements SET state_revision=state_revision+1 WHERE id=?',(row['id'],))
+                _recovery_notice(conn,ally['ally_id'],domain='pvp',ref=row['id'],reason='activity_overlap',now_ms=now_ms)

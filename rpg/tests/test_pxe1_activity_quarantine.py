@@ -143,3 +143,104 @@ def test_corrupt_active_pve_interrupts_with_owned_respawn_and_preserves_player_s
     assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE source_kind='pve' AND source_id=? AND event_kind='recovery'",(encounter,)).fetchone()[0]==1
     assert process_due_pve_world_sides(now_ms=1014000)==[]
     conn.close()
+
+
+@pytest.mark.parametrize('owner_id',[1,2])
+def test_startup_preserves_active_pve_over_future_pvp_principal_or_ally_commitment(owner_id):
+    from unittest.mock import patch
+    from game.build_progression import migrate_character_builds_v1
+    from game.mobs import get_mob
+    from game.pve_live import create_or_load_open_world_pve_encounter,list_location_available_spawn_instances,process_due_pve_formations
+    from game.pvp_world import invite,respond
+    from game.player_activity import recover_activity_overlaps
+    from tests.test_pxe1_pvp_membership import prepare
+    conn,engagement=prepare()
+    conn.execute('BEGIN IMMEDIATE')
+    invite(conn,engagement_id=engagement,principal_id=1,ally_id=2,now_ms=1001000)
+    respond(conn,engagement_id=engagement,ally_id=2,accepted=True,now_ms=1002000)
+    # Create both real owners, then restore the impossible saved overlap.
+    conn.execute("UPDATE pvp_engagements SET engagement_state='cancelled' WHERE id=?",(engagement,))
+    conn.execute("UPDATE players SET location_id='westwild_n1' WHERE telegram_id=?",(owner_id,))
+    conn.commit()
+    migrate_character_builds_v1()
+    spawn=next(s for s in list_location_available_spawn_instances(location_id='westwild_n1') if s['mob_id']=='westwild_rabbit')
+    with patch('time.time',return_value=1000):
+        encounter,status=create_or_load_open_world_pve_encounter(owner_player_id=owner_id,location_id='westwild_n1',mob_id='westwild_rabbit',
+            spawn_instance_id=spawn['spawn_instance_id'],battle_state={'mob_id':'westwild_rabbit','mob_hp':20,'mob_max_hp':20,'player_hp':100,'player_mana':100},mob=get_mob('westwild_rabbit'))
+    assert status=='created'
+    process_due_pve_formations(now_ms=1012000)
+    conn.execute("UPDATE pvp_engagements SET engagement_state='pending' WHERE id=?",(engagement,));conn.commit()
+    before=tuple(conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone())
+    player_before=tuple(conn.execute('SELECT * FROM players WHERE telegram_id=?',(owner_id,)).fetchone())
+    receipts=list(conn.execute('SELECT * FROM economy_action_receipts'))
+    conn.execute('BEGIN IMMEDIATE');recover_activity_overlaps(conn,now_ms=1013000);conn.commit()
+    assert before==tuple(conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone())
+    assert player_before==tuple(conn.execute('SELECT * FROM players WHERE telegram_id=?',(owner_id,)).fetchone())
+    assert receipts==list(conn.execute('SELECT * FROM economy_action_receipts'))
+    row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement,)).fetchone()
+    assert row['engagement_state']==('cancelled' if owner_id==1 else 'pending')
+    assert conn.execute('SELECT status FROM pvp_engagement_reinforcements WHERE engagement_id=? AND ally_id=2',(engagement,)).fetchone()[0]=='expired'
+    revision=row['state_revision']
+    conn.execute('BEGIN IMMEDIATE');recover_activity_overlaps(conn,now_ms=1014000);conn.commit()
+    assert conn.execute('SELECT state_revision FROM pvp_engagements WHERE id=?',(engagement,)).fetchone()[0]==revision
+    conn.close()
+
+
+def test_startup_preserves_live_pvp_over_future_owned_pve_formation():
+    from game.player_activity import recover_activity_overlaps
+    from tests.test_pxe1_encounter_lifecycle import prepare
+    encounter,spawn=prepare()
+    conn=get_connection()
+    conn.execute("UPDATE pve_encounters SET status='abandoned' WHERE encounter_id=?",(encounter,));conn.commit();conn.close()
+    conn,engagement=locked()
+    conn.execute("UPDATE pve_encounters SET status='active',formation_deadline_ms=9999999999 WHERE encounter_id=?",(encounter,));conn.commit()
+    before=tuple(conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement,)).fetchone())
+    players=[tuple(r) for r in conn.execute('SELECT * FROM players ORDER BY telegram_id')]
+    receipts=[tuple(r) for r in conn.execute('SELECT * FROM economy_action_receipts')]
+    conn.execute('BEGIN IMMEDIATE');recover_activity_overlaps(conn,now_ms=1301000);conn.commit()
+    assert before==tuple(conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement,)).fetchone())
+    assert players==[tuple(r) for r in conn.execute('SELECT * FROM players ORDER BY telegram_id')]
+    assert receipts==[tuple(r) for r in conn.execute('SELECT * FROM economy_action_receipts')]
+    assert conn.execute('SELECT status FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0]=='start_failed'
+    source=conn.execute('SELECT * FROM pve_spawn_instances WHERE spawn_instance_id=?',(spawn['spawn_instance_id'],)).fetchone()
+    assert source['state']=='idle' and source['linked_encounter_id'] is None
+    assert conn.execute("SELECT COUNT(*) FROM player_feedback_events WHERE source_kind='pve' AND source_id=?",(encounter,)).fetchone()[0]==1
+    conn.close()
+
+
+def test_invalid_terminal_pve_outcome_quarantines_owned_sources_without_reward():
+    from game.pve_live import _sync_v1_to_legacy_projection,load_active_pve_encounter,persist_solo_pve_encounter_state,process_due_pve_world_sides
+    from tests.test_pxe1_pve_world_tick import started
+    encounter,source=started()
+    state,mob=load_active_pve_encounter(encounter_id=encounter)
+    for enemy in state['enemy_states_v1']:
+        enemy.update(hp=0,dead=True)
+    _sync_v1_to_legacy_projection(state)
+    assert persist_solo_pve_encounter_state(encounter_id=encounter,battle_state=state,mob=mob)
+    conn=get_connection()
+    declaration=json.loads(conn.execute('SELECT source_units_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0])
+    declaration['units'][0]['spawn_instance_id']='another-encounters-source'
+    conn.execute('UPDATE pve_encounters SET source_units_json=? WHERE encounter_id=?',(json.dumps(declaration),encounter));conn.commit()
+    before=tuple(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    assert process_due_pve_world_sides(now_ms=1013000)==[{'encounter_id':encounter,'phase':'state_lost'}]
+    after=tuple(conn.execute('SELECT * FROM players WHERE telegram_id=1').fetchone())
+    columns=[d[0] for d in conn.execute('SELECT * FROM players').description]
+    assert {k:v for k,v in zip(columns,before) if k!='in_battle'}=={k:v for k,v in zip(columns,after) if k!='in_battle'}
+    assert not conn.execute('SELECT 1 FROM pve_reward_settlements WHERE encounter_id=?',(encounter,)).fetchone()
+    assert conn.execute('SELECT state FROM pve_spawn_instances WHERE spawn_instance_id=?',(source['spawn_instance_id'],)).fetchone()[0]=='respawning'
+    conn.close()
+
+
+def test_active_pve_recovery_failure_rolls_back_every_owned_transition_and_retries():
+    from unittest.mock import patch
+    from game.pve_live import process_due_pve_world_sides
+    from tests.test_pxe1_pve_world_tick import started
+    encounter,source=started()
+    conn=get_connection();conn.execute("UPDATE pve_encounters SET battle_state_json='corrupt' WHERE encounter_id=?",(encounter,));conn.commit()
+    tables=('players','pve_encounters','pve_encounter_participants','pve_spawn_instances','economy_action_receipts','player_feedback_events')
+    before={table:[tuple(r) for r in conn.execute('SELECT * FROM '+table)] for table in tables}
+    with patch('game.player_experience_schema._recovery_notice',side_effect=RuntimeError('recovery writer failure')):
+        assert process_due_pve_world_sides(now_ms=1013000)==[]
+    assert before=={table:[tuple(r) for r in conn.execute('SELECT * FROM '+table)] for table in tables}
+    assert process_due_pve_world_sides(now_ms=1014000)==[{'encounter_id':encounter,'phase':'state_lost'}]
+    conn.close()

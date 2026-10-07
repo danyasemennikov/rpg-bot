@@ -285,6 +285,26 @@ Focused evidence:
 - `python -m pytest -q tests/test_pxe1_activity_quarantine.py tests/test_pxe1_pve_world_tick.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_combat_result_recovery.py tests/test_pxe1_combat_order_replay.py tests/test_itemization_fix_packet_pr230.py --tb=short`
   **91 passed, 23.92s**. Full suite remains NOT RUN.
 
+## Startup combat/preparation precedence, candidate based on 7571caf
+
+Startup now preserves existing active PvE/PvP before conflicting future
+preparations. A conflicting principal cancels the unstarted PvP engagement; a
+conflicting accepted ally alone expires with a recovery notice and revision
+change. A conflicting PXE1 PvE formation releases its own unstarted sources as
+start_failed. Live snapshots, player state, prior crime and receipts remain
+unchanged. Existing domain owners perform these transitions under the startup
+writer. This does not claim all impossible cross-domain overlaps are resolved.
+
+Added terminal-invalid-outcome quarantine and injected recovery-writer failure
+checks: recovery rollback preserves every row and a later tick retries normally.
+
+Focused evidence:
+
+- `python -m pytest -q tests/test_pxe1_activity_quarantine.py tests/test_pxe1_travel.py tests/test_pxe1_pvp_membership.py tests/test_pxe1_encounter_lifecycle.py --tb=short`
+  **44 passed, 7.88s**.
+- `python -m pytest -q tests/test_pxe1_activity_quarantine.py tests/test_pxe1_travel.py tests/test_pxe1_pvp_membership.py tests/test_pxe1_encounter_lifecycle.py tests/test_pxe1_pve_world_tick.py tests/test_pxe1_combat_order_replay.py --tb=short`
+  **60 passed, 11.86s**.
+
 ## Remaining work
 
 Phase 6 remains in progress. Finish inventory/recipe presentation details and
