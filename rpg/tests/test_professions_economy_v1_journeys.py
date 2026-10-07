@@ -39,7 +39,6 @@ from handlers.chapter import handle_chapter_buttons
 from handlers.inventory import (
     build_item_detail,
     handle_inventory_buttons,
-    try_sell_inventory_item,
     use_inventory_consumable,
 )
 from handlers.professions import (
@@ -554,9 +553,7 @@ async def _complete_aster_elmor_chapter(
     finally:
         conn.close()
     assert sale_row
-    payload = f"{sale_row['id']}:{sale_row['quantity']}"
-    token = issue_actions(journey.player_id, 'sell', [payload])[payload]
-    assert try_sell_inventory_item(journey.player_id, token)['status'] == 'sold'
+    await _sell_owned(journey, f"i{sale_row['id']}", min(99, int(sale_row['quantity'])))
     await _claim_chapter_contract(journey, 'chapter_homecoming', 'capital_city')
     history = get_contract_history(journey.player_id)
     expected = {
