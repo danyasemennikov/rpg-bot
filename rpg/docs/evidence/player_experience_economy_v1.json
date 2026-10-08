@@ -2,7 +2,7 @@
   "contract": "PXE1-1",
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
-  "status": "IMPLEMENTING",
+  "status": "AUTOMATED READY; DRAFT PUBLICATION PENDING",
   "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
   "draft_pr": null,
   "merge": "NOT MERGED",
@@ -10,7 +10,7 @@
   "independent_review": "NOT RUN",
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "RUNNING; FINAL BROAD INCOMPLETE",
+    "status": "PASSED",
     "command": "python -m pytest -q",
     "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
     "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
@@ -30,7 +30,16 @@
       "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
       "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
     },
-    "history_mode": "Whole verified COMPLETE same-source history reused; all tests execute; no fresh core rebuild"
+    "history_mode": "Whole verified COMPLETE same-source history reused; all tests execute; no fresh core rebuild",
+    "passed": 2237,
+    "subtests_passed": 276,
+    "seconds": 1777.62,
+    "exit_code": 0,
+    "terminal_line": "2237 passed, 276 subtests passed in 1777.62s (0:29:37)",
+    "completed_observation_utc": "2026-10-08T06:19:02.499358+00:00",
+    "validation_recorded_head": "f77de3e841bf4c924110af0fd2f5c360c28bc9a0",
+    "log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
+    "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
   },
   "earned_profession_rav_journeys": {
     "status": "PASSED",
@@ -457,6 +466,38 @@
       "subtests_passed": 276,
       "seconds": 3492.79,
       "finding": "Four retained formation/Inn fixtures, tool-slot NPC resale assertion, and one shared earned-gear setup error propagated to 39 regional branches. No completed earned checkpoint."
+    },
+    {
+      "status": "PASSED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+      "session_id": 47845,
+      "started_utc": "2026-10-08T05:49:51.102733+00:00",
+      "log": "pxe1-final-ration-order-broad-pytest.log",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
+      "database": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\earned.sqlite3",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "git_identities": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+        "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+        "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+        "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+      },
+      "history_mode": "Whole verified COMPLETE same-source history reused; all tests execute; no fresh core rebuild",
+      "passed": 2237,
+      "subtests_passed": 276,
+      "seconds": 1777.62,
+      "exit_code": 0,
+      "terminal_line": "2237 passed, 276 subtests passed in 1777.62s (0:29:37)",
+      "completed_observation_utc": "2026-10-08T06:19:02.499358+00:00",
+      "validation_recorded_head": "f77de3e841bf4c924110af0fd2f5c360c28bc9a0",
+      "log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
+      "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
     }
   ],
   "gear_flow_diagnostic": {
@@ -466,16 +507,16 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "ALL-41 PASSED; FINAL BROAD RUNNING",
-    "observed_utc": "2026-10-08T05:49:51.102733+00:00",
+    "status": "AUTOMATED ACCEPTANCE COMPLETE; DRAFT PUBLICATION PENDING",
+    "observed_utc": "2026-10-08T06:19:02.499358+00:00",
     "code_candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
-    "active_session_id": 47845,
+    "active_session_id": null,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
     "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
     "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
     "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
     "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
-    "final_broad_status": "RUNNING; INCOMPLETE",
+    "final_broad_status": "PASSED",
     "human_validation": "NOT RUN",
     "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
     "completed_prior_core": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-completed-earned",
@@ -493,7 +534,9 @@
       "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
       "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
       "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
-    }
+    },
+    "broad_execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+    "broad_log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150"
   },
   "earned_journey_attempts": [
     {

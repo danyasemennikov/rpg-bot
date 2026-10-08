@@ -1,6 +1,6 @@
 # PXE1 — Player Experience & Economy Deepening V1
 
-Status: **IMPLEMENTING / unmerged candidate**. Frozen contract: PXE1-1.
+Status: **AUTOMATED READY / Draft publication pending / unmerged candidate**. Frozen contract: PXE1-1.
 Baseline: PR236 / `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
 Branch: `feat/pxe1-player-experience-economy-v1`. One future Draft PR; no merge.
 Human Telegram validation: **NOT RUN**. Independent architecture review and deployment
@@ -166,9 +166,14 @@ Production/creator/common sources remain unchanged, so that complete history was
 reused for the all-41 assertion rerun at HEAD `4629c1e`: **41 passed in 327.76s**.
 This is explicitly distinct from a fresh history rebuild. Whole-DB/source hashes,
 all eleven checks and exact provenance are preserved in the workspace and evidence.
-The exact final `python -m pytest -q` suite is now RUNNING at that same execution
-HEAD with the verified COMPLETE current-source history; all tests execute. Its
-terminal result remains pending, so no final broad pass or Draft readiness is claimed.
+The exact final `python -m pytest -q` suite completed normally at that same execution
+HEAD: **2237 passed, 276 subtests passed in 1777.62s (0:29:37)**; exit code 0.
+It explicitly reused the verified COMPLETE current-source history and executed all
+collected tests. Its log SHA-256 is
+`5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150`.
+All seven recorded code/test tree identities match the subsequent documentation-only
+HEAD; no production or test code changed after the final broad run. Automated
+acceptance is complete. Same-branch push and the single Draft publication follow.
 The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
@@ -182,5 +187,5 @@ This limits Draft handoff to automated evidence; it is not live/release acceptan
 Independent Astra review is pending and the owner retains merge authority. No merge
 or deployment is authorized. Teleport and larger structured PvP remain deferred.
 
-Deviations from frozen runtime/product requirements: none identified so far; final
-acceptance remains pending and any actual deviation must be recorded explicitly.
+Deviations from frozen runtime/product requirements: **NONE**. Independent
+architecture review remains pending; automated completion does not establish live acceptance.

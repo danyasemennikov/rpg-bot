@@ -994,3 +994,18 @@ Log `pxe1-final-ration-order-broad-pytest.log`; session 47845; status RUNNING, I
 All collected tests execute; the verified core reuse only avoids recreating the same earned history.
 Seven code/test Git identities were captured and will be compared with the proposed Draft HEAD after documentation commits.
 No final broad PASS is claimed before its actual terminal result. Human validation remains NOT RUN.
+
+
+### Final required broad suite PASS
+
+Exact command: `python -m pytest -q`. Normal observed exit: 0.
+Terminal result: **2237 passed, 276 subtests passed in 1777.62s (0:29:37)**.
+Execution HEAD: `4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d`; code/test candidate: `d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b`.
+Log: `pxe1-final-ration-order-broad-pytest.log`; SHA-256 `5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150`.
+`PXE1_EARNED_CHECKPOINT` explicitly reused the whole verified COMPLETE same-source history at
+workspace `acceptance-recovery/d5b9661-completed-earned`; all collected tests and acceptance assertions executed.
+Source SHA-256 `254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20`; DB SHA-256 `af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a`.
+Seven tested source/test tree identities still match documentation-only HEAD `f77de3e841bf4c924110af0fd2f5c360c28bc9a0`.
+Both the original frozen contract and repository specification retain SHA-256 `0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3`.
+All previous failed/interrupted runs remain historical evidence. Human Telegram and independent Astra review remain NOT RUN; deployment remains unverified.
+Automated acceptance is complete. Next: final docs, same-branch push, one exact-title Draft, actual links and source identity verification. NEVER merge.
