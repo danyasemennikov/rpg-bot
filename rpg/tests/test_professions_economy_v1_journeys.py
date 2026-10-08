@@ -844,6 +844,13 @@ async def _consume_new_recovery_outputs(journey: ProductionJourney) -> dict[str,
         'pe_shore_broth', 'pe_marsh_stew', 'pe_boar_feast', 'pe_oasis_meal',
         'pe_deep_marsh_meal',
     )
+    # Later material fights legitimately consume earlier crafted recovery stock.
+    # Earn replacements before testing every required output's actual effect.
+    for item_id in output_ids:
+        if _quantity(journey.player_id, item_id) == 0:
+            recipe = next(recipe for recipe in ACTIVE_RECIPES
+                          if recipe.output_spec.item_id == item_id)
+            await _learn_and_craft(journey, recipe.recipe_id)
     assert all(_quantity(journey.player_id, item_id) > 0 for item_id in output_ids)
     results: dict[str, dict] = {}
     battle_items = {
