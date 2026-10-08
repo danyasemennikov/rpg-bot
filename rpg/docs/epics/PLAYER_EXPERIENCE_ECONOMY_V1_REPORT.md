@@ -136,9 +136,16 @@ clock across that immediate preview/start pair is held fixed; its regression
 reproduces the failure and preserves token expiry and actual 15-second travel.
 A later fresh Chapter exposed the protected last-consumable sale guard (1 passed /
 40 errors, 12.81s); the helper now follows actual Shop confirmation, as verified on
-its whole failed state. The final helper candidate passes 25 fresh Chapter/Shop/
+its whole failed state. The Chapter/Shop/clock candidate passes 25 fresh Chapter/Shop/
 travel checks (13.44s); the changed common travel path also passes three earned
-group journeys (170.76s). Full fresh history runs again. No final pass is claimed.
+group journeys (170.76s). Its fresh full history reached all 83 recipes and all
+twelve profession caps, then failed the recovery-output availability assertion
+(1 passed / 40 errors, 6852.97s): later real fights had consumed earlier outputs.
+The helper now earns replacements through actual learned recipes before the
+retained eight-output/effect assertions. A whole-copy failing-state diagnostic
+passes all eight effects and three locales (28.52s); it is not final acceptance.
+The changed creator requires another fresh history, now running. No final pass
+is claimed.
 The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.

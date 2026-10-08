@@ -3,26 +3,26 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "IMPLEMENTING",
-  "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+  "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
   "draft_pr": null,
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
   "independent_review": "NOT RUN",
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "NOT RUN ON CLOCK/PROTECTED-SALE CANDIDATE",
+    "status": "NOT RUN ON RECOVERY-RESTOCK CANDIDATE",
     "command": "python -m pytest -q",
-    "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e"
+    "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847"
   },
   "earned_profession_rav_journeys": {
     "status": "RUNNING",
-    "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+    "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
     "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
-    "log": "pxe1-earned-protected-sale-fresh-pytest.log",
-    "session_id": 28082,
+    "log": "pxe1-earned-restocked-recovery-fresh-pytest.log",
+    "session_id": 75884,
     "collected_tests": 41,
-    "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; no partial state reused",
-    "observed_utc": "2026-10-07T22:56:18.072432+00:00"
+    "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; no failed partial history reused",
+    "observed_utc": "2026-10-08T01:27:56.065479+00:00"
   },
   "focused_runs": [
     {
@@ -390,19 +390,19 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "FRESH CLOCK/PROTECTED-SALE ACCEPTANCE RUNNING; PRIOR RUNS TERMINAL FAILED",
-    "observed_utc": "2026-10-07T22:56:18.072432+00:00",
-    "code_candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
-    "active_session_id": 28082,
+    "status": "FRESH RECOVERY-RESTOCK ACCEPTANCE RUNNING; PRIOR RUNS TERMINAL FAILED",
+    "observed_utc": "2026-10-08T01:27:56.065479+00:00",
+    "code_candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
+    "active_session_id": 75884,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
     "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
     "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
     "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
     "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
-    "final_broad_status": "NOT RUN ON CLOCK/PROTECTED-SALE CANDIDATE",
+    "final_broad_status": "NOT RUN ON RECOVERY-RESTOCK CANDIDATE",
     "human_validation": "NOT RUN",
-    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\2db8a7f-partial-earned",
-    "latest_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned"
+    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
+    "latest_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-partial-earned"
   },
   "earned_journey_attempts": [
     {
@@ -472,6 +472,19 @@
       "earned_history": "fresh registration; no checkpoint override",
       "finding": "Chapter helper used obsolete immediate sale of the last owned health_potion_small. Current last_consumable guard correctly required confirmation; shared fixture stopped before RAV execution.",
       "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\2db8a7f-partial-earned"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-protected-sale-fresh-pytest.log",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 6852.97,
+      "earned_history": "fresh registration; no checkpoint override",
+      "finding": "All 83 recipes and all twelve profession caps reached; crafted gear enhanced/advanced. Later real fights consumed four required recovery outputs before the final effect proof. Shared fixture stopped at its retained all-output availability assertion; no RAV branches executed.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
+      "database_sha256": "90dac5e420d6ef2acb81eee5891db855b5e74767f3219c731794a981ed1e3682"
     }
   ],
   "remaining_output_diagnostic": {
@@ -519,5 +532,14 @@
       "log": "pxe1-chapter-sale-focused-pytest.log",
       "finding": "Scratch diagnostic wrongly assumed protected stack required >=25g total; actual guard is last_consumable"
     }
+  },
+  "recovery_restock_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETE HISTORY",
+    "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
+    "command": "python -m pytest -q -s 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_current_outputs.py' --tb=short",
+    "passed": 1,
+    "seconds": 28.52,
+    "log": "pxe1-recovery-restock-diagnostic-pytest.log",
+    "provenance": "Whole actual failed 0e52fa6 DB; all five gathering and seven crafting caps retained, four missing outputs replenished by actual learned recipes and paid/material owners, all eight original effect assertions and all three locale checks pass. No injected progress/goods/gold; this copy is not final acceptance."
   }
 }

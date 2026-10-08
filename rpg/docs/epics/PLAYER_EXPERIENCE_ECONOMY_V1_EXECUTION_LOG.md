@@ -863,6 +863,36 @@ with `PXE1_EARNED_CHECKPOINT` absent, logged in
 `pxe1-earned-protected-sale-fresh-pytest.log`. No failed partial database is reused.
 Final profession/RAV acceptance and the final exact broad command remain pending.
 
+## Earned recovery stock before the final effect proof
+
+The `0e52fa6` fresh history completed normally: **1 passed / 40 errors,
+6852.97s (1h54m12s)**, `pxe1-earned-protected-sale-fresh-pytest.log`. All five
+gathering and seven crafting professions reached 20; all 83 recipes were actually
+crafted and the crafted sword was enhanced/advanced. Later real material fights
+consumed earlier recovery outputs. The retained availability assertion failed
+before any completed-history provenance or independent RAV branches. This is a
+failed run, not completed acceptance. Its whole DB, failure text and source
+provenance are preserved as workspace `acceptance-recovery/0e52fa6-partial-earned`
+(DB SHA-256 `90dac5e420d6ef2acb81eee5891db855b5e74767f3219c731794a981ed1e3682`).
+
+The creator now crafts any missing required recovery output through its actual
+learned recipe and ordinary material/currency owners before the final proof.
+The all-eight availability assertion and every positive HP/MP effect assertion
+remain unchanged; no materials, gold, HP or progression are granted by the test.
+The repair is committed at `b272d5223ed09b9c27ca9f358aaa9ae72181b847`.
+
+Whole-copy actual failed-state diagnostic: **1 passed, 28.52s** in
+`pxe1-recovery-restock-diagnostic-pytest.log`. It retains all twelve caps, replaces
+four genuinely consumed outputs, proves all eight actual recovery effects and
+checks complete ru/en/es navigation. This is diagnostic only, not final history
+or a reusable completed checkpoint. Exact command and effects are durable.
+
+Session 75884 now runs the same two-module 41-test command fresh from registration,
+with `PXE1_EARNED_CHECKPOINT` absent, in
+`pxe1-earned-restocked-recovery-fresh-pytest.log`. Creator changes require this
+fresh rebuild. Production owners and prior unrelated focused dependencies are
+unchanged. Profession/RAV terminal acceptance and final exact broad remain pending.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83
