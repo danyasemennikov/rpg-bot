@@ -3,27 +3,26 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "IMPLEMENTING",
-  "candidate_sha": "28664a714c7729514997877914db660fba126104",
+  "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
   "draft_pr": null,
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
   "independent_review": "NOT RUN",
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "NOT RUN ON DEPARTURE-RECOVERY CANDIDATE",
+    "status": "NOT RUN ON RATION-ORDER CANDIDATE",
     "command": "python -m pytest -q",
-    "candidate_sha": "28664a714c7729514997877914db660fba126104"
+    "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b"
   },
   "earned_profession_rav_journeys": {
-    "status": "RUNNING",
-    "candidate_sha": "28664a714c7729514997877914db660fba126104",
+    "status": "PENDING ALL-41 RERUN AFTER RAV-ONLY REPAIR",
+    "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
     "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
-    "log": "pxe1-earned-departure-recovery-fresh-pytest.log",
-    "session_id": 43109,
-    "collected_tests": 41,
-    "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; prior completed core is not reused after production changes",
-    "observed_utc": "2026-10-08T03:36:12.038357+00:00",
-    "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20"
+    "earned_history": "will reuse only the whole verified COMPLETE current-source core; no fresh rebuild or partial state",
+    "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+    "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+    "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-completed-earned",
+    "collected_tests": 41
   },
   "focused_runs": [
     {
@@ -256,6 +255,20 @@
       "log": "pxe1-departure-regional-repaired-diagnostic-pytest.log",
       "coverage": "Committed flee survives recovery with immutable lock; missing actor without receipt quarantines; non-victory flags release without resources/rewards; retained J09/J10/J12-one-fled/J14 assertions on whole prior earned party",
       "provenance": "Prior b272d52 party hash 70f0daa187006a63fe075b8d46bf098b86d53f288fbb7675b433e2e8e1ead28c; does not substitute current fresh history"
+    },
+    {
+      "candidate": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "status": "PASSED",
+      "passed": 3,
+      "deselected": 36,
+      "seconds": 61.95,
+      "command": "python -m pytest -q tests/test_regional_adventures_v1_journeys.py -k \"separate_connection_delivery_races or all_finite_claims_in_two_regional_orders\" --tb=short",
+      "log": "pxe1-regional-ration-order-focused-pytest.log",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-completed-earned",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "coverage": "Both separate-connection delivery races and both finite-claim region orders; all original equality, claim, conservation, replay and race assertions retained",
+      "provenance": "Working tree then committed unchanged at d5b9661; whole verified COMPLETE current-source history reused; no injected goods or XP"
     }
   ],
   "limitations": [
@@ -416,21 +429,25 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "FRESH DEPARTURE-RECOVERY HISTORY RUNNING; PRIOR COMBINED RUN FAILED WITH COMPLETED CORE",
-    "observed_utc": "2026-10-08T03:36:12.038357+00:00",
-    "code_candidate_sha": "28664a714c7729514997877914db660fba126104",
-    "active_session_id": 43109,
+    "status": "CURRENT FRESH CORE COMPLETE; COMBINED RUN FAILED; FOCUSED RAV-ONLY REPAIR PASSED",
+    "observed_utc": "2026-10-08T05:42:20.395732+00:00",
+    "code_candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+    "active_session_id": null,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
     "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
     "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
     "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
     "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
-    "final_broad_status": "NOT RUN ON DEPARTURE-RECOVERY CANDIDATE",
+    "final_broad_status": "NOT RUN ON RATION-ORDER CANDIDATE",
     "human_validation": "NOT RUN",
     "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
     "completed_prior_core": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-completed-earned",
     "completed_prior_core_current_reuse": "DIAGNOSTIC ONLY; CURRENT PRODUCTION HASH DIFFERS",
-    "failed_regional_states": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-failed-regional"
+    "failed_regional_states": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-failed-regional",
+    "completed_current_core": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-completed-earned",
+    "completed_current_database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+    "completed_current_source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+    "completed_current_core_reuse": "Valid for RAV-only setup repair; invalidated by any production/creator/common change"
   },
   "earned_journey_attempts": [
     {
@@ -533,6 +550,41 @@
       "database_sha256": "1e6da4e24728c63d77c444391e4dd96922af90b44a6a482a59c5ba2411292365",
       "source_sha256": "517c110c7c42c8decad374d919e219a6493c3a84b84ff060eb257f82e17b9284",
       "reuse_on_current_source": "FORBIDDEN AS CURRENT ACCEPTANCE: production changed; diagnostic only"
+    },
+    {
+      "status": "FAILED; CORE HISTORY COMPLETE",
+      "candidate_sha": "28664a714c7729514997877914db660fba126104",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-departure-recovery-fresh-pytest.log",
+      "session_id": 43109,
+      "collected_tests": 41,
+      "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; prior completed core is not reused after production changes",
+      "observed_utc": "2026-10-08T03:36:12.038357+00:00",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "passed": 38,
+      "failed": 3,
+      "seconds": 7481.45,
+      "regional_result": {
+        "passed": 36,
+        "failed": 3
+      },
+      "finding": "J17 did not earn required boar meat; J18 Sunscar ration reward saved one 12-XP boar victory in only one region order",
+      "completed_core_archive": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-completed-earned",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      },
+      "reuse_on_current_source": "COMPLETE same-source history remains valid: only RAV test setup changed"
     }
   ],
   "remaining_output_diagnostic": {

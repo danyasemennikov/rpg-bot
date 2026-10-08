@@ -949,3 +949,27 @@ PXE1 PvP content policy. Complete Phase 7 integration, run focused final checks,
 then the full suite on the near-final coherent candidate. Reconcile final docs,
 schema inventory and evidence, record human Telegram validation NOT RUN, push the
 same branch and create exactly one Draft PR. No merge or completion is claimed.
+
+### Current complete core and RAV-only ration/order repair
+
+Fresh command on code/test candidate `28664a714c7729514997877914db660fba126104`:
+`python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short`.
+Normal terminal result: **38 passed / 3 failed / 7481.45s**. Log:
+`pxe1-earned-departure-recovery-fresh-pytest.log`. Both profession tests and 36 regional cases passed.
+All eleven production checks, all 83 recipes, all twelve profession caps, gear/eight recovery effects and three locales completed.
+Whole current-source core: workspace `acceptance-recovery/28664a7-completed-earned`.
+Source SHA-256 `254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20`;
+DB SHA-256 `af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a`.
+Whole failed J17/J18 states and earned party were preserved before another pytest rotated Temp.
+This completed current-source history is valid for RAV-only setup repairs; the older b272d52 history remains diagnostic only.
+
+J17 now uses `_ensure_rations` to earn both recipe ingredients through actual gathering and boar victories/harvests.
+J18 earns two rations before either region order: otherwise Sunscar's one-ration reward avoids one ordinary 12-XP boar victory only when it precedes Westwild.
+All original conservation, exactly-one race winner, replay, finite claim totals and exact final player equality assertions remain.
+No production code, progression, goods, XP or rewards were changed/injected.
+Focused command with `PXE1_EARNED_CHECKPOINT` pointing at the whole verified complete core:
+`python -m pytest -q tests/test_regional_adventures_v1_journeys.py -k "separate_connection_delivery_races or all_finite_claims_in_two_regional_orders" --tb=short`.
+Result: **3 passed / 36 deselected / 61.95s**; log `pxe1-regional-ration-order-focused-pytest.log`.
+The working tree was committed unchanged at `d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b`.
+Next: all 41 assertions using verified COMPLETE same-source history, then exact final broad suite.
+Human Telegram remains NOT RUN; independent review and deployment remain unverified; no push/PR/merge yet.

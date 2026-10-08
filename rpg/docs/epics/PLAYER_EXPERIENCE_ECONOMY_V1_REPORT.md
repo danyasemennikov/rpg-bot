@@ -154,8 +154,18 @@ closure flags inside the writer without rewards/resource changes, and earns the
 required regional setup through actual crafts/harvests. It passes 53 current
 runtime regressions plus four whole-prior-party diagnostics (57 passed, 65.59s).
 That completed old-source core is preserved, but changed production requires a
-fresh history on `28664a7`, now running. The final broad suite remains pending;
-no final acceptance pass is claimed.
+fresh history on `28664a7`. It completed all core checks and both profession tests,
+but the combined result was 38 passed / 3 failed in 7481.45s. Two J17 delivery-race
+setups omitted required boar meat. J18's reverse order used Sunscar's ration reward
+to avoid one ordinary 12-XP boar victory, so player XP differed despite identical
+finite claims. The test-only repair at `d5b9661` earns actual required ingredients
+and the same two-ration stock before either compared order; it retains the original
+race, conservation and exact player-state equality assertions. All three affected
+cases pass in 61.95s using the whole verified COMPLETE current-source core.
+Production/creator/common sources remain unchanged, so that complete history can
+be reused for the all-41 assertion rerun. This is explicitly distinct from a fresh
+history rebuild. The final broad suite remains pending; no final acceptance pass
+is claimed.
 The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
