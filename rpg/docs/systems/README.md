@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation map for current implementation ownership
-- Last reconciled: 2026-10-07, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 candidate separately identified
+- Last reconciled: 2026-10-08, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 Draft separately identified
 
 This map points to current code and the documents that explain it. Code remains the
 exact implementation authority. Foundations express intent; Epic and pass reports
@@ -131,7 +131,8 @@ Historical generated balance reports are catalogued with their provenance in
 
 ## PXE1 candidate owners
 
-The unmerged [PXE1 contract](../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) extends
+The unmerged [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237)
+implements the [PXE1 contract](../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) at
 baseline PR236. [The report](../epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md) maps
 sections to checks; historical merged owners above remain responsible for retained
 mechanics. Candidate additions are:

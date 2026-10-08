@@ -5,7 +5,9 @@ claimed by this implementation. Automated transport mocks are not human evidence
 
 Repository: danyasemennikov/rpg-bot. Baseline: PR236,
 `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`. Candidate branch:
-`feat/pxe1-player-experience-economy-v1`. Record the exact deployed candidate SHA,
+`feat/pxe1-player-experience-economy-v1`.
+[Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237).
+Record the exact deployed candidate SHA,
 bot identity, date, device/viewport, locale and anonymized account labels A/B/C/D
 when executing. Use a test bot/database; never publish credentials or player IDs.
 

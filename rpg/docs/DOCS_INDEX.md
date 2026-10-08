@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation entry
-- Last reconciled: 2026-10-07, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 candidate separately identified
+- Last reconciled: 2026-10-08, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 Draft separately identified
 
 Start here.
 
@@ -50,8 +50,9 @@ mechanic is implemented.
 professions/economy, PvE, and PvP documentation to current implementation owners.
 It also catalogues compatibility-retained system and pass documents.
 
-## PXE1 unmerged implementation candidate
+## PXE1 unmerged Draft candidate
 
+- [Draft PR #237 — PXE1](https://github.com/danyasemennikov/rpg-bot/pull/237): automated acceptance complete; independent review pending
 - [Frozen contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md)
 - [Implementation report](epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md)
 - [Automated evidence](evidence/player_experience_economy_v1.json)

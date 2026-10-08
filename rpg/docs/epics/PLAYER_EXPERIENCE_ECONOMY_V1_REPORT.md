@@ -1,8 +1,9 @@
 # PXE1 — Player Experience & Economy Deepening V1
 
-Status: **AUTOMATED READY / Draft publication pending / unmerged candidate**. Frozen contract: PXE1-1.
+Status: **DRAFT / automated acceptance complete / unmerged candidate**. Frozen contract: PXE1-1.
 Baseline: PR236 / `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
-Branch: `feat/pxe1-player-experience-economy-v1`. One future Draft PR; no merge.
+Branch: `feat/pxe1-player-experience-economy-v1`.
+Single [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237); no merge.
 Human Telegram validation: **NOT RUN**. Independent architecture review and deployment
 are unverified. Exact measured runs belong to [evidence](../evidence/player_experience_economy_v1.json)
 and the [execution log](PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md).
@@ -173,7 +174,8 @@ collected tests. Its log SHA-256 is
 `5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150`.
 All seven recorded code/test tree identities match the subsequent documentation-only
 HEAD; no production or test code changed after the final broad run. Automated
-acceptance is complete. Same-branch push and the single Draft publication follow.
+acceptance is complete. The same branch is published as
+[Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237), awaiting independent review.
 The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.

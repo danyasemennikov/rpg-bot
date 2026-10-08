@@ -2,9 +2,9 @@
   "contract": "PXE1-1",
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
-  "status": "AUTOMATED READY; DRAFT PUBLICATION PENDING",
+  "status": "DRAFT; AUTOMATED ACCEPTANCE COMPLETE",
   "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
-  "draft_pr": null,
+  "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
   "independent_review": "NOT RUN",
@@ -434,7 +434,8 @@
     "contract": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md",
     "report": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md",
     "execution_log": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md",
-    "human_plan": "docs/evidence/player_experience_economy_v1_human.md"
+    "human_plan": "docs/evidence/player_experience_economy_v1_human.md",
+    "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237"
   },
   "pending_fixture_repair_diagnostic": {
     "status": "SCRATCH DIAGNOSTIC COMPLETED; FIXTURES NOW APPLIED AND VERIFIED IN REPOSITORY",
@@ -507,8 +508,8 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "AUTOMATED ACCEPTANCE COMPLETE; DRAFT PUBLICATION PENDING",
-    "observed_utc": "2026-10-08T06:19:02.499358+00:00",
+    "status": "SINGLE DRAFT CREATED; AUTOMATED COMPLETE; HUMAN NOT RUN",
+    "observed_utc": "2026-10-08T06:27:58.384128+00:00",
     "code_candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
     "active_session_id": null,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
@@ -536,7 +537,9 @@
       "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
     },
     "broad_execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
-    "broad_log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150"
+    "broad_log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
+    "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
+    "publication_head_at_creation": "aa97d808a89fcc3461be8fe1b84046d983f7b68d"
   },
   "earned_journey_attempts": [
     {
@@ -746,5 +749,25 @@
       "seconds": 1.22,
       "finding": "Temporary startup-call indentation error; terminal result preserved here; subsequent measured 57-check run passes"
     }
-  ]
+  ],
+  "publication": {
+    "state": "OPEN DRAFT",
+    "created_as_draft": true,
+    "creation_head": "aa97d808a89fcc3461be8fe1b84046d983f7b68d",
+    "head_ref": "feat/pxe1-player-experience-economy-v1",
+    "base_ref": "main",
+    "creation_verified_utc": "2026-10-08T06:27:58.384128+00:00",
+    "merge": "NOT MERGED",
+    "tested_code_and_tests": {
+      "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+      "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+      "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+      "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+      "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+      "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+      "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+    },
+    "head_correspondence": "Subsequent commits are docs only; final pushed HEAD is verified separately against these tested trees",
+    "github_checks_at_creation": "NO CHECKS REPORTED"
+  }
 }

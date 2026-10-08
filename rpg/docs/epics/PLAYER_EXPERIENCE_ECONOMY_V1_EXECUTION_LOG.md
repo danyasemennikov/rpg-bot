@@ -1009,3 +1009,16 @@ Seven tested source/test tree identities still match documentation-only HEAD `f7
 Both the original frozen contract and repository specification retain SHA-256 `0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3`.
 All previous failed/interrupted runs remain historical evidence. Human Telegram and independent Astra review remain NOT RUN; deployment remains unverified.
 Automated acceptance is complete. Next: final docs, same-branch push, one exact-title Draft, actual links and source identity verification. NEVER merge.
+
+
+### Single Draft publication and final navigation
+
+Same branch pushed successfully at `aa97d808a89fcc3461be8fe1b84046d983f7b68d`.
+Created and attached [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237) with exact title
+**PXE1 — Player Experience & Economy Deepening V1**; GitHub confirms OPEN and isDraft=true.
+Remote main remains frozen baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; no other PR exists for this head.
+Actual Draft links are added to the report, evidence, human plan, DOCS_INDEX, systems/README, CLAUDE, PROJECT_STATE_CURRENT's separate unmerged section, ROADMAP_CURRENT and Epic catalogue.
+The navigation follow-up contains documentation only and is pushed to this same Draft.
+All seven tested code/test identities and the original contract hash are checked again against the final pushed HEAD.
+No GitHub checks are reported at Draft creation; local automated PASS is recorded independently.
+Human Telegram and independent Astra review remain NOT RUN. Deployment remains unverified. NEVER merge.

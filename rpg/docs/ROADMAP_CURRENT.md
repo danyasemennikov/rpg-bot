@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical for forward priorities; not an implementation contract
-- Last reconciled: 2026-10-07, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 candidate separately identified
+- Last reconciled: 2026-10-08, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 Draft separately identified
 
 Statuses used here:
 
@@ -17,10 +17,10 @@ in this roadmap.
 
 ### PXE1 integrated candidate
 
-- Status: **in progress**, frozen [PXE1-1 contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md).
-- One candidate branch and one future Draft PR; no merge authorization.
-- Complete automated journeys, final broad acceptance, report/evidence and independent
-  review. Human Telegram validation remains **NOT RUN** under the owner's explicit
+- Status: **in progress — Draft review**, frozen [PXE1-1 contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md).
+- One [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237) on the existing candidate branch; no merge authorization.
+- Automated journeys, final broad acceptance and report/evidence are complete;
+  independent review is pending. Human Telegram validation remains **NOT RUN** under the owner's explicit
   implementation handoff instructions; run the [PXE1 human plan](evidence/player_experience_economy_v1_human.md)
   separately before claiming live acceptance.
 

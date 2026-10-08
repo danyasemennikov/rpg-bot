@@ -2,7 +2,7 @@
 
 - Status: Active catalogue
 - Authority: Navigation for merged delivery history
-- Last reconciled: 2026-10-03, against `adcc0baeee96c03852ed75c09e379b0c49be01d1`
+- Last reconciled: 2026-10-08, against `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 Draft separately identified
 
 Epic reports record what a candidate delivered, how it was migrated and validated,
 and which limitations applied at that baseline. They do not replace current code,
@@ -10,8 +10,9 @@ and which limitations applied at that baseline. They do not replace current code
 
 ## Active Draft candidates
 
-PXE1 is in implementation on `feat/pxe1-player-experience-economy-v1`; its single
-Draft PR will link the [contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md),
+PXE1's single [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237)
+is on `feat/pxe1-player-experience-economy-v1`, with automated acceptance complete
+and independent review pending. It links the [contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md),
 [report](PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md) and exact automated/human evidence.
 RAV1 subsequently merged as PR234.
 
