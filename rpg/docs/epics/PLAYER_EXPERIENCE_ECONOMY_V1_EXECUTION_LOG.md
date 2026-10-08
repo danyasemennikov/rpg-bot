@@ -973,3 +973,24 @@ Result: **3 passed / 36 deselected / 61.95s**; log `pxe1-regional-ration-order-f
 The working tree was committed unchanged at `d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b`.
 Next: all 41 assertions using verified COMPLETE same-source history, then exact final broad suite.
 Human Telegram remains NOT RUN; independent review and deployment remain unverified; no push/PR/merge yet.
+
+### All-41 verified-history acceptance PASS; exact final broad started
+
+The all-41 profession/regional assertion rerun completed normally at execution HEAD
+`4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d`, code/test candidate `d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b`:
+**41 passed in 327.76s**. Exact command:
+`python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short`.
+Log `pxe1-earned-ration-order-verified-history-pytest.log`, SHA-256
+`1b06ea9155abe2d681f563f7e140812a7b21f71becee479d54d48506d9dc4369`.
+`PXE1_EARNED_CHECKPOINT` explicitly reused the whole verified COMPLETE same-source core;
+this was not a new fresh history rebuild. All assertions executed and the regional party was earned again.
+Whole accepted copy and provenance: workspace `acceptance-recovery/d5b9661-completed-earned/acceptance-run.json`.
+Source SHA-256 `254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20`;
+DB SHA-256 `af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a`.
+
+Exact required final command `python -m pytest -q` started at the same execution HEAD,
+with `PXE1_EARNED_CHECKPOINT` set to the whole accepted current-source copy above.
+Log `pxe1-final-ration-order-broad-pytest.log`; session 47845; status RUNNING, INCOMPLETE.
+All collected tests execute; the verified core reuse only avoids recreating the same earned history.
+Seven code/test Git identities were captured and will be compared with the proposed Draft HEAD after documentation commits.
+No final broad PASS is claimed before its actual terminal result. Human validation remains NOT RUN.

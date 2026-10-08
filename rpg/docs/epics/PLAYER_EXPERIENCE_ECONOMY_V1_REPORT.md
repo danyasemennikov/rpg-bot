@@ -162,10 +162,13 @@ finite claims. The test-only repair at `d5b9661` earns actual required ingredien
 and the same two-ration stock before either compared order; it retains the original
 race, conservation and exact player-state equality assertions. All three affected
 cases pass in 61.95s using the whole verified COMPLETE current-source core.
-Production/creator/common sources remain unchanged, so that complete history can
-be reused for the all-41 assertion rerun. This is explicitly distinct from a fresh
-history rebuild. The final broad suite remains pending; no final acceptance pass
-is claimed.
+Production/creator/common sources remain unchanged, so that complete history was
+reused for the all-41 assertion rerun at HEAD `4629c1e`: **41 passed in 327.76s**.
+This is explicitly distinct from a fresh history rebuild. Whole-DB/source hashes,
+all eleven checks and exact provenance are preserved in the workspace and evidence.
+The exact final `python -m pytest -q` suite is now RUNNING at that same execution
+HEAD with the verified COMPLETE current-source history; all tests execute. Its
+terminal result remains pending, so no final broad pass or Draft readiness is claimed.
 The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
