@@ -2722,6 +2722,14 @@ def finish_solo_pve_encounter(*, player_id: int, encounter_id: str | None = None
     if resolved_encounter_id:
         conn = get_connection()
         try:
+            conn.execute('BEGIN IMMEDIATE')
+            encounter = conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',
+                                     (resolved_encounter_id,)).fetchone()
+            members = [row['player_id'] for row in conn.execute(
+                "SELECT player_id FROM pve_encounter_participants "
+                "WHERE encounter_id=? AND status='active'", (resolved_encounter_id,)
+            )] if (encounter and 'lifecycle_version' in encounter.keys()
+                   and encounter['lifecycle_version'] == 1) else []
             conn.execute(
                 '''
                 UPDATE pve_encounters
@@ -2746,7 +2754,15 @@ def finish_solo_pve_encounter(*, player_id: int, encounter_id: str | None = None
                 clear_link=True,
                 respawn_seconds=DEFAULT_WORLD_SPAWN_RESPAWN_SECONDS,
             )
+            from game.player_activity import player_activity
+            for member_id in members:
+                activity = player_activity(conn, member_id, exclude_pve=resolved_encounter_id)
+                if not activity or activity['kind'] not in {'pve', 'pvp'}:
+                    conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?', (member_id,))
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
     clear_solo_pve_runtime(player_id=player_id, encounter_id=resolved_encounter_id)
@@ -3888,7 +3904,7 @@ def apply_pxe1_pve_death(player_id: int, encounter_id: str, *, now_ms: int) -> d
         conn.close()
 
 
-def _validate_pxe1_active_state(row):
+def _validate_pxe1_active_state(row, *, conn):
     """Check saved identities; never rebuild an active combat snapshot."""
     try:
         state=json.loads(row['battle_state_json'])
@@ -3898,10 +3914,25 @@ def _validate_pxe1_active_state(row):
                 or not isinstance(roster,list) or not roster or len(set(roster))!=len(roster)
                 or any(not isinstance(p,int) or isinstance(p,bool) for p in roster)
                 or not isinstance(state['participant_states_v1'],dict)
-                or set(state['participant_states_v1'])!={str(p) for p in roster}
                 or not isinstance(state['enemy_states_v1'],list) or not state['enemy_states_v1']):
             raise ValueError()
-        for actor_id in roster:
+        # Flee removes only the departed actor from active targeting. The lock
+        # remains immutable; missing actors require their committed departure.
+        departed = set()
+        for departure in conn.execute('''SELECT d.player_id,d.result_json
+            FROM pve_participant_departures_v1 d
+            JOIN pve_encounter_participants p ON p.encounter_id=d.encounter_id
+                AND p.player_id=d.player_id
+            WHERE d.encounter_id=? AND p.status='fled' ''', (row['encounter_id'],)):
+            result = json.loads(departure['result_json'])
+            if (result.get('fled') is True and result.get('accepted') is True
+                    and result.get('encounter_id') == row['encounter_id']
+                    and result.get('player_id') == departure['player_id']):
+                departed.add(departure['player_id'])
+        if (not departed <= set(roster)
+                or set(state['participant_states_v1']) != {str(p) for p in roster if p not in departed}):
+            raise ValueError()
+        for actor_id in (p for p in roster if p not in departed):
             actor=state['participant_states_v1'][str(actor_id)]
             if (not isinstance(actor,dict) or actor['actor_id']!=actor_id
                     or not isinstance(actor['effects'],list) or not isinstance(actor['cooldowns'],dict)
@@ -3970,7 +4001,7 @@ def process_due_pve_world_sides(*,now_ms: int,limit: int=100,encounter_id: str |
                     current=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
                     if current['status']!='active':
                         conn.rollback();continue
-                    try: _validate_pxe1_active_state(current)
+                    try: _validate_pxe1_active_state(current, conn=conn)
                     except ValueError as exc:
                         _quarantine_pxe1_active_encounter(conn,current,now_ms=now_ms,reason=str(exc))
                         conn.commit()

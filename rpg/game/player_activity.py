@@ -94,7 +94,7 @@ def _recover_combat_preparation_overlaps(conn,*,now_ms):
             if row['status']=='resolving_victory' or row['lifecycle_version']!=1 or row['rules_version']!=RULES_VERSION:
                 live_actors.update(members)
             else:
-                try: _validate_pxe1_active_state(row)
+                try: _validate_pxe1_active_state(row, conn=conn)
                 except ValueError as exc:
                     _quarantine_pxe1_active_encounter(conn,row,now_ms=now_ms,reason=str(exc))
                     continue

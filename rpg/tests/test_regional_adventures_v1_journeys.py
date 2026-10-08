@@ -942,6 +942,25 @@ def test_j09_personal_practice(earned_party):
         assert pre_accept['result'].profession_xp > 0
         assert get_project_state(recipient.player_id, 'mv_medic_practice') is None
 
+        # XP policy 2 awards material-based XP rather than the old 250 XP.
+        # Earn the near-ceiling state before acceptance through actual crafts;
+        # the two post-acceptance crafts still prove positive then zero XP.
+        for _ in range(400):
+            conn = get_connection()
+            alchemy = conn.execute(
+                "SELECT level,exp FROM player_crafting_professions "
+                "WHERE player_id=? AND profession_key='alchemy'", (recipient.player_id,)
+            ).fetchone()
+            conn.close()
+            if int(alchemy['level']) == 5 and int(alchemy['exp']) >= 246:
+                break
+            assert int(alchemy['level']) < 6
+            await _ensure_resource(recipient, 'herb_common', 3, [])
+            await _move(recipient, 'capital_city')
+            assert (await _craft_known(recipient, 'field_tonic'))['result'].profession_xp > 0
+        else:
+            raise AssertionError('earned tonic practice did not approach its level-6 ceiling')
+
         await _move(recipient, 'hub_mireveil')
         await _rav_action(recipient, 'mv_medic_practice', 'start')
         premature = await _rav_action(
@@ -1006,6 +1025,12 @@ def test_j10_ordinary_delivery(earned_party):
         await _ensure_resource(donor, 'marsh_fish', _quantity(donor.player_id, 'marsh_fish') + 4, [])
         await _ensure_resource(donor, 'marsh_herb', _quantity(donor.player_id, 'marsh_herb') + 2, [])
         await _ensure_resource(donor, 'salt_crystal', _quantity(donor.player_id, 'salt_crystal') + 2, [])
+        # Full-catalogue training legitimately spends its earlier meat stock.
+        while _quantity(donor.player_id, 'boar_meat') < 4:
+            await _fight_and_harvest(
+                donor, location_id='westwild_n2', mob_id='forest_boar',
+                item_id='boar_meat', encounter_ids=[],
+            )
         await _move(donor, 'capital_city')
         for _ in range(4):
             assert (await _craft_known(donor, 'trail_ration'))['result'].status == 'crafted'

@@ -9,6 +9,8 @@ from database import get_connection
 from game.build_progression import migrate_character_builds_v1
 from game.pve_live import (
     _sync_v1_to_legacy_projection,apply_pxe1_pve_death,load_active_pve_encounter,
+    finish_solo_pve_encounter,join_open_world_pve_encounter,resolve_pve_flee_intent,
+    reset_solo_pve_runtime_store,
     persist_solo_pve_encounter_state,process_due_pve_formations,process_due_pve_world_sides,
 )
 from tests.test_pxe1_encounter_lifecycle import prepare
@@ -19,6 +21,82 @@ def started():
     encounter,spawn = prepare()
     process_due_pve_formations(now_ms=1012000)
     return encounter,spawn
+
+
+def started_group():
+    migrate_character_builds_v1()
+    encounter, spawn = prepare()
+    with patch('time.time', return_value=1001):
+        assert join_open_world_pve_encounter(encounter_id=encounter, player_id=777)[0]
+    process_due_pve_formations(now_ms=1012000)
+    return encounter, spawn
+
+
+def test_committed_flee_survives_background_recovery_without_rejoining_actor():
+    from game.combat_orders import issue_combat_intents
+    encounter, _ = started_group()
+    state, _ = load_active_pve_encounter(encounter_id=encounter)
+    conn = get_connection()
+    roster = conn.execute('SELECT locked_roster_json FROM pve_encounters WHERE encounter_id=?',
+                          (encounter,)).fetchone()[0]
+    with patch('time.time', return_value=1013):
+        token = next(iter(issue_combat_intents(777, encounter_id=encounter,
+            turn_revision=state['turn_revision'], deadline_at=state['side_deadline_at'],
+            actions=[{'kind': 'flee'}]).values()))
+        assert resolve_pve_flee_intent(player_id=777, encounter_id=encounter,
+                                      action_token=token, success=True)['fled']
+    departed = tuple(conn.execute('SELECT hp,mana,exp,gold FROM players WHERE telegram_id=777').fetchone())
+    reset_solo_pve_runtime_store()
+    with patch('game.pve_live._utc_now', return_value=datetime.fromtimestamp(1027, timezone.utc)):
+        result = process_due_pve_world_sides(now_ms=1027000, encounter_id=encounter)
+    assert result[0]['phase'] == 'active'
+    current, _ = load_active_pve_encounter(encounter_id=encounter)
+    assert set(current['participant_states_v1']) == {'1'}
+    assert current['side_a_player_ids'] == [1]
+    assert conn.execute('SELECT locked_roster_json FROM pve_encounters WHERE encounter_id=?',
+                        (encounter,)).fetchone()[0] == roster
+    assert tuple(conn.execute('SELECT hp,mana,exp,gold FROM players WHERE telegram_id=777').fetchone()) == departed
+    assert conn.execute('SELECT status FROM pve_encounter_participants WHERE encounter_id=? AND player_id=777',
+                        (encounter,)).fetchone()[0] == 'fled'
+    assert resolve_pve_flee_intent(player_id=777, encounter_id=encounter,
+                                  action_token=token, success=False)['already_applied']
+    conn.close()
+
+
+@pytest.mark.parametrize('membership', ['active', 'fled'])
+def test_missing_actor_without_committed_departure_still_quarantines(membership):
+    encounter, _ = started_group()
+    state, mob = load_active_pve_encounter(encounter_id=encounter)
+    state['participant_states_v1'].pop('777')
+    assert persist_solo_pve_encounter_state(encounter_id=encounter, battle_state=state, mob=mob)
+    conn = get_connection()
+    conn.execute('UPDATE pve_encounter_participants SET status=? WHERE encounter_id=? AND player_id=777',
+                 (membership, encounter))
+    conn.commit()
+    assert not conn.execute('SELECT 1 FROM pve_participant_departures_v1 WHERE encounter_id=?',
+                            (encounter,)).fetchone()
+    result = process_due_pve_world_sides(now_ms=1013000, encounter_id=encounter)
+    assert result[0]['phase'] == 'state_lost'
+    assert not conn.execute('SELECT 1 FROM pve_reward_settlements WHERE encounter_id=?', (encounter,)).fetchone()
+    conn.close()
+
+
+def test_nonvictory_closure_releases_all_current_combat_flags_without_rewards():
+    from game.player_activity import player_activity
+    encounter, spawn = started_group()
+    conn = get_connection()
+    before = [tuple(row) for row in conn.execute('SELECT telegram_id,hp,mana,exp,gold FROM players ORDER BY telegram_id')]
+    conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id IN (1,777)')
+    conn.commit()
+    finish_solo_pve_encounter(player_id=1, encounter_id=encounter, status='finished')
+    assert [tuple(row) for row in conn.execute('SELECT telegram_id,hp,mana,exp,gold FROM players ORDER BY telegram_id')] == before
+    for actor in (1,777):
+        assert not conn.execute('SELECT in_battle FROM players WHERE telegram_id=?', (actor,)).fetchone()[0]
+        assert player_activity(conn, actor) is None
+    assert conn.execute('SELECT state FROM pve_spawn_instances WHERE spawn_instance_id=?',
+                        (spawn['spawn_instance_id'],)).fetchone()[0] == 'respawning'
+    assert not conn.execute('SELECT 1 FROM pve_reward_settlements WHERE encounter_id=?', (encounter,)).fetchone()
+    conn.close()
 
 
 def test_nine_actor_formation_authorization_resolution_and_settlement():
