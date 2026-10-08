@@ -3,26 +3,27 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "IMPLEMENTING",
-  "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
+  "candidate_sha": "28664a714c7729514997877914db660fba126104",
   "draft_pr": null,
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
   "independent_review": "NOT RUN",
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "NOT RUN ON RECOVERY-RESTOCK CANDIDATE",
+    "status": "NOT RUN ON DEPARTURE-RECOVERY CANDIDATE",
     "command": "python -m pytest -q",
-    "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847"
+    "candidate_sha": "28664a714c7729514997877914db660fba126104"
   },
   "earned_profession_rav_journeys": {
     "status": "RUNNING",
-    "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
+    "candidate_sha": "28664a714c7729514997877914db660fba126104",
     "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
-    "log": "pxe1-earned-restocked-recovery-fresh-pytest.log",
-    "session_id": 75884,
+    "log": "pxe1-earned-departure-recovery-fresh-pytest.log",
+    "session_id": 43109,
     "collected_tests": 41,
-    "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; no failed partial history reused",
-    "observed_utc": "2026-10-08T01:27:56.065479+00:00"
+    "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; prior completed core is not reused after production changes",
+    "observed_utc": "2026-10-08T03:36:12.038357+00:00",
+    "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20"
   },
   "focused_runs": [
     {
@@ -30,7 +31,8 @@
       "command": "python -m pytest -q <all 25 discovered test_pxe1_*.py files>",
       "passed": 280,
       "seconds": 179.35,
-      "status": "PASSED"
+      "status": "PASSED",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "a819e7b + integration repairs",
@@ -46,21 +48,24 @@
       "failed": 1,
       "seconds": 104.22,
       "status": "FAILED",
-      "finding": "obsolete delayed-aggro fixture; reconciled with real durable threat and actual eligible mob"
+      "finding": "obsolete delayed-aggro fixture; reconciled with real durable threat and actual eligible mob",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "a819e7b + integration repairs",
       "command": "python -m pytest -q tests/test_solo_pve_runtime_handler_flow.py tests/test_pxe1_activity_conflicts.py tests/test_pxe1_pve_world_tick.py tests/test_alpha_core_loop_integration_pr226.py --tb=short",
       "passed": 59,
       "seconds": 12.04,
-      "status": "PASSED"
+      "status": "PASSED",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "ed999c2 + prepared docs/earned fixture",
       "command": "python -m pytest -q tests/test_character_builds_v1_contract.py tests/test_regional_adventures_contract.py tests/test_professions_economy_v1_migration.py tests/test_character_builds_v1_migration.py tests/test_pxe1_schema.py --tb=short",
       "passed": 37,
       "seconds": 15.85,
-      "status": "PASSED"
+      "status": "PASSED",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "ed999c2 + earned journey reconciliation",
@@ -69,7 +74,8 @@
       "failed": 1,
       "seconds": 1084.97,
       "status": "FAILED",
-      "finding": "Parked group members entered real hostile formations; travel correctly denied. Journey now performs legal prestart Leave without granting progress."
+      "finding": "Parked group members entered real hostile formations; travel correctly denied. Journey now performs legal prestart Leave without granting progress.",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "ed999c2 + earned journey reconciliation",
@@ -77,7 +83,8 @@
       "passed": 3,
       "seconds": 221.6,
       "status": "PASSED",
-      "log": "pxe1-group-focused-pytest.log"
+      "log": "pxe1-group-focused-pytest.log",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "d59ce04 + current journey fixtures",
@@ -113,7 +120,8 @@
       "status": "PASSED",
       "passed": 28,
       "seconds": 6.2,
-      "log": "pxe1-current-location-focused-pytest.log"
+      "log": "pxe1-current-location-focused-pytest.log",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "ce2f51dd5e4c7c45faef107e38657099039ebdc5",
@@ -148,7 +156,8 @@
       "status": "PASSED",
       "passed": 37,
       "seconds": 8.47,
-      "log": "pxe1-vitals-focused-pytest.log"
+      "log": "pxe1-vitals-focused-pytest.log",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "ca4331e47dee41a5256431f8116d9a3856609140",
@@ -193,7 +202,8 @@
       "passed": 341,
       "seconds": 315.54,
       "log": "pxe1-vitals-integration-pytest.log",
-      "coverage": "all 25 discovered PXE1 modules plus solo runtime, alpha integration and three actual earned group journeys"
+      "coverage": "all 25 discovered PXE1 modules plus solo runtime, alpha integration and three actual earned group journeys",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "d6453a54bbe9cd617750851f1e5d660c2238f030",
@@ -202,7 +212,8 @@
       "passed": 1,
       "seconds": 9.66,
       "log": "pxe1-chapter-potions-focused-pytest.log",
-      "coverage": "fresh registration, field weapon purchase/equip, all four real Chapter claims, actual battle potion recovery; no synthetic progress/goods/gold/wins"
+      "coverage": "fresh registration, field weapon purchase/equip, all four real Chapter claims, actual battle potion recovery; no synthetic progress/goods/gold/wins",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
@@ -211,7 +222,8 @@
       "passed": 7,
       "seconds": 2.56,
       "log": "pxe1-travel-clock-focused-pytest.log",
-      "coverage": "Simulated one-hour host pause reproduced failure before repair; immediate test control clock held fixed, real token expiry and 15-second edge preserved"
+      "coverage": "Simulated one-hour host pause reproduced failure before repair; immediate test control clock held fixed, real token expiry and 15-second edge preserved",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
@@ -220,7 +232,8 @@
       "passed": 3,
       "seconds": 170.76,
       "log": "pxe1-travel-clock-group-pytest.log",
-      "coverage": "Actual earned group journeys on repaired common travel helper; later creator-only Chapter-sale change does not change these dependencies"
+      "coverage": "Actual earned group journeys on repaired common travel helper; later creator-only Chapter-sale change does not change these dependencies",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
     },
     {
       "candidate": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
@@ -229,7 +242,20 @@
       "passed": 25,
       "seconds": 13.44,
       "log": "pxe1-clock-chapter-shop-focused-pytest.log",
-      "coverage": "Fresh four-assignment Chapter and earned potion proof, protected Shop owners, controlled immediate travel pair and production travel regressions; not full profession history"
+      "coverage": "Fresh four-assignment Chapter and earned potion proof, protected Shop owners, controlled immediate travel pair and production travel regressions; not full profession history",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "28664a714c7729514997877914db660fba126104",
+      "command": "python -m pytest -q tests/test_pxe1_pve_world_tick.py tests/test_pxe1_activity_quarantine.py tests/test_character_builds_v1_durability.py 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_regional_repairs.py' --tb=short",
+      "status": "PASSED; FOUR REGIONAL CASES ARE DIAGNOSTIC ONLY",
+      "passed": 57,
+      "runtime_regressions": 53,
+      "whole_prior_party_diagnostics": 4,
+      "seconds": 65.59,
+      "log": "pxe1-departure-regional-repaired-diagnostic-pytest.log",
+      "coverage": "Committed flee survives recovery with immutable lock; missing actor without receipt quarantines; non-victory flags release without resources/rewards; retained J09/J10/J12-one-fled/J14 assertions on whole prior earned party",
+      "provenance": "Prior b272d52 party hash 70f0daa187006a63fe075b8d46bf098b86d53f288fbb7675b433e2e8e1ead28c; does not substitute current fresh history"
     }
   ],
   "limitations": [
@@ -390,19 +416,21 @@
     "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
   },
   "continuation_preservation": {
-    "status": "FRESH RECOVERY-RESTOCK ACCEPTANCE RUNNING; PRIOR RUNS TERMINAL FAILED",
-    "observed_utc": "2026-10-08T01:27:56.065479+00:00",
-    "code_candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
-    "active_session_id": 75884,
+    "status": "FRESH DEPARTURE-RECOVERY HISTORY RUNNING; PRIOR COMBINED RUN FAILED WITH COMPLETED CORE",
+    "observed_utc": "2026-10-08T03:36:12.038357+00:00",
+    "code_candidate_sha": "28664a714c7729514997877914db660fba126104",
+    "active_session_id": 43109,
     "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
     "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
     "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
     "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
     "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
-    "final_broad_status": "NOT RUN ON RECOVERY-RESTOCK CANDIDATE",
+    "final_broad_status": "NOT RUN ON DEPARTURE-RECOVERY CANDIDATE",
     "human_validation": "NOT RUN",
     "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
-    "latest_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-partial-earned"
+    "completed_prior_core": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-completed-earned",
+    "completed_prior_core_current_reuse": "DIAGNOSTIC ONLY; CURRENT PRODUCTION HASH DIFFERS",
+    "failed_regional_states": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-failed-regional"
   },
   "earned_journey_attempts": [
     {
@@ -485,6 +513,26 @@
       "finding": "All 83 recipes and all twelve profession caps reached; crafted gear enhanced/advanced. Later real fights consumed four required recovery outputs before the final effect proof. Shared fixture stopped at its retained all-output availability assertion; no RAV branches executed.",
       "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
       "database_sha256": "90dac5e420d6ef2acb81eee5891db855b5e74767f3219c731794a981ed1e3682"
+    },
+    {
+      "status": "FAILED; CORE HISTORY COMPLETE",
+      "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-restocked-recovery-fresh-pytest.log",
+      "passed": 37,
+      "failed": 4,
+      "seconds": 7128.96,
+      "earned_history": "fresh registration; no checkpoint override",
+      "core_history": "all production checks passed, all 83 recipes, all 12 profession caps, gear and eight recovery effects, three locales",
+      "regional_result": {
+        "passed": 35,
+        "failed": 4
+      },
+      "finding": "RAV J09 old 250-XP setup assumption; J10 spent boar meat; J12 committed flee rejected by locked-roster validation; J14 non-victory closure left stale combat flag",
+      "completed_core_archive": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-completed-earned",
+      "database_sha256": "1e6da4e24728c63d77c444391e4dd96922af90b44a6a482a59c5ba2411292365",
+      "source_sha256": "517c110c7c42c8decad374d919e219a6493c3a84b84ff060eb257f82e17b9284",
+      "reuse_on_current_source": "FORBIDDEN AS CURRENT ACCEPTANCE: production changed; diagnostic only"
     }
   ],
   "remaining_output_diagnostic": {
@@ -541,5 +589,21 @@
     "seconds": 28.52,
     "log": "pxe1-recovery-restock-diagnostic-pytest.log",
     "provenance": "Whole actual failed 0e52fa6 DB; all five gathering and seven crafting caps retained, four missing outputs replenished by actual learned recipes and paid/material owners, all eight original effect assertions and all three locale checks pass. No injected progress/goods/gold; this copy is not final acceptance."
-  }
+  },
+  "focused_repair_attempts": [
+    {
+      "status": "FAILED WORKING-TREE REPAIR",
+      "failed": 5,
+      "passed": 48,
+      "seconds": 11.33,
+      "log": "pxe1-departure-closure-focused-pytest.log",
+      "finding": "Startup caller still omitted validator transaction argument; fixed before coherent commit"
+    },
+    {
+      "status": "COLLECTION ERROR; CORRECTED BEFORE COMMIT",
+      "errors": 1,
+      "seconds": 1.22,
+      "finding": "Temporary startup-call indentation error; terminal result preserved here; subsequent measured 57-check run passes"
+    }
+  ]
 }

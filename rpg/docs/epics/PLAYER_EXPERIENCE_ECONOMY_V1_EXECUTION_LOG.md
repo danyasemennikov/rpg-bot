@@ -893,6 +893,52 @@ with `PXE1_EARNED_CHECKPOINT` absent, in
 fresh rebuild. Production owners and prior unrelated focused dependencies are
 unchanged. Profession/RAV terminal acceptance and final exact broad remain pending.
 
+## Completed core and regional departure/closure repairs — 2026-10-08
+
+The `b272d52` fresh two-module history completed normally: **37 passed / 4 failed,
+7128.96s (1h58m48s)**, `pxe1-earned-restocked-recovery-fresh-pytest.log`. Both
+profession tests pass; 35 regional cases pass and four fail. All eleven core
+production checks, all 83 recipes, five gathering/seven crafting caps at 20,
+crafted gear enhancement/advancement, eight actual recovery effects and ru/en/es
+navigation complete. This is **not a combined acceptance PASS**. Whole core DB and
+complete provenance are saved outside Temp under workspace
+`acceptance-recovery/b272d52-completed-earned` (DB SHA-256
+`1e6da4e24728c63d77c444391e4dd96922af90b44a6a482a59c5ba2411292365`).
+The whole prior earned party and each failing regional DB are also preserved.
+
+J09 now earns its near-ceiling alchemy state by actual pre-acceptance crafts under
+XP policy 2; both positive-then-zero XP and exactly two personal post-acceptance
+credits remain asserted. J10 earns the meat spent by full catalogue training through
+real boar victories/harvests before crafting its transferred rations.
+
+J12 exposed a production mismatch: `resolve_pve_flee_intent` removes a fled actor
+from active targeting, but `_validate_pxe1_active_state` required the entire
+immutable lock in that active map. The validator now checks the lock minus only
+successful committed departure receipts, read in the caller's writer transaction.
+Missing snapshots without a receipt still quarantine, including a forged `fled`
+membership flag; fled actors do not return to targeting or recovery damage.
+J14 exposed `finish_solo_pve_encounter` leaving current participants' `in_battle`
+flags set after non-victory closure. Its existing closure writer now releases those
+flags while respecting another actual combat owner and preserving HP/MP/XP/gold,
+settlements and the existing source-respawn policy.
+
+Initial working-tree regressions caught a missed startup validator caller
+(5 failed / 48 passed, 11.33s); one temporary indentation collection error was
+corrected before the coherent commit. Final focused runtime/whole-prior-party
+run: **57 passed, 65.59s**, `pxe1-departure-regional-repaired-diagnostic-pytest.log`.
+The 53 repository regressions include background flee/restart, strict missing-actor
+quarantine and reward-free non-victory flag release. All four original failing
+regional scenarios also pass on whole prior-party copies; those are **diagnostic
+only** and do not substitute fresh current-source acceptance.
+
+Repair commit: `28664a714c7729514997877914db660fba126104`. Production changed,
+so the prior completed core cannot be loaded for current acceptance. Session 43109
+runs the same 41-test command fresh from registration with
+`PXE1_EARNED_CHECKPOINT` absent, in `pxe1-earned-departure-recovery-fresh-pytest.log`.
+Current source SHA-256:
+`254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20`.
+Final combined acceptance and exact `python -m pytest -q` remain pending.
+
 ## Remaining work
 
 Continue profession and RAV earned journeys against 22 starter recipes, all 83

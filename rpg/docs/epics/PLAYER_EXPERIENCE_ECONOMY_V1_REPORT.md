@@ -144,8 +144,18 @@ twelve profession caps, then failed the recovery-output availability assertion
 The helper now earns replacements through actual learned recipes before the
 retained eight-output/effect assertions. A whole-copy failing-state diagnostic
 passes all eight effects and three locales (28.52s); it is not final acceptance.
-The changed creator requires another fresh history, now running. No final pass
-is claimed.
+Its fresh history then completed all core checks, 83 recipes, all twelve caps,
+gear/eight recovery effects and three locales. The combined run failed normally:
+37 passed / 4 failed in 7128.96s. Four regional scenarios exposed an old XP setup
+assumption, spent meat stock, recovery rejecting committed flee, and a stale
+combat flag after non-victory closure. The repair validates missing actors against
+committed departure receipts while retaining the immutable lock, releases current
+closure flags inside the writer without rewards/resource changes, and earns the
+required regional setup through actual crafts/harvests. It passes 53 current
+runtime regressions plus four whole-prior-party diagnostics (57 passed, 65.59s).
+That completed old-source core is preserved, but changed production requires a
+fresh history on `28664a7`, now running. The final broad suite remains pending;
+no final acceptance pass is claimed.
 The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
