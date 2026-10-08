@@ -1966,10 +1966,7 @@ def test_j17_combat_t2_restart_and_response_loss(earned):
 def test_j17_separate_connection_delivery_races(earned_party, content_id, expected_status):
     sender, recipient = earned_party['advanced'], earned_party['physical']
     async def prepare():
-        while _quantity(sender.player_id, 'field_ration') < 2:
-            await _ensure_resource(sender, 'herb_common', 1, [])
-            await _move(sender, 'capital_city')
-            await _craft_known(sender, 'trail_ration')
+        await _ensure_rations(sender, 2)
         assert _quantity(sender.player_id, 'field_ration') == 2
         await _move(sender, 'hub_westwild')
     asyncio.run(prepare())
@@ -2061,6 +2058,10 @@ def test_j18_all_finite_claims_in_two_regional_orders(rav1_earned_checkpoint):
         journey = _restore_checkpoint(rav1_earned_checkpoint)
 
         async def run():
+            # Earn the same delivery stock before comparing regional orders.
+            # Otherwise Sunscar's ration reward saves one boar victory only
+            # when Sunscar precedes Westwild, changing ordinary combat XP.
+            await _ensure_rations(journey, 2)
             before = dict(get_player(journey.player_id))
             await _complete_all_finite(journey, order)
             claims = list_claims(journey.player_id)
