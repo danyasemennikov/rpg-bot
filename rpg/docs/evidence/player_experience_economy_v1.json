@@ -2,8 +2,8 @@
   "contract": "PXE1-1",
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
-  "status": "DRAFT; SECOND BOUNDED F2/F3 FOCUSED GATES PASSED; FRESH BROAD IN PROGRESS",
-  "candidate_sha": "9d0a02a1a6ef5f6406ad43bf23f04382363ece72",
+  "status": "DRAFT; SECOND REPAIR FOCUSED PASSED; EARLY INN FIXTURE FOLLOW-UP UNDER VALIDATION",
+  "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
   "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
@@ -27,25 +27,10 @@
   },
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "IN PROGRESS",
+    "status": "PENDING FRESH RESTART AFTER TEST-ONLY FIXTURE REPAIR",
     "command": "python -m pytest -q",
-    "execution_start_head": "fcdfb3986c28e5f8493257ff15931e38d1fa3ae3",
-    "source_sha256": "91096960d4c4b715eb6b389bd359d95c485bab7bc702398b0ebbd55897bb2c9c",
-    "history_mode": "Fresh earned core; reuse variable absent",
-    "started_at": "2026-10-09T19:15:31.438538+00:00",
-    "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-final-broad-pytest.log",
-    "test_pid": 1204,
-    "runner_pid": 2628,
-    "exit_code": null,
-    "code_test_identity": {
-      "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
-      "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
-      "game": "0feb987d1917f19ebdf6c2aeb21ba8293f4a46df",
-      "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
-      "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
-      "tests": "62721ec2aae3698a4beea3958867ce2ac430e5a6"
-    },
-    "candidate_sha": "9d0a02a1a6ef5f6406ad43bf23f04382363ece72"
+    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "history_mode": "Fresh core required; ordinary journey source changed; no prior core reused"
   },
   "earned_profession_rav_journeys": {
     "status": "PENDING NEW BROAD GATE"
@@ -1390,8 +1375,8 @@
       "raw_log": "work/rpg-bot/rpg/pxe1-second-review-external-final-pytest.log",
       "raw_log_sha256": "e13da2317bfbd7b535ca02f5162e19fbffe65d1bde6ddf69463f528fca2b3f3a"
     },
-    "acceptance": "FOCUSED COMPLETE; FINAL FRESH BROAD IN PROGRESS",
-    "candidate_sha": "9d0a02a1a6ef5f6406ad43bf23f04382363ece72",
+    "acceptance": "FOCUSED PASSED; EARNED HELPER VERIFICATION IN PROGRESS; FINAL FRESH BROAD RESTART PENDING",
+    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
     "focused": {
       "discovery": "$pxe1SecondTests=@(Get-ChildItem -LiteralPath tests -Filter test_pxe1*.py | ForEach-Object { $_.FullName })",
       "command": "python -m pytest -q $pxe1SecondTests tests/test_live_combat_runtime_foundation.py tests/test_solo_pve_runtime_adapter.py tests/test_solo_pve_runtime_handler_flow.py tests/test_group_pve_runtime_enablement.py tests/test_world_pve_encounter_foundation.py tests/test_pvp_live_flow_v1.py tests/test_character_builds_v1_pvp_journey.py tests/test_professions_economy_v1_transactions.py tests/test_alpha_transactions_v1.py --tb=short",
@@ -1410,6 +1395,51 @@
       "status": "FIXED IN FOCUSED TESTS; FINAL BROAD PENDING",
       "proof": "All rollback/retry boundaries resolve once; two three-enemy partial-order controls submit only missing actors"
     },
-    "execution_start_head": "fcdfb3986c28e5f8493257ff15931e38d1fa3ae3"
+    "execution_start_head": "fcdfb3986c28e5f8493257ff15931e38d1fa3ae3",
+    "first_broad_attempt": {
+      "status": "STOPPED AFTER FAILURE MARKER; BEFORE FRESH EARNED CORE",
+      "branch": "feat/pxe1-player-experience-economy-v1",
+      "candidate_sha": "fcdfb3986c28e5f8493257ff15931e38d1fa3ae3",
+      "execution_start_head": "fcdfb3986c28e5f8493257ff15931e38d1fa3ae3",
+      "command": "python -m pytest -q",
+      "source_sha256": "91096960d4c4b715eb6b389bd359d95c485bab7bc702398b0ebbd55897bb2c9c",
+      "history_mode": "Fresh earned core; reuse variable absent",
+      "started_at": "2026-10-09T19:15:31.438538+00:00",
+      "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-first-broad-stopped-pytest.log",
+      "runner_pid": 2628,
+      "exit_code": 4294967295,
+      "code_test_identity": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "0feb987d1917f19ebdf6c2aeb21ba8293f4a46df",
+        "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+        "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+        "tests": "62721ec2aae3698a4beea3958867ce2ac430e5a6"
+      },
+      "completed_earned_history": null,
+      "test_pid": 1204,
+      "elapsed_seconds": 963.51,
+      "heartbeat_at": "2026-10-09T19:31:34.949178+00:00",
+      "current_head": "0977db1a0278bf72e70069faaa2561a982106eeb",
+      "git_status": "clean",
+      "latest_log_tail": "............................................................... [  2%]\n........................................................................ [  5%]\n..................................................F..................... [  8%]\n........................................................................ [ 11%]\n........................................................................ [ 14%]\n........................................................................ [ 17%]\n........................................................................ [ 20%]\n........................................................................ [ 23%]\n........................................................................ [ 26%]\n........................................................................ [ 29%]\n..................................................................... [ 32%]\n........................................................................ [ 35%]\n........................................................................ [ 38%]\n........................................................................ [ 41%]\n....................................................................................................... [ 45%]\n.................................................................... [ 48%]\n........................................................................ [ 51%]\n........................................................................ [ 54%]\n.............................................",
+      "raw_log_sha256": "6f8441ecee66ed2d022a8be61795f7eccb466eff8f5c2fa806a926c6682e4682",
+      "completed_at": "2026-10-09T19:31:34.949178+00:00",
+      "normal_pytest_completion": false,
+      "stop_reason": "Reproduce and repair early inn funding fixture before guarded expensive core source changes",
+      "diagnosis": "Retained synthesis state HP131/max190, gold10 after 5 real victories; 12-gold recovery assertion failed"
+    },
+    "earned_helper_followup": {
+      "commit": "0977db1a0278bf72e70069faaa2561a982106eeb",
+      "production_changed": false,
+      "mechanism": "Legal early enemy damage requires rest at gold10, below12; ordinary fixture assumed combat gold was enough",
+      "correction": "Earn rest through production sale of owned material loot with exact confirmation; retain all inn/HP/MP/mastery/skill assertions",
+      "retained_whole_db": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\failed-synthesis.sqlite3",
+      "db_sha256": "253e4c28a59c16e55d5d7f5fd3e89860e187aef4fe2a4151c9f6d5341821f517",
+      "exact_retained_probe": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\test_second_review_retained_inn_state.py",
+      "before": "1 failed in 1.13s; assert 10 >= 12",
+      "after": "1 passed in 0.91s",
+      "affected_journeys": "IN PROGRESS; ordinary and group character build source consumers"
+    }
   }
 }

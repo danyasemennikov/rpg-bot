@@ -260,3 +260,26 @@ are included. Exact command and raw-log SHA256 are in JSON evidence.
 Required exact `python -m pytest -q` follows on this stabilized production source
 with a fresh earned core. It is not PASS until normal completion. Old historical
 source/core cannot validate this candidate. Same Draft PR237; human NOT RUN.
+
+
+### Second repair first broad attempt — stopped before fresh core
+
+Execution `fcdfb39` / code-test `9d0a02a` produced a failure marker at the ordinary
+synthesis journey. It was stopped before the expensive fresh earned core; **no
+normal terminal pytest result and no PASS**. Log `pxe1-second-review-first-broad-stopped-pytest.log`,
+SHA256 `6f8441ecee66ed2d022a8be61795f7eccb466eff8f5c2fa806a926c6682e4682`; elapsed observer time 963.51s. Retained whole isolated
+SQLite state has 5 real victories, HP131/max190 and gold10 at the capital inn.
+The exact cloned-state probe reproduces **1 failed in 1.13s**, `assert 10 >= 12`.
+A standalone different-seed synthesis run passed (55.04s), confirming this ordinary
+test assumed recovery funding rather than ensuring it for legal combat histories.
+
+Test-only `0977db1a0278bf72e70069faaa2561a982106eeb` funds early recovery by selling owned earned material loot
+through actual Shop preview/confirmation/mutation. No goods, gold, HP, XP or mastery
+are supplied directly. Original 12-gold deduction, full HP/MP restoration, skill
+proofs, exact mastery and conservation assertions remain. Exact same retained-state
+probe then passed **1 passed in 0.91s**. Whole failure state is preserved outside
+pytest rotation at `acceptance-recovery/second-review-237/failed-synthesis.sqlite3`.
+Ordinary and group source consumers are being verified before the exact final broad
+restart. This common test source is included in strict earned-history provenance,
+so no old core is compatible; no expensive new core had been built in the stopped run.
+Production F2/F3 code remains `9d0a02a`; unrelated systems/formulas are unchanged.
