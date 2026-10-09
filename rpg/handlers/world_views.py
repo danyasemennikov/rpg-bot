@@ -174,7 +174,7 @@ def map_card(player, *, region=None, page=0, world=False):
         if region not in WORLD_ROUTES:
             region = current_region(player)
         if region == 'core':
-            nodes = get_location_neighbors('capital_city')
+            nodes = [k for k in ['capital_city', *get_location_neighbors('capital_city')] if k != current]
         else:
             nodes = [k for k, location in WORLD_LOCATIONS.items() if location.get('route_id') == region and k != current]
             if region == 'route_frostspine':

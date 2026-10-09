@@ -62,16 +62,26 @@ def validate_live_group(conn,row):
                     or not 0<=actor['hp']<=actor['max_hp'] or not 0<=actor['mana']<=actor['max_mana']):
                 raise ValueError()
         roster = json.loads(row['locked_roster_json'])
-        locked_allies = {r['ally_id'] for r in conn.execute("SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1 AND status='locked'",(row['id'],))}
+        locked_allies = {r['ally_id'] for r in conn.execute("SELECT ally_id FROM pvp_engagement_reinforcements WHERE engagement_id=? AND membership_version=1 AND status IN ('locked','settled')",(row['id'],))}
         if locked_allies!=set(sides['side_a'][1:]+sides['side_b'][1:]):
             raise ValueError()
         for side,principal,member_side in (('side_a',row['attacker_id'],'initiator'),('side_b',row['defender_id'],'defender')):
             for member in roster[side][1:]:
-                if not conn.execute("""SELECT 1 FROM pvp_engagement_reinforcements WHERE id=?
+                membership = conn.execute("""SELECT status FROM pvp_engagement_reinforcements WHERE id=?
                     AND engagement_id=? AND ally_id=? AND inviter_id=? AND side=?
-                    AND membership_version=1 AND status='locked'""",
-                    (member['reinforcement_id'],row['id'],member['player_id'],principal,member_side)).fetchone():
+                    AND membership_version=1 AND status IN ('locked','settled')""",
+                    (member['reinforcement_id'],row['id'],member['player_id'],principal,member_side)).fetchone()
+                if not membership:
                     raise ValueError()
+                if membership['status']=='settled':
+                    receipt=conn.execute('''SELECT result_json FROM pvp_participant_settlements_pxe1
+                        WHERE engagement_id=? AND player_id=? AND status='applied' ''',
+                        (row['id'],member['player_id'])).fetchone()
+                    proof=json.loads(receipt['result_json']) if receipt else {}
+                    if (battle['participants_v1'][str(member['player_id'])]['hp']!=0
+                            or proof.get('engagement_id')!=row['id']
+                            or proof.get('player_id')!=member['player_id']):
+                        raise ValueError()
         return context
     except (ActionRejected,ValueError,TypeError,KeyError,IndexError,AttributeError):
         raise ActionRejected('corrupt_live_state')
@@ -264,6 +274,9 @@ def settle_deaths(conn, row, context, *, turn_revision, now_ms, failure_hook=Non
             VALUES (?,?,1,?,?,'applied',?)''',(row['id'],victim_id,turn_revision,encoded(result),now_ms))
         from game.player_feedback import record_combat_result
         record_combat_result(conn,victim_id,domain='pvp',ref=row['id'],phase='death',now_ms=now_ms)
+        conn.execute("""UPDATE pvp_engagement_reinforcements SET status='settled'
+            WHERE engagement_id=? AND ally_id=? AND membership_version=1 AND status='locked'""",
+            (row['id'],victim_id))
         if failure_hook:
             failure_hook('after_participant_receipt')
     return new_deaths
@@ -312,6 +325,8 @@ def settle_group(conn, row, context, *, turn_revision, now_ms, failure_hook=None
         (engagement_id,schema_version,terminal_turn_revision,result_json,status,created_ms)
         VALUES (?,1,?,?,'applied',?)''',(row['id'],turn_revision,encoded(result),now_ms))
     conn.execute("UPDATE pvp_engagements SET engagement_state='cancelled' WHERE id=?",(row['id'],))
+    conn.execute("""UPDATE pvp_engagement_reinforcements SET status='settled'
+        WHERE engagement_id=? AND membership_version=1 AND status IN ('accepted','locked')""",(row['id'],))
     from game.player_feedback import record_combat_result
     for ids in alive.values():
         for player_id in ids:

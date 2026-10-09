@@ -304,6 +304,8 @@ def ensure_player_experience_schema(conn, *, now_ms: int | None = None) -> None:
             for player in conn.execute('SELECT telegram_id FROM players').fetchall():
                 seed_visit_threats(conn,player['telegram_id'],now_ms=now_ms)
             conn.execute('INSERT INTO economy_schema_migrations(version) VALUES (?)', (MIGRATION_VERSION,))
+        from game.pvp_world import reconcile_settled_memberships
+        reconcile_settled_memberships(conn)
         violations = [tuple(row) for row in conn.execute('PRAGMA foreign_key_check')]
         if violations:
             raise RuntimeError(f'PXE1 foreign key violations: {violations!r}')

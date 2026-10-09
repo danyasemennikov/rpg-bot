@@ -233,7 +233,7 @@ async def handle_read_selection(update,context):
         token = conn.execute("SELECT payload FROM player_ui_actions WHERE token=? AND player_id=? AND kind='pxe1_pvp_view' AND used=0 AND expires_at>=?",
                              (query.data.removeprefix('pvp_cv_'),player['telegram_id'],int(time.time()))).fetchone()
         intent = json.loads(token['payload']) if token else {}
-        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=? AND group_rules_version=1',(intent.get('engagement_id'),)).fetchone()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=? AND world_model_version=1',(intent.get('engagement_id'),)).fetchone()
     finally: conn.close()
     if not row or intent.get('schema_version')!=1 or row['engagement_state']!='converted_to_battle':
         await query.answer(t('location.pvp_action_not_ready',lang),show_alert=True); return

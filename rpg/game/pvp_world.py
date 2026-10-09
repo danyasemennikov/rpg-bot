@@ -168,6 +168,7 @@ def invite(conn, *, engagement_id, principal_id, ally_id, now_ms):
 
 def respond(conn, *, engagement_id, ally_id, accepted, now_ms):
     _writer(conn)
+    reconcile_settled_memberships(conn, ally_id=ally_id)
     row = engagement(conn, engagement_id)
     _pending(row, now_ms)
     invitation = conn.execute("SELECT * FROM pvp_engagement_reinforcements WHERE engagement_id=? AND ally_id=? AND membership_version=1 AND status='pending'", (engagement_id, ally_id)).fetchone()
@@ -196,6 +197,30 @@ def respond(conn, *, engagement_id, ally_id, accepted, now_ms):
         conn.execute('UPDATE pvp_engagements SET reason_context=? WHERE id=?', (encoded(context), engagement_id))
     conn.execute('UPDATE pvp_engagement_reinforcements SET status=?,responded_at=? WHERE id=?', ('accepted' if accepted else 'rejected', iso(now_ms), invitation['id']))
     conn.execute('UPDATE pvp_engagements SET state_revision=state_revision+1 WHERE id=?', (engagement_id,))
+
+
+def reconcile_settled_memberships(conn, *, ally_id=None):
+    """Release leaked exclusivity only with a matching committed settlement.
+
+    Membership rows and immutable roster references remain historical evidence.
+    The caller's writer serializes repair with subsequent invitation acceptance.
+    """
+    _writer(conn)
+    return conn.execute('''UPDATE pvp_engagement_reinforcements AS m SET status='settled'
+        WHERE m.membership_version=1 AND m.status IN ('accepted','locked')
+        AND (? IS NULL OR m.ally_id=?)
+        AND EXISTS(SELECT 1 FROM pvp_engagements e WHERE e.id=m.engagement_id
+            AND e.world_model_version=1 AND (
+                EXISTS(SELECT 1 FROM pvp_group_settlements_pxe1 s
+                    WHERE s.engagement_id=e.id AND s.status='applied'
+                    AND json_valid(s.result_json)
+                    AND json_extract(s.result_json,'$.engagement_id')=e.id)
+                OR EXISTS(SELECT 1 FROM pvp_participant_settlements_pxe1 d
+                    WHERE d.engagement_id=e.id AND d.player_id=m.ally_id AND d.status='applied'
+                    AND json_valid(d.result_json)
+                    AND json_extract(d.result_json,'$.engagement_id')=e.id
+                    AND json_extract(d.result_json,'$.player_id')=m.ally_id)))''',
+        (ally_id,ally_id)).rowcount
 
 
 def leave_or_revoke(conn, *, engagement_id, actor_id, ally_id=None, now_ms):

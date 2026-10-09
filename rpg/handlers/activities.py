@@ -35,18 +35,30 @@ def activity_card(player,session,kind,*,now_ms=None):
             remaining = max(0,(session['next_due_ms']-now_ms+999)//1000)+18*max(0,len(path)-session['edge_index']-2)
             lines.append(t('pxe1.travel.remaining',lang,time=duration(remaining)))
     else:
+        from game.profession_tools import get_tool
         accounting = json.loads(session['result_json'])
+        conn=get_connection()
+        try: tool=get_tool(conn,player['telegram_id'],session['profession_key'])
+        finally: conn.close()
         lines += [t('professions.names.'+session['profession_key'],lang),
                   t('pxe1.gather.attempts',lang,done=session['last_tick'],total=accounting['max_attempts'],quantity=session['yield_total']),
                   t('pxe1.gather.xp_total',lang,xp=accounting['xp'])]
-        for item,quantity in list(accounting['items'].items())[:4]:
-            lines.append(f'{escape(get_item_name(item,lang))} ×{quantity}')
+        if accounting['items']:
+            lines.append(' · '.join(f'{escape(get_item_name(item,lang))} ×{quantity}'
+                                   for item,quantity in list(accounting['items'].items())[:4]))
+        if tool:
+            lines.append(t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier']))
+        warning=accounting.get('tool_warning') or {}
+        if warning and not warning['acknowledged']:
+            lines.append(t('pxe1.tool.worn_warning',lang))
         if status=='running':
             remaining=max(0,(session['next_due_ms']-now_ms+999)//1000)+8*max(0,accounting['max_attempts']-session['last_tick']-1)
             lines.append(t('pxe1.gather.remaining',lang,time=duration(remaining)))
     rows = []
     if status=='running':
         rows.append([InlineKeyboardButton(t('pxe1.'+kind+'.stop',lang),callback_data=f"px:stop:{kind}:{session['session_id']}")])
+    if kind=='gather' and status=='broken':
+        rows.append([InlineKeyboardButton(t('pxe1.tool.recovery',lang),callback_data='px:tool:'+session['profession_key'])])
     rows.append([InlineKeyboardButton(t('keyboard.activities',lang),callback_data='px:home'),InlineKeyboardButton(t('keyboard.location',lang),callback_data='pvp_refresh')])
     keyboard = _kb(rows)
     validate_surface('\n'.join(lines),keyboard)
@@ -162,6 +174,37 @@ def tool_list(player):
     return t('pxe1.tools',lang),_kb(rows)
 
 
+def _tool_service_route(player, *, tier):
+    """Nearest legal service on the canonical graph, through travel previews.
+
+    An undiscovered multi-edge route uses its adjacent first step; browsing
+    never discovers nodes or bypasses the existing travel owner.
+    """
+    from collections import deque
+    from game.locations import get_location,get_location_neighbors,resolve_location_id
+    from game.build_contract import SAFE_BUILD_HUBS
+    from game.travel_runtime import preview_travel
+    origin=resolve_location_id(player['location_id'])
+    queue,seen=deque([[origin]]),{origin}
+    conn=get_connection()
+    try:
+        while queue:
+            path=queue.popleft()
+            node=path[-1]
+            location=get_location(node) or {}
+            service=node in SAFE_BUILD_HUBS if tier==1 else 'craftsmen_guild' in location.get('services',[])
+            if service:
+                if node==origin: return None
+                try: preview_travel(conn,player['telegram_id'],node); destination=node
+                except ActionRejected: destination=path[1]
+                return node,destination
+            for neighbor in get_location_neighbors(node):
+                if neighbor not in seen:
+                    seen.add(neighbor);queue.append(path+[neighbor])
+    finally: conn.close()
+    return None
+
+
 def tool_card(player,profession):
     from game.build_contract import SAFE_BUILD_HUBS
     from game.locations import resolve_location_id
@@ -180,20 +223,34 @@ def tool_card(player,profession):
              t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier'])]
     rows = []
     location = get_location(player['location_id']) or {}
+    if tool['durability']==0:
+        lines.append(t('pxe1.tool.broken',lang))
     if quote and quote['restored']:
         lines.append(t('pxe1.repair_materials',lang))
         for item in quote['consumed']:
             lines.append(t('pxe1.repair_input',lang,name=escape(get_item_name(item,lang)),owned=quote['consumed'][item],supplied=quote['supplied'][item]))
         lines.append(t('pxe1.tool.repair_cost',lang,gold=quote['gold']))
+        if quote['repair_mode']=='assisted':
+            lines.append(t('pxe1.tool.assisted_repair_explanation',lang))
+        source_buttons=[InlineKeyboardButton(t('pxe1.sources',lang)+' · '+get_item_name(item,lang),callback_data=f'pe_m:{item}:0')
+                        for item in quote['consumed']]
+        rows += [source_buttons[i:i+2] for i in range(0,len(source_buttons),2)]
         if 'craftsmen_guild' in location.get('services',[]):
             payload = encoded(quote)
             token = issue_actions(player['telegram_id'],'tool_repair_pxe1',[payload])[payload]
             rows.append([InlineKeyboardButton(t('pxe1.tool.assisted_repair' if quote['repair_mode']=='assisted' else 'pxe1.tool.repair',lang),callback_data='px:repair:'+token)])
-    elif tool['tier']==1 and resolve_location_id(player['location_id']) in SAFE_BUILD_HUBS:
-        quote = {'schema_version':1,'profession_key':profession,'tool_revision':tool['revision'],'gold':12}
-        payload = encoded(quote)
-        token = issue_actions(player['telegram_id'],'tool_replace_pxe1',[payload])[payload]
-        rows.append([InlineKeyboardButton(t('pxe1.replace',lang,gold=12),callback_data='px:replace:'+token)])
+    elif tool['tier']==1:
+        lines.append(t('pxe1.tool.replacement_cost',lang,gold=12))
+        if resolve_location_id(player['location_id']) in SAFE_BUILD_HUBS:
+            quote = {'schema_version':1,'profession_key':profession,'tool_revision':tool['revision'],'gold':12}
+            payload = encoded(quote)
+            token = issue_actions(player['telegram_id'],'tool_replace_pxe1',[payload])[payload]
+            rows.append([InlineKeyboardButton(t('pxe1.replace',lang,gold=12),callback_data='px:replace:'+token)])
+    route=_tool_service_route(player,tier=tool['tier'])
+    if route:
+        hub,destination=route
+        lines.append(t('pxe1.tool.nearest_service',lang,name=escape(get_location_name(hub,lang))))
+        rows.append([InlineKeyboardButton(t('pxe1.tool.route',lang),callback_data='goto_'+destination)])
     next_tier = min(4,tool['tier']+1)
     rows.append([InlineKeyboardButton(t('pxe1.tool_recipe',lang),callback_data=f'pe_r:pxe_tool_{profession}_{next_tier}')])
     rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='px:tools')])
@@ -375,16 +432,9 @@ async def handle_activity_buttons(update,context):
     if session:
         text,keyboard = activity_card(player,session,kind,now_ms=now_ms)
         await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
-        conn = get_connection()
-        try:
-            conn.execute('''INSERT INTO player_pxe1_ui(player_id,schema_version,surface_kind,surface_ref,chat_id,message_id,surface_revision,updated_ms)
-                VALUES (?,1,?,?,?,?,?,?) ON CONFLICT(player_id) DO UPDATE SET surface_kind=excluded.surface_kind,
-                surface_ref=excluded.surface_ref,chat_id=excluded.chat_id,message_id=excluded.message_id,
-                surface_revision=excluded.surface_revision,updated_ms=excluded.updated_ms''',
-                (player['telegram_id'],kind,session['session_id'],query.message.chat_id,query.message.message_id,session['revision'],now_ms))
-            conn.commit()
-        finally:
-            conn.close()
+        from game.player_ui import record_surface
+        record_surface(player['telegram_id'],kind=kind,ref=session['session_id'],revision=session['revision'],
+                       chat_id=query.message.chat_id,message_id=query.message.message_id)
     else:
         text,keyboard = build_activities(player)
         await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')

@@ -3463,6 +3463,40 @@ def resolve_current_side_if_ready(
     on_player_action,
     on_enemy_action,
 ) -> bool:
+    """An unsuccessful attempt never leaves an advanced runtime as authority."""
+    resolved_id = _resolve_encounter_id(player_id=player_id, encounter_id=encounter_id,
+                                       battle_state=battle_state)
+    try:
+        return _resolve_current_side_if_ready(
+            player_id=player_id, encounter_id=encounter_id, battle_state=battle_state,
+            projection_states=projection_states, on_player_action=on_player_action,
+            on_enemy_action=on_enemy_action,
+        )
+    except BaseException:
+        # This includes ambiguous failure after commit. Reload SQLite instead
+        # of restoring a pre-attempt copy, which could replay an applied side.
+        if resolved_id:
+            _SOLO_PVE_RUNTIME_STORE.remove(resolved_id)
+            restored = load_active_pve_encounter(encounter_id=resolved_id)
+            if restored:
+                import copy
+                authoritative, _ = restored
+                for projection in [battle_state, *(projection_states or [])]:
+                    if projection is not None:
+                        projection.clear()
+                        projection.update(copy.deepcopy(authoritative))
+        raise
+
+
+def _resolve_current_side_if_ready(
+    *,
+    player_id: int | None = None,
+    encounter_id: str | None = None,
+    battle_state: dict | None = None,
+    projection_states: list[dict] | None = None,
+    on_player_action,
+    on_enemy_action,
+) -> bool:
     encounter_id = _resolve_encounter_id(
         player_id=player_id,
         battle_state=battle_state,
@@ -3783,12 +3817,10 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
     if not encounter_id:
         return False
     now = _utc_now()
-    runtime_state = None
+    runtime_state = _SOLO_PVE_RUNTIME_STORE.get(encounter_id)
     if battle_state.get('enemy_units'):
         runtime_state = _sync_runtime_enemy_roster_for_pack(encounter_id=encounter_id, battle_state=battle_state, now=now)
-    if runtime_state is None:
-        runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=now, timeout_seconds=0)
-    elif runtime_state.side_turn_state == 'completed':
+    if runtime_state is None or runtime_state.side_turn_state == 'completed':
         # A pack whose roster already matches the durable unit list still
         # needs its newly active enemy side opened before AI orders can commit.
         # Roster recreation opens the side itself, so only the existing-state
@@ -3950,8 +3982,25 @@ def _validate_pxe1_active_state(row, *, conn):
                 raise ValueError()
         if len({enemy['unit_id'] for enemy in enemies})!=len(enemies):
             raise ValueError()
-        if not state.get('mob_dead') and any(a['hp']>0 for a in state['participant_states_v1'].values()):
-            datetime.fromisoformat(state['side_deadline_at'])
+        phase = state['side_turn_state']
+        if phase == 'completed':
+            # A crash between result commit and opening the next side is a
+            # legitimate boundary only when that exact side has its receipt.
+            receipt = conn.execute('''SELECT state_json FROM combat_turn_results_v1
+                WHERE encounter_kind='pve' AND encounter_id=? AND turn_revision=?''',
+                (row['encounter_id'], state['turn_revision'])).fetchone()
+            if not receipt or state['side_deadline_at'] is not None:
+                raise ValueError()
+            committed = json.loads(receipt['state_json'])
+            if any(state.get(key) != committed.get(key) for key in
+                   ('side_turn_state','active_side','turn_revision','round_index')):
+                raise ValueError()
+        elif phase in {'collecting_orders','ready_to_lock'}:
+            deadline = datetime.fromisoformat(state['side_deadline_at'])
+            if deadline.tzinfo is None:
+                raise ValueError()
+        else:
+            raise ValueError()
         return state
     except (ValueError,TypeError,KeyError,AttributeError):
         raise ValueError('corrupt_live_state')
@@ -4026,6 +4075,7 @@ def process_due_pve_world_sides(*,now_ms: int,limit: int=100,encounter_id: str |
             if unsettled:
                 state,mob = load_active_pve_encounter(encounter_id=encounter_id)
             terminal_defeat = bool(state.get('participant_states_v1')) and all(int(a.get('hp',0))<=0 for a in state['participant_states_v1'].values())
+            recovering_completed_side = state.get('side_turn_state')=='completed'
             runtime = None if terminal_defeat or state.get('mob_dead') else ensure_runtime_for_battle(player_id=owner,battle_state=state,mob=mob)
             if not state.get('mob_dead') and not terminal_defeat:
                 if runtime.active_side_id==SIDE_ENEMY:
@@ -4036,7 +4086,7 @@ def process_due_pve_world_sides(*,now_ms: int,limit: int=100,encounter_id: str |
                         now=datetime.fromtimestamp(now_ms/1000,timezone.utc),
                         on_player_timeout_action=lambda action:_dispatch_v1_player_action(action,battle_state=state),
                         on_enemy_action=lambda action:_dispatch_v1_enemy_action(action,battle_state=state))
-                if not changed and not unsettled:
+                if not changed and not unsettled and not recovering_completed_side:
                     continue
             if not persist_solo_pve_encounter_state(encounter_id=encounter_id,battle_state=state,mob=mob):
                 continue

@@ -2,7 +2,7 @@
 
 import secrets
 
-from game.locations import get_location, resolve_location_id
+from game.locations import get_location, get_location_security_tier, resolve_location_id
 from game.mobs import get_mob
 
 
@@ -37,6 +37,8 @@ def arrive_at_location(conn, player_id: int, destination: str, *, now_ms: int) -
         raise ValueError('invalid arrival')
     conn.execute('''UPDATE players SET location_id=?,travel_revision=travel_revision+1,
         location_visit_revision=location_visit_revision+1 WHERE telegram_id=?''', (destination,player_id))
+    if get_location_security_tier(destination) in {'frontier','core_war'}:
+        conn.execute('UPDATE players SET pvp_respawn_protection_until=0 WHERE telegram_id=?',(player_id,))
     ensure_player_location_discovered(player_id,destination,conn=conn)
     conn.execute("UPDATE player_location_threats SET status='dismissed',reason='left_location',updated_ms=? WHERE player_id=? AND status='pending'", (now_ms,player_id))
     seed_visit_threats(conn,player_id,now_ms=now_ms)

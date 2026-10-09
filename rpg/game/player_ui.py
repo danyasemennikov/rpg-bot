@@ -48,7 +48,7 @@ async def install_menu_on_message(message,player):
 
 def validate_surface(text,keyboard,*,list_view=False,long_detail=False):
     rows = list(getattr(keyboard,'inline_keyboard',()) or ())
-    max_text = 3600 if long_detail else 900
+    max_text = 3000 if long_detail else 900
     if len(text.encode('utf-16-le'))//2 > max_text or (not long_detail and len(text.splitlines())>10):
         raise ValueError('surface_text_budget')
     if len(rows)>(10 if list_view else 6) or sum(len(row) for row in rows)>(12 if list_view else 8):
@@ -101,6 +101,16 @@ def record_surface(player_id,*,kind,ref,revision,chat_id,message_id):
             surface_ref=excluded.surface_ref,chat_id=excluded.chat_id,message_id=excluded.message_id,
             surface_revision=excluded.surface_revision,updated_ms=excluded.updated_ms''',
             (player_id,kind,ref,chat_id,message_id,revision,int(time.time()*1000)))
+        if kind=='gather':
+            import json
+            session=conn.execute('SELECT result_json FROM player_gathering_sessions WHERE session_id=? AND player_id=?',
+                                 (ref,player_id)).fetchone()
+            accounting=json.loads(session['result_json']) if session else {}
+            warning=accounting.get('tool_warning') or {}
+            if warning and warning['revision']<=revision and not warning['acknowledged']:
+                warning['acknowledged']=True
+                conn.execute('UPDATE player_gathering_sessions SET result_json=? WHERE session_id=? AND player_id=?',
+                             (json.dumps(accounting),ref,player_id))
         conn.commit()
     finally:
         conn.close()

@@ -245,6 +245,8 @@ def commit_gathering_tick(conn, session_id: str, *, now_ms: int) -> dict:
         accounting['items'][item] = accounting['items'].get(item,0)+1
         granted = [{'item_id':item,'quantity':1,'instance_ids':[],'gear_specs':[]}]
     updated_tool = wear_tool(conn,tool,now_ms=now_ms)
+    if updated_tool['worn_warning']:
+        accounting['tool_warning'] = {'revision':session['revision']+1,'acknowledged':False}
     accounting['attempts'] = tick
     accounting['xp'] += xp
     state = 'broken' if updated_tool['durability']==0 else 'completed' if tick>=accounting['max_attempts'] else 'running'
