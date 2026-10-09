@@ -343,6 +343,7 @@ def test_committed_nonterminal_pve_side_survives_process_restart(crash_side):
                 raise AssertionError('Crash point not reached')
     conn = get_connection()
     assert conn.execute('SELECT COUNT(*) FROM combat_turn_results_v1 WHERE encounter_id=?', (encounter,)).fetchone()[0] == crash_side
+    completed=json.loads(conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0])
     pve_live.reset_solo_pve_runtime_store()
     with patch('game.pve_live._utc_now', return_value=datetime.fromtimestamp(1028, timezone.utc)):
         outcome = pve_live.process_due_pve_world_sides(now_ms=1028000, encounter_id=encounter)
@@ -350,6 +351,7 @@ def test_committed_nonterminal_pve_side_survives_process_restart(crash_side):
     assert conn.execute('SELECT status FROM pve_encounters WHERE encounter_id=?', (encounter,)).fetchone()[0] == 'active'
     saved=json.loads(conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0])
     assert saved['side_turn_state']=='collecting_orders'
+    assert saved['round_index']==completed['round_index']+(1 if crash_side==1 else 0)
     deadline=saved['side_deadline_at']
     pve_live.reset_solo_pve_runtime_store()
     with patch('game.pve_live._utc_now',return_value=datetime.fromtimestamp(1030,timezone.utc)):

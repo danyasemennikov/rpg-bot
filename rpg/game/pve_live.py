@@ -3346,6 +3346,7 @@ def ensure_runtime_for_battle(
                     runtime_state.participants[int(order['actor_id'])].phase_state = 'auto_fallback'
         else:
             runtime_state.turn_revision = persisted_revision
+            runtime_state.round_index = max(1, int(battle_state.get('round_index', 1) or 1))
             runtime_state.side_turn_state = 'completed'
             runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
     elif runtime_state.side_turn_state == 'completed':
