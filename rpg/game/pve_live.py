@@ -3300,6 +3300,14 @@ def ensure_runtime_for_battle(
             side_b_participants=expected_enemy_participants,
             active_side_id=active_side,
         )
+        if active_side == SIDE_ENEMY:
+            # Player-side commit status is part of the completed projection.
+            # Creating the enemy runtime must not erase that receipt history.
+            for pid in side_a_players:
+                phase = (battle_state.get('ally_commit_status') or {}).get(str(pid))
+                if phase in {'eligible', 'committed', 'auto_fallback', 'unable_to_act',
+                             'defeated', 'fled', 'released'}:
+                    runtime_state.participants[pid].phase_state = phase
         persisted_revision = max(0, int(battle_state.get('turn_revision', 0) or 0))
         candidate_orders = load_combat_orders(
             encounter_kind='pve', encounter_id=encounter_id,
@@ -3344,13 +3352,22 @@ def ensure_runtime_for_battle(
                 )
                 if committed.accepted and str(order.get('order_kind')) == 'timeout':
                     runtime_state.participants[int(order['actor_id'])].phase_state = 'auto_fallback'
+                    runtime_state.submitted_actions[int(order['actor_id'])].source = 'fallback'
         else:
             runtime_state.turn_revision = persisted_revision
             runtime_state.round_index = max(1, int(battle_state.get('round_index', 1) or 1))
             runtime_state.side_turn_state = 'completed'
-            runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
+            runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(
+                encounter_id=encounter_id, now=check_now,
+                timeout_seconds=0 if runtime_state.active_side_id == SIDE_ENEMY
+                else DEFAULT_SIDE_TURN_TIMEOUT_SECONDS,
+            )
     elif runtime_state.side_turn_state == 'completed':
-        runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(encounter_id=encounter_id, now=check_now)
+        runtime_state = _SOLO_PVE_RUNTIME.open_side_turn(
+            encounter_id=encounter_id, now=check_now,
+            timeout_seconds=0 if runtime_state.active_side_id == SIDE_ENEMY
+            else DEFAULT_SIDE_TURN_TIMEOUT_SECONDS,
+        )
 
     ensure_participant_combat_state(
         battle_state=battle_state,
@@ -3516,6 +3533,10 @@ def _resolve_current_side_if_ready(
     if not claim.claimed:
         return False
 
+    # Evaluation uses the resolving side's revision for RNG and effect timing.
+    # Opening a side can advance runtime before its UI projection is refreshed.
+    _sync_projection_targets(encounter_id=encounter_id, battle_state=battle_state,
+                             projection_states=projection_states)
     batch = _SOLO_PVE_RUNTIME.build_resolution_batch(encounter_id=encounter_id)
     _resolve_batch_by_action(batch=batch, on_player_action=on_player_action, on_enemy_action=on_enemy_action)
 
@@ -3564,6 +3585,11 @@ def _resolve_current_side_if_ready(
                 battle_state['mob_max_hp'] = int(active_enemy.get('max_hp', 1))
                 battle_state['mob_dead'] = False
         battle_state.setdefault('combat_events_v1', []).extend(ticked['events'])
+        # Recovery projects the committed V1 vitals. Publish that same projection
+        # after periodic damage/healing in uninterrupted execution too.
+        _sync_v1_to_legacy_projection(battle_state)
+        if player_id is not None:
+            sync_projection_for_participant(battle_state=battle_state, player_id=player_id)
 
     _SOLO_PVE_RUNTIME.complete_side_and_advance(encounter_id=encounter_id, turn_revision=turn_revision)
     _sync_projection_targets(encounter_id=encounter_id, battle_state=battle_state, projection_states=projection_states)
@@ -3837,6 +3863,19 @@ def run_enemy_instant_side(*, player_id: int, battle_state: dict, on_enemy_actio
         battle_state['_pack_enemy_side_total'] = len(enemy_participants)
         battle_state['_pack_enemy_side_processed'] = 0
     for enemy_pid in enemy_participants:
+        accepted_action = runtime_state.submitted_actions.get(enemy_pid)
+        if accepted_action is not None:
+            # Recovery already hydrated the durable order. Recommitting a ready
+            # side would reject it and prevent resolution indefinitely.
+            if (accepted_action.turn_revision == runtime_state.turn_revision
+                    and accepted_action.action_type == 'enemy_basic_attack'
+                    and accepted_action.target_info is None
+                    and accepted_action.skill_id is None
+                    and accepted_action.item_id is None):
+                continue
+            battle_state.pop('_pack_enemy_side_total', None)
+            battle_state.pop('_pack_enemy_side_processed', None)
+            return False
         durable = submit_combat_order(
             encounter_kind='pve', encounter_id=encounter_id,
             turn_revision=runtime_state.turn_revision, actor_id=enemy_pid,
