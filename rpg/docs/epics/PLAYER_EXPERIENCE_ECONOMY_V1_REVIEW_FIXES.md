@@ -201,3 +201,14 @@ are included. Exact command and raw-log SHA256 are in JSON evidence.
 Required exact `python -m pytest -q` follows on this stabilized production source
 with a fresh earned core. It is not PASS until normal completion. Old historical
 source/core cannot validate this candidate. Same Draft PR237; human NOT RUN.
+
+
+### Fresh final broad gate started
+
+Exact `python -m pytest -q`, execution HEAD `fcdfb3986c28e5f8493257ff15931e38d1fa3ae3`,
+code/test candidate `9d0a02a1a6ef5f6406ad43bf23f04382363ece72`, source SHA256 `91096960d4c4b715eb6b389bd359d95c485bab7bc702398b0ebbd55897bb2c9c`.
+Fresh earned core; checkpoint reuse variable absent. IN PROGRESS, no exit/PASS yet.
+Raw log: `pxe1-second-review-final-broad-pytest.log`. The workspace observer records
+PID, heartbeat, exact HEAD/status, read-only incomplete observations and only verified
+complete core provenance at `acceptance-recovery/second-review-237/current-run.json`.
+Continuation checkpoint: `PXE1_SECOND_REVIEW_CHECKPOINT.md`. Human NOT RUN; no merge.
