@@ -1155,3 +1155,12 @@ Ordinary and group source consumers are being verified before the exact final br
 restart. This common test source is included in strict earned-history provenance,
 so no old core is compatible; no expensive new core had been built in the stopped run.
 Production F2/F3 code remains `9d0a02a`; unrelated systems/formulas are unchanged.
+
+
+### Earned helper follow-up verified
+
+At test-only candidate `0977db1a0278bf72e70069faaa2561a982106eeb`, ordinary and group
+character-build source consumers completed: **26 passed in 625.96s (0:10:25)**, normal exit 0.
+Exact invocation, raw log and SHA256 are retained in JSON evidence. This verifies
+the real earned-loot inn funding follow-up without changing production F2/F3 code.
+Exact fresh broad restart follows; no completed broad PASS is claimed yet.

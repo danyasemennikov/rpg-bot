@@ -2,7 +2,7 @@
   "contract": "PXE1-1",
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
-  "status": "DRAFT; SECOND REPAIR FOCUSED PASSED; EARLY INN FIXTURE FOLLOW-UP UNDER VALIDATION",
+  "status": "DRAFT; SECOND REPAIR FOCUSED AND EARNED HELPER PASSED; FRESH FINAL BROAD PENDING",
   "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
   "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
@@ -1375,7 +1375,7 @@
       "raw_log": "work/rpg-bot/rpg/pxe1-second-review-external-final-pytest.log",
       "raw_log_sha256": "e13da2317bfbd7b535ca02f5162e19fbffe65d1bde6ddf69463f528fca2b3f3a"
     },
-    "acceptance": "FOCUSED PASSED; EARNED HELPER VERIFICATION IN PROGRESS; FINAL FRESH BROAD RESTART PENDING",
+    "acceptance": "FOCUSED AND EARNED HELPER CONSUMERS PASSED; EXACT FRESH BROAD RESTART PENDING",
     "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
     "focused": {
       "discovery": "$pxe1SecondTests=@(Get-ChildItem -LiteralPath tests -Filter test_pxe1*.py | ForEach-Object { $_.FullName })",
@@ -1439,7 +1439,15 @@
       "exact_retained_probe": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\test_second_review_retained_inn_state.py",
       "before": "1 failed in 1.13s; assert 10 >= 12",
       "after": "1 passed in 0.91s",
-      "affected_journeys": "IN PROGRESS; ordinary and group character build source consumers"
+      "affected_journeys": {
+        "command": "python -m pytest -q tests/test_character_builds_v1_journeys.py tests/test_character_builds_v1_group_journeys.py --tb=short --basetemp '../../../acceptance-recovery/second-review-237/earned-helper-verification-temp'",
+        "passed": 26,
+        "seconds": 625.96,
+        "exit_code": 0,
+        "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-earned-helper-pytest.log",
+        "raw_log_sha256": "1087b917b9300e1e2a0c175d7108215dc1ccfa0aa448151c255e32ec82de010f",
+        "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb"
+      }
     }
   }
 }
