@@ -1,6 +1,7 @@
 # PXE1 PR237 bounded independent-review corrections
 
-Status: all seven findings FIXED; automated gates PASSED; READY FOR NARROW INDEPENDENT RE-REVIEW.
+Status: second bounded F2/F3 repair under validation; independent narrow review of `5fea976` returned FIX.
+Five other original findings independently FIXED. Prior acceptance below is historical.
 Date: 2026-10-09. Same [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237).
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Reviewed HEAD: `74389cb22ee6f49f584cc9c09a5f17cb792901c9`.
@@ -142,7 +143,61 @@ python -m pytest -q $pxe1ReviewTests tests/test_live_combat_runtime_foundation.p
 All 41 profession/regional assertions also passed in 322.23s at `d282be1` before the full
 repetition, with compatible complete-core reuse. The exact command and workspace
 basetemp path are retained in JSON evidence. The frozen contract remains unchanged.
-All seven findings are FIXED and automated validation is complete. Human Telegram
+The first packet reported all seven fixed and completed its automated validation. Subsequent independent review found residual F2/F3. Human Telegram
 is NOT RUN. Repaired-candidate independent review is PENDING. Real devices,
 sustained scheduler operations, deployment and cutover remain unverified.
-**READY FOR NARROW INDEPENDENT RE-REVIEW. Never merge or deploy.**
+Historical first-packet handoff was ready for narrow review; that review returned FIX. Never merge or deploy.
+
+
+## Second bounded repair — residual F2/F3 (2026-10-09)
+
+Independent narrow review of `5fea976cd1b44a6a19e65d54cfc7df28b5969845`
+returned FIX. F1/F4/F5/F6/F7 are independently confirmed fixed and are not
+reimplemented. Exact unchanged reviewer matrix reproduced **10 failed / 8 passed,
+11.67s** before edits. Raw log: `pxe1-second-review-before-pytest.log`.
+
+F3 root cause: durable AI orders hydrated a ready runtime, but enemy orchestration
+attempted to commit them again. `turn_not_collecting` prevented resolution forever
+after revision 2/4 rollback. The enemy loop reuses matching accepted actions,
+rejects conflicting actions, submits only missing actors and resolves the ready
+side through the existing claim/CAS/transaction path. Accepted orders are immutable.
+
+F2 root cause: normal enemy execution evaluated runtime revision 2/4/6 through
+projection revision 1/3/5; recovery synchronized the projection first. The resolving
+runtime revision, round and side now synchronize into all supplied projections
+before evaluation. Uninterrupted and recovered execution use identical RNG seeds
+and effect side indices. Full-receipt differential assertions additionally exposed
+lost timeout source/previous player commit status, different instantaneous enemy
+order deadlines, and stale compact vitals after periodic healing. Recovery retains
+those accepted identities and publishes the same post-tick projection as normal
+execution. Player timeout policy, formulas, shared N-v-M engine and CAS are retained.
+
+Permanent coverage: `tests/test_pxe1_second_review_recovery.py`. The 36-case matrix
+uses revisions 2/4/5, three fault boundaries, same-process/restart retry and solo/group
+effects. It compares complete result JSON/state JSON, all player records, semantic
+order rows (SQLite creation wall clock excluded between independent runs), complete
+evaluator inputs/seeds/actions/results, events and effects. Existing rows including
+creation timestamps remain immutable within each run. Repeated retries must leave
+all durable state unchanged. Two additional three-enemy mixed-encounter probes
+preserve a partially accepted order and submit exactly two missing orders.
+Retained corrupt-state quarantine cases run in the adjacent focused suite.
+
+Final production-source and broad validation are still pending at this checkpoint.
+Old **2391 passed / 276 subtests** belongs exclusively to the previous candidate.
+Changed production source invalidates its earned-history hash. The new final broad
+gate must build fresh earned history after focused stabilization, with every strict
+source/DB/recipe/cap/check safeguard retained. Human Telegram: NOT RUN. No merge.
+
+
+### Second repair focused gate complete
+
+Code/test candidate: `9d0a02a1a6ef5f6406ad43bf23f04382363ece72`. Final unchanged external probes: **28 passed,
+14.03s**, exit 0 (`pxe1-second-review-external-final-pytest.log`); the exact reviewer
+matrix is now **18/18**, retaining all eight original passing controls.
+Final focused discovery selects every `tests/test_pxe1*.py`, plus live-runtime,
+solo adapter/handler, group PvE, world encounter, retained PvP journey and transaction
+neighbors: **698 passed in 166.31s**, normal exit 0. All 38 new permanent regressions
+are included. Exact command and raw-log SHA256 are in JSON evidence.
+Required exact `python -m pytest -q` follows on this stabilized production source
+with a fresh earned core. It is not PASS until normal completion. Old historical
+source/core cannot validate this candidate. Same Draft PR237; human NOT RUN.

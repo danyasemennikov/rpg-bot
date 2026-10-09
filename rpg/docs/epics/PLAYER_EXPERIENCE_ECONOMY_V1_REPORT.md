@@ -1,11 +1,11 @@
 # PXE1 — Player Experience & Economy Deepening V1
 
-Status: **DRAFT / review repairs automated validation complete / narrow independent re-review pending / unmerged candidate**. Frozen contract: PXE1-1.
+Status: **DRAFT / second bounded F2/F3 repair validation in progress / narrow re-review FIX / unmerged candidate**. Frozen contract: PXE1-1.
 Baseline: PR236 / `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Single [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237); no merge.
 Human Telegram validation: **NOT RUN**. Independent review of `74389cb` is **COMPLETE / FIX**;
-narrow re-review of repaired code is pending. Deployment is unverified. Exact measured runs belong to [evidence](../evidence/player_experience_economy_v1.json)
+narrow re-review of `5fea976` is COMPLETE / FIX: residual F2/F3 remain. Second bounded repairs require new acceptance. Deployment is unverified. Exact measured runs belong to [evidence](../evidence/player_experience_economy_v1.json)
 and the [execution log](PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md).
 
 ## Frozen section implementation map
@@ -194,9 +194,9 @@ Their bounded repairs, root causes and candidate-specific validation are recorde
 [the correction report](PLAYER_EXPERIENCE_ECONOMY_V1_REVIEW_FIXES.md). Historical automated
 results above apply to their recorded code; they do not establish repaired-candidate or live acceptance.
 
-### Final bounded review-repair validation
+### First bounded review-repair validation (historical, superseded by narrow FIX verdict)
 
-All seven independent findings are FIXED. Code/test candidate `d282be1d5fb3117cac65eb3d813af41856f27c37`,
+The first repair packet reported all seven fixed; independent review later reproduced residual F2/F3. Historical code/test candidate `d282be1d5fb3117cac65eb3d813af41856f27c37`,
 production candidate `33dff10`, exact full command `python -m pytest -q`:
 **2391 passed, 276 subtests passed in 1568.15s (0:26:08)**, normal exit 0. The focused gate
 passed 520 tests in 110.83s; all 41 profession/regional assertions passed in 322.23s.
@@ -205,5 +205,58 @@ the final test-only follow-up reuses that verified whole
 compatible core explicitly. Prior stopped/failed histories remain preserved.
 Root causes, exact commands, hashes and J18 comparison-input correction are in
 the [bounded correction report](PLAYER_EXPERIENCE_ECONOMY_V1_REVIEW_FIXES.md).
-**READY FOR NARROW INDEPENDENT RE-REVIEW**. Human Telegram: NOT RUN. Independent
-re-review: PENDING. Unmerged Draft PR237; deployment/cutover unverified. Never merge.
+That packet was submitted for narrow re-review, which returned FIX at `5fea976`. Human Telegram: NOT RUN. Unmerged Draft PR237; deployment/cutover unverified. Never merge.
+
+
+## Second bounded repair — residual F2/F3 (2026-10-09)
+
+Independent narrow review of `5fea976cd1b44a6a19e65d54cfc7df28b5969845`
+returned FIX. F1/F4/F5/F6/F7 are independently confirmed fixed and are not
+reimplemented. Exact unchanged reviewer matrix reproduced **10 failed / 8 passed,
+11.67s** before edits. Raw log: `pxe1-second-review-before-pytest.log`.
+
+F3 root cause: durable AI orders hydrated a ready runtime, but enemy orchestration
+attempted to commit them again. `turn_not_collecting` prevented resolution forever
+after revision 2/4 rollback. The enemy loop reuses matching accepted actions,
+rejects conflicting actions, submits only missing actors and resolves the ready
+side through the existing claim/CAS/transaction path. Accepted orders are immutable.
+
+F2 root cause: normal enemy execution evaluated runtime revision 2/4/6 through
+projection revision 1/3/5; recovery synchronized the projection first. The resolving
+runtime revision, round and side now synchronize into all supplied projections
+before evaluation. Uninterrupted and recovered execution use identical RNG seeds
+and effect side indices. Full-receipt differential assertions additionally exposed
+lost timeout source/previous player commit status, different instantaneous enemy
+order deadlines, and stale compact vitals after periodic healing. Recovery retains
+those accepted identities and publishes the same post-tick projection as normal
+execution. Player timeout policy, formulas, shared N-v-M engine and CAS are retained.
+
+Permanent coverage: `tests/test_pxe1_second_review_recovery.py`. The 36-case matrix
+uses revisions 2/4/5, three fault boundaries, same-process/restart retry and solo/group
+effects. It compares complete result JSON/state JSON, all player records, semantic
+order rows (SQLite creation wall clock excluded between independent runs), complete
+evaluator inputs/seeds/actions/results, events and effects. Existing rows including
+creation timestamps remain immutable within each run. Repeated retries must leave
+all durable state unchanged. Two additional three-enemy mixed-encounter probes
+preserve a partially accepted order and submit exactly two missing orders.
+Retained corrupt-state quarantine cases run in the adjacent focused suite.
+
+Final production-source and broad validation are still pending at this checkpoint.
+Old **2391 passed / 276 subtests** belongs exclusively to the previous candidate.
+Changed production source invalidates its earned-history hash. The new final broad
+gate must build fresh earned history after focused stabilization, with every strict
+source/DB/recipe/cap/check safeguard retained. Human Telegram: NOT RUN. No merge.
+
+
+### Second repair focused gate complete
+
+Code/test candidate: `9d0a02a1a6ef5f6406ad43bf23f04382363ece72`. Final unchanged external probes: **28 passed,
+14.03s**, exit 0 (`pxe1-second-review-external-final-pytest.log`); the exact reviewer
+matrix is now **18/18**, retaining all eight original passing controls.
+Final focused discovery selects every `tests/test_pxe1*.py`, plus live-runtime,
+solo adapter/handler, group PvE, world encounter, retained PvP journey and transaction
+neighbors: **698 passed in 166.31s**, normal exit 0. All 38 new permanent regressions
+are included. Exact command and raw-log SHA256 are in JSON evidence.
+Required exact `python -m pytest -q` follows on this stabilized production source
+with a fresh earned core. It is not PASS until normal completion. Old historical
+source/core cannot validate this candidate. Same Draft PR237; human NOT RUN.
