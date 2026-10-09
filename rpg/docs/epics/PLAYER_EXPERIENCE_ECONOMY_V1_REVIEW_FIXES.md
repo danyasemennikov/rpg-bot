@@ -244,3 +244,14 @@ character-build source consumers completed: **26 passed in 625.96s (0:10:25)**, 
 Exact invocation, raw log and SHA256 are retained in JSON evidence. This verifies
 the real earned-loot inn funding follow-up without changing production F2/F3 code.
 Exact fresh broad restart follows; no completed broad PASS is claimed yet.
+
+
+### Fresh final broad gate started
+
+Exact `python -m pytest -q`, execution HEAD `a1a1b4550eb6de849dc99f936248dc27e91c3c44`,
+code/test candidate `0977db1a0278bf72e70069faaa2561a982106eeb`, source SHA256 `a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e`.
+Fresh earned core; checkpoint reuse variable absent. IN PROGRESS, no exit/PASS yet.
+Raw log: `pxe1-second-review-final-broad-pytest.log`. The workspace observer records
+PID, heartbeat, exact HEAD/status, read-only incomplete observations and only verified
+complete core provenance at `acceptance-recovery/second-review-237/current-run.json`.
+Continuation checkpoint: `PXE1_SECOND_REVIEW_CHECKPOINT.md`. Human NOT RUN; no merge.
