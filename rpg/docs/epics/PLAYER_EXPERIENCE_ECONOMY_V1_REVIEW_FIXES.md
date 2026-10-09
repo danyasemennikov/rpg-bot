@@ -5,6 +5,7 @@ Date: 2026-10-09. Same [Draft PR #237](https://github.com/danyasemennikov/rpg-bo
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Reviewed HEAD: `74389cb22ee6f49f584cc9c09a5f17cb792901c9`.
 Correction code/test commit: `4ade6abf8db825097c9754ce204e564c96cdfa5b`.
+Completed-side round follow-up / final code-test candidate: `33dff106ec6b17563e575c56a88dceed78673cd0`.
 Frozen contract retained unchanged. No migration/table/column, balance, scope or engine redesign.
 
 The independent review returned **FIX** with four P1 and three P2 defects. Its
@@ -18,7 +19,7 @@ before the changes. That raw run is `pxe1-review-before-pytest.log` in the works
 | User ID / review ID | Root cause and bounded correction | Regression coverage |
 |---|---|---|
 | P1-1 / F1 | `handle_read_selection` queried nonexistent `group_rules_version`. It now uses real `world_model_version`, without changing schema. | Emitted 1v1/2v1/2v2 principal/ally Attack, Skills and Guard controls through target/confirmation and actual order commit in ru/en/es. Selection is read-only; expired/stale/version-zero tokens cannot spend resources. Retained version-zero suites run separately. |
-| P1-2 / F2 | The validator required a deadline at a completed committed side. It now requires the matching side receipt and valid completed phase; malformed phases remain quarantined. Recovery persists a newly opened player-side deadline immediately. | Process exit after player/enemy side commit, second restart preserving deadline, terminal victory/death settlement replay, missing receipt/invalid phase/open-deadline corruption controls. |
+| P1-2 / F2 | The validator required a deadline at a completed committed side. It now requires the matching side receipt and valid completed phase; malformed phases remain quarantined. Recovery preserves persisted round identity and persists a newly opened player-side deadline immediately. | Process exit after player/enemy side commit with exact round identity, second restart preserving deadline, terminal victory/death settlement replay, missing receipt/invalid phase/open-deadline corruption controls. |
 | P1-3 / F3 | Resolution advanced runtime and projections before durability, retaining them on SQLite failure. Every failed attempt now discards runtime and reloads projections from SQLite, including ambiguous post-commit errors. An already-open enemy side is no longer opened twice. | Timeout and accepted attack/skill orders; faults before result, after vitals before commit, after commit; same-process retry and restart. Exact revisions, committed actor/enemy/effect snapshots, resources and receipt counts are checked. |
 | P1-4 / F4 | Personal and terminal settlements left ally rows `locked`, reserving the unique active commitment forever. Settlement atomically marks historical membership `settled`; ongoing validation requires a matching death receipt for such members. Existing leaks reconcile at installation/acceptance in the caller writer. | Survivor accepts later engagement; defeated ally returns by real travel and accepts before original fight finishes; original terminal settlement preserves new commitment and immutable roster. Idempotent historical repair and existing race/rollback/membership tests. |
 | P2-1 / F5 | Common timed arrival omitted dangerous-reentry protection consumption. Frontier/core-war arrivals clear it within the existing travel writer. | Normal, equality Stop and recovery frontier arrival; guarded/safe preservation; rollback and exactly one arrival revision. Retained travel/discovery tests. |
@@ -52,8 +53,9 @@ earned-progression or human evidence.
 | F6 neighbors | `python -m pytest -q tests/test_pxe1_local_surfaces.py tests/test_pxe1_travel.py --tb=short` | 26 passed, 6.66s |
 | F7 wear and recovery | `python -m pytest -q tests/test_pxe1_review_regressions.py -k 'gather or wilderness_tool or repaired_tool or detail_guard' --tb=short` | 22 passed, 4.42s |
 | All new regressions | `python -m pytest -q tests/test_pxe1_review_regressions.py --tb=short` | **154 passed, 34.48s**, exit 0 |
-| Combined focused/compatibility | All `test_pxe1*.py`, shared runtime, retained PvP/build journey/economy/alpha transaction suites | **520 passed, 111.35s**, exit 0 on final code; earlier 499-test run remains historical |
-| Repaired-candidate broad gate | **`python -m pytest -q`** | **RUNNING** with fresh earned history; no current PASS claim |
+| Combined focused/compatibility | All `test_pxe1*.py`, shared runtime, retained PvP/build journey/economy/alpha transaction suites | **520 passed, 110.83s**, exit 0 on `33dff10`, including all 154 new cases; earlier 499/520 runs remain historical |
+| Round restoration follow-up | Added exact round assertion at completed-side restart | Before: 1 failed / 1 passed, 1.45s; after: 38 passed, 10.69s |
+| Repaired-candidate broad gate | **`python -m pytest -q`** | First attempt stopped (not PASS) for confirmed round-restoration repair; final candidate repetition **RUNNING** with fresh history |
 
 Exact raw log hashes and Git code/test identities are retained in
 [automated evidence](../evidence/player_experience_economy_v1.json). Interrupted,
@@ -61,6 +63,13 @@ failed and earlier successful runs remain historical; none is silently replaced
 by the repaired-candidate result.
 
 ## Evidence interpretation and handoff
+
+The first correction-candidate broad run was deliberately stopped before the
+expensive profession core after an additional F2 invariant check reproduced round
+2 becoming round 1 on restart. Its raw output and consistent live observation are
+preserved as incomplete evidence. Commit `33dff10` restores the round and adds the
+assertion. The final broad gate runs on this follow-up candidate; its focused gate
+has passed again. The stopped predecessor remains incomplete historical evidence.
 
 The previous **2,237-test broad** and **41-test earned/RAV** results are credible
 historical executions on the reviewed source, with disclosed completed-history

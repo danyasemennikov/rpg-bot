@@ -3,7 +3,7 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "DRAFT; REVIEW REPAIRS IMPLEMENTED; FINAL VALIDATION IN PROGRESS",
-  "candidate_sha": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+  "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
   "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
@@ -19,10 +19,10 @@
   "full_suite": {
     "status": "RUNNING",
     "command": "python -m pytest -q",
-    "candidate_sha": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-    "history_policy": "Old completed earned source hash is incompatible; no checkpoint guard bypass.",
-    "raw_log": "work/rpg-bot/rpg/pxe1-review-final-broad-pytest.log",
-    "history_mode": "FRESH; PXE1_EARNED_CHECKPOINT unset"
+    "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+    "history_mode": "FRESH; old completed source guard retained",
+    "prior_attempt": "STOPPED, NOT PASS; see review_corrections.completed_side_round_followup",
+    "raw_log": "work/rpg-bot/rpg/pxe1-review-round-final-broad-pytest.log"
   },
   "earned_profession_rav_journeys": {
     "status": "PENDING FOR REPAIRED CANDIDATE",
@@ -771,13 +771,13 @@
     "tested_code_and_tests": {
       "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
       "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
-      "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
-      "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
-      "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+      "game": "8cdc2be3c0b8f9587a45f123dd2c4cebc7ebb689",
+      "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+      "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
       "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
-      "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+      "tests": "ae3f162b47160c5ee71bb391501418234ad18cd7"
     },
-    "head_correspondence": "Subsequent commits are docs only; final pushed HEAD is verified separately against these tested trees",
+    "head_correspondence": "Current corrected code/test candidate 33dff10, focused validation complete; final broad gate running. Historical source identities retained under reviewed_candidate_history.",
     "github_checks_at_creation": "NO CHECKS REPORTED"
   },
   "reviewed_candidate_history": {
@@ -974,26 +974,80 @@
         "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-focused-pytest.log",
         "sha256": "7e3328796cb8087a93864228b081c6669f6c76230968e1a4987af32aadea1c81",
         "terminal_line": "499 passed in 104.92s (0:01:44)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-boundary-after-pytest.log",
+        "sha256": "52690c81fa8f27f41ae401314c4baf52bb17e9e0db3eabeb644ed5fea83e1e5a",
+        "terminal_line": "38 passed, 127 deselected in 10.69s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-boundary-before-pytest.log",
+        "sha256": "ca70e66264882461ee1acc738a684901793d78c723672aa56308be9e3239f1d8",
+        "terminal_line": "1 failed, 1 passed, 152 deselected in 1.45s"
       }
     ],
     "source_and_test_git_identities": {
       "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
       "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
-      "game": "11159868a42729bf75f3e36e0c30f63616e34148",
+      "game": "8cdc2be3c0b8f9587a45f123dd2c4cebc7ebb689",
       "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
       "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
       "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
-      "tests": "de24e38bb538e9429e29577a312cc192bdb439da"
+      "tests": "ae3f162b47160c5ee71bb391501418234ad18cd7"
     },
     "preserved_contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
     "human_validation": "NOT RUN",
     "merge": "NOT MERGED",
     "review_status": "FINAL VALIDATION IN PROGRESS",
     "final_focused_result": {
+      "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
       "passed": 520,
-      "seconds": 111.35,
+      "seconds": 110.83,
       "exit_code": 0,
-      "log": "pxe1-review-final-focused-pytest.log"
+      "log": "pxe1-review-round-final-focused-pytest.log",
+      "log_sha256": "5e17a84fcd31663df4bcf5fadd32478e3ed703725032602cae620d24f6f25d62",
+      "includes_all_new_regressions": 154
+    },
+    "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+    "implementation_commits": [
+      "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "33dff106ec6b17563e575c56a88dceed78673cd0"
+    ],
+    "completed_side_round_followup": {
+      "finding": "P1-2 / F2",
+      "commit": "33dff106ec6b17563e575c56a88dceed78673cd0",
+      "root_cause": "Completed-side cache restoration did not restore persisted round_index.",
+      "before": "1 failed / 1 passed, 1.45s",
+      "after": "38 passed, 10.69s",
+      "regression": "Completed enemy/player side restart asserts round identity as well as deadline.",
+      "prior_broad_attempt": {
+        "candidate_sha": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+        "execution_start_head": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+        "current_head": "696b9d8339d750c6d1a974c660d40588e313f3da",
+        "branch": "feat/pxe1-player-experience-economy-v1",
+        "status": "STOPPED, NOT PASS",
+        "session_id": 54690,
+        "command": "python -m pytest -q",
+        "raw_log": "acceptance-recovery/review-237-corrections/4ade6ab-broad-stopped-for-round-fix.log",
+        "history_mode": "FRESH; PXE1_EARNED_CHECKPOINT unset",
+        "human_validation": "NOT RUN",
+        "observed_at_utc": "2026-10-09T00:48:34.537416+00:00",
+        "git_status": "",
+        "completed_regressions": "154 passed in 34.48s",
+        "completed_focused": "520 passed in 111.35s",
+        "source_sha256": "e11767b6aeeba81f96c0b772e00a43db2bcfce81d7b315adc7ef92dba1fab27c",
+        "source_and_test_git_identities": {
+          "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+          "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+          "game": "11159868a42729bf75f3e36e0c30f63616e34148",
+          "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+          "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+          "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+          "tests": "de24e38bb538e9429e29577a312cc192bdb439da"
+        },
+        "exit_code": -1,
+        "reason": "Confirmed completed enemy-side recovery reset round 2 to 1; fixed before final gate."
+      }
     }
   }
 }

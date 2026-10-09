@@ -1027,3 +1027,8 @@ Human Telegram and independent Astra review remain NOT RUN. Deployment remains u
 ### 2026-10-09 bounded review correction packet
 
 Independent review of 74389cb returned FIX: seven confirmed findings, reproduced locally as nine expected failures and one passing control. Repairs are committed at 4ade6abf8db825097c9754ce204e564c96cdfa5b on the same branch; new regression file passes 154 tests in 34.48s. The correction report records root causes and exact per-finding runs. Earlier 2237/41 results remain historical; changed production source invalidates that completed-history cache. Final focused repetition and required exact broad gate are pending. Human Telegram validation remains NOT RUN; repaired code requires narrow independent re-review. No merge or deployment.
+
+
+### Completed-side round restoration follow-up
+
+An additional F2 boundary assertion reproduced completed enemy-side round 2 resetting to 1: one failed / one passing control, 1.45s. The first repaired-candidate broad run was deliberately stopped before the profession core, not PASS; raw output and a whole live database observation are preserved. Commit 33dff106ec6b17563e575c56a88dceed78673cd0 restores round_index. Boundary/world-tick focus: 38 passed, 10.69s. Final combined focused/compatibility repetition: 520 passed, 110.83s, including all 154 new regressions. Exact broad command is restarting with fresh history on this corrected code. Narrow independent re-review and human Telegram remain pending/NOT RUN; no merge.
