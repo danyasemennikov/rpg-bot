@@ -52,7 +52,7 @@ It also catalogues compatibility-retained system and pass documents.
 
 ## PXE1 unmerged Draft candidate
 
-- [Draft PR #237 — PXE1](https://github.com/danyasemennikov/rpg-bot/pull/237): automated acceptance complete; independent review pending
+- [Draft PR #237 — PXE1](https://github.com/danyasemennikov/rpg-bot/pull/237): seven review repairs implemented; final validation and narrow re-review pending
 - [Frozen contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md)
 - [Implementation report](epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md)
 - [Automated evidence](evidence/player_experience_economy_v1.json)

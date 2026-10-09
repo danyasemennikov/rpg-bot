@@ -1022,3 +1022,8 @@ The navigation follow-up contains documentation only and is pushed to this same 
 All seven tested code/test identities and the original contract hash are checked again against the final pushed HEAD.
 No GitHub checks are reported at Draft creation; local automated PASS is recorded independently.
 Human Telegram and independent Astra review remain NOT RUN. Deployment remains unverified. NEVER merge.
+
+
+### 2026-10-09 bounded review correction packet
+
+Independent review of 74389cb returned FIX: seven confirmed findings, reproduced locally as nine expected failures and one passing control. Repairs are committed at 4ade6abf8db825097c9754ce204e564c96cdfa5b on the same branch; new regression file passes 154 tests in 34.48s. The correction report records root causes and exact per-finding runs. Earlier 2237/41 results remain historical; changed production source invalidates that completed-history cache. Final focused repetition and required exact broad gate are pending. Human Telegram validation remains NOT RUN; repaired code requires narrow independent re-review. No merge or deployment.

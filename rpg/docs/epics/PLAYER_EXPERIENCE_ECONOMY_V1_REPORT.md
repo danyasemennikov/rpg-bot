@@ -1,11 +1,11 @@
 # PXE1 — Player Experience & Economy Deepening V1
 
-Status: **DRAFT / automated acceptance complete / unmerged candidate**. Frozen contract: PXE1-1.
+Status: **DRAFT / bounded review repairs implemented / final validation in progress / unmerged candidate**. Frozen contract: PXE1-1.
 Baseline: PR236 / `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Single [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237); no merge.
-Human Telegram validation: **NOT RUN**. Independent architecture review and deployment
-are unverified. Exact measured runs belong to [evidence](../evidence/player_experience_economy_v1.json)
+Human Telegram validation: **NOT RUN**. Independent review of `74389cb` is **COMPLETE / FIX**;
+narrow re-review of repaired code is pending. Deployment is unverified. Exact measured runs belong to [evidence](../evidence/player_experience_economy_v1.json)
 and the [execution log](PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md).
 
 ## Frozen section implementation map
@@ -186,8 +186,10 @@ recorded separately from a fresh rebuild.
 
 Human validation remains NOT RUN per the owner's explicit continuation instructions.
 This limits Draft handoff to automated evidence; it is not live/release acceptance.
-Independent Astra review is pending and the owner retains merge authority. No merge
+Independent Astra review of `74389cb` returned FIX; repaired code requires narrow re-review. The owner retains merge authority. No merge
 or deployment is authorized. Teleport and larger structured PvP remain deferred.
 
-Deviations from frozen runtime/product requirements: **NONE**. Independent
-architecture review remains pending; automated completion does not establish live acceptance.
+The earlier claim of no runtime/product deviations is superseded by seven confirmed independent-review findings.
+Their bounded repairs, root causes and candidate-specific validation are recorded in
+[the correction report](PLAYER_EXPERIENCE_ECONOMY_V1_REVIEW_FIXES.md). Historical automated
+results above apply to their recorded code; they do not establish repaired-candidate or live acceptance.

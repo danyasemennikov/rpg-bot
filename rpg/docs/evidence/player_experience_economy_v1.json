@@ -2,73 +2,31 @@
   "contract": "PXE1-1",
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
-  "status": "DRAFT; AUTOMATED ACCEPTANCE COMPLETE",
-  "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+  "status": "DRAFT; REVIEW REPAIRS IMPLEMENTED; FINAL VALIDATION IN PROGRESS",
+  "candidate_sha": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
   "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
-  "independent_review": "NOT RUN",
+  "independent_review": {
+    "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+    "status": "COMPLETE",
+    "verdict": "FIX",
+    "findings": 7,
+    "repaired_candidate_review": "PENDING NARROW INDEPENDENT RE-REVIEW",
+    "source_report": "PXE1_PR237_INDEPENDENT_REVIEW.md"
+  },
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "PASSED",
+    "status": "RUNNING",
     "command": "python -m pytest -q",
-    "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
-    "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
-    "session_id": 47845,
-    "started_utc": "2026-10-08T05:49:51.102733+00:00",
-    "log": "pxe1-final-ration-order-broad-pytest.log",
-    "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
-    "database": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\earned.sqlite3",
-    "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
-    "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
-    "git_identities": {
-      "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
-      "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
-      "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
-      "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
-      "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
-      "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
-      "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
-    },
-    "history_mode": "Whole verified COMPLETE same-source history reused; all tests execute; no fresh core rebuild",
-    "passed": 2237,
-    "subtests_passed": 276,
-    "seconds": 1777.62,
-    "exit_code": 0,
-    "terminal_line": "2237 passed, 276 subtests passed in 1777.62s (0:29:37)",
-    "completed_observation_utc": "2026-10-08T06:19:02.499358+00:00",
-    "validation_recorded_head": "f77de3e841bf4c924110af0fd2f5c360c28bc9a0",
-    "log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
-    "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
+    "candidate_sha": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+    "history_policy": "Old completed earned source hash is incompatible; no checkpoint guard bypass.",
+    "raw_log": "work/rpg-bot/rpg/pxe1-review-final-broad-pytest.log",
+    "history_mode": "FRESH; PXE1_EARNED_CHECKPOINT unset"
   },
   "earned_profession_rav_journeys": {
-    "status": "PASSED",
-    "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
-    "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
-    "earned_history": "Verified COMPLETE same-source history reused; all 41 assertions execute; no fresh history rebuild",
-    "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
-    "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
-    "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
-    "collected_tests": 41,
-    "passed": 41,
-    "seconds": 327.76,
-    "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
-    "log": "pxe1-earned-ration-order-verified-history-pytest.log",
-    "log_sha256": "1b06ea9155abe2d681f563f7e140812a7b21f71becee479d54d48506d9dc4369",
-    "production_checks": {
-      "new_character_and_chapter": true,
-      "mining_smith_heavy": true,
-      "wood_fiber_arcane": true,
-      "herbalism_alchemy": true,
-      "fishing_cooking": true,
-      "hunting_claims_and_consumers": true,
-      "gear_integration": true,
-      "learning_authority": true,
-      "conservation_and_receipts": true,
-      "localized_complete_navigation": true,
-      "regional_source_coverage": true
-    },
-    "completed_acceptance_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\acceptance-run.json"
+    "status": "PENDING FOR REPAIRED CANDIDATE",
+    "historical_result": "Retained under reviewed_candidate_history; no current PASS claim."
   },
   "focused_runs": [
     {
@@ -319,9 +277,61 @@
   ],
   "limitations": [
     "Human Telegram validation NOT RUN; phone/desktop and real multi-account behavior unverified",
-    "Independent architecture review pending"
+    "Independent review COMPLETE / FIX at reviewed HEAD; narrow re-review pending for repaired candidate",
+    "Full repaired-candidate suite pending; historical 2237/41 PASS does not validate changed production code",
+    "Deployment, live data cutover and sustained operational scheduler behavior unverified"
   ],
-  "deviations": [],
+  "deviations": [
+    {
+      "finding": "P1-1",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Read-selection SQL used nonexistent group_rules_version instead of world_model_version.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+    },
+    {
+      "finding": "P1-2",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Recovery required an open deadline at a proven completed side boundary; restored next-side deadline also needed immediate persistence.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+    },
+    {
+      "finding": "P1-3",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Failed side resolution retained advanced cache/projections; recovery could open an already-open enemy side twice.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+    },
+    {
+      "finding": "P1-4",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Individual and terminal settlement retained accepted/locked ally exclusivity despite clearing activity.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+    },
+    {
+      "finding": "P2-1",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Common timed arrival omitted existing frontier/core-war respawn protection consumption.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+    },
+    {
+      "finding": "P2-2",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Core Map destination list contained only capital neighbors, omitting capital_city itself.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+    },
+    {
+      "finding": "P2-3",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Gather cards omitted durable tool state/warnings and broken-tool service/quote/source guidance.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+    }
+  ],
   "schema": {
     "migration": "player_experience_economy_v1",
     "table_count": 8,
@@ -769,5 +779,221 @@
     },
     "head_correspondence": "Subsequent commits are docs only; final pushed HEAD is verified separately against these tested trees",
     "github_checks_at_creation": "NO CHECKS REPORTED"
+  },
+  "reviewed_candidate_history": {
+    "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+    "full_suite": {
+      "status": "PASSED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+      "session_id": 47845,
+      "started_utc": "2026-10-08T05:49:51.102733+00:00",
+      "log": "pxe1-final-ration-order-broad-pytest.log",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
+      "database": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\earned.sqlite3",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "git_identities": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+        "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+        "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+        "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+      },
+      "history_mode": "Whole verified COMPLETE same-source history reused; all tests execute; no fresh core rebuild",
+      "passed": 2237,
+      "subtests_passed": 276,
+      "seconds": 1777.62,
+      "exit_code": 0,
+      "terminal_line": "2237 passed, 276 subtests passed in 1777.62s (0:29:37)",
+      "completed_observation_utc": "2026-10-08T06:19:02.499358+00:00",
+      "validation_recorded_head": "f77de3e841bf4c924110af0fd2f5c360c28bc9a0",
+      "log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
+      "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
+    },
+    "earned_profession_rav_journeys": {
+      "status": "PASSED",
+      "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "earned_history": "Verified COMPLETE same-source history reused; all 41 assertions execute; no fresh history rebuild",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
+      "collected_tests": 41,
+      "passed": 41,
+      "seconds": 327.76,
+      "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+      "log": "pxe1-earned-ration-order-verified-history-pytest.log",
+      "log_sha256": "1b06ea9155abe2d681f563f7e140812a7b21f71becee479d54d48506d9dc4369",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      },
+      "completed_acceptance_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\acceptance-run.json"
+    },
+    "publication": {
+      "state": "OPEN DRAFT",
+      "created_as_draft": true,
+      "creation_head": "aa97d808a89fcc3461be8fe1b84046d983f7b68d",
+      "head_ref": "feat/pxe1-player-experience-economy-v1",
+      "base_ref": "main",
+      "creation_verified_utc": "2026-10-08T06:27:58.384128+00:00",
+      "merge": "NOT MERGED",
+      "tested_code_and_tests": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+        "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+        "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+        "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+      },
+      "head_correspondence": "Subsequent commits are docs only; final pushed HEAD is verified separately against these tested trees",
+      "github_checks_at_creation": "NO CHECKS REPORTED"
+    },
+    "deviations": []
+  },
+  "review_corrections": {
+    "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+    "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+    "root_causes": {
+      "P1-1": "Read-selection SQL used nonexistent group_rules_version instead of world_model_version.",
+      "P1-2": "Recovery required an open deadline at a proven completed side boundary; restored next-side deadline also needed immediate persistence.",
+      "P1-3": "Failed side resolution retained advanced cache/projections; recovery could open an already-open enemy side twice.",
+      "P1-4": "Individual and terminal settlement retained accepted/locked ally exclusivity despite clearing activity.",
+      "P2-1": "Common timed arrival omitted existing frontier/core-war respawn protection consumption.",
+      "P2-2": "Core Map destination list contained only capital neighbors, omitting capital_city itself.",
+      "P2-3": "Gather cards omitted durable tool state/warnings and broken-tool service/quote/source guidance."
+    },
+    "regressions": "tests/test_pxe1_review_regressions.py",
+    "new_regressions_result": "154 passed in 34.48s",
+    "raw_logs": [
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-all-regressions-pytest.log",
+        "sha256": "675f4a9649f88f119a7f09d0f70eaee022ba7e083b32def4bc7403082eeccb52",
+        "terminal_line": "154 passed in 34.48s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-before-pytest.log",
+        "sha256": "8c445b59be6bfc44197328a2c46041ed3b7f14f82d0a28b9fc7a89b85eca5bf6",
+        "terminal_line": "9 failed, 1 passed in 2.90s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f1-pytest.log",
+        "sha256": "bbc9746a2de36fca7f235af7259ffbb64700c8ca34ece1931e18548ae4db2b5b",
+        "terminal_line": "64 passed, 77 deselected in 16.08s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f1-related-pytest.log",
+        "sha256": "670d253fc1e5e3ef65fdaa0ebdc2fe5f3e16bbb36b7b5b973d78940045147822",
+        "terminal_line": "68 passed in 13.18s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-expanded-pytest.log",
+        "sha256": "aaba122858843dea959568ac554c33b3b77466e508fd49f4893d8d77144c50f9",
+        "terminal_line": "38 passed, 70 deselected in 10.82s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-final-pytest.log",
+        "sha256": "a9e13f596687d8416d54341a6c1b8c1b8a8c33a6d815213b0a51cb2dfa9e09e2",
+        "terminal_line": "38 passed, 106 deselected in 10.56s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-pytest.log",
+        "sha256": "21e351c264777c1891e5e618307977aea2095aa3eb5f97462c170f4d03e73e43",
+        "terminal_line": "3 passed, 70 deselected in 1.41s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-related-pytest.log",
+        "sha256": "9322bec3dba8c4cddec6c45c990c7d8947684a9836416399fefa6eae6eb2372a",
+        "terminal_line": "70 passed in 14.11s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f4-expanded-pytest.log",
+        "sha256": "8e701713df197c85fa0693692a9fbc915266bd48d0118139a8745b78ac6c0d8d",
+        "terminal_line": "3 passed, 96 deselected in 1.13s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f4-pytest.log",
+        "sha256": "708db93b254b87e99a7d4ea540669c6f504e57df273da0d4004613c807453258",
+        "terminal_line": "1 passed, 102 deselected in 0.82s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f4-related-pytest.log",
+        "sha256": "45938792b5bb877928bda749140e9ccbd79ae3fc4f9e380db423dde228117ded",
+        "terminal_line": "73 passed in 13.02s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f5-pytest.log",
+        "sha256": "aaa0378ea97db9f82c989901de54d779aaadbcb9e0d82a91ebdf4c39b97ebefc",
+        "terminal_line": "10 passed, 98 deselected in 2.16s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f5-related-pytest.log",
+        "sha256": "d835bd8fc0993b9bc3db829fac57828068ffbf50e27415c8a0c062a669f1b44a",
+        "terminal_line": "21 passed, 113 subtests passed in 6.01s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f6-pytest.log",
+        "sha256": "64c6be65a10824c9b9a1c8f55e632d7c4908bd8ee26a1154413d2700fbb808a5",
+        "terminal_line": "7 passed, 107 deselected in 1.68s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f6-related-pytest.log",
+        "sha256": "431c37490d0c5f57caa7dd84357a7a545be8542e949ac5be50af869f5bce0baa",
+        "terminal_line": "26 passed in 6.66s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f7-expanded-pytest.log",
+        "sha256": "2d4423486329c5018f62a22bb1e1f76b6b85e56605e6cb57304ff4de317b9a5d",
+        "terminal_line": "22 passed, 111 deselected in 4.42s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f7-pytest.log",
+        "sha256": "2e765b607aa8fa1a241c46dae128775598f690ab672c7543d31c0405ae1d7db7",
+        "terminal_line": "3 passed, 111 deselected in 1.03s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-final-focused-pytest.log",
+        "sha256": "40d78087b5afbb739c82452a4d07bec72320b96d4536f64f63d1a17154197483",
+        "terminal_line": "520 passed in 111.35s (0:01:51)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-focused-pytest.log",
+        "sha256": "7e3328796cb8087a93864228b081c6669f6c76230968e1a4987af32aadea1c81",
+        "terminal_line": "499 passed in 104.92s (0:01:44)"
+      }
+    ],
+    "source_and_test_git_identities": {
+      "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+      "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+      "game": "11159868a42729bf75f3e36e0c30f63616e34148",
+      "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+      "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+      "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+      "tests": "de24e38bb538e9429e29577a312cc192bdb439da"
+    },
+    "preserved_contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
+    "human_validation": "NOT RUN",
+    "merge": "NOT MERGED",
+    "review_status": "FINAL VALIDATION IN PROGRESS",
+    "final_focused_result": {
+      "passed": 520,
+      "seconds": 111.35,
+      "exit_code": 0,
+      "log": "pxe1-review-final-focused-pytest.log"
+    }
   }
 }

@@ -28,11 +28,11 @@ production operation require separate evidence.
 
 [PXE1 frozen contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) is implemented in
 [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237) on
-`feat/pxe1-player-experience-economy-v1`; automated acceptance is complete.
+`feat/pxe1-player-experience-economy-v1`; seven bounded review repairs are implemented; final validation is in progress.
 Candidate behavior and measured results belong
 to its report/evidence and [system owner map](systems/README.md#pxe1-candidate-owners).
 They do not alter the confirmed baseline described below. PXE1 human Telegram validation
-is **NOT RUN**; deployment and independent acceptance review are not established.
+is **NOT RUN**; deployment is unverified; independent review of the prior HEAD returned FIX and narrow re-review is pending.
 
 ## Playable chapter and world
 
