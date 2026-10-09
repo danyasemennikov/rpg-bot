@@ -509,6 +509,29 @@ class ProductionJourney:
             await self.travel("capital_city")
         else:
             raise AssertionError(("unsupported recovery origin", origin))
+        while int(get_player(self.player_id)['gold']) < 12:
+            # A legal early damage sequence can require rest before combat gold
+            # reaches its price. Sell earned loot through the real shop writer.
+            from handlers.shop_views import handle_shop_buttons
+            loot = _rows('''SELECT inv.id, inv.quantity FROM inventory inv
+                JOIN items i ON i.item_id=inv.item_id
+                WHERE inv.telegram_id=? AND i.item_type='material' AND i.sell_price>0
+                ORDER BY i.sell_price DESC, inv.id LIMIT 1''', (self.player_id,))
+            assert loot, 'No earned loot available to fund recovery'
+            entry = loot[0]
+            await self.callback(
+                f"px:shop:saleview:i{entry['id']}:{min(99, int(entry['quantity']))}",
+                handle_shop_buttons,
+            )
+            for _ in range(2):
+                commit = next(value for value in _callbacks(self.messages[-1][1])
+                              if value.startswith('px:shop:commit:'))
+                await self.callback(commit, handle_shop_buttons)
+                if not any(value.startswith('px:shop:commit:')
+                           for value in _callbacks(self.messages[-1][1])):
+                    break
+            else:
+                raise AssertionError('Earned sale did not commit after confirmation')
         before = dict(get_player(self.player_id))
         assert before["gold"] >= 12
         await self.rest_at_current_inn()
