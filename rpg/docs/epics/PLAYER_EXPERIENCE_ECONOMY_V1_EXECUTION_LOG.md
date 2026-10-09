@@ -1032,3 +1032,20 @@ Independent review of 74389cb returned FIX: seven confirmed findings, reproduced
 ### Completed-side round restoration follow-up
 
 An additional F2 boundary assertion reproduced completed enemy-side round 2 resetting to 1: one failed / one passing control, 1.45s. The first repaired-candidate broad run was deliberately stopped before the profession core, not PASS; raw output and a whole live database observation are preserved. Commit 33dff106ec6b17563e575c56a88dceed78673cd0 restores round_index. Boundary/world-tick focus: 38 passed, 10.69s. Final combined focused/compatibility repetition: 520 passed, 110.83s, including all 154 new regressions. Exact broad command is restarting with fresh history on this corrected code. Narrow independent re-review and human Telegram remain pending/NOT RUN; no merge.
+
+
+### Fresh reviewed-repair broad result and J18 input correction
+
+`python -m pytest -q` at execution HEAD755f46d / code33dff10 completed normally:
+1 failed, 2390 passed, 276 subtests passed in 8808.88s, exit1. Fresh core completes
+all eleven checks, 83 recipes, twelve caps and is preserved whole with hashes in
+the correction report. J18 independently earned delivery stock before comparing
+absolute final XP; preparatory combat can consume rations and add different XP.
+Read-only traces establish matching 680-XP regional deltas; legal consumable
+variation reproduces a24-XP input/final difference, 1failed39.06s. Test-only commit
+d282be1d5fb3117cac65eb3d813af41856f27c37 prepares once and clones whole verified SQLite state for both orders;
+retained final equality passes the same variation, 1passed34.63s. All profession/
+regional assertions and then exact broad repetition are required. Complete core
+reuse is compatible and explicit; no source guard bypass. Human NOT RUN; no merge.
+
+All 41 profession/regional assertions pass at d282be1 in 322.23s, exit 0; complete core reuse explicitly verified by source and whole-DB hashes. Exact broad repetition is next.

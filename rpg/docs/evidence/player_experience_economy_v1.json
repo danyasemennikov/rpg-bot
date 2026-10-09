@@ -3,7 +3,7 @@
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
   "status": "DRAFT; REVIEW REPAIRS IMPLEMENTED; FINAL VALIDATION IN PROGRESS",
-  "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+  "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
   "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
   "deployment": "UNVERIFIED",
@@ -17,16 +17,25 @@
   },
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "RUNNING",
+    "status": "PENDING AFTER TEST-ONLY COMPARISON-SETUP CORRECTION",
     "command": "python -m pytest -q",
-    "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
-    "history_mode": "FRESH; old completed source guard retained",
-    "prior_attempt": "STOPPED, NOT PASS; see review_corrections.completed_side_round_followup",
-    "raw_log": "work/rpg-bot/rpg/pxe1-review-round-final-broad-pytest.log"
+    "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+    "history_mode": "Whole verified COMPLETE source-compatible core explicitly reused; no production/creator/common-source change",
+    "core_source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+    "core_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac"
   },
   "earned_profession_rav_journeys": {
-    "status": "PENDING FOR REPAIRED CANDIDATE",
-    "historical_result": "Retained under reviewed_candidate_history; no current PASS claim."
+    "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+    "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short --basetemp <workspace prepared-j18-all41-temp>",
+    "passed": 41,
+    "seconds": 322.23,
+    "exit_code": 0,
+    "history_mode": "Explicit verified COMPLETE same-source whole-core reuse; regional parties earned again",
+    "core_source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+    "core_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+    "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
+    "raw_log_sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e",
+    "status": "PASSED"
   },
   "focused_runs": [
     {
@@ -775,9 +784,9 @@
       "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
       "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
       "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
-      "tests": "ae3f162b47160c5ee71bb391501418234ad18cd7"
+      "tests": "16eae743ab58aaff799719009c6b564d8e99839a"
     },
-    "head_correspondence": "Current corrected code/test candidate 33dff10, focused validation complete; final broad gate running. Historical source identities retained under reviewed_candidate_history.",
+    "head_correspondence": "Production candidate 33dff10; J18 fixture-only follow-up d282be1; final broad repetition pending with verified same-source core.",
     "github_checks_at_creation": "NO CHECKS REPORTED"
   },
   "reviewed_candidate_history": {
@@ -984,6 +993,21 @@
         "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-boundary-before-pytest.log",
         "sha256": "ca70e66264882461ee1acc738a684901793d78c723672aa56308be9e3239f1d8",
         "terminal_line": "1 failed, 1 passed, 152 deselected in 1.45s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-j18-trace-pytest.log",
+        "sha256": "c3020f3a78ff3068626f19983ba2dac70d37415c6ec71b805467add0e201e7c8",
+        "terminal_line": "1 passed in 35.35s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-j18-variation-after-pytest.log",
+        "sha256": "b99dfd3f9770385dac4e68fe94430eaddd2333206c0d66d77b84cff2c7dc550e",
+        "terminal_line": "1 passed in 34.63s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-j18-variation-before-pytest.log",
+        "sha256": "b2ba4bc6fc7f7bf08311595d7d2c0ebf1ad24e28ab6dec104ecbfb5ce1ffda1d",
+        "terminal_line": "1 failed in 39.06s"
       }
     ],
     "source_and_test_git_identities": {
@@ -993,7 +1017,7 @@
       "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
       "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
       "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
-      "tests": "ae3f162b47160c5ee71bb391501418234ad18cd7"
+      "tests": "16eae743ab58aaff799719009c6b564d8e99839a"
     },
     "preserved_contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
     "human_validation": "NOT RUN",
@@ -1008,7 +1032,7 @@
       "log_sha256": "5e17a84fcd31663df4bcf5fadd32478e3ed703725032602cae620d24f6f25d62",
       "includes_all_new_regressions": 154
     },
-    "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+    "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
     "implementation_commits": [
       "4ade6abf8db825097c9754ce204e564c96cdfa5b",
       "33dff106ec6b17563e575c56a88dceed78673cd0"
@@ -1048,6 +1072,141 @@
         "exit_code": -1,
         "reason": "Confirmed completed enemy-side recovery reset round 2 to 1; fixed before final gate."
       }
+    },
+    "regional_order_fixture_followup": {
+      "commit": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+      "production_changed": false,
+      "root_cause": "Independent ration preparation can consume newly crafted rations in real boar fights and earn different starting XP; final absolute progression compared unequal inputs.",
+      "correction": "Earn the stock once; consistent whole SQLite backup and verified whole-copy restore for each regional order. Assert identical full prepared player state; retain final exact progression equality and all claim/conservation assertions.",
+      "prior_full_suite": {
+        "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+        "execution_start_head": "755f46d02e4500363e4b5f0bb3f3dbb2fbd0c37b",
+        "current_head": "755f46d02e4500363e4b5f0bb3f3dbb2fbd0c37b",
+        "branch": "feat/pxe1-player-experience-economy-v1",
+        "status": "FAILED",
+        "session_id": 10193,
+        "command": "python -m pytest -q",
+        "raw_log": "work/rpg-bot/rpg/pxe1-review-round-final-broad-pytest.log",
+        "history_mode": "FRESH; PXE1_EARNED_CHECKPOINT unset",
+        "human_validation": "NOT RUN",
+        "observed_at_utc": "2026-10-09T03:14:26.531727+00:00",
+        "git_status": "",
+        "completed_regressions": "All 154 included in final 520-test focused gate",
+        "completed_focused": "520 passed in 110.83s",
+        "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "source_and_test_git_identities": {
+          "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+          "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+          "game": "8cdc2be3c0b8f9587a45f123dd2c4cebc7ebb689",
+          "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+          "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+          "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+          "tests": "ae3f162b47160c5ee71bb391501418234ad18cd7"
+        },
+        "completed_earned_core": {
+          "status": "COMPLETE CORE ONLY; broad suite result recorded separately",
+          "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-agy20wot",
+          "target": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+          "observed_utc": "2026-10-09T03:13:51.676127+00:00",
+          "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+          "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+          "database_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+          "production_checks": {
+            "new_character_and_chapter": true,
+            "mining_smith_heavy": true,
+            "wood_fiber_arcane": true,
+            "herbalism_alchemy": true,
+            "fishing_cooking": true,
+            "hunting_claims_and_consumers": true,
+            "gear_integration": true,
+            "learning_authority": true,
+            "conservation_and_receipts": true,
+            "localized_complete_navigation": true,
+            "regional_source_coverage": true
+          },
+          "crafted_recipes": 83,
+          "gathering": {
+            "fishing": 20,
+            "herbalism": 20,
+            "hunting": 20,
+            "mining": 20,
+            "woodcutting": 20
+          },
+          "crafting": {
+            "alchemy": 20,
+            "arcane_engineer": 20,
+            "blacksmith": 20,
+            "cooking": 20,
+            "heavy_armor": 20,
+            "light_armor": 20,
+            "medium_armor": 20
+          }
+        },
+        "exit_code": 1,
+        "passed": 2390,
+        "failed": 1,
+        "subtests_passed": 276,
+        "seconds": 8808.88,
+        "completed_utc": "2026-10-09T03:28:52.165123+00:00",
+        "failure": "J18 regional-order equality: exp 6739 vs 6751",
+        "raw_log_sha256": "f617b4611cba40cf191510d18b338211819649df5001e4d8afefe11760be575d"
+      },
+      "complete_fresh_core": {
+        "status": "COMPLETE CORE ONLY; broad suite result recorded separately",
+        "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-agy20wot",
+        "target": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+        "observed_utc": "2026-10-09T03:13:51.676127+00:00",
+        "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+        "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "database_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+        "production_checks": {
+          "new_character_and_chapter": true,
+          "mining_smith_heavy": true,
+          "wood_fiber_arcane": true,
+          "herbalism_alchemy": true,
+          "fishing_cooking": true,
+          "hunting_claims_and_consumers": true,
+          "gear_integration": true,
+          "learning_authority": true,
+          "conservation_and_receipts": true,
+          "localized_complete_navigation": true,
+          "regional_source_coverage": true
+        },
+        "crafted_recipes": 83,
+        "gathering": {
+          "fishing": 20,
+          "herbalism": 20,
+          "hunting": 20,
+          "mining": 20,
+          "woodcutting": 20
+        },
+        "crafting": {
+          "alchemy": 20,
+          "arcane_engineer": 20,
+          "blacksmith": 20,
+          "cooking": 20,
+          "heavy_armor": 20,
+          "light_armor": 20,
+          "medium_armor": 20
+        }
+      },
+      "read_only_trace": "Both regional orders award 680 XP when prepared starting states match.",
+      "legal_consumable_variation_before": "1 failed in 39.06s; starting XP differed 24, final XP differed 24, region delta 680 for both",
+      "legal_consumable_variation_after": "1 passed in 34.63s; exact same prepared player and same final equality",
+      "affected_journeys": {
+        "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+        "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short --basetemp <workspace prepared-j18-all41-temp>",
+        "passed": 41,
+        "seconds": 322.23,
+        "exit_code": 0,
+        "history_mode": "Explicit verified COMPLETE same-source whole-core reuse; regional parties earned again",
+        "core_source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "core_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+        "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
+        "raw_log_sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e"
+      },
+      "final_full_suite": "PENDING"
     }
-  }
+  },
+  "production_candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0"
 }

@@ -5,7 +5,7 @@ Date: 2026-10-09. Same [Draft PR #237](https://github.com/danyasemennikov/rpg-bo
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Reviewed HEAD: `74389cb22ee6f49f584cc9c09a5f17cb792901c9`.
 Correction code/test commit: `4ade6abf8db825097c9754ce204e564c96cdfa5b`.
-Completed-side round follow-up / final code-test candidate: `33dff106ec6b17563e575c56a88dceed78673cd0`.
+Completed-side round follow-up / production candidate: `33dff106ec6b17563e575c56a88dceed78673cd0`.
 Frozen contract retained unchanged. No migration/table/column, balance, scope or engine redesign.
 
 The independent review returned **FIX** with four P1 and three P2 defects. Its
@@ -55,7 +55,7 @@ earned-progression or human evidence.
 | All new regressions | `python -m pytest -q tests/test_pxe1_review_regressions.py --tb=short` | **154 passed, 34.48s**, exit 0 |
 | Combined focused/compatibility | All `test_pxe1*.py`, shared runtime, retained PvP/build journey/economy/alpha transaction suites | **520 passed, 110.83s**, exit 0 on `33dff10`, including all 154 new cases; earlier 499/520 runs remain historical |
 | Round restoration follow-up | Added exact round assertion at completed-side restart | Before: 1 failed / 1 passed, 1.45s; after: 38 passed, 10.69s |
-| Repaired-candidate broad gate | **`python -m pytest -q`** | First attempt stopped (not PASS) for confirmed round-restoration repair; final candidate repetition **RUNNING** with fresh history |
+| Repaired-candidate broad gate | **`python -m pytest -q`** | First attempt stopped (not PASS) for confirmed round-restoration repair; fresh repetition completed **1 failed / 2,390 passed / 276 subtests, 8808.88s**; J18 fixture-only correction is validated below, final repetition pending |
 
 Exact raw log hashes and Git code/test identities are retained in
 [automated evidence](../evidence/player_experience_economy_v1.json). Interrupted,
@@ -87,3 +87,32 @@ Independent review of reviewed HEAD: **COMPLETE / FIX**. Narrow independent
 re-review of repaired HEAD: **PENDING**. Final broad completion is required before
 claiming **READY FOR NARROW INDEPENDENT RE-REVIEW**. This remains one unmerged
 Draft PR; no merge or deployment is authorized.
+
+## J18 comparison-input correction after the fresh broad gate
+
+The fresh gate on `33dff10` completed normally, exit 1: **1 failed, 2390 passed,
+276 subtests passed in 8808.88s**. All seven repair regressions passed. The fresh
+core completed all eleven checks, all 83 recipes and all twelve profession caps.
+Its whole database and provenance are preserved at workspace
+`acceptance-recovery/review-237-corrections/33dff10-completed-earned`.
+Source SHA-256: `6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929`.
+Whole DB SHA-256: `b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac`.
+
+J18 compared final absolute XP after separately earning two rations for each
+order. Real preparatory boar combat can consume the newly crafted ration and
+require another victory. The failed broad run differed by 12 XP. A read-only
+trace showed both regional orders award 680 XP with matching starting states;
+an emitted legal Guard/consumable variation reproduced unequal setup XP and
+the unchanged final assertion failed (39.06s). Commit `d282be1d5fb3117cac65eb3d813af41856f27c37` earns the
+stock once and clones that whole consistent SQLite state for both orders,
+checking full prepared-player equality. No progress/items are injected; no
+reward or final equality assertion is weakened. The same variation passes
+in 34.63s after the correction.
+
+This commit changes only the regional comparison test. Production, creator and
+common history sources remain compatible with the complete fresh core above;
+the strict source and whole-database guards remain intact. All 41 profession/regional
+assertions pass again in 322.23s, exit 0; exact `python -m pytest -q` must then repeat with
+this verified COMPLETE core explicitly supplied. Prior failure remains evidence,
+and no final PASS is claimed yet. Human Telegram remains NOT RUN; narrow
+independent re-review remains pending. Never merge or deploy.
