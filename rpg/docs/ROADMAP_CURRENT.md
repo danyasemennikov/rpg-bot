@@ -19,8 +19,8 @@ in this roadmap.
 
 - Status: **in progress — Draft review**, frozen [PXE1-1 contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md).
 - One [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237) on the existing candidate branch; no merge authorization.
-- Independent review of `74389cb` returned FIX. Seven bounded repairs are implemented;
-  repaired-candidate final validation and narrow re-review are pending. Human Telegram validation remains **NOT RUN** under the owner's explicit
+- Independent review of `74389cb` returned FIX. All seven bounded repairs pass automated validation;
+  the repaired candidate is ready for narrow independent re-review. Human Telegram validation remains **NOT RUN** under the owner's explicit
   implementation handoff instructions; run the [PXE1 human plan](evidence/player_experience_economy_v1_human.md)
   separately before claiming live acceptance.
 

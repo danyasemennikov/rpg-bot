@@ -2,7 +2,7 @@
   "contract": "PXE1-1",
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
-  "status": "DRAFT; REVIEW REPAIRS IMPLEMENTED; FINAL VALIDATION IN PROGRESS",
+  "status": "DRAFT; ALL SEVEN FINDINGS FIXED AND AUTOMATED GATES PASSED; NARROW INDEPENDENT RE-REVIEW PENDING",
   "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
   "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
@@ -17,16 +17,38 @@
   },
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "PENDING AFTER TEST-ONLY COMPARISON-SETUP CORRECTION",
+    "status": "PASSED",
     "command": "python -m pytest -q",
     "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
-    "history_mode": "Whole verified COMPLETE source-compatible core explicitly reused; no production/creator/common-source change",
-    "core_source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
-    "core_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac"
+    "execution_start_head": "b78b0186b79e0816a63cc95c33009991c5e5c22f",
+    "history_mode": "Explicit whole verified COMPLETE same-source core reuse; fresh core originally built in failed 33dff10 broad gate",
+    "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+    "passed": 2391,
+    "subtests_passed": 276,
+    "seconds": 1568.15,
+    "exit_code": 0,
+    "terminal_summary": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)",
+    "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+    "raw_log_sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+    "completed_history": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+    "completed_history_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+    "production_checks": {
+      "new_character_and_chapter": true,
+      "mining_smith_heavy": true,
+      "wood_fiber_arcane": true,
+      "herbalism_alchemy": true,
+      "fishing_cooking": true,
+      "hunting_claims_and_consumers": true,
+      "gear_integration": true,
+      "learning_authority": true,
+      "conservation_and_receipts": true,
+      "localized_complete_navigation": true,
+      "regional_source_coverage": true
+    }
   },
   "earned_profession_rav_journeys": {
     "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
-    "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short --basetemp <workspace prepared-j18-all41-temp>",
+    "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short --basetemp 'C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\prepared-j18-all41-temp'",
     "passed": 41,
     "seconds": 322.23,
     "exit_code": 0,
@@ -35,7 +57,8 @@
     "core_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
     "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
     "raw_log_sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e",
-    "status": "PASSED"
+    "status": "PASSED",
+    "also_executed_in_final_full_suite": true
   },
   "focused_runs": [
     {
@@ -287,7 +310,6 @@
   "limitations": [
     "Human Telegram validation NOT RUN; phone/desktop and real multi-account behavior unverified",
     "Independent review COMPLETE / FIX at reviewed HEAD; narrow re-review pending for repaired candidate",
-    "Full repaired-candidate suite pending; historical 2237/41 PASS does not validate changed production code",
     "Deployment, live data cutover and sustained operational scheduler behavior unverified"
   ],
   "deviations": [
@@ -296,49 +318,50 @@
       "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
       "root_cause": "Read-selection SQL used nonexistent group_rules_version instead of world_model_version.",
       "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
     },
     {
       "finding": "P1-2",
       "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
       "root_cause": "Recovery required an open deadline at a proven completed side boundary; restored next-side deadline also needed immediate persistence.",
       "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING",
+      "followup_commit": "33dff106ec6b17563e575c56a88dceed78673cd0"
     },
     {
       "finding": "P1-3",
       "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
       "root_cause": "Failed side resolution retained advanced cache/projections; recovery could open an already-open enemy side twice.",
       "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
     },
     {
       "finding": "P1-4",
       "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
       "root_cause": "Individual and terminal settlement retained accepted/locked ally exclusivity despite clearing activity.",
       "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
     },
     {
       "finding": "P2-1",
       "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
       "root_cause": "Common timed arrival omitted existing frontier/core-war respawn protection consumption.",
       "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
     },
     {
       "finding": "P2-2",
       "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
       "root_cause": "Core Map destination list contained only capital neighbors, omitting capital_city itself.",
       "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
     },
     {
       "finding": "P2-3",
       "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
       "root_cause": "Gather cards omitted durable tool state/warnings and broken-tool service/quote/source guidance.",
       "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
-      "status": "IMPLEMENTED; FINAL VALIDATION PENDING"
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
     }
   ],
   "schema": {
@@ -786,7 +809,7 @@
       "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
       "tests": "16eae743ab58aaff799719009c6b564d8e99839a"
     },
-    "head_correspondence": "Production candidate 33dff10; J18 fixture-only follow-up d282be1; final broad repetition pending with verified same-source core.",
+    "head_correspondence": "Final full run at executionb78b018, code/test candidated282be1. Subsequent commits change only docs; actual pushed HEAD/clean state/Draft state verified in workspace publication receipt.",
     "github_checks_at_creation": "NO CHECKS REPORTED"
   },
   "reviewed_candidate_history": {
@@ -879,7 +902,7 @@
     "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
     "root_causes": {
       "P1-1": "Read-selection SQL used nonexistent group_rules_version instead of world_model_version.",
-      "P1-2": "Recovery required an open deadline at a proven completed side boundary; restored next-side deadline also needed immediate persistence.",
+      "P1-2": "Recovery required an open deadline at a proven completed side boundary; restored next-side deadline also needed immediate persistence. Completed-side cache restoration also omitted persisted round_index, corrected at33dff10.",
       "P1-3": "Failed side resolution retained advanced cache/projections; recovery could open an already-open enemy side twice.",
       "P1-4": "Individual and terminal settlement retained accepted/locked ally exclusivity despite clearing activity.",
       "P2-1": "Common timed arrival omitted existing frontier/core-war respawn protection consumption.",
@@ -1008,6 +1031,31 @@
         "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-j18-variation-before-pytest.log",
         "sha256": "b2ba4bc6fc7f7bf08311595d7d2c0ebf1ad24e28ab6dec104ecbfb5ce1ffda1d",
         "terminal_line": "1 failed in 39.06s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-final-broad-pytest.log",
+        "sha256": "46a4d343dfb1cf619e63092e7b4e7f063288457f6b335fdd332e9eb9b2ed6951",
+        "terminal_line": ".................................................."
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
+        "sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e",
+        "terminal_line": "41 passed in 322.23s (0:05:22)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+        "sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+        "terminal_line": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-final-broad-pytest.log",
+        "sha256": "f617b4611cba40cf191510d18b338211819649df5001e4d8afefe11760be575d",
+        "terminal_line": "1 failed, 2390 passed, 276 subtests passed in 8808.88s (2:26:48)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-final-focused-pytest.log",
+        "sha256": "5e17a84fcd31663df4bcf5fadd32478e3ed703725032602cae620d24f6f25d62",
+        "terminal_line": "520 passed in 110.83s (0:01:50)"
       }
     ],
     "source_and_test_git_identities": {
@@ -1022,7 +1070,7 @@
     "preserved_contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
     "human_validation": "NOT RUN",
     "merge": "NOT MERGED",
-    "review_status": "FINAL VALIDATION IN PROGRESS",
+    "review_status": "READY FOR NARROW INDEPENDENT RE-REVIEW",
     "final_focused_result": {
       "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
       "passed": 520,
@@ -1205,7 +1253,66 @@
         "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
         "raw_log_sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e"
       },
-      "final_full_suite": "PENDING"
+      "final_full_suite": {
+        "status": "PASSED",
+        "command": "python -m pytest -q",
+        "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+        "execution_start_head": "b78b0186b79e0816a63cc95c33009991c5e5c22f",
+        "history_mode": "Explicit whole verified COMPLETE same-source core reuse; fresh core originally built in failed 33dff10 broad gate",
+        "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "passed": 2391,
+        "subtests_passed": 276,
+        "seconds": 1568.15,
+        "exit_code": 0,
+        "terminal_summary": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)",
+        "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+        "raw_log_sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+        "completed_history": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+        "completed_history_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+        "production_checks": {
+          "new_character_and_chapter": true,
+          "mining_smith_heavy": true,
+          "wood_fiber_arcane": true,
+          "herbalism_alchemy": true,
+          "fishing_cooking": true,
+          "hunting_claims_and_consumers": true,
+          "gear_integration": true,
+          "learning_authority": true,
+          "conservation_and_receipts": true,
+          "localized_complete_navigation": true,
+          "regional_source_coverage": true
+        }
+      }
+    },
+    "final_broad_result": {
+      "status": "PASSED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+      "execution_start_head": "b78b0186b79e0816a63cc95c33009991c5e5c22f",
+      "history_mode": "Explicit whole verified COMPLETE same-source core reuse; fresh core originally built in failed 33dff10 broad gate",
+      "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+      "passed": 2391,
+      "subtests_passed": 276,
+      "seconds": 1568.15,
+      "exit_code": 0,
+      "terminal_summary": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)",
+      "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+      "raw_log_sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+      "completed_history": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+      "completed_history_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      }
     }
   },
   "production_candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0"

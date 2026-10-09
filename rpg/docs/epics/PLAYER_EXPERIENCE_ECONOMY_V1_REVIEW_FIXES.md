@@ -1,6 +1,6 @@
 # PXE1 PR237 bounded independent-review corrections
 
-Status: implemented; repaired-candidate final validation in progress.
+Status: all seven findings FIXED; automated gates PASSED; READY FOR NARROW INDEPENDENT RE-REVIEW.
 Date: 2026-10-09. Same [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237).
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Reviewed HEAD: `74389cb22ee6f49f584cc9c09a5f17cb792901c9`.
@@ -52,10 +52,10 @@ earned-progression or human evidence.
 | F6 Map path | `python -m pytest -q tests/test_pxe1_review_regressions.py -k 'aster or elmor' --tb=short` | 7 passed, 1.68s |
 | F6 neighbors | `python -m pytest -q tests/test_pxe1_local_surfaces.py tests/test_pxe1_travel.py --tb=short` | 26 passed, 6.66s |
 | F7 wear and recovery | `python -m pytest -q tests/test_pxe1_review_regressions.py -k 'gather or wilderness_tool or repaired_tool or detail_guard' --tb=short` | 22 passed, 4.42s |
-| All new regressions | `python -m pytest -q tests/test_pxe1_review_regressions.py --tb=short` | **154 passed, 34.48s**, exit 0 |
+| Initial standalone new regressions (`4ade6ab`) | `python -m pytest -q tests/test_pxe1_review_regressions.py --tb=short` | **154 passed, 34.48s**, exit 0; all cases run again in the final focused and broad gates |
 | Combined focused/compatibility | All `test_pxe1*.py`, shared runtime, retained PvP/build journey/economy/alpha transaction suites | **520 passed, 110.83s**, exit 0 on `33dff10`, including all 154 new cases; earlier 499/520 runs remain historical |
 | Round restoration follow-up | Added exact round assertion at completed-side restart | Before: 1 failed / 1 passed, 1.45s; after: 38 passed, 10.69s |
-| Repaired-candidate broad gate | **`python -m pytest -q`** | First attempt stopped (not PASS) for confirmed round-restoration repair; fresh repetition completed **1 failed / 2,390 passed / 276 subtests, 8808.88s**; J18 fixture-only correction is validated below, final repetition pending |
+| Repaired-candidate broad gate | **`python -m pytest -q`** | First attempt stopped (not PASS) for confirmed round-restoration repair; fresh repetition completed **1 failed / 2,390 passed / 276 subtests, 8808.88s**; J18 fixture-only correction is validated below, final repetition **2391 passed, 276 subtests passed in 1568.15s (0:26:08), exit 0** |
 
 Exact raw log hashes and Git code/test identities are retained in
 [automated evidence](../evidence/player_experience_economy_v1.json). Interrupted,
@@ -84,8 +84,8 @@ locales within the existing human plan. Actual transport/device and sustained
 scheduler behavior, deployment and live cutover remain unverified.
 
 Independent review of reviewed HEAD: **COMPLETE / FIX**. Narrow independent
-re-review of repaired HEAD: **PENDING**. Final broad completion is required before
-claiming **READY FOR NARROW INDEPENDENT RE-REVIEW**. This remains one unmerged
+re-review of repaired HEAD: **PENDING**. Final broad completion is recorded below. The candidate is
+**READY FOR NARROW INDEPENDENT RE-REVIEW**; this is not independent approval. This remains one unmerged
 Draft PR; no merge or deployment is authorized.
 
 ## J18 comparison-input correction after the fresh broad gate
@@ -112,7 +112,37 @@ in 34.63s after the correction.
 This commit changes only the regional comparison test. Production, creator and
 common history sources remain compatible with the complete fresh core above;
 the strict source and whole-database guards remain intact. All 41 profession/regional
-assertions pass again in 322.23s, exit 0; exact `python -m pytest -q` must then repeat with
+assertions pass again in 322.23s, exit 0; exact `python -m pytest -q` has repeated successfully with
 this verified COMPLETE core explicitly supplied. Prior failure remains evidence,
-and no final PASS is claimed yet. Human Telegram remains NOT RUN; narrow
+and the final normally completed PASS is recorded below. Human Telegram remains NOT RUN; narrow
 independent re-review remains pending. Never merge or deploy.
+
+## Final repaired-candidate gate
+
+Code/test candidate: `d282be1d5fb3117cac65eb3d813af41856f27c37`; production candidate `33dff10`.
+Execution HEAD: `b78b0186b79e0816a63cc95c33009991c5e5c22f`.
+Exact command: **`python -m pytest -q`**.
+Normal observed exit: **0**. Terminal result: **2391 passed, 276 subtests passed in 1568.15s (0:26:08)**.
+Raw log: `work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log`.
+Log SHA-256: `c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc`.
+`PXE1_EARNED_CHECKPOINT` explicitly supplied the whole verified COMPLETE core
+described above. Production/creator/common history sources remained unchanged;
+all collected assertions, including all 154 review regressions and corrected J18,
+executed. This was compatible reuse, not another fresh core rebuild. Historical
+failed/stopped runs and their distinct source/test candidates remain preserved.
+
+Final focused gate: 520 passed in 110.83s at production candidate `33dff10`, all 154 review
+cases included. Exact PowerShell discovery and Python invocation:
+
+```powershell
+$pxe1ReviewTests=@(Get-ChildItem -LiteralPath tests -Filter test_pxe1*.py | ForEach-Object { $_.FullName })
+python -m pytest -q $pxe1ReviewTests tests/test_live_combat_runtime_foundation.py tests/test_pvp_live_flow_v1.py tests/test_character_builds_v1_pvp_journey.py tests/test_professions_economy_v1_transactions.py tests/test_alpha_transactions_v1.py --tb=short
+```
+
+All 41 profession/regional assertions also passed in 322.23s at `d282be1` before the full
+repetition, with compatible complete-core reuse. The exact command and workspace
+basetemp path are retained in JSON evidence. The frozen contract remains unchanged.
+All seven findings are FIXED and automated validation is complete. Human Telegram
+is NOT RUN. Repaired-candidate independent review is PENDING. Real devices,
+sustained scheduler operations, deployment and cutover remain unverified.
+**READY FOR NARROW INDEPENDENT RE-REVIEW. Never merge or deploy.**

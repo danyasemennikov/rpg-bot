@@ -1,5 +1,12 @@
 # PXE1 implementation execution log
 
+Current status: all seven review findings FIXED; automated gates PASSED at
+code/test candidate `d282be1`. Narrow independent re-review is pending; human
+Telegram remains NOT RUN. The latest completed gates are recorded at the end.
+Same unmerged Draft PR237; never merge or deploy.
+
+## Initial checkpoint (historical)
+
 Implementation is IN PROGRESS. This file preserves focused evidence between
 continuations; it is not the final implementation report or acceptance evidence.
 
@@ -1049,3 +1056,14 @@ regional assertions and then exact broad repetition are required. Complete core
 reuse is compatible and explicit; no source guard bypass. Human NOT RUN; no merge.
 
 All 41 profession/regional assertions pass at d282be1 in 322.23s, exit 0; complete core reuse explicitly verified by source and whole-DB hashes. Exact broad repetition is next.
+
+
+### Final repaired-source broad repetition PASS
+
+Exact command `python -m pytest -q` completed normally, exit0: **2391 passed, 276 subtests passed in 1568.15s (0:26:08)**.
+Execution `b78b0186b79e0816a63cc95c33009991c5e5c22f`; code/test candidate `d282be1d5fb3117cac65eb3d813af41856f27c37`.
+Complete compatible core explicitly reused from fresh33dff10 run; all current
+assertions executed, source and whole-DB guards intact. Log `work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log`,
+SHA256 `c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc`. Prior stopped attempt and failed8808.88s run
+remain distinct history. Seven findings fixed; narrow re-review ready/pending.
+Human Telegram NOT RUN. Same Draft237; never merge or deploy.

@@ -1,6 +1,6 @@
 # PXE1 — Player Experience & Economy Deepening V1
 
-Status: **DRAFT / bounded review repairs implemented / final validation in progress / unmerged candidate**. Frozen contract: PXE1-1.
+Status: **DRAFT / review repairs automated validation complete / narrow independent re-review pending / unmerged candidate**. Frozen contract: PXE1-1.
 Baseline: PR236 / `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Single [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237); no merge.
@@ -174,8 +174,8 @@ collected tests. Its log SHA-256 is
 `5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150`.
 All seven recorded code/test tree identities match the subsequent documentation-only
 HEAD; no production or test code changed after the final broad run. Automated
-acceptance is complete. The same branch is published as
-[Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237), awaiting independent review.
+acceptance was complete for that historical reviewed source. The same branch was published as
+[Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237); the subsequent independent review returned FIX as recorded below.
 The earned profession
 checkpoint is created once per pytest session from registration and all four Chapter
 claims, then cloned whole for independent regional branches with SHA-256 provenance.
@@ -193,3 +193,17 @@ The earlier claim of no runtime/product deviations is superseded by seven confir
 Their bounded repairs, root causes and candidate-specific validation are recorded in
 [the correction report](PLAYER_EXPERIENCE_ECONOMY_V1_REVIEW_FIXES.md). Historical automated
 results above apply to their recorded code; they do not establish repaired-candidate or live acceptance.
+
+### Final bounded review-repair validation
+
+All seven independent findings are FIXED. Code/test candidate `d282be1d5fb3117cac65eb3d813af41856f27c37`,
+production candidate `33dff10`, exact full command `python -m pytest -q`:
+**2391 passed, 276 subtests passed in 1568.15s (0:26:08)**, normal exit 0. The focused gate
+passed 520 tests in 110.83s; all 41 profession/regional assertions passed in 322.23s.
+The fresh repaired-source core completed all 11 checks, 83 recipes and 12 caps;
+the final test-only follow-up reuses that verified whole
+compatible core explicitly. Prior stopped/failed histories remain preserved.
+Root causes, exact commands, hashes and J18 comparison-input correction are in
+the [bounded correction report](PLAYER_EXPERIENCE_ECONOMY_V1_REVIEW_FIXES.md).
+**READY FOR NARROW INDEPENDENT RE-REVIEW**. Human Telegram: NOT RUN. Independent
+re-review: PENDING. Unmerged Draft PR237; deployment/cutover unverified. Never merge.
