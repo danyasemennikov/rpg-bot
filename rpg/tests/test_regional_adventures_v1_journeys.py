@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -2048,21 +2049,38 @@ def test_j18_arbitrary_reward_order(rav1_earned_checkpoint, reverse):
     asyncio.run(run())
 
 
-def test_j18_all_finite_claims_in_two_regional_orders(rav1_earned_checkpoint):
+def test_j18_all_finite_claims_in_two_regional_orders(rav1_earned_checkpoint, tmp_path):
+    # Earn delivery stock once, then compare whole copies of exactly that state.
+    # Preparatory boar fights may consume a freshly crafted ration, adding legal
+    # combat XP. Repeating preparation separately cannot promise equal inputs.
+    prepared = _restore_checkpoint(rav1_earned_checkpoint)
+    asyncio.run(_ensure_rations(prepared, 2))
+    assert _quantity(prepared.player_id, 'field_ration') >= 2
+    prepared_player = dict(get_player(prepared.player_id))
+    prepared_path = tmp_path / 'ration-ready.sqlite3'
+    source = sqlite3.connect(Path(database.DB_PATH).resolve().as_uri() + '?mode=ro', uri=True)
+    destination = sqlite3.connect(prepared_path)
+    try:
+        source.backup(destination)
+    finally:
+        destination.close()
+        source.close()
+    prepared_checkpoint = {
+        'path': prepared_path,
+        'sha256': hashlib.sha256(prepared_path.read_bytes()).hexdigest(),
+        'player_id': prepared.player_id,
+    }
     orders = (
         ('westwild', 'frostspine', 'ashen_ruins', 'sunscar', 'mireveil'),
         ('mireveil', 'sunscar', 'ashen_ruins', 'frostspine', 'westwild'),
     )
     outcomes = []
     for order in orders:
-        journey = _restore_checkpoint(rav1_earned_checkpoint)
+        journey = _restore_checkpoint(prepared_checkpoint)
 
         async def run():
-            # Earn the same delivery stock before comparing regional orders.
-            # Otherwise Sunscar's ration reward saves one boar victory only
-            # when Sunscar precedes Westwild, changing ordinary combat XP.
-            await _ensure_rations(journey, 2)
             before = dict(get_player(journey.player_id))
+            assert before == prepared_player
             await _complete_all_finite(journey, order)
             claims = list_claims(journey.player_id)
             assert set(claims) == {
