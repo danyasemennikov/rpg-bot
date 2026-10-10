@@ -2,7 +2,7 @@
   "contract": "PXE1-1",
   "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
   "branch": "feat/pxe1-player-experience-economy-v1",
-  "status": "DRAFT; SECOND BOUNDED F2/F3 FOCUSED GATES PASSED; FRESH BROAD IN PROGRESS",
+  "status": "DRAFT; SECOND BOUNDED F2/F3 AUTOMATED GATES PASSED; READY FOR SECOND NARROW RE-REVIEW",
   "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
   "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
   "merge": "NOT MERGED",
@@ -27,16 +27,17 @@
   },
   "human_validation": "NOT RUN",
   "full_suite": {
-    "status": "IN PROGRESS",
-    "command": "python -m pytest -q",
+    "status": "PASSED",
+    "branch": "feat/pxe1-player-experience-economy-v1",
+    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
     "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
+    "command": "python -m pytest -q",
     "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
     "history_mode": "Fresh earned core; reuse variable absent",
     "started_at": "2026-10-09T19:46:15.639704+00:00",
     "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-final-broad-pytest.log",
-    "test_pid": 32608,
     "runner_pid": 31532,
-    "exit_code": null,
+    "exit_code": 0,
     "code_test_identity": {
       "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
       "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
@@ -45,10 +46,84 @@
       "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
       "tests": "743516a1e8b7ef15178ec736046398f79f30bbb7"
     },
-    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb"
+    "completed_earned_history": {
+      "directory": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\completed-earned",
+      "original": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-4h9lsf_6",
+      "db_sha256": "370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259",
+      "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      },
+      "fresh": true
+    },
+    "test_pid": 32608,
+    "elapsed_seconds": 22095.51,
+    "heartbeat_at": "2026-10-10T01:54:31.154466+00:00",
+    "current_head": "e6842835557ae468648f58622ecd1c4f32ca1a15",
+    "git_status": "",
+    "latest_log_tail": "........ [ 48%]\n........................................................................ [ 51%]\n........................................................................ [ 54%]\n........................................................................ [ 57%]\n........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n........................................................................ [ 75%]\n........................................................................ [ 78%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 86%]\n........................................................................ [ 89%]\n........................................................................ [ 92%]\n........................................................................ [ 95%]\n........................................................................ [ 98%]\n.............................                                [100%]\n2429 passed, 276 subtests passed in 22066.01s (6:07:46)\n",
+    "incomplete_observation": {
+      "path": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\incomplete-observation.sqlite3",
+      "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pytest-of-masha\\pytest-503\\pxe1-earned-professions0\\earned.sqlite3",
+      "accepted": false,
+      "recorded_at": "2026-10-10T01:54:31.154466+00:00"
+    },
+    "raw_log_sha256": "c40442cec9906c1df1f86412c76fba305cffd00b00a3dfebd99275f9b60ffdc3",
+    "completed_at": "2026-10-10T01:54:31.154466+00:00",
+    "passed": 2429,
+    "subtests_passed": 276,
+    "seconds": 22066.01,
+    "terminal_summary": "2429 passed, 276 subtests passed in 22066.01s (6:07:46)",
+    "fresh_vs_reused": "FRESH; no prior core reused"
   },
   "earned_profession_rav_journeys": {
-    "status": "PENDING NEW BROAD GATE"
+    "status": "PASSED IN FINAL BROAD SUITE",
+    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "assertions": 41,
+    "history_mode": "FRESH core; real regional histories earned again",
+    "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+    "db_sha256": "370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259",
+    "directory": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\completed-earned",
+    "production_checks": {
+      "new_character_and_chapter": true,
+      "mining_smith_heavy": true,
+      "wood_fiber_arcane": true,
+      "herbalism_alchemy": true,
+      "fishing_cooking": true,
+      "hunting_claims_and_consumers": true,
+      "gear_integration": true,
+      "learning_authority": true,
+      "conservation_and_receipts": true,
+      "localized_complete_navigation": true,
+      "regional_source_coverage": true
+    },
+    "crafted_recipes": 83,
+    "gathering": {
+      "fishing": 20,
+      "herbalism": 20,
+      "hunting": 20,
+      "mining": 20,
+      "woodcutting": 20
+    },
+    "crafting": {
+      "alchemy": 20,
+      "arcane_engineer": 20,
+      "blacksmith": 20,
+      "cooking": 20,
+      "heavy_armor": 20,
+      "light_armor": 20,
+      "medium_armor": 20
+    }
   },
   "focused_runs": [
     {
@@ -783,8 +858,11 @@
     }
   ],
   "publication": {
-    "status": "PENDING SECOND-REPAIR PUSH",
-    "previous_head": "5fea976cd1b44a6a19e65d54cfc7df28b5969845"
+    "status": "CODE/TEST CANDIDATE PUBLISHED; FINAL DOCS PUBLICATION RECORDED IN WORKSPACE RECEIPT",
+    "code_test_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
+    "verification_receipt": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\publication-check.json",
+    "head_correspondence": "Code/test identities match completed full gate; later changes are documentation only"
   },
   "reviewed_candidate_history": {
     "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
@@ -1287,7 +1365,9 @@
         "localized_complete_navigation": true,
         "regional_source_coverage": true
       }
-    }
+    },
+    "historical_first_packet": true,
+    "superseded_by_narrow_review": "5fea976 COMPLETE / FIX for residual F2/F3"
   },
   "production_candidate_sha": "9d0a02a1a6ef5f6406ad43bf23f04382363ece72",
   "second_review_prior_candidate": {
@@ -1390,7 +1470,7 @@
       "raw_log": "work/rpg-bot/rpg/pxe1-second-review-external-final-pytest.log",
       "raw_log_sha256": "e13da2317bfbd7b535ca02f5162e19fbffe65d1bde6ddf69463f528fca2b3f3a"
     },
-    "acceptance": "FOCUSED COMPLETE; FINAL FRESH BROAD IN PROGRESS",
+    "acceptance": "COMPLETE; READY FOR SECOND NARROW RE-REVIEW",
     "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
     "focused": {
       "discovery": "$pxe1SecondTests=@(Get-ChildItem -LiteralPath tests -Filter test_pxe1*.py | ForEach-Object { $_.FullName })",
@@ -1403,11 +1483,11 @@
       "new_permanent_regressions": 38
     },
     "F2": {
-      "status": "FIXED IN FOCUSED TESTS; FINAL BROAD PENDING",
+      "status": "FIXED",
       "proof": "Complete evaluator identity/output and durable receipts equal across all 36 differential cases"
     },
     "F3": {
-      "status": "FIXED IN FOCUSED TESTS; FINAL BROAD PENDING",
+      "status": "FIXED",
       "proof": "All rollback/retry boundaries resolve once; two three-enemy partial-order controls submit only missing actors"
     },
     "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
@@ -1463,6 +1543,68 @@
         "raw_log_sha256": "1087b917b9300e1e2a0c175d7108215dc1ccfa0aa448151c255e32ec82de010f",
         "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb"
       }
-    }
+    },
+    "final_broad_result": {
+      "status": "PASSED",
+      "branch": "feat/pxe1-player-experience-economy-v1",
+      "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+      "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
+      "command": "python -m pytest -q",
+      "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+      "history_mode": "Fresh earned core; reuse variable absent",
+      "started_at": "2026-10-09T19:46:15.639704+00:00",
+      "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-final-broad-pytest.log",
+      "runner_pid": 31532,
+      "exit_code": 0,
+      "code_test_identity": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "0feb987d1917f19ebdf6c2aeb21ba8293f4a46df",
+        "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+        "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+        "tests": "743516a1e8b7ef15178ec736046398f79f30bbb7"
+      },
+      "completed_earned_history": {
+        "directory": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\completed-earned",
+        "original": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-4h9lsf_6",
+        "db_sha256": "370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259",
+        "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+        "production_checks": {
+          "new_character_and_chapter": true,
+          "mining_smith_heavy": true,
+          "wood_fiber_arcane": true,
+          "herbalism_alchemy": true,
+          "fishing_cooking": true,
+          "hunting_claims_and_consumers": true,
+          "gear_integration": true,
+          "learning_authority": true,
+          "conservation_and_receipts": true,
+          "localized_complete_navigation": true,
+          "regional_source_coverage": true
+        },
+        "fresh": true
+      },
+      "test_pid": 32608,
+      "elapsed_seconds": 22095.51,
+      "heartbeat_at": "2026-10-10T01:54:31.154466+00:00",
+      "current_head": "e6842835557ae468648f58622ecd1c4f32ca1a15",
+      "git_status": "",
+      "latest_log_tail": "........ [ 48%]\n........................................................................ [ 51%]\n........................................................................ [ 54%]\n........................................................................ [ 57%]\n........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n........................................................................ [ 75%]\n........................................................................ [ 78%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 86%]\n........................................................................ [ 89%]\n........................................................................ [ 92%]\n........................................................................ [ 95%]\n........................................................................ [ 98%]\n.............................                                [100%]\n2429 passed, 276 subtests passed in 22066.01s (6:07:46)\n",
+      "incomplete_observation": {
+        "path": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\incomplete-observation.sqlite3",
+        "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pytest-of-masha\\pytest-503\\pxe1-earned-professions0\\earned.sqlite3",
+        "accepted": false,
+        "recorded_at": "2026-10-10T01:54:31.154466+00:00"
+      },
+      "raw_log_sha256": "c40442cec9906c1df1f86412c76fba305cffd00b00a3dfebd99275f9b60ffdc3",
+      "completed_at": "2026-10-10T01:54:31.154466+00:00",
+      "passed": 2429,
+      "subtests_passed": 276,
+      "seconds": 22066.01,
+      "terminal_summary": "2429 passed, 276 subtests passed in 22066.01s (6:07:46)",
+      "fresh_vs_reused": "FRESH; no prior core reused"
+    },
+    "final_code_test_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "independent_review": "PENDING SECOND NARROW RE-REVIEW"
   }
 }

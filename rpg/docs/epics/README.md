@@ -11,8 +11,8 @@ and which limitations applied at that baseline. They do not replace current code
 ## Active Draft candidates
 
 PXE1's single [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237)
-is on `feat/pxe1-player-experience-economy-v1`, with second bounded F2/F3 repairs under validation after narrow
-independent review of `5fea976` returned FIX. It links the [contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md),
+is on `feat/pxe1-player-experience-economy-v1`, with second bounded F2/F3 repairs validated; ready for second narrow
+independent re-review after FIX at `5fea976`. It links the [contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md),
 [report](PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md) and exact automated/human evidence.
 RAV1 subsequently merged as PR234.
 

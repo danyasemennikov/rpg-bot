@@ -1,6 +1,6 @@
 # PXE1 PR237 bounded independent-review corrections
 
-Status: second bounded F2/F3 repair under validation; independent narrow review of `5fea976` returned FIX.
+Status: second bounded F2/F3 repairs FIXED; automated gates PASSED; READY FOR SECOND NARROW RE-REVIEW; independent narrow review of `5fea976` returned FIX.
 Five other original findings independently FIXED. Prior acceptance below is historical.
 Date: 2026-10-09. Same [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237).
 Branch: `feat/pxe1-player-experience-economy-v1`.
@@ -203,12 +203,12 @@ with a fresh earned core. It is not PASS until normal completion. Old historical
 source/core cannot validate this candidate. Same Draft PR237; human NOT RUN.
 
 
-### Fresh final broad gate started
+### Historical broad start — subsequently stopped
 
 Exact `python -m pytest -q`, execution HEAD `fcdfb3986c28e5f8493257ff15931e38d1fa3ae3`,
 code/test candidate `9d0a02a1a6ef5f6406ad43bf23f04382363ece72`, source SHA256 `91096960d4c4b715eb6b389bd359d95c485bab7bc702398b0ebbd55897bb2c9c`.
-Fresh earned core; checkpoint reuse variable absent. IN PROGRESS, no exit/PASS yet.
-Raw log: `pxe1-second-review-final-broad-pytest.log`. The workspace observer records
+At this historical start: fresh earned core; checkpoint reuse variable absent; IN PROGRESS. Subsequent outcome is recorded below.
+Raw log: `pxe1-second-review-first-broad-stopped-pytest.log`. The workspace observer records
 PID, heartbeat, exact HEAD/status, read-only incomplete observations and only verified
 complete core provenance at `acceptance-recovery/second-review-237/current-run.json`.
 Continuation checkpoint: `PXE1_SECOND_REVIEW_CHECKPOINT.md`. Human NOT RUN; no merge.
@@ -246,12 +246,41 @@ the real earned-loot inn funding follow-up without changing production F2/F3 cod
 Exact fresh broad restart follows; no completed broad PASS is claimed yet.
 
 
-### Fresh final broad gate started
+### Historical final broad start — subsequently completed
 
 Exact `python -m pytest -q`, execution HEAD `a1a1b4550eb6de849dc99f936248dc27e91c3c44`,
 code/test candidate `0977db1a0278bf72e70069faaa2561a982106eeb`, source SHA256 `a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e`.
-Fresh earned core; checkpoint reuse variable absent. IN PROGRESS, no exit/PASS yet.
+At this historical start: fresh earned core; checkpoint reuse variable absent; IN PROGRESS. Subsequent outcome is recorded below.
 Raw log: `pxe1-second-review-final-broad-pytest.log`. The workspace observer records
 PID, heartbeat, exact HEAD/status, read-only incomplete observations and only verified
 complete core provenance at `acceptance-recovery/second-review-237/current-run.json`.
 Continuation checkpoint: `PXE1_SECOND_REVIEW_CHECKPOINT.md`. Human NOT RUN; no merge.
+
+
+### Second bounded repair — completed acceptance
+
+F2 and F3: **FIXED** on code/test `0977db1a0278bf72e70069faaa2561a982106eeb`. Final exact broad command
+`python -m pytest -q` at execution HEAD `a1a1b4550eb6de849dc99f936248dc27e91c3c44` completed
+normally with exit **0**: **2429 passed, 276 subtests passed in 22066.01s (6:07:46)**. Subsequent publication changes only
+documentation; every recorded code/test Git identity remains equal to the full run.
+
+External matrix **18/18**, original probes **10/10** (combined 28 passed, 14.03s).
+Focused/adjacent gate **698 passed, 166.31s**, including all 38 new regressions.
+Permanent differential assertions retain complete receipts/evaluator inputs and
+outputs, selected actions/order, RNG seeds, events, damage/healing, effects/durations,
+HP/MP, enemies, all player progression and semantic durable orders. Accepted order
+rows are immutable and successful repeated retries have no durable mutations.
+
+Fresh earned history built during this gate: all **11 checks**, **83 recipes**,
+five gathering and seven crafting caps at 20. Source SHA256 `a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e`;
+whole DB SHA256 `370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259`. Verified whole core and provenance preserved
+at `C:\Users\masha\Documents\Codex\2026-10-05\files-mentioned-by-the-user-pxe1\acceptance-recovery\second-review-237\completed-earned`. No earlier candidate/core was reused. All 41 profession
+and regional assertions ran in this broad gate. Existing J18 prepared-state equality
+and every compatibility safeguard remain intact.
+
+Raw log: `pxe1-second-review-final-broad-pytest.log`;
+SHA256 `c40442cec9906c1df1f86412c76fba305cffd00b00a3dfebd99275f9b60ffdc3`. Previous 2391-pass result and intermediate
+diagnostic failures remain explicitly historical. Frozen contract hash unchanged.
+
+**READY FOR SECOND NARROW RE-REVIEW.** Human Telegram: **NOT RUN**. Independent
+review of this repair: **PENDING**. Same unmerged Draft PR237. Never merge/deploy.

@@ -1,11 +1,11 @@
 # PXE1 — Player Experience & Economy Deepening V1
 
-Status: **DRAFT / second bounded F2/F3 repair validation in progress / narrow re-review FIX / unmerged candidate**. Frozen contract: PXE1-1.
+Status: **DRAFT / second bounded F2/F3 automated validation complete / ready for second narrow re-review / unmerged candidate**. Frozen contract: PXE1-1.
 Baseline: PR236 / `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
 Branch: `feat/pxe1-player-experience-economy-v1`.
 Single [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237); no merge.
 Human Telegram validation: **NOT RUN**. Independent review of `74389cb` is **COMPLETE / FIX**;
-narrow re-review of `5fea976` is COMPLETE / FIX: residual F2/F3 remain. Second bounded repairs require new acceptance. Deployment is unverified. Exact measured runs belong to [evidence](../evidence/player_experience_economy_v1.json)
+narrow re-review of `5fea976` is COMPLETE / FIX: it found residual F2/F3 at that HEAD. Second bounded repairs passed fresh automated acceptance and await second narrow review. Deployment is unverified. Exact measured runs belong to [evidence](../evidence/player_experience_economy_v1.json)
 and the [execution log](PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md).
 
 ## Frozen section implementation map
@@ -292,3 +292,32 @@ character-build source consumers completed: **26 passed in 625.96s (0:10:25)**, 
 Exact invocation, raw log and SHA256 are retained in JSON evidence. This verifies
 the real earned-loot inn funding follow-up without changing production F2/F3 code.
 Exact fresh broad restart follows; no completed broad PASS is claimed yet.
+
+
+### Second bounded repair — completed acceptance
+
+F2 and F3: **FIXED** on code/test `0977db1a0278bf72e70069faaa2561a982106eeb`. Final exact broad command
+`python -m pytest -q` at execution HEAD `a1a1b4550eb6de849dc99f936248dc27e91c3c44` completed
+normally with exit **0**: **2429 passed, 276 subtests passed in 22066.01s (6:07:46)**. Subsequent publication changes only
+documentation; every recorded code/test Git identity remains equal to the full run.
+
+External matrix **18/18**, original probes **10/10** (combined 28 passed, 14.03s).
+Focused/adjacent gate **698 passed, 166.31s**, including all 38 new regressions.
+Permanent differential assertions retain complete receipts/evaluator inputs and
+outputs, selected actions/order, RNG seeds, events, damage/healing, effects/durations,
+HP/MP, enemies, all player progression and semantic durable orders. Accepted order
+rows are immutable and successful repeated retries have no durable mutations.
+
+Fresh earned history built during this gate: all **11 checks**, **83 recipes**,
+five gathering and seven crafting caps at 20. Source SHA256 `a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e`;
+whole DB SHA256 `370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259`. Verified whole core and provenance preserved
+at `C:\Users\masha\Documents\Codex\2026-10-05\files-mentioned-by-the-user-pxe1\acceptance-recovery\second-review-237\completed-earned`. No earlier candidate/core was reused. All 41 profession
+and regional assertions ran in this broad gate. Existing J18 prepared-state equality
+and every compatibility safeguard remain intact.
+
+Raw log: `pxe1-second-review-final-broad-pytest.log`;
+SHA256 `c40442cec9906c1df1f86412c76fba305cffd00b00a3dfebd99275f9b60ffdc3`. Previous 2391-pass result and intermediate
+diagnostic failures remain explicitly historical. Frozen contract hash unchanged.
+
+**READY FOR SECOND NARROW RE-REVIEW.** Human Telegram: **NOT RUN**. Independent
+review of this repair: **PENDING**. Same unmerged Draft PR237. Never merge/deploy.

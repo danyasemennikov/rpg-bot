@@ -52,7 +52,7 @@ It also catalogues compatibility-retained system and pass documents.
 
 ## PXE1 unmerged Draft candidate
 
-- [Draft PR #237 — PXE1](https://github.com/danyasemennikov/rpg-bot/pull/237): second narrow review returned FIX for residual F2/F3; bounded repairs under validation
+- [Draft PR #237 — PXE1](https://github.com/danyasemennikov/rpg-bot/pull/237): second bounded F2/F3 repairs validated; ready for second narrow independent re-review
 - [Frozen contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md)
 - [Implementation report](epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md)
 - [Automated evidence](evidence/player_experience_economy_v1.json)
