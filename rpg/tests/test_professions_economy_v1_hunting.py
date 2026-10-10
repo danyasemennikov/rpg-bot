@@ -76,20 +76,31 @@ def test_harvest_pages_five_eligible_encounters_before_expanding_multi_choices(t
         units = ([
             {'unit_id':'wolf-z','mob_id':'forest_wolf'},
             {'unit_id':'wolf-a','mob_id':'white_wolf'},
-        ] if index == 5 else [{'unit_id':f'boar-{index}','mob_id':'forest_boar'}])
+        ] if index == 0 else [{'unit_id':f'boar-{index}','mob_id':'forest_boar'}])
         _settlement(21, f'eligible-{index}', eligible=True, enemy_units=units)
 
     first, page, pages = harvestable_victory_page(21, page=0)
     second, second_page, _ = harvestable_victory_page(21, page=1)
     assert (page, second_page, pages) == (0, 1, 2)
     assert {row['encounter_id'] for row in first} == {
-        'eligible-5', 'eligible-4', 'eligible-3', 'eligible-2', 'eligible-1'
+        'eligible-0', 'eligible-1', 'eligible-2', 'eligible-3', 'eligible-4'
     }
-    assert [(row['unit_id'], row['item_id']) for row in first if row['encounter_id'] == 'eligible-5'] == [
+    assert [(row['unit_id'], row['item_id']) for row in first if row['encounter_id'] == 'eligible-0'] == [
         ('wolf-a', 'wolf_pelt'), ('wolf-a', 'wolf_fang')
     ]
-    assert {row['encounter_id'] for row in second} == {'eligible-0'}
+    assert {row['encounter_id'] for row in second} == {'eligible-5'}
     _, keyboard = build_harvest_menu(dict(database.get_player(21)), page=0)
     callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
     assert sum(value.startswith('pe_a:') for value in callbacks) == 6
     assert 'alpha_harvest:1' in callbacks
+
+
+def test_harvest_lists_the_earliest_expiring_entitlement_first():
+    _player(25)
+    _settlement(25, 'older', eligible=True)
+    _settlement(25, 'newer', eligible=True)
+    conn = database.get_connection()
+    conn.execute("UPDATE pve_encounters SET finished_at=datetime('now','-29 minutes') WHERE encounter_id='older'")
+    conn.commit(); conn.close()
+    choices = list_harvestable_victories(25)
+    assert [choice['encounter_id'] for choice in choices] == ['older', 'newer']

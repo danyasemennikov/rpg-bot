@@ -32,6 +32,10 @@ def apply_progression_reward(conn, player_id: int, exp_gain: int, gold_gain: int
            build_revision=build_revision+?, gold=? WHERE telegram_id=?""",
         (level, exp_value, stat_points, attribute_budget, int(levels_gained > 0), gold, int(player_id)),
     )
+    if levels_gained and conn.execute("SELECT 1 FROM sqlite_master WHERE name='player_feedback_events'").fetchone():
+        from game.player_feedback import record_feedback
+        record_feedback(conn,player_id,event_key=f'character_level:{level}',source_kind='character',
+                        source_id=str(level),event_kind='level_up',payload={'old_level':old_level,'new_level':level})
     if failure_hook:
         failure_hook("after_xp_update")
         failure_hook("after_gold_update")

@@ -181,29 +181,29 @@ class GearInstanceTransitionTests(unittest.TestCase):
         self.assertNotIn('g1', eq.values())
 
         _text, keyboard = build_inventory_list(2001, 'weapon', 'ru')
-        equipped_tag = t('inventory.equipped', 'ru')
+        equipped_tag = '✓'
 
         by_callback = {
             row[0].callback_data: row[0].text
-            for row in keyboard.inline_keyboard[1:]
+            for row in keyboard.inline_keyboard
         }
-        self.assertIn('inv_item_i1_weapon', by_callback)
-        self.assertIn('inv_item_g1_weapon', by_callback)
-        self.assertIn(equipped_tag, by_callback['inv_item_i1_weapon'])
-        self.assertNotIn(equipped_tag, by_callback['inv_item_g1_weapon'])
+        self.assertIn('inv_item_i1_gear', by_callback)
+        self.assertIn('inv_item_g1_gear', by_callback)
+        self.assertIn(equipped_tag, by_callback['inv_item_i1_gear'])
+        self.assertNotIn(equipped_tag, by_callback['inv_item_g1_gear'])
 
     def test_instance_equipped_item_is_marked_as_equipped(self):
         instance_id = create_gear_instance(2001, 'oak_guard_shield')
         set_gear_instance_equipped_slot(2001, instance_id, 'offhand')
 
         _text, keyboard = build_inventory_list(2001, 'armor', 'ru')
-        equipped_tag = t('inventory.equipped', 'ru')
+        equipped_tag = '✓'
         labels = {
             row[0].callback_data: row[0].text
-            for row in keyboard.inline_keyboard[1:]
+            for row in keyboard.inline_keyboard
         }
-        self.assertIn('inv_item_g1_armor', labels)
-        self.assertIn(equipped_tag, labels['inv_item_g1_armor'])
+        self.assertIn('inv_item_g1_gear', labels)
+        self.assertIn(equipped_tag, labels['inv_item_g1_gear'])
 
     def test_generated_gear_instance_has_tier_rarity_and_runtime_secondary_rolls(self):
         rng = random.Random(7)
@@ -276,14 +276,16 @@ class GearInstanceTransitionTests(unittest.TestCase):
             rarity='rare',
             secondary_rolls_json='[{\"stat\":\"accuracy\",\"value\":2}]',
         )
-        text, _kb = build_item_detail(2001, f'g{instance_id}', 'weapon', 'en')
+        from handlers.inventory_views import item_card
+        text, _kb = item_card(2001, f'g{instance_id}', 'gear', 'en', more=True)
         self.assertIn('Tier 5', text)
         self.assertIn('Secondaries', text)
         self.assertIn('Accuracy +2', text)
 
     def test_inventory_detail_surfaces_enhancement_ui(self):
         instance_id = create_gear_instance(2001, 'wooden_sword', enhance_level=2)
-        text, keyboard = build_item_detail(2001, f'g{instance_id}', 'weapon', 'en')
+        from handlers.inventory_views import item_card
+        text, keyboard = item_card(2001, f'g{instance_id}', 'gear', 'en', more=True)
         self.assertIn('+2', text)
         flat_buttons = [btn.text for row in keyboard.inline_keyboard for btn in row]
         self.assertIn('🔨 Enhance', flat_buttons)
@@ -522,10 +524,10 @@ class CrossModelExclusivityFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(get_equipped_item_ids(3001).get('weapon'), 'wooden_sword')
 
         _text, keyboard = build_inventory_list(3001, 'weapon', 'ru')
-        equipped_tag = t('inventory.equipped', 'ru')
-        labels = {row[0].callback_data: row[0].text for row in keyboard.inline_keyboard[1:]}
-        self.assertNotIn(equipped_tag, labels['inv_item_i1_weapon'])
-        self.assertIn(equipped_tag, labels[f'inv_item_g{instance_id}_weapon'])
+        equipped_tag = '✓'
+        labels = {row[0].callback_data: row[0].text for row in keyboard.inline_keyboard}
+        self.assertNotIn(equipped_tag, labels['inv_item_i1_gear'])
+        self.assertIn(equipped_tag, labels[f'inv_item_g{instance_id}_gear'])
 
         profile_summary = _build_equipment_summary(3001, 'ru')
         self.assertNotIn('Железный меч', profile_summary)

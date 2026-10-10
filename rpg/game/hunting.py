@@ -72,7 +72,7 @@ def harvestable_victory_page(player_id: int, *, page: int = 0,
             LEFT JOIN pve_harvest_claims h ON h.encounter_id=e.encounter_id AND h.player_id=?
             WHERE e.owner_player_id=? AND e.status='victory' AND s.status='applied'
               AND h.encounter_id IS NULL AND e.finished_at >= datetime('now', '-30 minutes')
-              ORDER BY e.finished_at DESC, e.encounter_id DESC''', (player_id, player_id)).fetchall()
+              ORDER BY e.finished_at ASC, e.encounter_id ASC''', (player_id, player_id)).fetchall()
         eligible_encounters = []
         for row in rows:
             if resolve_location_id(row['location_id']) != resolve_location_id(player['location_id']):
@@ -148,13 +148,19 @@ def harvest_victory(player_id: int, encounter_id: str, *, unit_id: str | None = 
         required = RESOURCES[item_id].required_level
         if int(state['level']) < required:
             raise ActionRejected('profession_locked')
+        from game.profession_tools import require_tool,wear_tool
+        import time
+        knife = require_tool(conn,player_id,'hunting',required_tier=RESOURCES[item_id].required_tool_tier)
         inserted = conn.execute('INSERT OR IGNORE INTO pve_harvest_claims(encounter_id, player_id, item_id) VALUES (?, ?, ?)',
                                 (encounter_id, player_id, item_id))
         if inserted.rowcount != 1:
             raise ActionRejected('stale_action')
         require_item_delivery(grant_item_to_player(player_id, item_id, 1, source='hunting', conn=conn), 1)
+        updated_knife = wear_tool(conn,knife,now_ms=int(time.time()*1000))
         xp = gathering_profession_xp_for_success(current_profession_level=state['level'], required_profession_level=required)
         progression = add_gathering_profession_exp(player_id, 'hunting', xp, conn=conn)
+        from game.player_feedback import record_progression
+        record_progression(conn,player_id,'hunting',progression,request_id or encounter_id)
         from game.quest_board import register_contract_objective
         register_contract_objective(conn, player_id, 'harvest', item_id, 1, player['location_id'])
         result = {'schema_version': 1, 'action_kind': 'harvest', 'status': 'harvested',
@@ -164,9 +170,10 @@ def harvest_victory(player_id: int, encounter_id: str, *, unit_id: str | None = 
                   'progression': [{'profession_key': 'hunting', 'old_level': progression.old_level,
                     'old_exp': progression.old_exp, 'new_level': progression.new_level,
                     'new_exp': progression.new_exp, 'xp_awarded': progression.xp_awarded}],
-                  'source': {'encounter_id': encounter_id, **choice}, 'details': {}}
+                  'catalog_version':2,
+                  'source': {'encounter_id': encounter_id, **choice}, 'details': {'tool':updated_knife}}
         if request_id:
-            store_receipt(conn, player_id, request_id, 'harvest', receipt_hash, result)
+            store_receipt(conn, player_id, request_id, 'harvest', receipt_hash, result,catalog_version=2)
         conn.commit()
         return {**result, 'item_id': item_id, 'progression_result': progression}
     except ActionRejected as exc:
@@ -180,6 +187,7 @@ def harvest_victory(player_id: int, encounter_id: str, *, unit_id: str | None = 
                 location_id=player['location_id'] if player else None,
                 gold_after=player['gold'] if player else 0,
                 source={'encounter_id': encounter_id, 'unit_id': unit_id, 'item_id': item_id},
+                catalog_version=2,
             )
             conn.commit()
             return result

@@ -1,9 +1,10 @@
 """Journal, quartermaster, workshop and harvesting entry points for chapter one."""
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from html import escape
 
 from database import get_connection, get_player, list_gathering_profession_states
-from game.action_receipts import issue_actions
+from game.action_receipts import ActionRejected, issue_actions
 from game.alpha_schema import ensure_crafting_professions
 from game.crafting_runtime import LIVE_RECIPE_IDS, get_recipe, craft_recipe
 from game.hunting import harvestable_victory_page, list_harvestable_victories, harvest_victory
@@ -21,66 +22,200 @@ def _button(text, data):
     return [InlineKeyboardButton(text, callback_data=data)]
 
 
+def _assignment(player):
+    state = get_player_hunt_contract_state(player['telegram_id'])
+    if state and state['status'] in {'active', 'completed'}:
+        return state['contract'], state
+    history = get_contract_history(player['telegram_id'])
+    return next((c for c in get_chapter_contracts() if c.contract_key not in history), None), None
+
+
+def _assignment_rows(player, contract, state):
+    lang = player.get('lang', 'ru')
+    rows = []
+    destinations = contract.claim_locations or contract.board_locations
+    if state and state['status'] == 'completed':
+        from game.locations import resolve_location_id
+        if resolve_location_id(player['location_id']) in {resolve_location_id(k) for k in destinations}:
+            token = issue_actions(player['telegram_id'], 'contract_claim', [contract.contract_key])[contract.contract_key]
+            rows.append(_button(t('pxe1.quest.turn_in', lang), f'quest_board_claim_{token}'))
+        else:
+            rows.append(_button(t('pxe1.quest.route_to_turn_in', lang, name=get_location_name(destinations[0], lang)), f'goto_{destinations[0]}'))
+    elif not state:
+        from game.locations import resolve_location_id
+        if resolve_location_id(player['location_id']) in {resolve_location_id(k) for k in contract.board_locations}:
+            rows.append(_button(t('pxe1.accept_assignment', lang), f'quest_board_accept_{contract.contract_key}'))
+        else:
+            rows.append(_button(t('pxe1.quest.route_to_turn_in', lang, name=get_location_name(contract.board_locations[0], lang)), f'goto_{contract.board_locations[0]}'))
+    if state:
+        from game.profession_recipes import ACTIVE_RECIPES
+        recipe = next((r for o in contract.objectives if o.action == 'craft'
+                       and state.get('objective_progress', {}).get(o.key, 0) < o.required
+                       for r in ACTIVE_RECIPES if r.output_spec.item_id == o.target), None)
+        if recipe:
+            rows.append(_button(t('pxe1.required_recipe', lang), f'pe_r:{recipe.recipe_id}'))
+        if any(o.action == 'equip' and state.get('objective_progress', {}).get(o.key, 0) < o.required for o in contract.objectives):
+            rows.append(_button(t('keyboard.inventory', lang), 'inv_tab_armor'))
+    return rows
+
+
 def build_journal(player: dict, *, show_completed_history: bool = False):
-    player_id, lang = player['telegram_id'], player.get('lang', 'ru')
-    history = get_contract_history(player_id)
-    if 'chapter_homecoming' in history and not show_completed_history:
+    if show_completed_history:
+        return build_history(player)
+    lang = player.get('lang', 'ru')
+    if 'chapter_homecoming' in get_contract_history(player['telegram_id']):
         from handlers.regional import build_regional_home
         return build_regional_home(player)
-    contracts = get_chapter_contracts()
-    lines = [t('chapter.title', lang), t('chapter.premise', lang), '']
-    lines.append(t('chapter.progress', lang, done=sum(c.contract_key in history for c in contracts), total=len(contracts)))
-    for contract in contracts:
-        mark = '✓' if contract.contract_key in history else '○'
-        lines.append(f'{mark} {build_contract_title(contract, lang)}')
-    state = get_player_hunt_contract_state(player_id)
-    if state and state['status'] in {'active', 'completed'}:
-        contract = state['contract']
-        lines += ['', build_contract_title(contract, lang)]
-        if contract.chapter_order:
-            lines.append(t(f'chapter.story_{contract.chapter_order}', lang))
+    contract, state = _assignment(player)
+    lines = [t('chapter.title', lang), escape(build_contract_title(contract, lang))]
+    if state:
         lines.extend(build_objective_lines(state, lang))
-        places = ' / '.join(get_location_name(key, lang) for key in (contract.claim_locations or contract.board_locations))
-        lines.append(t('chapter.report_to', lang, places=places))
+        if not contract.chapter_order:
+            lines.append(t('pxe1.quest.slot_occupied', lang))
     else:
-        next_contract = next((c for c in contracts if c.contract_key not in history), None)
-        lines.append(t(f'chapter.story_{next_contract.chapter_order}', lang) if next_contract else t('chapter.epilogue', lang))
-        if next_contract:
-            places = ' / '.join(get_location_name(key, lang) for key in next_contract.board_locations)
-            lines.append(t('chapter.accept_at', lang, places=places))
-    rows = []
-    if not has_starter_kit(player_id):
-        lines += ['', t('chapter.kit_intro', lang)]
-        if player['location_id'] == 'capital_city':
-            rows.extend(_button(get_item_name(key, lang), f'alpha_kit_{key}') for key in STARTER_WEAPONS)
-    lines += ['', t('chapter.professions', lang)]
-    rows.append(_button(t('professions.title', lang).replace('<b>', '').replace('</b>', ''), 'pe_o:0'))
-    for row in list_gathering_profession_states(player_id):
-        key = row['profession_key']
-        lines.append(t('chapter.profession_row', lang, name=t(f'professions.names.{key}', lang),
-                       level=row['level'], exp=row['exp'], needed=row['level'] * 50 if row['level'] < 20 else '—'))
+        lines.append(t('pxe1.assignment_available', lang))
+    places = ' / '.join(get_location_name(k, lang) for k in (contract.claim_locations or contract.board_locations))
+    lines.append(t('chapter.report_to', lang, places=escape(places)))
+    rows = [_button(t('pxe1.open_assignment', lang), 'alpha_assignment')]
+    rows.extend(_assignment_rows(player, contract, state)[:2])
+    rows.append([InlineKeyboardButton(t('pxe1.journal.opportunities', lang), callback_data='rv:v:h:0:all'),
+                 InlineKeyboardButton(t('pxe1.journal.history', lang), callback_data='alpha_history')])
+    from game.player_ui import validate_surface
+    keyboard = InlineKeyboardMarkup(rows)
+    validate_surface('\n'.join(lines), keyboard)
+    return '\n'.join(lines), keyboard
+
+
+def build_assignment(player, *, story=False):
+    lang = player.get('lang', 'ru')
+    contract, state = _assignment(player)
+    if not contract:
+        return build_journal(player)
+    lines = [f'<b>{escape(build_contract_title(contract, lang))}</b>']
+    if story:
+        lines.append(t(f'chapter.story_{contract.chapter_order}', lang) if contract.chapter_order else t('pxe1.hunt_purpose', lang))
+        rows = [_button(t('gear.back_btn', lang), 'alpha_assignment')]
+    else:
+        preview = state or {'contract': contract, 'progress_kills': 0, 'objective_progress': {}}
+        lines.extend(build_objective_lines(preview, lang))
+        places = ' / '.join(get_location_name(k, lang) for k in (contract.claim_locations or contract.board_locations))
+        lines.append(t('chapter.report_to', lang, places=escape(places)))
+        rows = _assignment_rows(player, contract, state)
+        rows.append([InlineKeyboardButton(t('pxe1.sources', lang), callback_data='alpha_sources'),
+                     InlineKeyboardButton(t('pxe1.story', lang), callback_data='alpha_story')])
+        if state and state['status'] == 'active':
+            rows.append(_button(t('pxe1.more', lang), 'alpha_assignment_more'))
+        rows.append(_button(t('gear.back_btn', lang), 'alpha_home'))
+    keyboard = InlineKeyboardMarkup(rows)
+    from game.player_ui import validate_surface
+    validate_surface('\n'.join(lines), keyboard, long_detail=story)
+    return '\n'.join(lines), keyboard
+
+
+def build_assignment_more(player):
+    contract, state = _assignment(player)
+    if not state or state['status'] != 'active':
+        return build_assignment(player)
+    lang = player.get('lang', 'ru')
+    token = issue_actions(player['telegram_id'], 'contract_abandon', [contract.contract_key])[contract.contract_key]
+    return t('pxe1.abandon_warning', lang), InlineKeyboardMarkup([
+        _button(t('location.quest_board_abandon_btn', lang), f'quest_board_abandon_{token}'),
+        _button(t('gear.back_btn', lang), 'alpha_assignment')])
+
+
+def build_assignment_sources(player):
+    from game.profession_resources import ENVIRONMENTAL_SOURCES
+    from game.travel_runtime import preview_travel
+    contract, state = _assignment(player)
+    if not contract:
+        return build_journal(player)
+    lang = player.get('lang', 'ru')
+    candidates = []
     conn = get_connection()
     try:
-        ensure_crafting_professions(conn, player_id)
-        conn.commit()
-        for row in conn.execute('SELECT * FROM player_crafting_professions WHERE player_id=? ORDER BY profession_key', (player_id,)):
-            lines.append(t('chapter.profession_row', lang, name=t(f"professions.names.{row['profession_key']}", lang),
-                           level=row['level'], exp=row['exp'], needed=row['level'] * 50 if row['level'] < 20 else '—'))
+        for objective in contract.objectives:
+            if objective.action != 'gather' or (state and state.get('objective_progress', {}).get(objective.key, 0) >= objective.required):
+                continue
+            sources = [(chance, location_id) for location_id, entries in ENVIRONMENTAL_SOURCES.items()
+                       if not objective.location_ids or location_id in objective.location_ids
+                       for item_id, chance in entries if item_id == objective.target]
+            for chance, location_id in sorted(sources, key=lambda source: (-source[0], source[1])):
+                try:
+                    if location_id != player['location_id']:
+                        preview_travel(conn, player['telegram_id'], location_id)
+                except (ValueError, ActionRejected):
+                    continue
+                candidates.append((get_item_name(objective.target, lang), location_id))
+                break
     finally:
         conn.close()
-    location = get_location(player['location_id']) or {}
-    if 'chapter_homecoming' in history:
-        goal = get_equipment_goal(player_id)
-        next_step = t('gear.journal_goal_step', lang, name=get_item_name(goal, lang)) if goal else t('gear.journal_choose_goal', lang)
-        lines += ['', t('gear.journal_next_step', lang, step=next_step)]
-        rows.append(_button(t('gear.catalog_btn', lang), 'inv_catalog'))
-        rows.append(_button(t('gear.receipts_btn', lang), 'inv_receipts'))
-    if 'quest_board' in location.get('services', []):
-        rows.append(_button(t('location.quests_btn', lang), 'quest_board'))
-    if 'craftsmen_guild' in location.get('services', []):
-        rows.append(_button(t('chapter.workshop', lang), 'pe_o:0'))
-    rows.append(_button(t('chapter.harvest', lang), 'alpha_harvest'))
-    rows.append(_button(t('rav1.nav.opportunities', lang), 'rv:v:h:0:all'))
+    if contract.required_kills and (not state or state['progress_kills'] < contract.required_kills):
+        candidates.extend((get_mob_name(contract.target_mob_id, lang), k) for k in contract.target_location_ids[:1])
+    if any(o.action == 'harvest' for o in contract.objectives):
+        candidates.append((t('chapter.harvest', lang), None))
+    candidates = candidates[:6]
+    lines = [t('pxe1.sources', lang)]
+    rows = []
+    for label, place in candidates:
+        if place:
+            lines.append(f'{escape(label)} · {escape(get_location_name(place, lang))}')
+            rows.append(_button(get_location_name(place, lang), f'goto_{place}' if place != player['location_id'] else 'px:home'))
+        else:
+            rows.append(_button(label, 'alpha_harvest'))
+    if not candidates:
+        lines.append(t('pxe1.source_map_hint', lang))
+    rows.append(_button(t('keyboard.map', lang), 'px:map'))
+    rows.append(_button(t('gear.back_btn', lang), 'alpha_assignment'))
+    keyboard = InlineKeyboardMarkup(rows)
+    from game.player_ui import validate_surface
+    validate_surface('\n'.join(lines), keyboard, list_view=True)
+    return '\n'.join(lines), keyboard
+
+
+def build_history(player, page=0, *, chapter_story=False):
+    from game.quest_board import get_hunt_contract
+    lang = player.get('lang', 'ru')
+    history = get_contract_history(player['telegram_id'])
+    if chapter_story:
+        contracts = [c for c in get_chapter_contracts() if c.contract_key in history]
+        lines = [t('chapter.title', lang)]
+        for contract in contracts:
+            lines += [escape(build_contract_title(contract, lang)), t(f'chapter.story_{contract.chapter_order}', lang)]
+        if 'chapter_homecoming' in history:
+            lines.append(t('pxe1.chapter.epilogue_intro', lang))
+        return '\n\n'.join(lines), InlineKeyboardMarkup([_button(t('gear.back_btn', lang), 'alpha_history')])
+    conn = get_connection()
+    try:
+        records = [dict(r) for r in conn.execute('SELECT contract_key,claimed_at FROM player_contract_history WHERE player_id=? ORDER BY claimed_at DESC,contract_key', (player['telegram_id'],))]
+    finally:
+        conn.close()
+    chapter_keys = {c.contract_key for c in get_chapter_contracts()}
+    archive = []
+    if chapter_keys & history:
+        chapter = [r for r in records if r['contract_key'] in chapter_keys]
+        archive.append({'contract_key': 'chapter', 'claimed_at': max((r['claimed_at'] or '' for r in chapter), default='')})
+    archive.extend(r for r in records if r['contract_key'] not in chapter_keys)
+    archive.sort(key=lambda r: (r['claimed_at'] or '', r['contract_key']), reverse=True)
+    pages = max(1, (len(archive)+5)//6)
+    page = min(max(0, int(page)), pages-1)
+    lines, rows = [t('pxe1.journal.history', lang)], []
+    for record in archive[page*6:(page+1)*6]:
+        contract = get_hunt_contract(record['contract_key'])
+        label = t('chapter.title', lang) if record['contract_key'] == 'chapter' else build_contract_title(contract, lang) if contract else t('pxe1.journal.earlier_records', lang)
+        lines.append(f"✓ {escape(label)}"+(f" · {escape(str(record['claimed_at'])[:16])}" if record['claimed_at'] else ''))
+        if record['contract_key'] == 'chapter':
+            rows.append(_button(label, 'alpha_history_chapter'))
+    if not archive:
+        lines.append(t('pxe1.history_empty', lang))
+    nav = []
+    if page:
+        nav.append(InlineKeyboardButton('◀️', callback_data=f'alpha_history:{page-1}'))
+    if page+1 < pages:
+        nav.append(InlineKeyboardButton('▶️', callback_data=f'alpha_history:{page+1}'))
+    if nav:
+        rows.append(nav)
+    rows.append(_button(t('pxe1.journal.regional_completed', lang), 'rv:v:s:0:all'))
+    rows.append(_button(t('gear.back_btn', lang), 'alpha_home'))
     return '\n'.join(lines), InlineKeyboardMarkup(rows)
 
 
@@ -111,31 +246,8 @@ def build_harvest_menu(player: dict, page: int = 0):
 
 
 def build_sell_menu(player: dict, page: int = 0):
-    lang, player_id = player.get('lang', 'ru'), player['telegram_id']
-    conn = get_connection()
-    try:
-        candidates = conn.execute('''SELECT inv.id, inv.item_id, inv.quantity FROM inventory inv
-            JOIN items i ON i.item_id=inv.item_id WHERE inv.telegram_id=?
-            AND i.sell_price>0 AND inv.quantity>0 ORDER BY inv.item_id''',
-                             (player_id,)).fetchall()
-    finally:
-        conn.close()
-    from game.items_data import get_item
-    from game.seed import PEV1_CONSUMABLE_IDS
-    items = [row for row in candidates if get_item(row['item_id'])['item_type'] == 'material' or row['item_id'] in PEV1_CONSUMABLE_IDS]
-    pages = max(1, (len(items) + 7) // 8); page = min(max(0, int(page)), pages - 1)
-    items = items[page * 8:(page + 1) * 8]
-    payloads = [f"{row['id']}:{row['quantity']}" for row in items]
-    tokens = issue_actions(player_id, 'sell', payloads)
-    rows = [_button(t('chapter.sell_button', lang, name=get_item_name(row['item_id'], lang),
-                      price=get_item(row['item_id'])['sell_price'], qty=row['quantity']),
-                    f'alpha_sellone_{tokens[payload]}') for row, payload in zip(items, payloads)]
-    nav = []
-    if page: nav.append(InlineKeyboardButton('◀️', callback_data=f'alpha_sell_page_{page-1}'))
-    if page + 1 < pages: nav.append(InlineKeyboardButton('▶️', callback_data=f'alpha_sell_page_{page+1}'))
-    if nav: rows.append(nav)
-    rows.append(_button(t('location.shop_btn', lang), 'shop'))
-    return t('chapter.sell_intro', lang), InlineKeyboardMarkup(rows)
+    from handlers.shop_views import sell_categories
+    return sell_categories(player)
 
 
 async def journal_command(update, context):
@@ -143,6 +255,8 @@ async def journal_command(update, context):
     if not player:
         await update.message.reply_text(t('common.no_character', 'ru'))
         return
+    from game.player_feedback import present_pending_feedback
+    await present_pending_feedback(context.bot,update.effective_user.id,recover_presented=True)
     from game.pve_reward_settlement import recover_player_settlements
     recovery = recover_player_settlements(int(player['telegram_id']))
     player = get_player(update.effective_user.id)
@@ -183,6 +297,18 @@ async def handle_chapter_buttons(update, context):
             answered = True
     if data == 'alpha_history':
         view = lambda current: build_journal(current, show_completed_history=True)
+    elif data.startswith('alpha_history:'):
+        view = lambda current: build_history(current, int(data.split(':', 1)[1]))
+    elif data == 'alpha_history_chapter':
+        view = lambda current: build_history(current, chapter_story=True)
+    elif data == 'alpha_assignment':
+        view = build_assignment
+    elif data == 'alpha_story':
+        view = lambda current: build_assignment(current, story=True)
+    elif data == 'alpha_sources':
+        view = build_assignment_sources
+    elif data == 'alpha_assignment_more':
+        view = build_assignment_more
     if data.startswith('alpha_kit_'):
         status = claim_starter_kit(player_id, data.removeprefix('alpha_kit_'))['status']
     elif data == 'alpha_workshop':
@@ -202,7 +328,7 @@ async def handle_chapter_buttons(update, context):
         view = build_harvest_menu
     elif data == 'alpha_sell' or data.startswith('alpha_sellone_') or data.startswith('alpha_sell_page_'):
         location = get_location(player['location_id']) or {}
-        if 'shop' not in location.get('services', []):
+        if 'shop' not in location.get('services', []) and not data.startswith('alpha_sellone_'):
             status = 'wrong_location'
         else:
             view = build_sell_menu
@@ -215,7 +341,25 @@ async def handle_chapter_buttons(update, context):
             if data.startswith('alpha_sellone_'):
                 from handlers.inventory import try_sell_inventory_item
                 result = try_sell_inventory_item(player_id, data.removeprefix('alpha_sellone_'))
-                status = result['status']
+                from handlers.shop_views import sale_preview,result_card
+                keys = []
+                if result['status']=='confirmation_required':
+                    quote = result['quote']
+                    text,keyboard = sale_preview(dict(get_player(player_id)),f"i{quote['entry_id']}",confirmation_quote=quote)
+                elif result['status']=='sold':
+                    # Historical receipts may predate the compact result fields.
+                    result = {**result,'item_id':result['consumed'][0]['item_id'],
+                              'quantity':result['consumed'][0]['quantity']}
+                    text,keyboard,keys = result_card(dict(get_player(player_id)),result)
+                else:
+                    await query.answer(t('pxe1.shop.stale',lang),show_alert=True)
+                    return
+                await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+                if keys:
+                    from game.player_feedback import acknowledge_presented_facts
+                    acknowledge_presented_facts(player_id,keys)
+                await query.answer()
+                return
     if status:
         await query.answer(t(f'chapter.{status}', lang), show_alert=True)
     elif not answered:

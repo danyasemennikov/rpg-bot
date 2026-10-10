@@ -68,7 +68,7 @@ STAT_NAMES = {
     'es': {'strength': '💪 Fuerza', 'agility': '🤸 Agilidad', 'intuition': '🔮 Intuición', 'vitality': '❤️ Vitalidad', 'wisdom': '🧠 Sabiduría', 'luck': '🍀 Suerte'},
 }
 
-TABS = ['weapon', 'armor', 'accessory', 'potion', 'material']
+TABS = ['all','gear','supplies','material','tools','weapon','armor','accessory','potion']
 EQUIPMENT_SLOT_KEYS = (
     'weapon',
     'offhand',
@@ -136,7 +136,7 @@ WEAPON_PROFILE_NAME = {
     'es': {'sword_1h': 'Espada 1M', 'sword_2h': 'Espada 2M', 'axe_2h': 'Hacha 2M', 'daggers': 'Dagas', 'bow': 'Arco', 'magic_staff': 'Bastón mágico', 'holy_staff': 'Bastón sagrado', 'wand': 'Varita', 'holy_rod': 'Vara sagrada', 'tome': 'Tomo', 'unarmed': 'Sin arma'},
 }
 
-INVENTORY_PAGE_SIZE = 8
+INVENTORY_PAGE_SIZE = 6
 
 def get_inventory(telegram_id: int, item_type: str = None) -> list:
     conn = get_connection()
@@ -308,27 +308,50 @@ def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
         payload = consume_action(conn, telegram_id, 'sell', action_token, payload=payload)
         authorized = True
         player = peaceful_player(conn, telegram_id, service='shop')
-        inv_id, expected_quantity = (int(value) for value in payload.split(':'))
+        from game.sale_policy import sale_quote,validate_sale_quote,GEAR_TYPES
+        confirmed = False
+        if payload.startswith('{'):
+            intent = json.loads(payload)
+            if intent.get('schema_version')!=1 or intent.get('catalog_version')!=2:
+                raise ActionRejected('stale_action')
+            quote = intent['quote']
+            if quote.get('entry_type')!='i':
+                raise ActionRejected('stale_action')
+            confirmed = intent.get('confirmed') is True
+            inv_id,expected_quantity = quote['entry_id'],quote['stack_count']
+            quantity = quote['quantity']
+        else:
+            inv_id,expected_quantity = (int(value) for value in payload.split(':'))
+            quantity = 1
+            quote = sale_quote(conn,telegram_id,'i',inv_id,quantity)
         row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inv_id, telegram_id)).fetchone()
         if not row or row['quantity'] != expected_quantity or expected_quantity <= 0:
             raise ActionRejected('stale_action')
         item = get_item(row['item_id'])
-        if not item or (item['item_type'] != 'material' and row['item_id'] not in PEV1_CONSUMABLE_IDS) or item['sell_price'] <= 0:
+        if not item or (item['item_type'] not in {'material',*GEAR_TYPES} and row['item_id'] not in PEV1_CONSUMABLE_IDS) or item['sell_price'] <= 0:
             raise ActionRejected('stale_action')
-        if expected_quantity == 1:
+        warning = validate_sale_quote(conn,telegram_id,quote,confirmed=confirmed)
+        if warning:
+            conn.rollback()
+            return warning
+        if expected_quantity == quantity:
             conn.execute('DELETE FROM inventory WHERE id=?', (inv_id,))
         else:
-            conn.execute('UPDATE inventory SET quantity=quantity-1 WHERE id=?', (inv_id,))
-        conn.execute('UPDATE players SET gold=gold+? WHERE telegram_id=?', (item['sell_price'], telegram_id))
-        register_contract_objective(conn, telegram_id, 'sell', row['item_id'], 1, player['location_id'])
-        result = {'schema_version':1,'action_kind':'sell','status':'sold','player_id':telegram_id,
+            conn.execute('UPDATE inventory SET quantity=quantity-? WHERE id=?', (quantity,inv_id))
+        proceeds = quote['total']
+        conn.execute('UPDATE players SET gold=gold+? WHERE telegram_id=?', (proceeds, telegram_id))
+        if item['item_type'] in GEAR_TYPES:
+            conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?',(telegram_id,))
+        register_contract_objective(conn, telegram_id, 'sell', row['item_id'], quantity, player['location_id'])
+        result = {'schema_version':1,'catalog_version':2,'action_kind':'sell','status':'sold','player_id':telegram_id,
                   'location_id':player['location_id'],'recipe_id':None,
-                  'consumed':[{'item_id':row['item_id'],'quantity':1}],'granted':[],
-                  'gold_delta':item['sell_price'],'gold_after':int(player['gold'])+item['sell_price'],
-                  'progression':[],'source':{'inventory_id':inv_id},'details':{}}
-        store_receipt(conn, telegram_id, f'ui:{action_token}', 'sell', receipt_hash, result)
+                  'consumed':[{'item_id':row['item_id'],'quantity':quantity}],'granted':[],
+                  'item_id':row['item_id'],'quantity':quantity,'remaining':expected_quantity-quantity,
+                  'gold_delta':proceeds,'gold_after':int(player['gold'])+proceeds,
+                  'progression':[],'source':{'inventory_id':inv_id},'details':{'quote':quote}}
+        store_receipt(conn, telegram_id, f'ui:{action_token}', 'sell', receipt_hash, result,catalog_version=2)
         conn.commit()
-        return {**result, 'gold': item['sell_price']}
+        return {**result, 'gold': proceeds}
     except ActionRejected as exc:
         status = str(exc)
         if authorized and status != 'stale_action':
@@ -574,76 +597,19 @@ def _load_inventory_entry(telegram_id: int, token: str) -> dict | None:
         conn.close()
 
 
-def build_inventory_list(
-        telegram_id: int, active_tab: str, lang: str = 'ru', page: int | None = None) -> tuple:
-    parsed_route = _parse_inventory_route(active_tab)
-    if parsed_route is None:
-        active_tab, route_page = 'weapon', 0
-    else:
-        active_tab, route_page = parsed_route
-    requested_page = route_page if page is None else max(0, int(page))
-    items = []
-    if active_tab in ('weapon', 'armor', 'accessory'):
-        items.extend(get_gear_inventory_entries(telegram_id, active_tab))
-    legacy_items = get_inventory(telegram_id, active_tab)
-    for row in legacy_items:
-        row['entry_type'] = 'legacy_inventory'
-        items.append(row)
-    items.sort(key=lambda row: (
-        str(row.get('item_id') or ''),
-        0 if row.get('entry_type') == 'gear_instance' else 1,
-        int(row.get('id', 0)),
-    ))
-    page_count = max(1, (len(items) + INVENTORY_PAGE_SIZE - 1) // INVENTORY_PAGE_SIZE)
-    current_page = min(requested_page, page_count - 1)
-    visible_items = items[
-        current_page * INVENTORY_PAGE_SIZE:(current_page + 1) * INVENTORY_PAGE_SIZE
-    ]
-    current_route = _inventory_route(active_tab, current_page)
+def build_inventory_list(telegram_id: int, active_tab: str = 'all', lang: str = 'ru', page=None):
+    from handlers.inventory_views import inventory_card
+    category, separator, raw_page = active_tab.partition('~')
+    current_page = int(raw_page) if separator and raw_page.isdigit() else 0
+    return inventory_card(telegram_id,category,lang,current_page if page is None else page)
 
-    eq = get_equipped(telegram_id)
-    keyboard = [build_tab_keyboard(active_tab, lang)]
-    keyboard.append([InlineKeyboardButton(t('gear.catalog_btn', lang), callback_data='inv_catalog')])
 
-    text = t('inventory.title', lang) + '\n'
-    text += t('gear.page', lang, page=current_page + 1, pages=page_count) + '\n\n'
+def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: str = 'ru'):
+    from handlers.inventory_views import item_card
+    return item_card(telegram_id,entry_token,back_tab,lang)
 
-    if not items:
-        text += t('inventory.empty', lang) + '\n'
-    else:
-        for inv_row in visible_items:
-            item = get_item(inv_row['item_id'])
-            if not item:
-                continue
 
-            entry_rarity, entry_tier = _get_entry_rarity_and_tier(inv_row, item)
-            entry_enhance = _get_entry_enhance_level(inv_row)
-            rarity  = t(f"inventory.{RARITY_KEYS.get(entry_rarity, 'rarity_common')}", lang)
-            enhance = f" +{entry_enhance}" if entry_enhance > 0 else ""
-            qty     = f" x{inv_row['quantity']}" if inv_row['quantity'] > 1 else ""
-            token = make_entry_token(inv_row.get('entry_type', 'legacy_inventory'), inv_row['id'])
-            eq_mark = t('inventory.equipped', lang) if token in eq.values() else ""
-            tier_tag = f" {t('inventory.instance_tier_short', lang, tier=entry_tier)}" if inv_row.get('entry_type') == 'gear_instance' else ''
-
-            label = f"{rarity} {get_item_name(inv_row['item_id'], lang)}{tier_tag}{enhance}{qty}{eq_mark}"
-            keyboard.append([InlineKeyboardButton(
-                label,
-                callback_data=f"inv_item_{token}_{current_route}"
-            )])
-
-    nav = []
-    if current_page > 0:
-        nav.append(InlineKeyboardButton('◀️', callback_data=f'inv_tab_{_inventory_route(active_tab, current_page - 1)}'))
-    if current_page + 1 < page_count:
-        nav.append(InlineKeyboardButton('▶️', callback_data=f'inv_tab_{_inventory_route(active_tab, current_page + 1)}'))
-    if nav:
-        keyboard.append(nav)
-    keyboard.append([InlineKeyboardButton(
-        t('gear.refresh_btn', lang), callback_data=f'inv_tab_{current_route}')])
-
-    return text, InlineKeyboardMarkup(keyboard)
-
-def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: str = 'ru') -> tuple:
+def _legacy_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: str = 'ru') -> tuple:
     inv_row = _load_inventory_entry(telegram_id, entry_token)
     if not inv_row:
         return t('inventory.item_not_found', lang), InlineKeyboardMarkup([[
@@ -726,7 +692,8 @@ def build_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang: s
             ]
             text += t('inventory.instance_secondaries', lang, val=', '.join(secondary_lines)) + '\n'
         equipped_suffix = t('gear.equipped_suffix', lang, slot=equipped_slot) if equipped_slot else ''
-        text += t('gear.ownership', lang, id=inv_row['id'], equipped=equipped_suffix) + '\n'
+        if equipped_slot:
+            text += t('inventory.equipped',lang)+'\n'
 
     if item['description']:
         from game.starter_kit import STARTER_WEAPONS
@@ -851,10 +818,7 @@ def build_field_catalog(player: dict, category: str = 'weapon', page: int = 0) -
     lines = [t('gear.catalog_title', lang), t('gear.catalog_intro', lang), '',
              t('gear.goal_current', lang, name=get_item_name(goal, lang)) if goal else t('gear.goal_none', lang),
              t('gear.page', lang, page=view['page'] + 1, pages=view['page_count'])]
-    rows = [[
-        InlineKeyboardButton(t(f'gear.category_{key}', lang), callback_data=f'inv_cat_{key}_0')
-        for key in ('weapon', 'armor', 'offhand', 'accessories')
-    ]]
+    rows = []
     for item_id in view['item_ids']:
         index = FIELD_ITEM_IDS.index(item_id)
         marker = '🎯 ' if goal == item_id else ''
@@ -869,12 +833,34 @@ def build_field_catalog(player: dict, category: str = 'weapon', page: int = 0) -
         nav.append(InlineKeyboardButton('▶️', callback_data=f"inv_cat_{view['category']}_{view['page'] + 1}"))
     if nav:
         rows.append(nav)
-    if goal:
-        rows.append([InlineKeyboardButton(t('gear.goal_clear_btn', lang), callback_data=f"inv_gclear_{view['category']}_{view['page']}")])
-    rows.append([InlineKeyboardButton(t('gear.refresh_btn', lang), callback_data=f"inv_cat_{view['category']}_{view['page']}")])
-    rows.append([InlineKeyboardButton(t('gear.receipts_btn', lang), callback_data='inv_receipts')])
-    rows.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data='inv_tab_weapon')])
-    return '\n'.join(lines), InlineKeyboardMarkup(rows)
+    rows.append([InlineKeyboardButton(t('pxe1.common.more',lang),callback_data=f"inv_cmore_{view['category']}_{view['page']}"),
+                 InlineKeyboardButton(t('gear.back_btn', lang), callback_data='inv_tab_weapon')])
+    keyboard=InlineKeyboardMarkup(rows)
+    from game.player_ui import validate_surface
+    validate_surface('\n'.join(lines),keyboard,list_view=True)
+    return '\n'.join(lines),keyboard
+
+
+def build_field_catalog_controls(player,category='weapon',page=0):
+    from game.regional_adventures import issue_regional_action,list_pins
+    from game.player_ui import validate_surface
+    lang=player.get('lang','ru')
+    categories=[InlineKeyboardButton(t(f'gear.category_{key}',lang),callback_data=f'inv_cat_{key}_0')
+                for key in ('weapon','armor','offhand','accessories')]
+    rows=[categories[:2],categories[2:]]
+    if get_equipment_goal(player['telegram_id']):
+        pinned=any(pin['owner_kind']=='gear' and pin['owner_id']=='current' for pin in list_pins(player['telegram_id']))
+        token=issue_regional_action(player['telegram_id'],'journal','pin',
+            pin={'owner_kind':'gear','owner_id':'current','remove':pinned})
+        actions=[InlineKeyboardButton(t('gear.goal_clear_btn',lang),callback_data=f'inv_gclear_{category}_{page}')]
+        if token: actions.append(InlineKeyboardButton(t('rav1.actions.unpin' if pinned else 'rav1.actions.pin',lang),callback_data='rv:a:'+token))
+        rows.append(actions)
+    rows.append([InlineKeyboardButton(t('gear.receipts_btn',lang),callback_data='inv_receipts'),
+                 InlineKeyboardButton(t('gear.back_btn',lang),callback_data=f'inv_cat_{category}_{page}')])
+    text=t('gear.catalog_title',lang)
+    keyboard=InlineKeyboardMarkup(rows)
+    validate_surface(text,keyboard)
+    return text,keyboard
 
 
 def build_field_catalog_detail(player: dict, item_id: str, category: str, page: int) -> tuple:
@@ -1026,8 +1012,12 @@ def build_gear_comparison(player_id: int, entry_token: str, slot: str, back_tab:
                        current=comparison['current'][key], candidate=comparison['candidate'][key], delta=sign))
     if len(lines) == 1:
         lines.append(t('gear.comparison_no_change', lang))
-    return '\n'.join(lines), InlineKeyboardMarkup([[
-        InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'inv_item_{entry_token}_{back_tab}')]])
+    rows = []
+    token = issue_gear_intent(player_id,'equip',instance_id,target_slot=slot)
+    if token:
+        rows.append([InlineKeyboardButton(t('inventory.equip_btn',lang),callback_data=f'inv_cequip_{token}_{entry_token}_{slot}_{back_tab}')])
+    rows.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'inv_item_{entry_token}_{back_tab}')])
+    return '\n'.join(lines), InlineKeyboardMarkup(rows)
 
 # ────────────────────────────────────────
 # КОМАНДА /inventory
@@ -1042,7 +1032,8 @@ async def inventory_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('common.no_character', lang))
         return
 
-    text, keyboard = build_inventory_list(user.id, 'weapon', lang)
+    route = context.user_data.get('pxe1_inventory_route','all')
+    text, keyboard = build_inventory_list(user.id,route,lang)
     await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 # ────────────────────────────────────────
@@ -1063,12 +1054,51 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
 
     if data.startswith(('inv_equip_', 'inv_unequip_', 'inv_enhance_', 'inv_drop_', 'inv_transfer_', 'inv_gift_',
                         'inv_gequip_', 'inv_gunequip_', 'inv_genh_', 'inv_lequip_', 'inv_lunequip_',
-                        'inv_sellask_', 'inv_gsell_')):
+                        'inv_sellask_')):
         from game.pvp_live import has_active_live_pvp_engagement
         if p['in_battle'] or has_active_live_pvp_engagement(user.id):
             await query.answer(t('chapter.in_battle', lang), show_alert=True)
             return
 
+    if data.startswith('inv_cequip_'):
+        parts = data.split('_')
+        if len(parts)!=6:
+            await query.answer(t('gear.state_changed',lang),show_alert=True)
+            return
+        result = apply_gear_intent(user.id,'equip',parts[2])
+        if result.get('status')!='equipped':
+            await query.answer(t('gear.state_changed',lang),show_alert=True)
+            return
+        text,keyboard = build_gear_comparison(user.id,parts[3],parts[4],parts[5],lang)
+        from game.player_feedback import inline_feedback,acknowledge_presented_facts
+        text,keys = inline_feedback(user.id,lang,text)
+        await query.answer(t('inventory.equipped_ok',lang,name=get_item_name((_load_inventory_entry(user.id,parts[3]) or {}).get('item_id',''),lang)))
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        acknowledge_presented_facts(user.id,keys)
+        return
+    if data=='inv_categories':
+        from handlers.inventory_views import category_card
+        text,keyboard = category_card(lang)
+        await query.answer()
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+    if data=='inv_more_home':
+        text = t('pxe1.more',lang)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(t('gear.catalog_btn',lang),callback_data='inv_catalog')],
+            [InlineKeyboardButton(t('gear.receipts_btn',lang),callback_data='inv_receipts')],
+            [InlineKeyboardButton(t('location.shop_btn',lang),callback_data='shop')],
+            [InlineKeyboardButton(t('common.back',lang),callback_data='inv_tab_all')]])
+        await query.answer()
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+    if data.startswith('inv_more_'):
+        from handlers.inventory_views import item_card
+        token,route = data.removeprefix('inv_more_').split('_',1)
+        text,keyboard = item_card(user.id,token,route,lang,more=True)
+        await query.answer()
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
     if data == 'inv_noop':
         await query.answer()
         return
@@ -1076,6 +1106,16 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     if data == 'inv_catalog':
         text, keyboard = build_field_catalog(p, 'weapon', 0)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('inv_cmore_'):
+        parts=data.split('_')
+        if len(parts)!=4 or not parts[3].isdigit() or parts[2] not in {'weapon','armor','offhand','accessories'}:
+            await query.answer(t('gear.state_changed',lang),show_alert=True)
+            return
+        text,keyboard=build_field_catalog_controls(dict(p),parts[2],int(parts[3]))
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
         await query.answer()
         return
 
@@ -1180,15 +1220,11 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
             await query.answer(t('gear.state_changed', lang), show_alert=True)
             return
         entry = _load_inventory_entry(user.id, parts[3])
-        preview = build_gear_mutation_preview(user.id, 'sale', entry['id']) if entry else None
-        if not preview:
+        if not entry:
             await query.answer(t('gear.state_changed', lang), show_alert=True)
             return
-        text = t('gear.sell_confirm', lang, gold=preview['cost']['gold'])
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(t('common.confirm', lang), callback_data=f'inv_gsell_{parts[2]}_{parts[3]}_{parts[4]}')],
-            [InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'inv_item_{parts[3]}_{parts[4]}')],
-        ])
+        from handlers.shop_views import sale_preview
+        text,keyboard = sale_preview(p,parts[3])
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
         return
@@ -1199,13 +1235,28 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
             await query.answer(t('gear.state_changed', lang), show_alert=True)
             return
         result = apply_gear_intent(user.id, 'sale', parts[2])
+        from handlers.shop_views import sale_preview,result_card
+        if result.get('status')=='confirmation_required':
+            text,keyboard = sale_preview(p,parts[3],confirmation_quote=result['quote'])
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
+            return
         if result.get('status') != 'sold':
             key = 'equipped_item' if result.get('status') == 'equipped_item' else 'state_changed'
             await query.answer(t(f'gear.{key}', lang), show_alert=True)
             return
-        await query.answer(t('gear.sold', lang, gold=result['gold']), show_alert=True)
-        text, keyboard = build_inventory_list(user.id, parts[4], lang)
+        if 'item_id' not in result:
+            # Old receipts did not retain an item name; recover their exact gold.
+            text = t('gear.sold',lang,gold=result['gold'])
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('gear.back_btn',lang),callback_data='inv_tab_'+parts[4])]])
+            keys = []
+        else:
+            text,keyboard,keys = result_card(dict(get_player(user.id)),result)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        if keys:
+            from game.player_feedback import acknowledge_presented_facts
+            acknowledge_presented_facts(user.id,keys)
+        await query.answer()
         return
 
     if data.startswith(('inv_gequip_', 'inv_gunequip_', 'inv_genh_')):
@@ -1265,6 +1316,7 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
     # ── Смена вкладки ──
     if data.startswith('inv_tab_'):
         route = data.removeprefix('inv_tab_')
+        context.user_data['pxe1_inventory_route'] = route
         if _parse_inventory_route(route) is None:
             await query.answer(t('gear.state_changed', lang), show_alert=True)
             return

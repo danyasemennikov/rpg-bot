@@ -431,6 +431,11 @@ class PackRuntimePR2B1Tests(unittest.TestCase):
         self.assertGreaterEqual(len(forming_rows), 3)
         self.assertTrue(all(str(row['state']) == 'forming' for row in forming_rows))
 
+        conn = get_connection()
+        deadline = conn.execute('SELECT formation_deadline_ms FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()[0]
+        conn.close()
+        from game.pve_live import process_due_pve_formations
+        process_due_pve_formations(now_ms=deadline)
         locked_roster = lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
         self.assertIsNotNone(locked_roster)
         conn = get_connection()

@@ -1,5 +1,7 @@
 # Playable Alpha Vertical Slice V1 — Aster to Elmor
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PXE1 sections 3–4/11–14 extend presentation with six persistent buttons, contextual Location, immediate durable Chapter finale/handoff, Journal pursuits versus narrative History, and compact economy/build/combat flows. All four assignments and their rewards remain. The frozen PXE1 timed owners supersede instant gathering and sleeping travel. See [the frozen PXE1 contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 - Status: Merged delivery record for [PR229](https://github.com/danyasemennikov/rpg-bot/pull/229)
 - Authority: Historical implementation, migration, validation, and limitation record
 - Successor context: [current state](../PROJECT_STATE_CURRENT.md) and

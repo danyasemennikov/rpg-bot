@@ -225,5 +225,5 @@ def ensure_profession_rows(conn, player_id: int) -> None:
 def grant_new_player_starters(conn, player_id: int) -> None:
     conn.executemany('''INSERT OR IGNORE INTO player_recipe_knowledge
         (player_id, recipe_id, acquired_via, gold_paid, catalog_version)
-        VALUES (?, ?, 'starter', 0, 1)''',
+        VALUES (?, ?, 'starter', 0, 2)''',
         ((int(player_id), recipe_id) for recipe_id in STARTER_RECIPE_IDS))

@@ -27,6 +27,8 @@ from game.quest_board import (
 )
 from handlers.location import build_quest_board_message
 from handlers.location import handle_location_buttons
+from handlers.quest_views import board_card,board_detail
+from handlers.chapter import build_assignment,build_assignment_more
 
 
 class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
@@ -134,12 +136,17 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state['status'], 'completed')
 
     def test_board_renders_claim_and_abandon_buttons_truthfully(self):
-        player = {'telegram_id': 8101, 'lang': 'en'}
+        player = dict(database.get_player(8101))
         location = {'id': 'village'}
 
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
         _text_active, keyboard_active = build_quest_board_message(player, location)
         active_callbacks = {btn.callback_data for row in keyboard_active.inline_keyboard for btn in row}
+        self.assertIn('alpha_assignment',active_callbacks)
+        _,assignment=build_assignment(player)
+        self.assertIn('alpha_assignment_more',{b.callback_data for row in assignment.inline_keyboard for b in row})
+        _,more=build_assignment_more(player)
+        active_callbacks={b.callback_data for row in more.inline_keyboard for b in row}
         self.assertTrue(any(c.startswith('quest_board_abandon_') for c in active_callbacks))
         self.assertNotIn('quest_board_claim', active_callbacks)
 
@@ -188,8 +195,13 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn('Board: 🏛️ Aster', text)
         self.assertNotIn('No contracts available', text)
-        self.assertIn('quest_board_accept_hunt_forest_wolves', callbacks)
-        self.assertIn('quest_board_accept_hunt_forest_spiders', callbacks)
+        self.assertIn('quest_board_list_available_0',callbacks)
+        _,available=board_card(player,{'id':'capital_city'},category='available')
+        listed={b.callback_data for row in available.inline_keyboard for b in row}
+        for key in ('hunt_forest_wolves','hunt_forest_spiders'):
+            self.assertIn('quest_board_detail_'+key,listed)
+            _,detail=board_detail(player,{'id':'capital_city'},key)
+            self.assertIn('quest_board_accept_'+key,{b.callback_data for row in detail.inline_keyboard for b in row})
 
     def test_capital_city_can_accept_and_claim_starter_contracts(self):
         self.move_fixture('capital_city')
@@ -433,7 +445,11 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         text, _keyboard = build_quest_board_message(player, location)
         self.assertIn('Hunter rank:', text)
         self.assertIn('Board: 🏘️ Ashen Village', text)
-        self.assertIn('Locked contracts:', text)
+        self.assertIn('quest_board_list_locked_0',{b.callback_data for row in _keyboard.inline_keyboard for b in row})
+        text,locked=board_card(player,location,category='locked')
+        self.assertIn('Locked contracts:',text)
+        self.assertIn('quest_board_detail_hunt_elite_boars',{b.callback_data for row in locked.inline_keyboard for b in row})
+        text,_=board_detail(player,location,'hunt_elite_boars')
         self.assertIn('requires rank Tracker', text)
         self.assertIn('board: 🏘️ Ashen Village', text)
         self.assertIn('place: 🌲 Dark Forest', text)
@@ -446,9 +462,11 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
 
         text, keyboard = build_quest_board_message(player, {'id': 'frontier_outpost'})
         callbacks = {btn.callback_data for row in keyboard.inline_keyboard for btn in row}
-        self.assertIn('Claim board(s): 🏘️ Ashen Village', text)
-        self.assertIn('Claim it at: 🏘️ Ashen Village', text)
-        self.assertNotIn('quest_board_claim', callbacks)
+        self.assertIn('goto_village',callbacks)
+        self.move_fixture('frontier_outpost')
+        text,_=build_assignment(dict(database.get_player(8101)))
+        self.assertIn('Report at: 🏘️ Ashen Village',text)
+        self.assertFalse(any(c.startswith('quest_board_claim_') for c in callbacks))
 
     def test_completed_contract_claim_fails_on_wrong_board(self):
         accept_hunt_contract(player_id=8101, location_id='village', contract_key='hunt_forest_wolves')
@@ -766,6 +784,9 @@ class QuestBoardPhase1Tests(unittest.IsolatedAsyncioTestCase):
         sql_log: list[str] = []
 
         class _LoggedConn:
+            def __getattr__(self,name):
+                return getattr(base_conn,name)
+
             def execute(self, sql, params=()):
                 sql_log.append(str(sql).strip().upper())
                 return base_conn.execute(sql, params)

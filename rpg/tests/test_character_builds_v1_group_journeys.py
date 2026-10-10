@@ -185,12 +185,13 @@ async def _open_group(
     await owner.callback(start_callback, handle_combat_buttons)
     enter_callback = next(
         callback for callback in _callbacks(owner.messages[-1][1])
-        if callback.startswith("pve_enter_")
+        if callback.startswith("pve_view_")
     )
-    encounter_id = enter_callback.removeprefix("pve_enter_")
+    encounter_id = enter_callback.removeprefix("pve_view_")
     for joiner in joiners:
         await joiner.callback(f"pve_join_{encounter_id}", handle_location_buttons)
     members = [owner, *joiners]
+    owner.start_due_formation(encounter_id)
     for member in members:
         await _enter(member, encounter_id)
     state = _encounter_state(encounter_id)
@@ -238,7 +239,7 @@ async def _commit_round(
         )
         callbacks.append((
             member,
-            member._find_combat_action(
+            await member._find_combat_action(
                 kind=kind,
                 skill_id=skill_id,
                 target_id=target_id,
@@ -762,11 +763,12 @@ def test_late_joiners_receive_v1_snapshots_and_can_commit_consecutive_rounds():
         spawn_id = owner._accelerate_respawn("forest_boar")
         await owner.callback(f"fight_spawn_{spawn_id}", handle_combat_buttons)
         encounter_id = next(
-            callback.removeprefix("pve_enter_")
+            callback.removeprefix("pve_view_")
             for callback in _callbacks(owner.messages[-1][1])
-            if callback.startswith("pve_enter_")
+            if callback.startswith("pve_view_")
         )
         await joiner.callback(f"pve_join_{encounter_id}", handle_location_buttons)
+        owner.start_due_formation(encounter_id)
         await _enter(owner, encounter_id)
         await _enter(joiner, encounter_id)
         state = _encounter_state(encounter_id)

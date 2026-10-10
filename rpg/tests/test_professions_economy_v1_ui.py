@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import database
+import pytest
 from game.economy_actions import list_receipts, store_receipt
 from game.i18n import get_item_description, get_item_name, t
 from game.profession_resources import MANDATORY_RESOURCE_IDS
@@ -27,8 +28,36 @@ def test_locale_parity_and_callback_sized_ids():
     assert all(len(f'pe_r:{recipe.recipe_id}'.encode()) <= 64 for recipe in ACTIVE_RECIPES)
 
 
+@pytest.mark.parametrize('lang',['ru','en','es'])
+def test_timed_tool_and_unknown_history_keeps_dates_and_hides_unrecognized_ids(lang):
+    from handlers.professions import _receipt_lines,_receipt_list_label
+    from game.player_ui import validate_surface
+    base={'created_at':'2026-10-07 12:34:56','consumed':[],'granted':[],
+          'gold_delta':0,'gold_after':12,'progression':[],'details':{}}
+    cases=[('gather_tick_pxe1','running','pxe1.gather.collecting'),
+           ('tool_commission_pxe1','crafted','pxe1.tool.commission'),
+           ('tool_repair_pxe1','repaired','pxe1.tool.repair'),
+           ('tool_replace_pxe1','replaced','pxe1.tool.replace'),
+           ('removed_future_action','removed_future_status','pxe1.common.unknown_historical')]
+    for index,(kind,status,key) in enumerate(cases):
+        receipt={**base,'action_kind':kind,'status':status,'request_id':f'history:{index}'}
+        lines=_receipt_lines(receipt,lang)
+        assert t(key,lang) in lines[2]
+        assert lines[1]=='2026-10-07 12:34'
+        label=_receipt_list_label(receipt,lang)
+        assert not any(raw in '\n'.join(lines)+label for raw in ('removed_future_action','removed_future_status','[pxe1.','[professions.'))
+        store_conn=database.get_connection()
+        store_receipt(store_conn,1,receipt['request_id'],kind,str(index),receipt,catalog_version=2)
+        store_conn.commit();store_conn.close()
+    player=dict(database.get_player(1));player['lang']=lang
+    text,kb=build_receipts(player)
+    validate_surface(text,kb,list_view=True)
+    assert len([b for row in kb.inline_keyboard for b in row if b.callback_data.startswith('pe_x:')])==5
+    assert 'removed_future' not in repr(kb)
+
+
 def test_known_pev1_content_has_real_parallel_localization():
-    item_ids = set(MANDATORY_RESOURCE_IDS) | {recipe.output_spec.item_id for recipe in ACTIVE_RECIPES}
+    item_ids = set(MANDATORY_RESOURCE_IDS) | {recipe.output_spec.item_id for recipe in ACTIVE_RECIPES if recipe.output_spec.item_id}
     for lang in ('ru', 'en', 'es'):
         for item_id in item_ids:
             name = get_item_name(item_id, lang)
@@ -46,23 +75,27 @@ def test_profession_and_recipe_details_show_contract_fields_and_clickable_ingred
     database.create_player(71, 'ui', 'UI',
         dict.fromkeys(('strength','agility','intuition','vitality','wisdom','luck'), 2), lang='en')
     player = dict(database.get_player(71))
-    _, first_keyboard = build_overview(player, 0)
-    _, second_keyboard = build_overview(player, 1)
+    _, first_keyboard = build_overview(player, 0, group='crafting')
+    _, second_keyboard = build_overview(player, 1, group='crafting')
     assert sum(button.callback_data.startswith('pe_p:') for row in first_keyboard.inline_keyboard for button in row) == 6
-    assert sum(button.callback_data.startswith('pe_p:') for row in second_keyboard.inline_keyboard for button in row) == 6
+    assert sum(button.callback_data.startswith('pe_p:') for row in second_keyboard.inline_keyboard for button in row) == 1
     profession, _ = build_profession(player, 'alchemy')
     assert 'Current milestone' in profession and 'Next unlock' in profession and 'training ceiling' in profession
-    recipe, keyboard = build_recipe(player, 'pe_sword_1h_01')
+    from handlers.recipe_views import recipe_card
+    recipe, keyboard = recipe_card(player, 'pe_sword_1h_01', details=True)
     callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
     assert 'State: Known' in recipe and 'Output: ×1' in recipe and 'T1, common rarity' in recipe
     assert 'No secondary properties' in recipe and 'trains through level 6' in recipe
-    assert sum(value.startswith('pe_m:') for value in callbacks) == 3
-    assert any(value.startswith('pe_a:') for value in callbacks)
+    assert 'pe_inputs:pe_sword_1h_01:0' in callbacks
+    inputs,inputs_keyboard=recipe_card(player,'pe_sword_1h_01',inputs_page=0)
+    assert sum(button.callback_data.startswith('pe_m:') for row in inputs_keyboard.inline_keyboard for button in row)==3
+    assert 'Iron' in inputs
+    assert 'pe_r:pe_sword_1h_01' in callbacks
     conn = database.get_connection()
-    conn.execute("UPDATE player_crafting_professions SET level=5,exp=245 WHERE player_id=71 AND profession_key='alchemy'")
+    conn.execute("UPDATE player_crafting_professions SET level=5,exp=249 WHERE player_id=71 AND profession_key='alchemy'")
     conn.commit(); conn.close()
     clipped_preview, _ = build_recipe(dict(database.get_player(71)), 'field_tonic')
-    assert 'This craft awards 5 profession XP.' in clipped_preview
+    assert 'This craft awards 1 profession XP.' in clipped_preview
     conn = database.get_connection()
     conn.execute("UPDATE player_crafting_professions SET level=6,exp=0 WHERE player_id=71 AND profession_key='alchemy'")
     conn.commit(); conn.close()
@@ -70,7 +103,7 @@ def test_profession_and_recipe_details_show_contract_fields_and_clickable_ingred
     assert 'At your current level this recipe grants 0 XP.' in zero_preview
 
 
-def test_receipt_pages_use_five_row_offsets_and_one_row_lookahead(tmp_path, monkeypatch):
+def test_receipt_pages_use_six_row_offsets_and_one_row_lookahead(tmp_path, monkeypatch):
     monkeypatch.setattr(database, 'DB_PATH', str(tmp_path / 'game.db'))
     database.init_db(); seed_items()
     database.create_player(70, 'receipts', 'Receipts',
@@ -84,22 +117,22 @@ def test_receipt_pages_use_five_row_offsets_and_one_row_lookahead(tmp_path, monk
         store_receipt(conn, 70, f'r{index:02}', 'gather', f'h{index:02}', result)
     conn.commit(); conn.close()
 
-    page0 = list_receipts(70, page=0, page_size=5)
-    page1 = list_receipts(70, page=1, page_size=5)
-    page2 = list_receipts(70, page=2, page_size=5)
-    assert [row['request_id'] for row in page0] == ['r11','r10','r09','r08','r07','r06']
-    assert [row['request_id'] for row in page1] == ['r06','r05','r04','r03','r02','r01']
-    assert [row['request_id'] for row in page2] == ['r01','r00']
+    page0 = list_receipts(70, page=0, page_size=6)
+    page1 = list_receipts(70, page=1, page_size=6)
+    page2 = list_receipts(70, page=2, page_size=6)
+    assert [row['request_id'] for row in page0] == ['r11','r10','r09','r08','r07','r06','r05']
+    assert [row['request_id'] for row in page1] == ['r05','r04','r03','r02','r01','r00']
+    assert [row['request_id'] for row in page2] == []
     player = dict(database.get_player(70))
     _, keyboard = build_receipts(player, 1)
     receipt_buttons = [button for row in keyboard.inline_keyboard for button in row
                        if button.callback_data.startswith('pe_x:')]
-    assert len(receipt_buttons) == 5
+    assert len(receipt_buttons) == 6
     conn = database.get_connection()
     payloads = [conn.execute('SELECT payload FROM player_ui_actions WHERE token=?',
                 (button.callback_data.split(':', 1)[1],)).fetchone()['payload'] for button in receipt_buttons]
     conn.close()
-    assert payloads == ['r06','r05','r04','r03','r02']
+    assert payloads == ['r05','r04','r03','r02','r01','r00']
     _, oversized_keyboard = build_receipts(player, 999)
     oversized_receipts = [button for row in oversized_keyboard.inline_keyboard for button in row
                           if button.callback_data.startswith('pe_x:')]
@@ -109,8 +142,8 @@ def test_receipt_pages_use_five_row_offsets_and_one_row_lookahead(tmp_path, monk
     oversized_payloads = [conn.execute('SELECT payload FROM player_ui_actions WHERE token=?',
         (button.callback_data.split(':', 1)[1],)).fetchone()['payload'] for button in oversized_receipts]
     conn.close()
-    assert oversized_payloads == ['r01', 'r00']
-    assert oversized_nav == ['pe_h:1']
+    assert oversized_payloads == ['r05','r04','r03','r02','r01','r00']
+    assert oversized_nav == ['pe_h:0']
     query = SimpleNamespace(
         from_user=SimpleNamespace(id=70), data='pe_h:999',
         answer=AsyncMock(), edit_message_text=AsyncMock(),
@@ -121,7 +154,7 @@ def test_receipt_pages_use_five_row_offsets_and_one_row_lookahead(tmp_path, monk
                     if button.callback_data.startswith('pe_h:')]
     callback_receipts = [button for row in callback_keyboard.inline_keyboard for button in row
                          if button.callback_data.startswith('pe_x:')]
-    assert len(callback_receipts) == 2 and callback_nav == ['pe_h:1']
+    assert len(callback_receipts) == 6 and callback_nav == ['pe_h:0']
 
 
 def test_ru_en_es_profession_callbacks_render_complete_localized_flow(tmp_path, monkeypatch):
@@ -206,7 +239,7 @@ def test_ru_en_es_complete_navigation_and_failure_results_hide_internal_keys(tmp
     for lang in ('ru', 'en', 'es'):
         player = dict(database.get_player(72)); player['lang'] = lang
         stages = (
-            build_overview(player, 0)[0],
+            build_overview(player, 0, group='crafting')[0],
             build_profession(player, 'herbalism')[0],
             build_resource_list(player, 'herbalism', 0)[0],
             build_material(player, 'herb_magic', 0)[0],

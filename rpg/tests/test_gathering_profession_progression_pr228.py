@@ -64,17 +64,9 @@ def _profession(profession_key):
 
 
 async def _gather(profession_key, roll=0.0):
-    message = SimpleNamespace(text='Gather', message_id=next(_message_ids), reply_text=AsyncMock())
-    update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
-    with (
-        patch('handlers.location.looks_like_lower_gather_button', return_value=True),
-        patch('handlers.location.resolve_lower_gather_profession_button', return_value=profession_key),
-        patch('handlers.location.random.random', return_value=roll),
-        patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
-        patch('handlers.location.is_in_battle', return_value=False),
-    ):
-        handled = await handle_lower_menu_gather_text(update, SimpleNamespace())
-    return handled, message
+    from tests.pxe1_gather_fixture import one_tick
+    handled,message,_=await one_tick(PLAYER_ID,profession_key,roll,next(_message_ids))
+    return handled,message
 
 
 def test_progression_contract_and_multiple_level_application():
@@ -154,8 +146,9 @@ def test_successful_accessible_gather_grants_item_xp_and_progress_feedback():
     assert _profession('woodcutting')['exp'] == 10
     feedback = message.reply_text.await_args.args[0]
     assert 'Common Wood' in feedback
-    assert '+10 profession XP' in feedback
-    assert 'Lv. 1: 10/50' in feedback
+    from game.i18n import t
+    assert t('pxe1.gather.xp_total','en',xp=10) in feedback
+    assert message.tick_result['progression'][0]['new_exp']==10
 
 
 def test_success_can_level_profession_and_emits_level_up_feedback():
@@ -163,8 +156,8 @@ def test_success_can_level_profession_and_emits_level_up_feedback():
     _set_profession('woodcutting', level=1, exp=40)
     _, message = asyncio.run(_gather('woodcutting'))
     assert (_profession('woodcutting')['level'], _profession('woodcutting')['exp']) == (2, 0)
-    assert 'profession level 2!' in message.reply_text.await_args.args[0]
-    assert '0/100' in message.reply_text.await_args.args[0]
+    assert message.tick_result['progression'][0]['new_level']==2
+    assert message.tick_result['progression'][0]['new_exp']==0
 
 
 def test_denied_dark_wood_grants_neither_item_nor_xp_and_does_not_reroll():
@@ -176,6 +169,9 @@ def test_denied_dark_wood_grants_neither_item_nor_xp_and_does_not_reroll():
     assert message.reply_text.await_count == 1
 
     _set_profession('woodcutting', level=6)
+    conn=get_connection()
+    conn.execute("UPDATE player_profession_tools SET tier=2,durability=120 WHERE player_id=? AND profession_key='woodcutting'",(PLAYER_ID,))
+    conn.commit();conn.close()
     asyncio.run(_gather('woodcutting'))
     conn = get_connection()
     quantity = conn.execute(
@@ -211,8 +207,9 @@ def test_capped_profession_still_gathers_item_and_banks_no_xp():
     assert quantity == 1
     assert _profession('woodcutting')['exp'] == 123
     feedback = message.reply_text.await_args.args[0]
-    assert '+0 profession XP' in feedback
-    assert 'maximum' in feedback
+    from game.i18n import t
+    assert t('pxe1.gather.xp_total','en',xp=0) in feedback
+    assert message.tick_result['xp']==0
     assert '/1000' not in feedback
 
 

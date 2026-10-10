@@ -758,6 +758,21 @@ STRINGS = {
         ),
     },
 }
+
+STRINGS['common']['refresh'] = '🔄 Обновить'
+STRINGS['keyboard']['activities'] = '🧰 Занятия'
+STRINGS['keyboard']['profile'] = '👤 Персонаж'
+STRINGS['pxe1'] = {'menu_home':'👤 <b>{name}</b>\n📍 {location}\nВыберите начало следующего путешествия.'}
+from locales.pxe1 import PXE1_STRINGS
+STRINGS['pxe1'].update(PXE1_STRINGS['ru'])
+STRINGS['location'].update({
+    'pvp_leave_prep':'Покинуть подготовку',
+    'pvp_reinforcement_status_locked':'в бою',
+    'pvp_reinforcement_status_left':'вышел',
+    'pvp_reinforcement_status_revoked':'отозвано',
+    'pvp_personal_death':'Поражение · возвращение в {hub}\nHP {hp} · МП {mana}\nПотеря материалов: {quantity}\nЗащита после возрождения: 8 минут',
+    'pvp_personal_result':'PvP завершён\nHP {hp} · МП {mana}\nПолучено материалов: {quantity}',
+})
 from locales.professions import STRINGS as _PROFESSION_STRINGS
 STRINGS['professions'] = _PROFESSION_STRINGS['ru']
 from locales.rav1_ru import STRINGS as _RAV1_STRINGS
@@ -818,3 +833,6 @@ STRINGS['gear'] = {
     'page': 'Страница {page}/{pages}', 'buy_here_btn': 'Купить здесь за {gold}',
     'ownership': 'Ваш экземпляр #{id}{equipped}', 'equipped_suffix': ' (надет: {slot})',
 }
+
+from locales.pxe1_surface_keys import install_surface_keys
+install_surface_keys(STRINGS, 'ru')

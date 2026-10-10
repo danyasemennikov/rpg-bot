@@ -45,7 +45,7 @@ class RecipeRequirement:
 @dataclass(frozen=True)
 class RecipeDefinition:
     recipe_id: str
-    output_item_id: str
+    output_item_id: str | None
     output_quantity: int
     profession_key: CraftingProfessionKey
     minimum_profession_level: int
@@ -63,6 +63,9 @@ class RecipeDefinition:
     item_tier: int | None = None
     output_rarity: str = 'common'
     secondary_policy: str = 'not_applicable'
+    material_value: int = 0
+    tool_profession: str | None = None
+    tool_tier: int | None = None
 
 
 @dataclass(frozen=True)
@@ -179,6 +182,8 @@ def _pev1_runtime_recipe(recipe) -> RecipeDefinition:
         catalog_version=recipe.catalog_version, output_kind=recipe.output_spec.kind,
         item_tier=recipe.output_spec.item_tier, output_rarity=recipe.output_spec.rarity,
         secondary_policy=recipe.output_spec.secondary_policy,
+        material_value=recipe.material_value,tool_profession=recipe.output_spec.profession_key,
+        tool_tier=recipe.output_spec.tool_tier,
     )
 
 
@@ -197,12 +202,12 @@ def get_recipe(recipe_id: str) -> RecipeDefinition | None:
 
 def _craft_rejection(conn, *, player_id, player, request_id, receipt_hash, recipe, status, details=None):
     from game.economy_actions import store_receipt
-    result = {'schema_version':1,'action_kind':'craft','status':status,'player_id':player_id,
+    result = {'schema_version':1,'catalog_version':2,'action_kind':'craft','status':status,'player_id':player_id,
               'location_id':player.get('location_id'),'recipe_id':recipe.recipe_id,
               'consumed':[],'granted':[],'gold_delta':0,'gold_after':player.get('gold',0),
-              'progression':[],'source':{'catalog_version':1},'details':details or {}}
+              'progression':[],'source':{'catalog_version':2},'details':details or {}}
     if request_id:
-        store_receipt(conn, player_id, request_id, 'craft', receipt_hash, result)
+        store_receipt(conn, player_id, request_id, 'craft', receipt_hash, result,catalog_version=2)
         conn.commit()
     return CraftResult(status=status, recipe_id=recipe.recipe_id,
                        profession_key=recipe.profession_key,
@@ -224,13 +229,33 @@ def craft_recipe(telegram_id: int, recipe_id: str,
     from game.economy_actions import find_receipt, intent_hash, store_business_rejection, store_receipt
     from game.profession_progression import apply_profession_xp, crafting_xp_for_success
 
+    tool_recipe = get_recipe(recipe_id)
+    if tool_recipe and tool_recipe.output_kind=='tool':
+        from game.profession_tools import craft_tool
+        result = craft_tool(telegram_id,recipe_id,action_token=action_token,request_id=request_id)
+        return CraftResult(status=result['status'],recipe_id=recipe_id,
+            profession_key=tool_recipe.profession_key,crafted_quantity=1 if result['status']=='crafted' else 0,
+            profession_xp=int((result.get('progression') or [{}])[0].get('xp_awarded',0)),
+            recovered=bool(result.get('recovered')))
+
     conn = get_connection()
     recipe = None
     authorized = False
     receipt_hash = ''
     try:
         conn.execute('BEGIN IMMEDIATE')
+        committed_receipt = None
         if action_token is not None:
+            request_id = request_id or f'ui:{action_token}'
+            committed_receipt = conn.execute('SELECT action_kind,result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?',(telegram_id,request_id)).fetchone()
+            if committed_receipt:
+                if committed_receipt['action_kind']!='craft':
+                    raise ActionRejected('stale_action')
+                committed_id = str(json.loads(committed_receipt['result_json']).get('recipe_id') or '')
+                if recipe_id and recipe_id!=committed_id:
+                    raise ActionRejected('stale_action')
+                recipe_id = committed_id
+        if action_token is not None and not committed_receipt:
             request_id = request_id or f'ui:{action_token}'
             token_row = conn.execute('''SELECT payload FROM player_ui_actions
                 WHERE token=? AND player_id=? AND kind='craft' ''', (action_token, telegram_id)).fetchone()
@@ -317,7 +342,7 @@ def craft_recipe(telegram_id: int, recipe_id: str,
             recipe.output_quantity,
             source='crafting',
             gear_spec=gear_spec,
-            provenance={'source': 'crafting', 'catalog_version': 1, 'recipe_id': recipe_id,
+            provenance={'source': 'crafting', 'catalog_version': 2, 'recipe_id': recipe_id,
                         'profession_key': recipe.profession_key, 'crafter_player_id': telegram_id,
                         'location_id': player['location_id'], 'craft_request_id': request_id},
             rng=rng,
@@ -326,8 +351,10 @@ def craft_recipe(telegram_id: int, recipe_id: str,
         require_item_delivery(grant, recipe.output_quantity)
         crafted_quantity = int(grant.get('stackable_added', 0) + grant.get('gear_instances_created', 0))
         xp = crafting_xp_for_success(current_level=player_level, current_exp=profession['exp'],
-                                     recipe_level=recipe.minimum_profession_level)
+                                     recipe_level=recipe.minimum_profession_level,material_value=recipe.material_value)
         progression = apply_profession_xp(player_level, profession['exp'], xp)
+        from game.player_feedback import record_progression
+        record_progression(conn,telegram_id,recipe.profession_key,progression,request_id or recipe.recipe_id)
         if xp:
             conn.execute('''UPDATE player_crafting_professions SET level=?, exp=?
                 WHERE player_id=? AND profession_key=?''',
@@ -354,9 +381,9 @@ def craft_recipe(telegram_id: int, recipe_id: str,
                 'progression': [{'profession_key': recipe.profession_key,
                     'old_level': progression.old_level, 'old_exp': progression.old_exp,
                     'new_level': progression.new_level, 'new_exp': progression.new_exp, 'xp_awarded': xp}],
-                'source': {'catalog_version': 1}, 'details': {},
+                'source': {'catalog_version': 2}, 'details': {}, 'xp_policy_version':2,
             }
-            store_receipt(conn, telegram_id, request_id, 'craft', receipt_hash, receipt)
+            store_receipt(conn, telegram_id, request_id, 'craft', receipt_hash, receipt,catalog_version=2)
         conn.commit()
         return CraftResult(
             status='crafted',
@@ -375,7 +402,7 @@ def craft_recipe(telegram_id: int, recipe_id: str,
                 conn, player_id=telegram_id, request_id=request_id, action_kind='craft',
                 request_hash=receipt_hash, status=status,
                 location_id=player['location_id'] if player else None, recipe_id=recipe_id,
-                gold_after=player['gold'] if player else 0, source={'catalog_version': 1},
+                gold_after=player['gold'] if player else 0, source={'catalog_version': 2},catalog_version=2,
             )
             conn.commit()
             return CraftResult(status=status, recipe_id=recipe_id,
@@ -396,6 +423,11 @@ def validate_recipe_contract(recipe: RecipeDefinition) -> list[str]:
     errors: list[str] = []
     if recipe.profession_key not in CRAFTING_PROFESSION_CONTRACTS:
         errors.append(f'unknown profession {recipe.profession_key}')
+        return errors
+
+    if recipe.output_kind=='tool':
+        if recipe.output_item_id is not None or recipe.output_quantity!=1 or recipe.tool_tier not in (1,2,3,4):
+            errors.append('invalid tool output')
         return errors
 
     output_item = get_item(recipe.output_item_id)

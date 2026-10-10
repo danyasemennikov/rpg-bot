@@ -24,6 +24,8 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
         self._orig_db_path = database.DB_PATH
         database.DB_PATH = os.path.join(self._tmpdir.name, 'test_game.db')
         init_db()
+        from game.regional_schema import ensure_regional_schema
+        conn=get_connection();ensure_regional_schema(conn);conn.close()
 
         conn = get_connection()
         conn.execute(
@@ -44,39 +46,25 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
 
 
     async def _travel_for_test(self, *, start_location_id: str, target_location_id: str):
-        def _discard_task(coro):
-            coro.close()
-
-        conn = get_connection()
-        conn.execute(
-            'UPDATE players SET location_id=? WHERE telegram_id=?',
-            (start_location_id, 9101),
-        )
+        from handlers.activities import handle_activity_buttons
+        from game.travel_runtime import advance_travel_edge
+        conn=get_connection()
+        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=9101',(start_location_id,))
         conn.commit()
-        conn.close()
-
-        query = SimpleNamespace(
-            data=f'goto_{target_location_id}',
-            from_user=SimpleNamespace(id=9101),
-            answer=AsyncMock(),
-            edit_message_text=AsyncMock(),
-            message=SimpleNamespace(message_id=201),
-        )
-        update = SimpleNamespace(callback_query=query)
-        context = SimpleNamespace(
-            user_data={},
-            application=SimpleNamespace(create_task=_discard_task),
-        )
-
-        with (
-            patch('handlers.location.asyncio.sleep', new=AsyncMock()),
-            patch('handlers.location.is_in_battle', return_value=False),
-            patch('handlers.location.is_pvp_mobility_blocked', return_value=False),
-            patch('handlers.location._build_location_message_with_snapshot', return_value=('ok', None)),
-            patch('handlers.location.clear_respawn_protection_on_dangerous_reentry', return_value=None),
-        ):
-            await handle_location_buttons(update, context)
-
+        query=SimpleNamespace(data='goto_'+target_location_id,from_user=SimpleNamespace(id=9101),
+            answer=AsyncMock(),edit_message_text=AsyncMock(),message=SimpleNamespace(message_id=201,chat_id=9101))
+        context=SimpleNamespace(user_data={})
+        await handle_location_buttons(SimpleNamespace(callback_query=query),context)
+        self.assertEqual(get_player(9101)['location_id'],start_location_id)
+        keyboard=query.edit_message_text.call_args.kwargs['reply_markup']
+        query.data=next(button.callback_data for row in keyboard.inline_keyboard for button in row if button.callback_data.startswith('px:travel:'))
+        with patch('time.time',return_value=1000):
+            await handle_activity_buttons(SimpleNamespace(callback_query=query),context)
+        session=conn.execute("SELECT * FROM player_travel_sessions WHERE player_id=9101 AND status='running'").fetchone()
+        self.assertIsNotNone(session)
+        conn.execute('BEGIN IMMEDIATE')
+        advance_travel_edge(conn,session['session_id'],now_ms=session['next_due_ms'])
+        conn.commit();conn.close()
         return query
 
     def test_capital_city_treated_as_discovered_by_default(self):
@@ -270,37 +258,9 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(is_location_discovered(9101, target_location_id))
 
     async def test_successful_arrival_marks_destination_discovered_in_canonical_form(self):
-        def _discard_task(coro):
-            coro.close()
-
-        query = SimpleNamespace(
-            data='goto_westwild_n1',
-            from_user=SimpleNamespace(id=9101),
-            answer=AsyncMock(),
-            edit_message_text=AsyncMock(),
-            message=SimpleNamespace(message_id=101),
-        )
-        update = SimpleNamespace(callback_query=query)
-        context = SimpleNamespace(
-            user_data={},
-            application=SimpleNamespace(create_task=_discard_task),
-        )
-
-        conn = get_connection()
-        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('capital_city', 9101))
-        conn.commit()
-        conn.close()
-
-        with (
-            patch('handlers.location.asyncio.sleep', new=AsyncMock()),
-            patch('handlers.location.is_in_battle', return_value=False),
-            patch('handlers.location.is_pvp_mobility_blocked', return_value=False),
-            patch('handlers.location._build_location_message_with_snapshot', return_value=('ok', None)),
-            patch('handlers.location.clear_respawn_protection_on_dangerous_reentry', return_value=None),
-        ):
-            await handle_location_buttons(update, context)
-
-        self.assertTrue(is_location_discovered(9101, 'westwild_n1'))
+        self.assertFalse(is_location_discovered(9101,'westwild_n1'))
+        await self._travel_for_test(start_location_id='capital_city',target_location_id='westwild_n1')
+        self.assertTrue(is_location_discovered(9101,'westwild_n1'))
 
     async def test_failed_movement_does_not_mark_discovery(self):
         def _discard_task(coro):
@@ -320,7 +280,7 @@ class LocationDiscoveryTravelMigrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
         conn = get_connection()
-        conn.execute('UPDATE players SET location_id=? WHERE telegram_id=?', ('capital_city', 9101))
+        conn.execute('UPDATE players SET location_id=?,in_battle=1 WHERE telegram_id=?', ('capital_city', 9101))
         conn.commit()
         conn.close()
 

@@ -1,0 +1,1610 @@
+{
+  "contract": "PXE1-1",
+  "baseline_sha": "3c5bfa62836c705a6327ce059f4e190b54ccf3e6",
+  "branch": "feat/pxe1-player-experience-economy-v1",
+  "status": "DRAFT; SECOND BOUNDED F2/F3 AUTOMATED GATES PASSED; READY FOR SECOND NARROW RE-REVIEW",
+  "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+  "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
+  "merge": "NOT MERGED",
+  "deployment": "UNVERIFIED",
+  "independent_review": {
+    "reviewed_head": "5fea976cd1b44a6a19e65d54cfc7df28b5969845",
+    "status": "COMPLETE",
+    "verdict": "FIX",
+    "source_report": "PXE1_PR237_NARROW_REREVIEW.md",
+    "independently_fixed": [
+      "F1",
+      "F4",
+      "F5",
+      "F6",
+      "F7"
+    ],
+    "residual_blockers": [
+      "F2",
+      "F3"
+    ],
+    "repaired_candidate_review": "PENDING SECOND NARROW RE-REVIEW"
+  },
+  "human_validation": "NOT RUN",
+  "full_suite": {
+    "status": "PASSED",
+    "branch": "feat/pxe1-player-experience-economy-v1",
+    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
+    "command": "python -m pytest -q",
+    "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+    "history_mode": "Fresh earned core; reuse variable absent",
+    "started_at": "2026-10-09T19:46:15.639704+00:00",
+    "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-final-broad-pytest.log",
+    "runner_pid": 31532,
+    "exit_code": 0,
+    "code_test_identity": {
+      "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+      "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+      "game": "0feb987d1917f19ebdf6c2aeb21ba8293f4a46df",
+      "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+      "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+      "tests": "743516a1e8b7ef15178ec736046398f79f30bbb7"
+    },
+    "completed_earned_history": {
+      "directory": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\completed-earned",
+      "original": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-4h9lsf_6",
+      "db_sha256": "370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259",
+      "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      },
+      "fresh": true
+    },
+    "test_pid": 32608,
+    "elapsed_seconds": 22095.51,
+    "heartbeat_at": "2026-10-10T01:54:31.154466+00:00",
+    "current_head": "e6842835557ae468648f58622ecd1c4f32ca1a15",
+    "git_status": "",
+    "latest_log_tail": "........ [ 48%]\n........................................................................ [ 51%]\n........................................................................ [ 54%]\n........................................................................ [ 57%]\n........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n........................................................................ [ 75%]\n........................................................................ [ 78%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 86%]\n........................................................................ [ 89%]\n........................................................................ [ 92%]\n........................................................................ [ 95%]\n........................................................................ [ 98%]\n.............................                                [100%]\n2429 passed, 276 subtests passed in 22066.01s (6:07:46)\n",
+    "incomplete_observation": {
+      "path": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\incomplete-observation.sqlite3",
+      "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pytest-of-masha\\pytest-503\\pxe1-earned-professions0\\earned.sqlite3",
+      "accepted": false,
+      "recorded_at": "2026-10-10T01:54:31.154466+00:00"
+    },
+    "raw_log_sha256": "c40442cec9906c1df1f86412c76fba305cffd00b00a3dfebd99275f9b60ffdc3",
+    "completed_at": "2026-10-10T01:54:31.154466+00:00",
+    "passed": 2429,
+    "subtests_passed": 276,
+    "seconds": 22066.01,
+    "terminal_summary": "2429 passed, 276 subtests passed in 22066.01s (6:07:46)",
+    "fresh_vs_reused": "FRESH; no prior core reused"
+  },
+  "earned_profession_rav_journeys": {
+    "status": "PASSED IN FINAL BROAD SUITE",
+    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "assertions": 41,
+    "history_mode": "FRESH core; real regional histories earned again",
+    "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+    "db_sha256": "370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259",
+    "directory": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\completed-earned",
+    "production_checks": {
+      "new_character_and_chapter": true,
+      "mining_smith_heavy": true,
+      "wood_fiber_arcane": true,
+      "herbalism_alchemy": true,
+      "fishing_cooking": true,
+      "hunting_claims_and_consumers": true,
+      "gear_integration": true,
+      "learning_authority": true,
+      "conservation_and_receipts": true,
+      "localized_complete_navigation": true,
+      "regional_source_coverage": true
+    },
+    "crafted_recipes": 83,
+    "gathering": {
+      "fishing": 20,
+      "herbalism": 20,
+      "hunting": 20,
+      "mining": 20,
+      "woodcutting": 20
+    },
+    "crafting": {
+      "alchemy": 20,
+      "arcane_engineer": 20,
+      "blacksmith": 20,
+      "cooking": 20,
+      "heavy_armor": 20,
+      "light_armor": 20,
+      "medium_armor": 20
+    }
+  },
+  "focused_runs": [
+    {
+      "candidate": "6948487",
+      "command": "python -m pytest -q <all 25 discovered test_pxe1_*.py files>",
+      "passed": 280,
+      "seconds": 179.35,
+      "status": "PASSED",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "a819e7b + integration repairs",
+      "command": "python -m pytest -q tests/test_alpha_transactions_v1.py tests/test_alpha_core_loop_integration_pr226.py tests/test_world_pve_encounter_foundation.py tests/test_contextual_lower_menu_pr1b1a.py tests/test_lower_service_menu_pr1b2a.py --tb=short",
+      "passed": 104,
+      "seconds": 21.25,
+      "status": "PASSED"
+    },
+    {
+      "candidate": "a819e7b + integration repairs",
+      "command": "python -m pytest -q <all 25 discovered test_pxe1_*.py files> tests/test_alpha_release_gate_pr3p.py tests/test_solo_pve_runtime_handler_flow.py tests/test_itemization_fix_packet_pr230.py tests/test_regional_adventures_review_repairs.py tests/test_character_builds_v1_ui.py --tb=short",
+      "passed": 475,
+      "failed": 1,
+      "seconds": 104.22,
+      "status": "FAILED",
+      "finding": "obsolete delayed-aggro fixture; reconciled with real durable threat and actual eligible mob",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "a819e7b + integration repairs",
+      "command": "python -m pytest -q tests/test_solo_pve_runtime_handler_flow.py tests/test_pxe1_activity_conflicts.py tests/test_pxe1_pve_world_tick.py tests/test_alpha_core_loop_integration_pr226.py --tb=short",
+      "passed": 59,
+      "seconds": 12.04,
+      "status": "PASSED",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "ed999c2 + prepared docs/earned fixture",
+      "command": "python -m pytest -q tests/test_character_builds_v1_contract.py tests/test_regional_adventures_contract.py tests/test_professions_economy_v1_migration.py tests/test_character_builds_v1_migration.py tests/test_pxe1_schema.py --tb=short",
+      "passed": 37,
+      "seconds": 15.85,
+      "status": "PASSED",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "ed999c2 + earned journey reconciliation",
+      "command": "python -m pytest -q tests/test_character_builds_v1_journeys.py tests/test_character_builds_v1_group_journeys.py tests/test_regional_adventures_review_repairs.py tests/test_regional_adventures_localization.py tests/test_quest_board_phase1.py tests/test_craftsmen_guild_pr1b2b.py --tb=short",
+      "passed": 158,
+      "failed": 1,
+      "seconds": 1084.97,
+      "status": "FAILED",
+      "finding": "Parked group members entered real hostile formations; travel correctly denied. Journey now performs legal prestart Leave without granting progress.",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "ed999c2 + earned journey reconciliation",
+      "command": "python -m pytest -q tests/test_character_builds_v1_group_journeys.py --tb=short",
+      "passed": 3,
+      "seconds": 221.6,
+      "status": "PASSED",
+      "log": "pxe1-group-focused-pytest.log",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "d59ce04 + current journey fixtures",
+      "command": "python -m pytest -q tests/test_group_pve_runtime_enablement.py tests/test_character_builds_v1_durability.py tests/test_character_builds_v1_mixed_encounters.py tests/test_character_builds_v1_pvp_journey.py tests/test_pvp_live_flow_v1.py tests/test_location_live_pvp_view.py tests/test_location_action_tokens.py tests/test_location_discovery_travel_migration.py tests/test_playable_alpha_v1.py --tb=short",
+      "passed": 127,
+      "failed": 13,
+      "subtests_passed": 113,
+      "seconds": 95.95,
+      "status": "FAILED",
+      "finding": "legacy synthetic Location projection fixtures and obsolete singleton/seeding PvP journey assumptions"
+    },
+    {
+      "candidate": "d59ce04 + current journey fixtures",
+      "command": "python -m pytest -q tests/test_character_builds_v1_pvp_journey.py tests/test_location_action_tokens.py --tb=short",
+      "passed": 23,
+      "seconds": 20.98,
+      "status": "PASSED",
+      "log": "pxe1-retained-repair-focused-pytest.log"
+    },
+    {
+      "candidate": "08b8f9e + earned fixtures",
+      "command": "python -m pytest -q tests/test_map_and_long_route_phase1_5.py tests/test_quest_board_battle_bridge.py tests/test_alpha_ux_onboarding_recovery_pr3o.py tests/test_gathering_professions_foundation.py tests/test_crafting_professions_foundation.py tests/test_crafting_runtime_phase7.py tests/test_open_world_gameplay_rollout_phase1.py --tb=short",
+      "status": "FAILED",
+      "failed": 2,
+      "passed": 58,
+      "subtests_passed": 76,
+      "seconds": 28.36,
+      "finding": "current-location preview lost already-here response; synthetic recipe omitted XP-policy-2 static input value"
+    },
+    {
+      "candidate": "08b8f9e + final integration repairs",
+      "command": "python -m pytest -q tests/test_map_and_long_route_phase1_5.py tests/test_crafting_runtime_phase7.py tests/test_pxe1_travel.py --tb=short",
+      "status": "PASSED",
+      "passed": 28,
+      "seconds": 6.2,
+      "log": "pxe1-current-location-focused-pytest.log",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "ce2f51dd5e4c7c45faef107e38657099039ebdc5",
+      "command": "python -m pytest -q tests/test_formation_metadata_rollout_pr2c2.py tests/test_inn_phase1.py --tb=short",
+      "status": "FAILED",
+      "failed": 4,
+      "passed": 11,
+      "seconds": 5.26,
+      "log": "pxe1-broad-failures-focused-pytest.log",
+      "finding": "Three retained formation mocks need current spawn/transaction-aware equipment fields; Inn private-DB fixture omits its regional migration. Repairs pending until the unchanged broad candidate finishes."
+    },
+    {
+      "candidate": "ce2f51dd5e4c7c45faef107e38657099039ebdc5",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_economy.py --tb=short",
+      "status": "FAILED",
+      "failed": 1,
+      "seconds": 1.19,
+      "log": "pxe1-economy-broad-failure-pytest.log",
+      "finding": "Dedicated profession tool outputs have no sellable item record."
+    },
+    {
+      "candidate": "ce2f51d + retained fixture/earned gear repairs",
+      "command": "python -m pytest -q tests/test_formation_metadata_rollout_pr2c2.py tests/test_inn_phase1.py tests/test_professions_economy_v1_economy.py --tb=short",
+      "status": "PASSED",
+      "passed": 16,
+      "seconds": 5.1,
+      "log": "pxe1-broad-fixture-repairs-pytest.log"
+    },
+    {
+      "candidate": "ca4331e47dee41a5256431f8116d9a3856609140",
+      "command": "python -m pytest -q tests/test_pxe1_pve_world_tick.py tests/test_pxe1_combat_order_replay.py tests/test_pxe1_combat_result_recovery.py tests/test_character_builds_v1_durability.py --tb=short",
+      "status": "PASSED",
+      "passed": 37,
+      "seconds": 8.47,
+      "log": "pxe1-vitals-focused-pytest.log",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "ca4331e47dee41a5256431f8116d9a3856609140",
+      "observed_head": "98f2edae604c308e333af7e0b3c5aaa0aa38d588",
+      "command": "python -m pytest -q tests\\test_pxe1_travel.py tests\\test_pxe1_tools_economy.py tests\\test_pxe1_shop_transactions.py tests\\test_pxe1_schema.py tests\\test_pxe1_recipe_surfaces.py tests\\test_pxe1_pvp_membership_ui.py tests\\test_pxe1_pvp_membership.py tests\\test_pxe1_pvp_group_runtime.py tests\\test_pxe1_pve_world_tick.py tests\\test_pxe1_progression.py tests\\test_pxe1_navigation_ui.py tests\\test_pxe1_local_surfaces.py tests\\test_pxe1_journal_surfaces.py tests\\test_pxe1_inventory_surfaces.py tests\\test_pxe1_hunting_tools.py tests\\test_pxe1_gathering_sessions.py tests\\test_pxe1_feedback_journal.py tests\\test_pxe1_encounter_lifecycle.py tests\\test_pxe1_combat_ui.py tests\\test_pxe1_combat_result_recovery.py tests\\test_pxe1_combat_order_replay.py tests\\test_pxe1_combat_delivery.py tests\\test_pxe1_character_spending.py tests\\test_pxe1_activity_quarantine.py tests\\test_pxe1_activity_conflicts.py tests/test_solo_pve_runtime_handler_flow.py tests/test_alpha_core_loop_integration_pr226.py tests/test_character_builds_v1_group_journeys.py --tb=short",
+      "argv": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests\\test_pxe1_travel.py",
+        "tests\\test_pxe1_tools_economy.py",
+        "tests\\test_pxe1_shop_transactions.py",
+        "tests\\test_pxe1_schema.py",
+        "tests\\test_pxe1_recipe_surfaces.py",
+        "tests\\test_pxe1_pvp_membership_ui.py",
+        "tests\\test_pxe1_pvp_membership.py",
+        "tests\\test_pxe1_pvp_group_runtime.py",
+        "tests\\test_pxe1_pve_world_tick.py",
+        "tests\\test_pxe1_progression.py",
+        "tests\\test_pxe1_navigation_ui.py",
+        "tests\\test_pxe1_local_surfaces.py",
+        "tests\\test_pxe1_journal_surfaces.py",
+        "tests\\test_pxe1_inventory_surfaces.py",
+        "tests\\test_pxe1_hunting_tools.py",
+        "tests\\test_pxe1_gathering_sessions.py",
+        "tests\\test_pxe1_feedback_journal.py",
+        "tests\\test_pxe1_encounter_lifecycle.py",
+        "tests\\test_pxe1_combat_ui.py",
+        "tests\\test_pxe1_combat_result_recovery.py",
+        "tests\\test_pxe1_combat_order_replay.py",
+        "tests\\test_pxe1_combat_delivery.py",
+        "tests\\test_pxe1_character_spending.py",
+        "tests\\test_pxe1_activity_quarantine.py",
+        "tests\\test_pxe1_activity_conflicts.py",
+        "tests/test_solo_pve_runtime_handler_flow.py",
+        "tests/test_alpha_core_loop_integration_pr226.py",
+        "tests/test_character_builds_v1_group_journeys.py",
+        "--tb=short"
+      ],
+      "status": "PASSED",
+      "passed": 341,
+      "seconds": 315.54,
+      "log": "pxe1-vitals-integration-pytest.log",
+      "coverage": "all 25 discovered PXE1 modules plus solo runtime, alpha integration and three actual earned group journeys",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "d6453a54bbe9cd617750851f1e5d660c2238f030",
+      "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_chapter_recovery.py' --tb=short",
+      "status": "PASSED FOCUSED FRESH CHAPTER; NOT FULL PROFESSION HISTORY",
+      "passed": 1,
+      "seconds": 9.66,
+      "log": "pxe1-chapter-potions-focused-pytest.log",
+      "coverage": "fresh registration, field weapon purchase/equip, all four real Chapter claims, actual battle potion recovery; no synthetic progress/goods/gold/wins",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
+      "command": "python -m pytest -q tests/test_character_builds_v1_journeys.py::test_immediate_journey_travel_survives_host_pause_between_controls tests/test_pxe1_travel.py --tb=short",
+      "status": "PASSED",
+      "passed": 7,
+      "seconds": 2.56,
+      "log": "pxe1-travel-clock-focused-pytest.log",
+      "coverage": "Simulated one-hour host pause reproduced failure before repair; immediate test control clock held fixed, real token expiry and 15-second edge preserved",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
+      "command": "python -m pytest -q tests/test_character_builds_v1_group_journeys.py --tb=short",
+      "status": "PASSED",
+      "passed": 3,
+      "seconds": 170.76,
+      "log": "pxe1-travel-clock-group-pytest.log",
+      "coverage": "Actual earned group journeys on repaired common travel helper; later creator-only Chapter-sale change does not change these dependencies",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+      "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_chapter_recovery.py' tests/test_pxe1_shop_transactions.py tests/test_character_builds_v1_journeys.py::test_immediate_journey_travel_survives_host_pause_between_controls tests/test_pxe1_travel.py --tb=short",
+      "status": "PASSED",
+      "passed": 25,
+      "seconds": 13.44,
+      "log": "pxe1-clock-chapter-shop-focused-pytest.log",
+      "coverage": "Fresh four-assignment Chapter and earned potion proof, protected Shop owners, controlled immediate travel pair and production travel regressions; not full profession history",
+      "current_applicability": "Historical measured result; affected PvE owners changed at 28664a7; final broad pending"
+    },
+    {
+      "candidate": "28664a714c7729514997877914db660fba126104",
+      "command": "python -m pytest -q tests/test_pxe1_pve_world_tick.py tests/test_pxe1_activity_quarantine.py tests/test_character_builds_v1_durability.py 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_regional_repairs.py' --tb=short",
+      "status": "PASSED; FOUR REGIONAL CASES ARE DIAGNOSTIC ONLY",
+      "passed": 57,
+      "runtime_regressions": 53,
+      "whole_prior_party_diagnostics": 4,
+      "seconds": 65.59,
+      "log": "pxe1-departure-regional-repaired-diagnostic-pytest.log",
+      "coverage": "Committed flee survives recovery with immutable lock; missing actor without receipt quarantines; non-victory flags release without resources/rewards; retained J09/J10/J12-one-fled/J14 assertions on whole prior earned party",
+      "provenance": "Prior b272d52 party hash 70f0daa187006a63fe075b8d46bf098b86d53f288fbb7675b433e2e8e1ead28c; does not substitute current fresh history"
+    },
+    {
+      "candidate": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "status": "PASSED",
+      "passed": 3,
+      "deselected": 36,
+      "seconds": 61.95,
+      "command": "python -m pytest -q tests/test_regional_adventures_v1_journeys.py -k \"separate_connection_delivery_races or all_finite_claims_in_two_regional_orders\" --tb=short",
+      "log": "pxe1-regional-ration-order-focused-pytest.log",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-completed-earned",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "coverage": "Both separate-connection delivery races and both finite-claim region orders; all original equality, claim, conservation, replay and race assertions retained",
+      "provenance": "Working tree then committed unchanged at d5b9661; whole verified COMPLETE current-source history reused; no injected goods or XP"
+    }
+  ],
+  "limitations": [
+    "Human Telegram validation NOT RUN; phone/desktop and real multi-account behavior unverified",
+    "Independent review COMPLETE / FIX at reviewed HEAD; narrow re-review pending for repaired candidate",
+    "Deployment, live data cutover and sustained operational scheduler behavior unverified"
+  ],
+  "deviations": [
+    {
+      "finding": "P1-1",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Read-selection SQL used nonexistent group_rules_version instead of world_model_version.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
+    },
+    {
+      "finding": "P1-2",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Recovery required an open deadline at a proven completed side boundary; restored next-side deadline also needed immediate persistence.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING",
+      "followup_commit": "33dff106ec6b17563e575c56a88dceed78673cd0"
+    },
+    {
+      "finding": "P1-3",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Failed side resolution retained advanced cache/projections; recovery could open an already-open enemy side twice.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
+    },
+    {
+      "finding": "P1-4",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Individual and terminal settlement retained accepted/locked ally exclusivity despite clearing activity.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
+    },
+    {
+      "finding": "P2-1",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Common timed arrival omitted existing frontier/core-war respawn protection consumption.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
+    },
+    {
+      "finding": "P2-2",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Core Map destination list contained only capital neighbors, omitting capital_city itself.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
+    },
+    {
+      "finding": "P2-3",
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "root_cause": "Gather cards omitted durable tool state/warnings and broken-tool service/quote/source guidance.",
+      "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "status": "FIXED; AUTOMATED REGRESSION AND FINAL BROAD VALIDATION PASSED; INDEPENDENT RE-REVIEW PENDING"
+    }
+  ],
+  "schema": {
+    "migration": "player_experience_economy_v1",
+    "table_count": 8,
+    "tables": [
+      "player_travel_sessions",
+      "player_gathering_sessions",
+      "player_profession_tools",
+      "player_location_threats",
+      "player_feedback_events",
+      "player_pxe1_ui",
+      "pvp_participant_settlements_pxe1",
+      "pvp_group_settlements_pxe1"
+    ],
+    "additive_column_count": 9,
+    "additive_columns": {
+      "players": [
+        "location_visit_revision"
+      ],
+      "pve_encounters": [
+        "lifecycle_version",
+        "formation_deadline_ms",
+        "formation_revision",
+        "runtime_started_ms"
+      ],
+      "pvp_engagements": [
+        "world_model_version",
+        "locked_roster_json",
+        "roster_locked_ms"
+      ],
+      "pvp_engagement_reinforcements": [
+        "membership_version"
+      ]
+    },
+    "catalog_version": 2,
+    "craft_xp_policy_version": 2,
+    "schema_versions": 1,
+    "index_count": 16,
+    "indexes": [
+      "idx_pxe1_travel_running",
+      "idx_pxe1_travel_due",
+      "idx_pxe1_travel_history",
+      "idx_pxe1_gather_running",
+      "idx_pxe1_gather_due",
+      "idx_pxe1_gather_history",
+      "idx_pxe1_threat_due",
+      "idx_pxe1_threat_player",
+      "idx_pxe1_feedback_player",
+      "idx_pxe1_pvp_death_player",
+      "idx_pve_formation_due",
+      "idx_pvp_pxe1_due",
+      "idx_pxe1_pvp_ally_once",
+      "idx_pxe1_pvp_seat",
+      "idx_pxe1_pvp_commitment",
+      "idx_pxe1_pvp_membership"
+    ],
+    "versions": {
+      "travel_schema": 1,
+      "travel_route": 1,
+      "gathering_schema": 1,
+      "gathering_rng": 1,
+      "gathering_source": 1,
+      "tool_schema": 1,
+      "threat_schema": 1,
+      "feedback_schema": 1,
+      "ui_schema": 1,
+      "pvp_membership": 1,
+      "pvp_participant_settlement": 1,
+      "pvp_group_settlement": 1,
+      "catalogue": 2,
+      "craft_xp_policy": 2,
+      "legacy_live_pvp": 0
+    }
+  },
+  "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
+  "historical_focused_evidence": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md",
+  "human_scenarios": {
+    "H01": "NOT RUN",
+    "H02": "NOT RUN",
+    "H03": "NOT RUN",
+    "H04": "NOT RUN",
+    "H05": "NOT RUN",
+    "H06": "NOT RUN",
+    "H07": "NOT RUN",
+    "H08": "NOT RUN",
+    "H09": "NOT RUN",
+    "H10": "NOT RUN",
+    "H11": "NOT RUN",
+    "H12": "NOT RUN",
+    "H13a": "NOT RUN",
+    "H13b": "NOT RUN",
+    "H13c": "NOT RUN",
+    "H13d": "NOT RUN",
+    "H13e": "NOT RUN",
+    "H14": "NOT RUN",
+    "H15": "NOT RUN",
+    "H16": "NOT RUN",
+    "H17": "NOT RUN",
+    "H18": "NOT RUN",
+    "H19": "NOT RUN",
+    "H20": "NOT RUN"
+  },
+  "environment": {
+    "python": "3.12.10",
+    "pytest": "9.1.1",
+    "python_telegram_bot": "21.11.1",
+    "platform": "win32",
+    "database": "isolated temporary SQLite; production database untouched"
+  },
+  "links": {
+    "contract": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md",
+    "report": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md",
+    "execution_log": "docs/epics/PLAYER_EXPERIENCE_ECONOMY_V1_EXECUTION_LOG.md",
+    "human_plan": "docs/evidence/player_experience_economy_v1_human.md",
+    "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237"
+  },
+  "pending_fixture_repair_diagnostic": {
+    "status": "SCRATCH DIAGNOSTIC COMPLETED; FIXTURES NOW APPLIED AND VERIFIED IN REPOSITORY",
+    "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-pending-fixture-repairs/test_formation_metadata_rollout_pr2c2.py' 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-pending-fixture-repairs/test_inn_phase1.py' --tb=short",
+    "passed": 15,
+    "seconds": 4.02,
+    "purpose": "Verify the four known fixture repairs without changing the in-flight ce2f51d broad candidate."
+  },
+  "full_suite_attempts": [
+    {
+      "status": "FAILED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "ce2f51dd5e4c7c45faef107e38657099039ebdc5",
+      "observed_running_utc": "2026-10-07T14:37:04.679522+00:00",
+      "log": "pxe1-final-broad-pytest.log",
+      "source_blobs_and_trees": {
+        "rpg/bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "rpg/database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "rpg/game": "523851ae086247de91589dd1dc7582df68a6aa56",
+        "rpg/handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+        "rpg/locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+        "rpg/requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "rpg/tests": "45aa67571b7a379b276ea04d7c401b681a6a6b00"
+      },
+      "earned_history": "fresh session build; no recorded checkpoint environment override",
+      "passed": 2186,
+      "failed": 5,
+      "errors": 40,
+      "subtests_passed": 276,
+      "seconds": 3492.79,
+      "finding": "Four retained formation/Inn fixtures, tool-slot NPC resale assertion, and one shared earned-gear setup error propagated to 39 regional branches. No completed earned checkpoint."
+    },
+    {
+      "status": "PASSED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+      "session_id": 47845,
+      "started_utc": "2026-10-08T05:49:51.102733+00:00",
+      "log": "pxe1-final-ration-order-broad-pytest.log",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
+      "database": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\earned.sqlite3",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "git_identities": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+        "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+        "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+        "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+      },
+      "history_mode": "Whole verified COMPLETE same-source history reused; all tests execute; no fresh core rebuild",
+      "passed": 2237,
+      "subtests_passed": 276,
+      "seconds": 1777.62,
+      "exit_code": 0,
+      "terminal_line": "2237 passed, 276 subtests passed in 1777.62s (0:29:37)",
+      "completed_observation_utc": "2026-10-08T06:19:02.499358+00:00",
+      "validation_recorded_head": "f77de3e841bf4c924110af0fd2f5c360c28bc9a0",
+      "log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
+      "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
+    }
+  ],
+  "gear_flow_diagnostic": {
+    "status": "NOT RUN: FAILED TEMPORARY DATABASE ALREADY ROTATED BY PYTEST",
+    "log": "pxe1-earned-gear-diagnostic-pytest.log",
+    "exit_code": 1,
+    "finding": "Readonly source open failed before backup or gear actions. Fresh earned rebuild required; no incomplete checkpoint accepted."
+  },
+  "continuation_preservation": {
+    "status": "SINGLE DRAFT CREATED; AUTOMATED COMPLETE; HUMAN NOT RUN",
+    "observed_utc": "2026-10-08T06:27:58.384128+00:00",
+    "code_candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+    "active_session_id": null,
+    "partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\earned.sqlite3",
+    "partial_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned\\partial-provenance.json",
+    "partial_status": "PARTIAL; NOT ACCEPTANCE; NOT LOADABLE AS COMPLETED CHECKPOINT",
+    "partial_database_sha256": "e8d9df8f92fab2504090add14ada7f1cde67bbeefc07933ea78dd62ec56cdfb4",
+    "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\PXE1_CONTINUATION_CHECKPOINT.md",
+    "final_broad_status": "PASSED",
+    "human_validation": "NOT RUN",
+    "latest_failed_partial_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
+    "completed_prior_core": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-completed-earned",
+    "completed_prior_core_current_reuse": "DIAGNOSTIC ONLY; CURRENT PRODUCTION HASH DIFFERS",
+    "failed_regional_states": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-failed-regional",
+    "completed_current_core": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
+    "completed_current_database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+    "completed_current_source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+    "completed_current_core_reuse": "Valid for RAV-only setup repair; invalidated by any production/creator/common change",
+    "tested_code_and_tests": {
+      "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+      "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+      "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+      "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+      "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+      "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+      "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+    },
+    "broad_execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+    "broad_log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
+    "draft_pr": "https://github.com/danyasemennikov/rpg-bot/pull/237",
+    "publication_head_at_creation": "aa97d808a89fcc3461be8fe1b84046d983f7b68d"
+  },
+  "earned_journey_attempts": [
+    {
+      "status": "FAILED",
+      "provenance": "one current registration/Chapter/profession history, SHA-256 whole DB clones; no old PEV1 history",
+      "collected_tests": 41,
+      "candidate_sha": "fb89ec23bcbfc09a1d46224cf905f26d3f78bdba",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-repaired-fresh-pytest.log",
+      "earned_history": "fresh from registration; no checkpoint override",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 6526.18,
+      "finding": "All 83 recipes and twelve professions reached 20; crafted gear enhanced/advanced. Consumable inventory proof exposed stale player HP/MP: combat actor lost HP but player row retained full prebattle resources. Shared fixture failure prevented 39 RAV branches from executing.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\fb89ec2-partial-earned-latest"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-vitals-repaired-fresh-pytest.log",
+      "session_id": 98396,
+      "earned_history": "fresh from registration; PXE1_EARNED_CHECKPOINT explicitly absent; no partial backup reused",
+      "collected_tests": 41,
+      "observed_utc": "2026-10-07T21:15:12.430900+00:00",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 1575.5,
+      "finding": "Actual combat damage now persists. Paid Inn recovery exhausted gold during tier-three crafting and used an obsolete immediate All sale; the valuable material stack correctly returned confirmation_required. Shared setup error prevented 39 RAV branches.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\ca4331e-partial-earned"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "8a9e10c8bfe328ef31b133a776a42a770c10a13d",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-confirmed-recovery-fresh-pytest.log",
+      "session_id": 85414,
+      "collected_tests": 41,
+      "earned_history": "fresh from registration; no PXE1_EARNED_CHECKPOINT override; no failed partial history reused",
+      "observed_utc": "2026-10-07T21:43:46.040502+00:00",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 13.01,
+      "finding": "A real three-wolf Chapter pack defeated the early character while five earned health potions were carried; harvesting helper enabled battle potion use only for trolls. No death assertion relaxed.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\8a9e10c-partial-earned"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "d6453a54bbe9cd617750851f1e5d660c2238f030",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-battle-recovery-fresh-pytest.log",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 3730.28,
+      "earned_history": "fresh registration; no checkpoint override",
+      "finding": "Host clock pause aged the immediate travel preview beyond its 900-second expiry; production correctly rejected the unused token. No RAV branches executed.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d6453a5-partial-earned"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "2db8a7f526e241b5b5133dd72efd27318dbfef9a",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-clock-stable-fresh-pytest.log",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 12.81,
+      "earned_history": "fresh registration; no checkpoint override",
+      "finding": "Chapter helper used obsolete immediate sale of the last owned health_potion_small. Current last_consumable guard correctly required confirmation; shared fixture stopped before RAV execution.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\2db8a7f-partial-earned"
+    },
+    {
+      "status": "FAILED",
+      "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-protected-sale-fresh-pytest.log",
+      "passed": 1,
+      "errors": 40,
+      "seconds": 6852.97,
+      "earned_history": "fresh registration; no checkpoint override",
+      "finding": "All 83 recipes and all twelve profession caps reached; crafted gear enhanced/advanced. Later real fights consumed four required recovery outputs before the final effect proof. Shared fixture stopped at its retained all-output availability assertion; no RAV branches executed.",
+      "diagnostic_backup": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\0e52fa6-partial-earned",
+      "database_sha256": "90dac5e420d6ef2acb81eee5891db855b5e74767f3219c731794a981ed1e3682"
+    },
+    {
+      "status": "FAILED; CORE HISTORY COMPLETE",
+      "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-restocked-recovery-fresh-pytest.log",
+      "passed": 37,
+      "failed": 4,
+      "seconds": 7128.96,
+      "earned_history": "fresh registration; no checkpoint override",
+      "core_history": "all production checks passed, all 83 recipes, all 12 profession caps, gear and eight recovery effects, three locales",
+      "regional_result": {
+        "passed": 35,
+        "failed": 4
+      },
+      "finding": "RAV J09 old 250-XP setup assumption; J10 spent boar meat; J12 committed flee rejected by locked-roster validation; J14 non-victory closure left stale combat flag",
+      "completed_core_archive": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\b272d52-completed-earned",
+      "database_sha256": "1e6da4e24728c63d77c444391e4dd96922af90b44a6a482a59c5ba2411292365",
+      "source_sha256": "517c110c7c42c8decad374d919e219a6493c3a84b84ff060eb257f82e17b9284",
+      "reuse_on_current_source": "FORBIDDEN AS CURRENT ACCEPTANCE: production changed; diagnostic only"
+    },
+    {
+      "status": "FAILED; CORE HISTORY COMPLETE",
+      "candidate_sha": "28664a714c7729514997877914db660fba126104",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "log": "pxe1-earned-departure-recovery-fresh-pytest.log",
+      "session_id": 43109,
+      "collected_tests": 41,
+      "earned_history": "fresh registration; PXE1_EARNED_CHECKPOINT explicitly absent; prior completed core is not reused after production changes",
+      "observed_utc": "2026-10-08T03:36:12.038357+00:00",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "passed": 38,
+      "failed": 3,
+      "seconds": 7481.45,
+      "regional_result": {
+        "passed": 36,
+        "failed": 3
+      },
+      "finding": "J17 did not earn required boar meat; J18 Sunscar ration reward saved one 12-XP boar victory in only one region order",
+      "completed_core_archive": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\28664a7-completed-earned",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      },
+      "reuse_on_current_source": "COMPLETE same-source history remains valid: only RAV test setup changed"
+    }
+  ],
+  "remaining_output_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETED HISTORY ACCEPTANCE",
+    "candidate_sha": "ca4331e47dee41a5256431f8116d9a3856609140",
+    "command": "python -m pytest -q -s 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_outputs.py' --tb=short",
+    "passed": 1,
+    "seconds": 21.95,
+    "log": "pxe1-consumables-locale-repaired-diagnostic-pytest.log",
+    "provenance": "Whole copy of failed fb89ec2 history; missing previously consumed outputs replenished by real learned recipes, then all eight unchanged consumable effects and three unchanged locale assertions executed. This copy is not reusable final acceptance."
+  },
+  "architecture_pair_adapters": {
+    "legacy_version_zero": "game/pvp_live.py::_ensure_live_runtime_for_battle, _init_live_battle_payload, _runtime_side_for_player, _runtime_active_player_id, _finalize_pvp_battle; game/combat_orders.py::consume_combat_intent principal-only branch",
+    "current_content_policy": "game/pvp_group_runtime.py::locked_sides; principal identity and maximum-two cap outside shared runtime",
+    "shared_engine": "generic participant collections; no fixed side size"
+  },
+  "static_verification": {
+    "utc": "2026-10-07T21:21:43.729636+00:00",
+    "active_doc_file_links": "RESOLVE",
+    "frozen_contract_matches_original": true,
+    "sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
+  },
+  "inn_funding_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETED ACCEPTANCE HISTORY",
+    "candidate_sha": "8a9e10c8bfe328ef31b133a776a42a770c10a13d",
+    "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_inn_funding.py' --tb=short",
+    "passed": 1,
+    "seconds": 0.93,
+    "log": "pxe1-inn-funding-repaired-diagnostic-pytest.log",
+    "provenance": "Whole-copy failed current history; unchanged earned state, actual Shop preview/confirmation sale (1..99), 12g Inn charge, restored effective HP and original location verified. No synthetic resources/progression."
+  },
+  "chapter_sale_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETE HISTORY",
+    "candidate_sha": "0e52fa6078e669deb6fca8dc1d6c4e5a356b7b1e",
+    "command": "python -m pytest -q 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_chapter_sale.py' --tb=short",
+    "passed": 1,
+    "seconds": 0.66,
+    "log": "pxe1-chapter-protected-sale-diagnostic-pytest.log",
+    "provenance": "Whole failed 2db8a7f Chapter state; exact last_consumable risk verified, actual Shop confirmation commits sale and real Homecoming claim completes all four Chapter assignments; no injected progress",
+    "prior_diagnostic_attempt": {
+      "status": "FAILED DIAGNOSTIC ASSERTION; 18 FOCUSED CHECKS PASSED",
+      "failed": 1,
+      "passed": 18,
+      "seconds": 14.09,
+      "log": "pxe1-chapter-sale-focused-pytest.log",
+      "finding": "Scratch diagnostic wrongly assumed protected stack required >=25g total; actual guard is last_consumable"
+    }
+  },
+  "recovery_restock_diagnostic": {
+    "status": "PASSED DIAGNOSTIC ONLY; NOT COMPLETE HISTORY",
+    "candidate_sha": "b272d5223ed09b9c27ca9f358aaa9ae72181b847",
+    "command": "python -m pytest -q -s 'C:/Users/masha/Documents/Codex/2026-10-05/files-mentioned-by-the-user-pxe1/pxe1-recovery-diagnostic/test_current_outputs.py' --tb=short",
+    "passed": 1,
+    "seconds": 28.52,
+    "log": "pxe1-recovery-restock-diagnostic-pytest.log",
+    "provenance": "Whole actual failed 0e52fa6 DB; all five gathering and seven crafting caps retained, four missing outputs replenished by actual learned recipes and paid/material owners, all eight original effect assertions and all three locale checks pass. No injected progress/goods/gold; this copy is not final acceptance."
+  },
+  "focused_repair_attempts": [
+    {
+      "status": "FAILED WORKING-TREE REPAIR",
+      "failed": 5,
+      "passed": 48,
+      "seconds": 11.33,
+      "log": "pxe1-departure-closure-focused-pytest.log",
+      "finding": "Startup caller still omitted validator transaction argument; fixed before coherent commit"
+    },
+    {
+      "status": "COLLECTION ERROR; CORRECTED BEFORE COMMIT",
+      "errors": 1,
+      "seconds": 1.22,
+      "finding": "Temporary startup-call indentation error; terminal result preserved here; subsequent measured 57-check run passes"
+    }
+  ],
+  "publication": {
+    "status": "CODE/TEST CANDIDATE PUBLISHED; FINAL DOCS PUBLICATION RECORDED IN WORKSPACE RECEIPT",
+    "code_test_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
+    "verification_receipt": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\publication-check.json",
+    "head_correspondence": "Code/test identities match completed full gate; later changes are documentation only"
+  },
+  "reviewed_candidate_history": {
+    "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+    "full_suite": {
+      "status": "PASSED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+      "session_id": 47845,
+      "started_utc": "2026-10-08T05:49:51.102733+00:00",
+      "log": "pxe1-final-ration-order-broad-pytest.log",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
+      "database": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\earned.sqlite3",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "git_identities": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+        "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+        "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+        "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+      },
+      "history_mode": "Whole verified COMPLETE same-source history reused; all tests execute; no fresh core rebuild",
+      "passed": 2237,
+      "subtests_passed": 276,
+      "seconds": 1777.62,
+      "exit_code": 0,
+      "terminal_line": "2237 passed, 276 subtests passed in 1777.62s (0:29:37)",
+      "completed_observation_utc": "2026-10-08T06:19:02.499358+00:00",
+      "validation_recorded_head": "f77de3e841bf4c924110af0fd2f5c360c28bc9a0",
+      "log_sha256": "5c8d502209c843b0845af742242651b91a4489a791d45735d56cd90017066150",
+      "contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3"
+    },
+    "earned_profession_rav_journeys": {
+      "status": "PASSED",
+      "candidate_sha": "d5b96612a75b1d56f7b9da2d1a01b05fa3c6ea5b",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short",
+      "earned_history": "Verified COMPLETE same-source history reused; all 41 assertions execute; no fresh history rebuild",
+      "source_sha256": "254c8532dfa804e2d1ace27562c13281d5032db4817dfe6eca21e465e126cf20",
+      "database_sha256": "af3c5ad250f791faeda35f5434dad37ebb0f7d57173f4715c7d18b26dab3806a",
+      "checkpoint": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned",
+      "collected_tests": 41,
+      "passed": 41,
+      "seconds": 327.76,
+      "execution_head": "4629c1e6c415f8b86eceb8c4ffff2ddce2c4d95d",
+      "log": "pxe1-earned-ration-order-verified-history-pytest.log",
+      "log_sha256": "1b06ea9155abe2d681f563f7e140812a7b21f71becee479d54d48506d9dc4369",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      },
+      "completed_acceptance_provenance": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\d5b9661-completed-earned\\acceptance-run.json"
+    },
+    "publication": {
+      "state": "OPEN DRAFT",
+      "created_as_draft": true,
+      "creation_head": "aa97d808a89fcc3461be8fe1b84046d983f7b68d",
+      "head_ref": "feat/pxe1-player-experience-economy-v1",
+      "base_ref": "main",
+      "creation_verified_utc": "2026-10-08T06:27:58.384128+00:00",
+      "merge": "NOT MERGED",
+      "tested_code_and_tests": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "46d4024e7bf0641c7a92aad12453d5a38cc69721",
+        "handlers": "6a8a775c1f05da45dbad6a71db4b57f99a7a30b1",
+        "locales": "a4191b30ede0f7fb88aa9c98c10529f10b35e408",
+        "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "tests": "b1956e3f76da133762c7fdfb2b4cd114a459bfd6"
+      },
+      "head_correspondence": "Subsequent commits are docs only; final pushed HEAD is verified separately against these tested trees",
+      "github_checks_at_creation": "NO CHECKS REPORTED"
+    },
+    "deviations": []
+  },
+  "review_corrections": {
+    "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+    "repair_commit": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+    "root_causes": {
+      "P1-1": "Read-selection SQL used nonexistent group_rules_version instead of world_model_version.",
+      "P1-2": "Recovery required an open deadline at a proven completed side boundary; restored next-side deadline also needed immediate persistence. Completed-side cache restoration also omitted persisted round_index, corrected at33dff10.",
+      "P1-3": "Failed side resolution retained advanced cache/projections; recovery could open an already-open enemy side twice.",
+      "P1-4": "Individual and terminal settlement retained accepted/locked ally exclusivity despite clearing activity.",
+      "P2-1": "Common timed arrival omitted existing frontier/core-war respawn protection consumption.",
+      "P2-2": "Core Map destination list contained only capital neighbors, omitting capital_city itself.",
+      "P2-3": "Gather cards omitted durable tool state/warnings and broken-tool service/quote/source guidance."
+    },
+    "regressions": "tests/test_pxe1_review_regressions.py",
+    "new_regressions_result": "154 passed in 34.48s",
+    "raw_logs": [
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-all-regressions-pytest.log",
+        "sha256": "675f4a9649f88f119a7f09d0f70eaee022ba7e083b32def4bc7403082eeccb52",
+        "terminal_line": "154 passed in 34.48s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-before-pytest.log",
+        "sha256": "8c445b59be6bfc44197328a2c46041ed3b7f14f82d0a28b9fc7a89b85eca5bf6",
+        "terminal_line": "9 failed, 1 passed in 2.90s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f1-pytest.log",
+        "sha256": "bbc9746a2de36fca7f235af7259ffbb64700c8ca34ece1931e18548ae4db2b5b",
+        "terminal_line": "64 passed, 77 deselected in 16.08s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f1-related-pytest.log",
+        "sha256": "670d253fc1e5e3ef65fdaa0ebdc2fe5f3e16bbb36b7b5b973d78940045147822",
+        "terminal_line": "68 passed in 13.18s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-expanded-pytest.log",
+        "sha256": "aaba122858843dea959568ac554c33b3b77466e508fd49f4893d8d77144c50f9",
+        "terminal_line": "38 passed, 70 deselected in 10.82s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-final-pytest.log",
+        "sha256": "a9e13f596687d8416d54341a6c1b8c1b8a8c33a6d815213b0a51cb2dfa9e09e2",
+        "terminal_line": "38 passed, 106 deselected in 10.56s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-pytest.log",
+        "sha256": "21e351c264777c1891e5e618307977aea2095aa3eb5f97462c170f4d03e73e43",
+        "terminal_line": "3 passed, 70 deselected in 1.41s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f2-f3-related-pytest.log",
+        "sha256": "9322bec3dba8c4cddec6c45c990c7d8947684a9836416399fefa6eae6eb2372a",
+        "terminal_line": "70 passed in 14.11s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f4-expanded-pytest.log",
+        "sha256": "8e701713df197c85fa0693692a9fbc915266bd48d0118139a8745b78ac6c0d8d",
+        "terminal_line": "3 passed, 96 deselected in 1.13s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f4-pytest.log",
+        "sha256": "708db93b254b87e99a7d4ea540669c6f504e57df273da0d4004613c807453258",
+        "terminal_line": "1 passed, 102 deselected in 0.82s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f4-related-pytest.log",
+        "sha256": "45938792b5bb877928bda749140e9ccbd79ae3fc4f9e380db423dde228117ded",
+        "terminal_line": "73 passed in 13.02s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f5-pytest.log",
+        "sha256": "aaa0378ea97db9f82c989901de54d779aaadbcb9e0d82a91ebdf4c39b97ebefc",
+        "terminal_line": "10 passed, 98 deselected in 2.16s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f5-related-pytest.log",
+        "sha256": "d835bd8fc0993b9bc3db829fac57828068ffbf50e27415c8a0c062a669f1b44a",
+        "terminal_line": "21 passed, 113 subtests passed in 6.01s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f6-pytest.log",
+        "sha256": "64c6be65a10824c9b9a1c8f55e632d7c4908bd8ee26a1154413d2700fbb808a5",
+        "terminal_line": "7 passed, 107 deselected in 1.68s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f6-related-pytest.log",
+        "sha256": "431c37490d0c5f57caa7dd84357a7a545be8542e949ac5be50af869f5bce0baa",
+        "terminal_line": "26 passed in 6.66s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f7-expanded-pytest.log",
+        "sha256": "2d4423486329c5018f62a22bb1e1f76b6b85e56605e6cb57304ff4de317b9a5d",
+        "terminal_line": "22 passed, 111 deselected in 4.42s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-f7-pytest.log",
+        "sha256": "2e765b607aa8fa1a241c46dae128775598f690ab672c7543d31c0405ae1d7db7",
+        "terminal_line": "3 passed, 111 deselected in 1.03s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-final-focused-pytest.log",
+        "sha256": "40d78087b5afbb739c82452a4d07bec72320b96d4536f64f63d1a17154197483",
+        "terminal_line": "520 passed in 111.35s (0:01:51)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-focused-pytest.log",
+        "sha256": "7e3328796cb8087a93864228b081c6669f6c76230968e1a4987af32aadea1c81",
+        "terminal_line": "499 passed in 104.92s (0:01:44)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-boundary-after-pytest.log",
+        "sha256": "52690c81fa8f27f41ae401314c4baf52bb17e9e0db3eabeb644ed5fea83e1e5a",
+        "terminal_line": "38 passed, 127 deselected in 10.69s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-boundary-before-pytest.log",
+        "sha256": "ca70e66264882461ee1acc738a684901793d78c723672aa56308be9e3239f1d8",
+        "terminal_line": "1 failed, 1 passed, 152 deselected in 1.45s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-j18-trace-pytest.log",
+        "sha256": "c3020f3a78ff3068626f19983ba2dac70d37415c6ec71b805467add0e201e7c8",
+        "terminal_line": "1 passed in 35.35s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-j18-variation-after-pytest.log",
+        "sha256": "b99dfd3f9770385dac4e68fe94430eaddd2333206c0d66d77b84cff2c7dc550e",
+        "terminal_line": "1 passed in 34.63s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-j18-variation-before-pytest.log",
+        "sha256": "b2ba4bc6fc7f7bf08311595d7d2c0ebf1ad24e28ab6dec104ecbfb5ce1ffda1d",
+        "terminal_line": "1 failed in 39.06s"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-final-broad-pytest.log",
+        "sha256": "46a4d343dfb1cf619e63092e7b4e7f063288457f6b335fdd332e9eb9b2ed6951",
+        "terminal_line": ".................................................."
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
+        "sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e",
+        "terminal_line": "41 passed in 322.23s (0:05:22)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+        "sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+        "terminal_line": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-final-broad-pytest.log",
+        "sha256": "f617b4611cba40cf191510d18b338211819649df5001e4d8afefe11760be575d",
+        "terminal_line": "1 failed, 2390 passed, 276 subtests passed in 8808.88s (2:26:48)"
+      },
+      {
+        "workspace_relative_path": "work/rpg-bot/rpg/pxe1-review-round-final-focused-pytest.log",
+        "sha256": "5e17a84fcd31663df4bcf5fadd32478e3ed703725032602cae620d24f6f25d62",
+        "terminal_line": "520 passed in 110.83s (0:01:50)"
+      }
+    ],
+    "source_and_test_git_identities": {
+      "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+      "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+      "game": "8cdc2be3c0b8f9587a45f123dd2c4cebc7ebb689",
+      "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+      "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+      "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+      "tests": "16eae743ab58aaff799719009c6b564d8e99839a"
+    },
+    "preserved_contract_sha256": "0c5b81abd67805a3839631001c050615b4c3ece49d3506640d1ee483f8598de3",
+    "human_validation": "NOT RUN",
+    "merge": "NOT MERGED",
+    "review_status": "READY FOR NARROW INDEPENDENT RE-REVIEW",
+    "final_focused_result": {
+      "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+      "passed": 520,
+      "seconds": 110.83,
+      "exit_code": 0,
+      "log": "pxe1-review-round-final-focused-pytest.log",
+      "log_sha256": "5e17a84fcd31663df4bcf5fadd32478e3ed703725032602cae620d24f6f25d62",
+      "includes_all_new_regressions": 154
+    },
+    "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+    "implementation_commits": [
+      "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+      "33dff106ec6b17563e575c56a88dceed78673cd0"
+    ],
+    "completed_side_round_followup": {
+      "finding": "P1-2 / F2",
+      "commit": "33dff106ec6b17563e575c56a88dceed78673cd0",
+      "root_cause": "Completed-side cache restoration did not restore persisted round_index.",
+      "before": "1 failed / 1 passed, 1.45s",
+      "after": "38 passed, 10.69s",
+      "regression": "Completed enemy/player side restart asserts round identity as well as deadline.",
+      "prior_broad_attempt": {
+        "candidate_sha": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+        "execution_start_head": "4ade6abf8db825097c9754ce204e564c96cdfa5b",
+        "current_head": "696b9d8339d750c6d1a974c660d40588e313f3da",
+        "branch": "feat/pxe1-player-experience-economy-v1",
+        "status": "STOPPED, NOT PASS",
+        "session_id": 54690,
+        "command": "python -m pytest -q",
+        "raw_log": "acceptance-recovery/review-237-corrections/4ade6ab-broad-stopped-for-round-fix.log",
+        "history_mode": "FRESH; PXE1_EARNED_CHECKPOINT unset",
+        "human_validation": "NOT RUN",
+        "observed_at_utc": "2026-10-09T00:48:34.537416+00:00",
+        "git_status": "",
+        "completed_regressions": "154 passed in 34.48s",
+        "completed_focused": "520 passed in 111.35s",
+        "source_sha256": "e11767b6aeeba81f96c0b772e00a43db2bcfce81d7b315adc7ef92dba1fab27c",
+        "source_and_test_git_identities": {
+          "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+          "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+          "game": "11159868a42729bf75f3e36e0c30f63616e34148",
+          "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+          "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+          "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+          "tests": "de24e38bb538e9429e29577a312cc192bdb439da"
+        },
+        "exit_code": -1,
+        "reason": "Confirmed completed enemy-side recovery reset round 2 to 1; fixed before final gate."
+      }
+    },
+    "regional_order_fixture_followup": {
+      "commit": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+      "production_changed": false,
+      "root_cause": "Independent ration preparation can consume newly crafted rations in real boar fights and earn different starting XP; final absolute progression compared unequal inputs.",
+      "correction": "Earn the stock once; consistent whole SQLite backup and verified whole-copy restore for each regional order. Assert identical full prepared player state; retain final exact progression equality and all claim/conservation assertions.",
+      "prior_full_suite": {
+        "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+        "execution_start_head": "755f46d02e4500363e4b5f0bb3f3dbb2fbd0c37b",
+        "current_head": "755f46d02e4500363e4b5f0bb3f3dbb2fbd0c37b",
+        "branch": "feat/pxe1-player-experience-economy-v1",
+        "status": "FAILED",
+        "session_id": 10193,
+        "command": "python -m pytest -q",
+        "raw_log": "work/rpg-bot/rpg/pxe1-review-round-final-broad-pytest.log",
+        "history_mode": "FRESH; PXE1_EARNED_CHECKPOINT unset",
+        "human_validation": "NOT RUN",
+        "observed_at_utc": "2026-10-09T03:14:26.531727+00:00",
+        "git_status": "",
+        "completed_regressions": "All 154 included in final 520-test focused gate",
+        "completed_focused": "520 passed in 110.83s",
+        "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "source_and_test_git_identities": {
+          "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+          "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+          "game": "8cdc2be3c0b8f9587a45f123dd2c4cebc7ebb689",
+          "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+          "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+          "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+          "tests": "ae3f162b47160c5ee71bb391501418234ad18cd7"
+        },
+        "completed_earned_core": {
+          "status": "COMPLETE CORE ONLY; broad suite result recorded separately",
+          "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-agy20wot",
+          "target": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+          "observed_utc": "2026-10-09T03:13:51.676127+00:00",
+          "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+          "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+          "database_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+          "production_checks": {
+            "new_character_and_chapter": true,
+            "mining_smith_heavy": true,
+            "wood_fiber_arcane": true,
+            "herbalism_alchemy": true,
+            "fishing_cooking": true,
+            "hunting_claims_and_consumers": true,
+            "gear_integration": true,
+            "learning_authority": true,
+            "conservation_and_receipts": true,
+            "localized_complete_navigation": true,
+            "regional_source_coverage": true
+          },
+          "crafted_recipes": 83,
+          "gathering": {
+            "fishing": 20,
+            "herbalism": 20,
+            "hunting": 20,
+            "mining": 20,
+            "woodcutting": 20
+          },
+          "crafting": {
+            "alchemy": 20,
+            "arcane_engineer": 20,
+            "blacksmith": 20,
+            "cooking": 20,
+            "heavy_armor": 20,
+            "light_armor": 20,
+            "medium_armor": 20
+          }
+        },
+        "exit_code": 1,
+        "passed": 2390,
+        "failed": 1,
+        "subtests_passed": 276,
+        "seconds": 8808.88,
+        "completed_utc": "2026-10-09T03:28:52.165123+00:00",
+        "failure": "J18 regional-order equality: exp 6739 vs 6751",
+        "raw_log_sha256": "f617b4611cba40cf191510d18b338211819649df5001e4d8afefe11760be575d"
+      },
+      "complete_fresh_core": {
+        "status": "COMPLETE CORE ONLY; broad suite result recorded separately",
+        "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-agy20wot",
+        "target": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+        "observed_utc": "2026-10-09T03:13:51.676127+00:00",
+        "candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+        "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "database_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+        "production_checks": {
+          "new_character_and_chapter": true,
+          "mining_smith_heavy": true,
+          "wood_fiber_arcane": true,
+          "herbalism_alchemy": true,
+          "fishing_cooking": true,
+          "hunting_claims_and_consumers": true,
+          "gear_integration": true,
+          "learning_authority": true,
+          "conservation_and_receipts": true,
+          "localized_complete_navigation": true,
+          "regional_source_coverage": true
+        },
+        "crafted_recipes": 83,
+        "gathering": {
+          "fishing": 20,
+          "herbalism": 20,
+          "hunting": 20,
+          "mining": 20,
+          "woodcutting": 20
+        },
+        "crafting": {
+          "alchemy": 20,
+          "arcane_engineer": 20,
+          "blacksmith": 20,
+          "cooking": 20,
+          "heavy_armor": 20,
+          "light_armor": 20,
+          "medium_armor": 20
+        }
+      },
+      "read_only_trace": "Both regional orders award 680 XP when prepared starting states match.",
+      "legal_consumable_variation_before": "1 failed in 39.06s; starting XP differed 24, final XP differed 24, region delta 680 for both",
+      "legal_consumable_variation_after": "1 passed in 34.63s; exact same prepared player and same final equality",
+      "affected_journeys": {
+        "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+        "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short --basetemp <workspace prepared-j18-all41-temp>",
+        "passed": 41,
+        "seconds": 322.23,
+        "exit_code": 0,
+        "history_mode": "Explicit verified COMPLETE same-source whole-core reuse; regional parties earned again",
+        "core_source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "core_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+        "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
+        "raw_log_sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e"
+      },
+      "final_full_suite": {
+        "status": "PASSED",
+        "command": "python -m pytest -q",
+        "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+        "execution_start_head": "b78b0186b79e0816a63cc95c33009991c5e5c22f",
+        "history_mode": "Explicit whole verified COMPLETE same-source core reuse; fresh core originally built in failed 33dff10 broad gate",
+        "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+        "passed": 2391,
+        "subtests_passed": 276,
+        "seconds": 1568.15,
+        "exit_code": 0,
+        "terminal_summary": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)",
+        "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+        "raw_log_sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+        "completed_history": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+        "completed_history_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+        "production_checks": {
+          "new_character_and_chapter": true,
+          "mining_smith_heavy": true,
+          "wood_fiber_arcane": true,
+          "herbalism_alchemy": true,
+          "fishing_cooking": true,
+          "hunting_claims_and_consumers": true,
+          "gear_integration": true,
+          "learning_authority": true,
+          "conservation_and_receipts": true,
+          "localized_complete_navigation": true,
+          "regional_source_coverage": true
+        }
+      }
+    },
+    "final_broad_result": {
+      "status": "PASSED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+      "execution_start_head": "b78b0186b79e0816a63cc95c33009991c5e5c22f",
+      "history_mode": "Explicit whole verified COMPLETE same-source core reuse; fresh core originally built in failed 33dff10 broad gate",
+      "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+      "passed": 2391,
+      "subtests_passed": 276,
+      "seconds": 1568.15,
+      "exit_code": 0,
+      "terminal_summary": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)",
+      "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+      "raw_log_sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+      "completed_history": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+      "completed_history_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      }
+    },
+    "historical_first_packet": true,
+    "superseded_by_narrow_review": "5fea976 COMPLETE / FIX for residual F2/F3"
+  },
+  "production_candidate_sha": "9d0a02a1a6ef5f6406ad43bf23f04382363ece72",
+  "second_review_prior_candidate": {
+    "status": "DRAFT; ALL SEVEN FINDINGS FIXED AND AUTOMATED GATES PASSED; NARROW INDEPENDENT RE-REVIEW PENDING",
+    "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+    "production_candidate_sha": "33dff106ec6b17563e575c56a88dceed78673cd0",
+    "full_suite": {
+      "status": "PASSED",
+      "command": "python -m pytest -q",
+      "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+      "execution_start_head": "b78b0186b79e0816a63cc95c33009991c5e5c22f",
+      "history_mode": "Explicit whole verified COMPLETE same-source core reuse; fresh core originally built in failed 33dff10 broad gate",
+      "source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+      "passed": 2391,
+      "subtests_passed": 276,
+      "seconds": 1568.15,
+      "exit_code": 0,
+      "terminal_summary": "2391 passed, 276 subtests passed in 1568.15s (0:26:08)",
+      "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-final-broad-pytest.log",
+      "raw_log_sha256": "c8c8632681e2e910958caa2f5f5e338671a6a45576594437b2f24bf38b7d53dc",
+      "completed_history": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\33dff10-completed-earned",
+      "completed_history_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+      "production_checks": {
+        "new_character_and_chapter": true,
+        "mining_smith_heavy": true,
+        "wood_fiber_arcane": true,
+        "herbalism_alchemy": true,
+        "fishing_cooking": true,
+        "hunting_claims_and_consumers": true,
+        "gear_integration": true,
+        "learning_authority": true,
+        "conservation_and_receipts": true,
+        "localized_complete_navigation": true,
+        "regional_source_coverage": true
+      }
+    },
+    "earned_profession_rav_journeys": {
+      "candidate_sha": "d282be1d5fb3117cac65eb3d813af41856f27c37",
+      "command": "python -m pytest -q tests/test_professions_economy_v1_journeys.py tests/test_regional_adventures_v1_journeys.py --tb=short --basetemp 'C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\review-237-corrections\\prepared-j18-all41-temp'",
+      "passed": 41,
+      "seconds": 322.23,
+      "exit_code": 0,
+      "history_mode": "Explicit verified COMPLETE same-source whole-core reuse; regional parties earned again",
+      "core_source_sha256": "6db9b9e96e253fef9ba424afacf63a39c5f3ae49901465efc02b9596d1f45929",
+      "core_db_sha256": "b2cef94b8418b6b508d2bd939bd10d0d7a25fe4d413af03bee7de41135d624ac",
+      "raw_log": "work/rpg-bot/rpg/pxe1-review-prepared-j18-all41-pytest.log",
+      "raw_log_sha256": "4d1b9becd0145b9abd1a249e2c9f25d04f5650172f794e005fecb50ecb3ed00e",
+      "status": "PASSED",
+      "also_executed_in_final_full_suite": true
+    },
+    "independent_review": {
+      "reviewed_head": "74389cb22ee6f49f584cc9c09a5f17cb792901c9",
+      "status": "COMPLETE",
+      "verdict": "FIX",
+      "findings": 7,
+      "repaired_candidate_review": "PENDING NARROW INDEPENDENT RE-REVIEW",
+      "source_report": "PXE1_PR237_INDEPENDENT_REVIEW.md"
+    },
+    "publication": {
+      "state": "OPEN DRAFT",
+      "created_as_draft": true,
+      "creation_head": "aa97d808a89fcc3461be8fe1b84046d983f7b68d",
+      "head_ref": "feat/pxe1-player-experience-economy-v1",
+      "base_ref": "main",
+      "creation_verified_utc": "2026-10-08T06:27:58.384128+00:00",
+      "merge": "NOT MERGED",
+      "tested_code_and_tests": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "8cdc2be3c0b8f9587a45f123dd2c4cebc7ebb689",
+        "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+        "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+        "requirements.txt": "bbad65a8b4b46cff3545fe54e5725f504b62eaad",
+        "tests": "16eae743ab58aaff799719009c6b564d8e99839a"
+      },
+      "head_correspondence": "Final full run at executionb78b018, code/test candidated282be1. Subsequent commits change only docs; actual pushed HEAD/clean state/Draft state verified in workspace publication receipt.",
+      "github_checks_at_creation": "NO CHECKS REPORTED"
+    }
+  },
+  "second_bounded_review_repair": {
+    "reviewed_head": "5fea976cd1b44a6a19e65d54cfc7df28b5969845",
+    "scope": [
+      "F2",
+      "F3"
+    ],
+    "permanent_regression_file": "tests/test_pxe1_second_review_recovery.py",
+    "before": {
+      "command": "python -m pytest -q <absolute reviewer test_rereview_boundaries.py> --tb=short",
+      "failed": 10,
+      "passed": 8,
+      "seconds": 11.67,
+      "exit_code": 1,
+      "raw_log": "work/rpg-bot/rpg/pxe1-second-review-before-pytest.log",
+      "raw_log_sha256": "8f5aa92d40395ff73c7b07fb122a215b89be52d3a4dc5d38c2b7124b1b777c88"
+    },
+    "external_after": {
+      "passed": 28,
+      "seconds": 14.03,
+      "exit_code": 0,
+      "raw_log": "work/rpg-bot/rpg/pxe1-second-review-external-final-pytest.log",
+      "raw_log_sha256": "e13da2317bfbd7b535ca02f5162e19fbffe65d1bde6ddf69463f528fca2b3f3a"
+    },
+    "acceptance": "COMPLETE; READY FOR SECOND NARROW RE-REVIEW",
+    "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "focused": {
+      "discovery": "$pxe1SecondTests=@(Get-ChildItem -LiteralPath tests -Filter test_pxe1*.py | ForEach-Object { $_.FullName })",
+      "command": "python -m pytest -q $pxe1SecondTests tests/test_live_combat_runtime_foundation.py tests/test_solo_pve_runtime_adapter.py tests/test_solo_pve_runtime_handler_flow.py tests/test_group_pve_runtime_enablement.py tests/test_world_pve_encounter_foundation.py tests/test_pvp_live_flow_v1.py tests/test_character_builds_v1_pvp_journey.py tests/test_professions_economy_v1_transactions.py tests/test_alpha_transactions_v1.py --tb=short",
+      "passed": 698,
+      "seconds": 166.31,
+      "exit_code": 0,
+      "raw_log": "work/rpg-bot/rpg/pxe1-second-review-focused-pytest.log",
+      "raw_log_sha256": "129a9a9865c56b003ae0cc5df9a18e52a8295dc349a808cfa7d9d2bea745fd1d",
+      "new_permanent_regressions": 38
+    },
+    "F2": {
+      "status": "FIXED",
+      "proof": "Complete evaluator identity/output and durable receipts equal across all 36 differential cases"
+    },
+    "F3": {
+      "status": "FIXED",
+      "proof": "All rollback/retry boundaries resolve once; two three-enemy partial-order controls submit only missing actors"
+    },
+    "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
+    "first_broad_attempt": {
+      "status": "STOPPED AFTER FAILURE MARKER; BEFORE FRESH EARNED CORE",
+      "branch": "feat/pxe1-player-experience-economy-v1",
+      "candidate_sha": "fcdfb3986c28e5f8493257ff15931e38d1fa3ae3",
+      "execution_start_head": "fcdfb3986c28e5f8493257ff15931e38d1fa3ae3",
+      "command": "python -m pytest -q",
+      "source_sha256": "91096960d4c4b715eb6b389bd359d95c485bab7bc702398b0ebbd55897bb2c9c",
+      "history_mode": "Fresh earned core; reuse variable absent",
+      "started_at": "2026-10-09T19:15:31.438538+00:00",
+      "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-first-broad-stopped-pytest.log",
+      "runner_pid": 2628,
+      "exit_code": 4294967295,
+      "code_test_identity": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "0feb987d1917f19ebdf6c2aeb21ba8293f4a46df",
+        "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+        "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+        "tests": "62721ec2aae3698a4beea3958867ce2ac430e5a6"
+      },
+      "completed_earned_history": null,
+      "test_pid": 1204,
+      "elapsed_seconds": 963.51,
+      "heartbeat_at": "2026-10-09T19:31:34.949178+00:00",
+      "current_head": "0977db1a0278bf72e70069faaa2561a982106eeb",
+      "git_status": "clean",
+      "latest_log_tail": "............................................................... [  2%]\n........................................................................ [  5%]\n..................................................F..................... [  8%]\n........................................................................ [ 11%]\n........................................................................ [ 14%]\n........................................................................ [ 17%]\n........................................................................ [ 20%]\n........................................................................ [ 23%]\n........................................................................ [ 26%]\n........................................................................ [ 29%]\n..................................................................... [ 32%]\n........................................................................ [ 35%]\n........................................................................ [ 38%]\n........................................................................ [ 41%]\n....................................................................................................... [ 45%]\n.................................................................... [ 48%]\n........................................................................ [ 51%]\n........................................................................ [ 54%]\n.............................................",
+      "raw_log_sha256": "6f8441ecee66ed2d022a8be61795f7eccb466eff8f5c2fa806a926c6682e4682",
+      "completed_at": "2026-10-09T19:31:34.949178+00:00",
+      "normal_pytest_completion": false,
+      "stop_reason": "Reproduce and repair early inn funding fixture before guarded expensive core source changes",
+      "diagnosis": "Retained synthesis state HP131/max190, gold10 after 5 real victories; 12-gold recovery assertion failed"
+    },
+    "earned_helper_followup": {
+      "commit": "0977db1a0278bf72e70069faaa2561a982106eeb",
+      "production_changed": false,
+      "mechanism": "Legal early enemy damage requires rest at gold10, below12; ordinary fixture assumed combat gold was enough",
+      "correction": "Earn rest through production sale of owned material loot with exact confirmation; retain all inn/HP/MP/mastery/skill assertions",
+      "retained_whole_db": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\failed-synthesis.sqlite3",
+      "db_sha256": "253e4c28a59c16e55d5d7f5fd3e89860e187aef4fe2a4151c9f6d5341821f517",
+      "exact_retained_probe": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\test_second_review_retained_inn_state.py",
+      "before": "1 failed in 1.13s; assert 10 >= 12",
+      "after": "1 passed in 0.91s",
+      "affected_journeys": {
+        "command": "python -m pytest -q tests/test_character_builds_v1_journeys.py tests/test_character_builds_v1_group_journeys.py --tb=short --basetemp '../../../acceptance-recovery/second-review-237/earned-helper-verification-temp'",
+        "passed": 26,
+        "seconds": 625.96,
+        "exit_code": 0,
+        "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-earned-helper-pytest.log",
+        "raw_log_sha256": "1087b917b9300e1e2a0c175d7108215dc1ccfa0aa448151c255e32ec82de010f",
+        "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb"
+      }
+    },
+    "final_broad_result": {
+      "status": "PASSED",
+      "branch": "feat/pxe1-player-experience-economy-v1",
+      "candidate_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+      "execution_start_head": "a1a1b4550eb6de849dc99f936248dc27e91c3c44",
+      "command": "python -m pytest -q",
+      "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+      "history_mode": "Fresh earned core; reuse variable absent",
+      "started_at": "2026-10-09T19:46:15.639704+00:00",
+      "raw_log": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\work\\rpg-bot\\rpg\\pxe1-second-review-final-broad-pytest.log",
+      "runner_pid": 31532,
+      "exit_code": 0,
+      "code_test_identity": {
+        "bot.py": "aa21a1e45129dbd10e9b370f0f69c0d607a322fd",
+        "database.py": "6cd7bec18bd1563426608b134cf3f861310ed454",
+        "game": "0feb987d1917f19ebdf6c2aeb21ba8293f4a46df",
+        "handlers": "10415cdf406028880e052fe93ce02dd5d877ad83",
+        "locales": "5b9d1676a873ace91efd604d60cd66f0a2c263a7",
+        "tests": "743516a1e8b7ef15178ec736046398f79f30bbb7"
+      },
+      "completed_earned_history": {
+        "directory": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\completed-earned",
+        "original": "C:\\Users\\masha\\AppData\\Local\\Temp\\pxe1-earned-history-4h9lsf_6",
+        "db_sha256": "370f6f0c424ee2c84f2abf1b3a7575e587dfe562770a1b06cf1658f48fe3a259",
+        "source_sha256": "a82d5f823f4b035aa2d6a657cb36452b9e2ee60bb1702af882915c71360b702e",
+        "production_checks": {
+          "new_character_and_chapter": true,
+          "mining_smith_heavy": true,
+          "wood_fiber_arcane": true,
+          "herbalism_alchemy": true,
+          "fishing_cooking": true,
+          "hunting_claims_and_consumers": true,
+          "gear_integration": true,
+          "learning_authority": true,
+          "conservation_and_receipts": true,
+          "localized_complete_navigation": true,
+          "regional_source_coverage": true
+        },
+        "fresh": true
+      },
+      "test_pid": 32608,
+      "elapsed_seconds": 22095.51,
+      "heartbeat_at": "2026-10-10T01:54:31.154466+00:00",
+      "current_head": "e6842835557ae468648f58622ecd1c4f32ca1a15",
+      "git_status": "",
+      "latest_log_tail": "........ [ 48%]\n........................................................................ [ 51%]\n........................................................................ [ 54%]\n........................................................................ [ 57%]\n........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 66%]\n........................................................................ [ 69%]\n........................................................................ [ 72%]\n........................................................................ [ 75%]\n........................................................................ [ 78%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 86%]\n........................................................................ [ 89%]\n........................................................................ [ 92%]\n........................................................................ [ 95%]\n........................................................................ [ 98%]\n.............................                                [100%]\n2429 passed, 276 subtests passed in 22066.01s (6:07:46)\n",
+      "incomplete_observation": {
+        "path": "C:\\Users\\masha\\Documents\\Codex\\2026-10-05\\files-mentioned-by-the-user-pxe1\\acceptance-recovery\\second-review-237\\incomplete-observation.sqlite3",
+        "source": "C:\\Users\\masha\\AppData\\Local\\Temp\\pytest-of-masha\\pytest-503\\pxe1-earned-professions0\\earned.sqlite3",
+        "accepted": false,
+        "recorded_at": "2026-10-10T01:54:31.154466+00:00"
+      },
+      "raw_log_sha256": "c40442cec9906c1df1f86412c76fba305cffd00b00a3dfebd99275f9b60ffdc3",
+      "completed_at": "2026-10-10T01:54:31.154466+00:00",
+      "passed": 2429,
+      "subtests_passed": 276,
+      "seconds": 22066.01,
+      "terminal_summary": "2429 passed, 276 subtests passed in 22066.01s (6:07:46)",
+      "fresh_vs_reused": "FRESH; no prior core reused"
+    },
+    "final_code_test_sha": "0977db1a0278bf72e70069faaa2561a982106eeb",
+    "independent_review": "PENDING SECOND NARROW RE-REVIEW"
+  }
+}

@@ -1,5 +1,7 @@
 # Character Builds & Combat Identity V1
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PXE1 sections 5.4/13/14 supersede the singleton PvP adapter and distinguish free-point spending (anywhere outside combat) from redistribution (six safe hubs). Ten weapon families, two branches/five skills, 100 branch skills plus Power Strike, budgets and combat coefficients remain. Current PvP allows two actors per side through content policy; generic runtime has no such cap. The historical PR231 group-PvP deferral below does not constrain this approved extension. See [the frozen PXE1 contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 ## Status and authority
 
 - Status: Merged delivery record for [PR231](https://github.com/danyasemennikov/rpg-bot/pull/231)

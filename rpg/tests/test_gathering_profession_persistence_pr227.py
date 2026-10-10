@@ -43,26 +43,9 @@ def _profession_snapshot(profession_key):
 
 
 async def _gather(profession_key, roll, profiles=None):
-    message = SimpleNamespace(text='Gather', message_id=next(_message_ids), reply_text=AsyncMock())
-    update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
-    profile_patch = (
-        patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=profiles)
-        if profiles is not None else patch('game.gathering_runtime.build_location_gather_source_profiles', wraps=build_location_gather_source_profiles)
-    )
-    with (
-        patch('handlers.location.looks_like_lower_gather_button', return_value=True),
-        patch('handlers.location.resolve_lower_gather_profession_button', return_value=profession_key),
-        patch('handlers.location.random.random', return_value=roll),
-        patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
-        patch('handlers.location.is_in_battle', return_value=False),
-        profile_patch,
-        patch(
-            'game.gathering_runtime.resolve_gather_access_decision',
-            wraps=resolve_gather_access_decision,
-        ) as access_mock,
-    ):
-        handled = await handle_lower_menu_gather_text(update, SimpleNamespace())
-    return handled, message, access_mock
+    from tests.pxe1_gather_fixture import one_tick
+    handled,message,result=await one_tick(PLAYER_ID,profession_key,roll,next(_message_ids))
+    return handled,message,result
 
 
 def test_new_player_bootstraps_exact_canonical_profession_state():
@@ -128,7 +111,7 @@ def test_accessible_roll_grants_one_item_with_followup_profession_progression():
     handled, _, access_mock = asyncio.run(_gather('herbalism', 0.0))
 
     assert handled
-    access_mock.assert_called_once()
+    assert access_mock['granted'][0]['item_id']=='herb_common'
     conn = get_connection()
     quantity = conn.execute(
         "SELECT quantity FROM inventory WHERE telegram_id=? AND item_id='herb_common'",
@@ -162,6 +145,9 @@ def test_locked_roll_grants_nothing_does_not_reroll_and_level_unlocks_same_resou
     conn.commit()
     conn.close()
 
+    conn = get_connection()
+    conn.execute("UPDATE player_profession_tools SET tier=2,durability=120 WHERE player_id=? AND profession_key='herbalism'",(PLAYER_ID,))
+    conn.commit();conn.close()
     asyncio.run(_gather('herbalism', 0.45))
     conn = get_connection()
     assert conn.execute(
@@ -186,7 +172,12 @@ def test_zone_tier_does_not_override_explicit_resource_level_gate():
     conn.commit()
     conn.close()
 
-    asyncio.run(_gather('woodcutting', 0.0, profiles=(replace(wood, zone_tier_band=6),)))
+    conn=get_connection()
+    conn.execute("UPDATE players SET location_id='westwild_n6' WHERE telegram_id=?",(PLAYER_ID,))
+    conn.execute("UPDATE player_profession_tools SET tier=2,durability=120 WHERE player_id=? AND profession_key='woodcutting'",(PLAYER_ID,))
+    conn.commit();conn.close()
+    assert resolve_gather_access_decision(item_id='wood_dark',player_profession_level=20,zone_tier_band=6).is_allowed
+    asyncio.run(_gather('woodcutting',0.0))
 
     conn = get_connection()
     count = conn.execute(

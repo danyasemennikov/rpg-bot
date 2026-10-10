@@ -1,6 +1,7 @@
 """Ordinary earned Character Builds V1 journeys through production handlers.
 
-The only accelerated rule is the world respawn clock.  Registration, the
+Controlled world deadlines and the immediate travel-control clock are the only
+time accelerators. Registration, the
 45-gold vendor purchase, instance equip, skill receipts, combat orders, combat
 resolution, rewards, and mastery all use their production authorities.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -331,13 +333,19 @@ class ProductionJourney:
         self.messages: list[tuple[str, object | None]] = []
         self.recovery_stops: list[dict] = []
         self.user_data: dict = {}
-        self.bot = SimpleNamespace(send_message=AsyncMock(side_effect=self._output))
+        self.bot = SimpleNamespace(
+            send_message=AsyncMock(side_effect=self._bot_output),
+            edit_message_text=AsyncMock(side_effect=self._output),
+        )
         self.context = SimpleNamespace(user_data=self.user_data, bot=self.bot)
         self.context.application = SimpleNamespace(
             user_data={self.player_id: self.user_data},
             create_task=lambda coroutine: coroutine.close(),
             bot=self.bot,
         )
+
+    async def _bot_output(self, chat_id=None, text=None, **kwargs):
+        return await self._output(text, **kwargs)
 
     async def _output(self, text: str | None = None, **kwargs):
         rendered = str(text or "")
@@ -404,9 +412,10 @@ class ProductionJourney:
         await self.callback(f"shop_preview_{item_id}|0", handle_location_buttons)
         buy = next(
             value for value in _callbacks(self.messages[-1][1])
-            if value.startswith(f"shop_buy_{item_id}|")
+            if value.startswith("px:shop:purchase:")
         )
-        await self.callback(buy, handle_location_buttons)
+        from handlers.activities import handle_activity_buttons
+        await self.callback(buy, handle_activity_buttons)
         instance = _rows(
             "SELECT * FROM gear_instances WHERE telegram_id=? AND base_item_id=?",
             (self.player_id, item_id),
@@ -451,10 +460,43 @@ class ProductionJourney:
         return {"token": receipt["token"], **result}
 
     async def travel(self, *destinations: str) -> None:
+        from handlers.activities import handle_activity_buttons
+        from game.world_activity_tick import run_world_activity_tick
         for destination in destinations:
-            with patch("handlers.location.asyncio.sleep", new=AsyncMock()):
+            # Advancing world time for another party member can create a real
+            # hostile formation for a parked actor. Choose its legal prelock
+            # Leave control before attempting peaceful travel.
+            from game.pve_live import get_active_pve_encounter_id_for_player
+            active=get_active_pve_encounter_id_for_player(player_id=self.player_id,ensure_schema=False)
+            if active:
+                encounter=_rows('SELECT runtime_started_ms FROM pve_encounters WHERE encounter_id=?',(active,))[0]
+                if encounter['runtime_started_ms'] is None:
+                    before=dict(get_player(self.player_id))
+                    await self.callback('pve_enter_'+active,handle_location_buttons)
+                    leave='pve_leave_'+active
+                    assert leave in _callbacks(self.messages[-1][1])
+                    await self.callback(leave,handle_location_buttons)
+                    after=dict(get_player(self.player_id))
+                    assert (after['exp'],after['gold'])==(before['exp'],before['gold'])
+                    assert get_active_pve_encounter_id_for_player(player_id=self.player_id,ensure_schema=False) is None
+            # These two controls represent one immediate player choice. A host
+            # suspension must not expire the preview between mocked callbacks.
+            with patch('time.time', return_value=time.time()):
+                origin = get_player(self.player_id)['location_id']
                 await self.callback(f"goto_{destination}", handle_location_buttons)
-            assert get_player(self.player_id)["location_id"] == destination
+                assert get_player(self.player_id)['location_id'] == origin
+                start = next(c for c in _callbacks(self.messages[-1][1]) if c.startswith('px:travel:'))
+                await self.callback(start, handle_activity_buttons)
+                session = _rows("SELECT * FROM player_travel_sessions WHERE player_id=? AND status='running'", (self.player_id,))[0]
+            run_world_activity_tick(now_ms=session['next_due_ms'])
+            assert get_player(self.player_id)['location_id'] == destination
+
+    def start_due_formation(self, encounter_id: str) -> None:
+        from game.pve_live import process_due_pve_formations
+        row = _rows('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,))[0]
+        if row['runtime_started_ms'] is None:
+            process_due_pve_formations(now_ms=row['formation_deadline_ms'])
+        assert _rows('SELECT runtime_started_ms FROM pve_encounters WHERE encounter_id=?', (encounter_id,))[0]['runtime_started_ms'] is not None
 
     async def recover_if_needed(self) -> None:
         player = dict(get_player(self.player_id))
@@ -467,6 +509,29 @@ class ProductionJourney:
             await self.travel("capital_city")
         else:
             raise AssertionError(("unsupported recovery origin", origin))
+        while int(get_player(self.player_id)['gold']) < 12:
+            # A legal early damage sequence can require rest before combat gold
+            # reaches its price. Sell earned loot through the real shop writer.
+            from handlers.shop_views import handle_shop_buttons
+            loot = _rows('''SELECT inv.id, inv.quantity FROM inventory inv
+                JOIN items i ON i.item_id=inv.item_id
+                WHERE inv.telegram_id=? AND i.item_type='material' AND i.sell_price>0
+                ORDER BY i.sell_price DESC, inv.id LIMIT 1''', (self.player_id,))
+            assert loot, 'No earned loot available to fund recovery'
+            entry = loot[0]
+            await self.callback(
+                f"px:shop:saleview:i{entry['id']}:{min(99, int(entry['quantity']))}",
+                handle_shop_buttons,
+            )
+            for _ in range(2):
+                commit = next(value for value in _callbacks(self.messages[-1][1])
+                              if value.startswith('px:shop:commit:'))
+                await self.callback(commit, handle_shop_buttons)
+                if not any(value.startswith('px:shop:commit:')
+                           for value in _callbacks(self.messages[-1][1])):
+                    break
+            else:
+                raise AssertionError('Earned sale did not commit after confirmation')
         before = dict(get_player(self.player_id))
         assert before["gold"] >= 12
         await self.rest_at_current_inn()
@@ -526,13 +591,38 @@ class ProductionJourney:
         assert rows, callback
         return json.loads(rows[0]["payload"])
 
-    def _find_combat_action(
+    async def _find_combat_action(
         self,
         *,
         kind: str,
         skill_id: str | None = None,
         target_id: str | int | None = None,
     ) -> str:
+        encounter_id = self.context.user_data['battle']['pve_encounter_id']
+        await self.callback(f'pve_enter_{encounter_id}', handle_location_buttons)
+        action_id = 'normal' if kind == 'basic_attack' else skill_id if kind == 'skill' else kind
+        for _ in range(20):
+            selected = None
+            next_page = None
+            for callback in _callbacks(self.messages[-1][1]):
+                if not callback.startswith('battle_px_'):
+                    continue
+                row = _rows("SELECT payload FROM player_ui_actions WHERE token=? AND player_id=?", (callback.removeprefix('battle_px_'), self.player_id))
+                view = json.loads(row[0]['payload'])
+                if view.get('view') == 'action' and view.get('action_id') == action_id:
+                    selected = callback
+                    break
+                if view.get('view') == 'skills':
+                    next_page = callback
+            if selected:
+                await self.callback(selected, handle_battle_buttons)
+                break
+            if next_page:
+                await self.callback(next_page, handle_battle_buttons)
+            else:
+                raise AssertionError((kind, skill_id, _callbacks(self.messages[-1][1])))
+        else:
+            raise AssertionError(('skill pagination exhausted', skill_id))
         for callback in _callbacks(self.messages[-1][1]):
             if not callback.startswith("battle_v1_"):
                 continue
@@ -553,10 +643,11 @@ class ProductionJourney:
         await self.callback(f"fight_spawn_{spawn_id}", handle_combat_buttons)
         enter = next(
             value for value in _callbacks(self.messages[-1][1])
-            if value.startswith("pve_enter_")
+            if value.startswith("pve_view_")
         )
-        encounter_id = enter.removeprefix("pve_enter_")
-        await self.callback(enter, handle_location_buttons)
+        encounter_id = enter.removeprefix("pve_view_")
+        self.start_due_formation(encounter_id)
+        await self.callback(f"pve_enter_{encounter_id}", handle_location_buttons)
         assert self.context.user_data["battle"]["rules_version"] == "character_builds_combat_identity_v1"
         battle_state = self.context.user_data["battle"]
         selected_actions: list[dict] = []
@@ -644,19 +735,20 @@ class ProductionJourney:
                 kind, skill_id = opening[turn]
             else:
                 kind, skill_id = "basic_attack", None
-            callback = self._find_combat_action(kind=kind, skill_id=skill_id)
+            callback = await self._find_combat_action(kind=kind, skill_id=skill_id)
             payload = self._intent_for_callback(callback)["action"]
+            battle_state = self.context.user_data["battle"]
             before_events = len(battle_state.get("combat_events_v1", []))
             actor_before = copy.deepcopy(
                 (battle_state.get("participant_states_v1") or {}).get(str(self.player_id), {})
             )
             enemies_before = copy.deepcopy(battle_state.get("enemy_states_v1") or [])
             await self.callback(callback, handle_battle_buttons)
-            current_battle = self.context.user_data.get("battle", battle_state)
+            current_battle = json.loads(_rows("SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?", (encounter_id,))[0]["battle_state_json"])
             selected_actions.append({
                 "kind": payload["kind"],
                 "skill_id": payload.get("skill_id"),
-                "events": battle_state.get("combat_events_v1", [])[before_events:],
+                "events": current_battle.get("combat_events_v1", [])[before_events:],
                 "actor_before": actor_before,
                 "enemies_before": enemies_before,
                 "actor_after": copy.deepcopy(
@@ -664,6 +756,7 @@ class ProductionJourney:
                 ),
                 "enemies_after": copy.deepcopy(current_battle.get("enemy_states_v1") or []),
             })
+            battle_state = current_battle
         else:
             raise AssertionError((mob_id, battle_state))
 
@@ -900,3 +993,37 @@ def test_twenty_ordinary_branch_loops_reach_m8_and_named_four_reach_m14(
     assert result["mastery"]["level"] == (14 if identity in DEEP_IDENTITIES else 8)
     expected_encounters = 91 if identity in DEEP_IDENTITIES else 29
     assert expected_encounters <= result["earned_encounters"] <= expected_encounters + 7
+
+
+def test_immediate_journey_travel_survives_host_pause_between_controls():
+    """Host suspension must not age a synthetic immediate preview/start pair."""
+    async def scenario():
+        journey = ProductionJourney(989302)
+        await journey.register(primary='strength', name='Clock Traveler')
+        before = dict(get_player(journey.player_id))
+        clock = [time.time()]
+        preview_time = clock[0]
+        original_callback = journey.callback
+
+        async def paused_callback(data, handler):
+            result = await original_callback(data, handler)
+            if data.startswith('goto_'):
+                clock[0] += 3600
+            return result
+
+        journey.callback = paused_callback
+        with patch('time.time', side_effect=lambda: clock[0]):
+            await journey.travel('westwild_n1')
+        after = dict(get_player(journey.player_id))
+        session = _rows('SELECT * FROM player_travel_sessions WHERE player_id=?',
+                        (journey.player_id,))[0]
+        intent = _rows("SELECT * FROM player_ui_actions WHERE player_id=? AND kind='pxe1_travel'",
+                       (journey.player_id,))[0]
+        assert session['status'] == 'arrived'
+        assert session['started_ms'] == int(preview_time * 1000)
+        assert session['updated_ms'] == session['started_ms'] + 15000
+        assert intent['used'] == 1 and intent['expires_at'] == int(preview_time) + 900
+        assert after['location_id'] == 'westwild_n1'
+        assert (after['gold'], after['exp']) == (before['gold'], before['exp'])
+
+    asyncio.run(scenario())

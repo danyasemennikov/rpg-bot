@@ -1,5 +1,7 @@
 # LOOT_CRAFT_PROGRESSION_FOUNDATION.md
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PXE1 sections 7–10/15 explicitly promote profession tools into the candidate: five separate slots, four tiers, durability/wear, paid replacement, ordinary/assisted repairs, and one-time axe/pick bootstrap commissions. Catalogue 2 and craft XP policy 2 supersede the PEV1 acquisition/progression subset without wiping old levels, XP, knowledge or receipts. This changes profession-tool bands, not long-term gear-level-100 intent. See [the frozen PXE1 contract](../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 - Status: Active, scoped foundation
 - Authority: Canonical for durable loot/crafting/progression intent; not proof of implementation
 - Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`

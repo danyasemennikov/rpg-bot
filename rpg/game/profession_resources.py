@@ -14,6 +14,14 @@ class ProfessionResource:
     sell_price: int
     is_new: bool = False
 
+    @property
+    def resource_tier(self) -> int:
+        return 4 if self.required_level >= 18 else 3 if self.required_level >= 12 else 2 if self.required_level >= 6 else 1
+
+    @property
+    def required_tool_tier(self) -> int:
+        return self.resource_tier
+
 
 RESOURCE_ROWS = (
     ('herb_common', 'herbalism', 1, 'herb_base', 3, False),
@@ -47,6 +55,10 @@ RESOURCE_ROWS = (
 )
 
 RESOURCES = {row[0]: ProfessionResource(*row) for row in RESOURCE_ROWS}
+RESOURCES.update({
+    'dry_reagent': ProfessionResource('dry_reagent','herbalism',1,'herb_base',4),
+    'marsh_mushroom': ProfessionResource('marsh_mushroom','herbalism',1,'herb_base',4),
+})
 MANDATORY_RESOURCE_IDS = tuple(row[0] for row in RESOURCE_ROWS)
 NEW_MATERIAL_IDS = tuple(row[0] for row in RESOURCE_ROWS if row[5])
 

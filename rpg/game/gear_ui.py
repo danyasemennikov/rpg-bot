@@ -18,7 +18,7 @@ from game.gear_instances import get_equipped_gear_instances, resolve_gear_instan
 from game.items_data import get_item
 from game.equipment_stats import aggregate_equipped_stat_bonuses, build_effective_player_stats
 
-CATALOG_PAGE_SIZE = 8
+CATALOG_PAGE_SIZE = 6
 COMPARISON_CHANNELS = (
     'damage_min', 'damage_max', 'physical_defense', 'magic_defense',
     'max_hp', 'max_mana', 'strength', 'agility', 'intuition', 'vitality',

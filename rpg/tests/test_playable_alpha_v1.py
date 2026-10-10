@@ -1,6 +1,6 @@
 """Chapter acceptance through production Telegram actions with ordinary stats.
 
-Only randomness, travel delays and spawn availability are controlled. No rewards,
+Only RNG seeds, due clocks and spawn availability are controlled. No rewards,
 completed objectives, combat outcomes or character power are injected.
 """
 import asyncio
@@ -25,6 +25,7 @@ from handlers.battle import handle_battle_buttons
 from handlers.build import build_skills_command, handle_build_buttons
 from handlers.chapter import handle_chapter_buttons, build_journal, build_workshop, build_sell_menu
 from handlers.inventory import handle_inventory_buttons, build_item_detail
+from tests.test_character_builds_v1_journeys import ProductionJourney
 
 
 PLAYER = 90101
@@ -46,14 +47,13 @@ def buttons(markup):
     return [button.callback_data for row in markup.inline_keyboard for button in row if button.callback_data]
 
 
-class Journey:
+class Journey(ProductionJourney):
     def __init__(self, lang):
-        self.user = SimpleNamespace(id=PLAYER, username='traveler', language_code=lang)
-        self.lang, self.message_id = lang, 0
-        self.context = SimpleNamespace(user_data={}, bot=SimpleNamespace(send_message=AsyncMock(side_effect=self.output)))
-        self.context.application = SimpleNamespace(user_data={PLAYER: self.context.user_data},
-                                                  create_task=lambda coro: coro.close(), bot=self.context.bot)
-        self.messages = []
+        super().__init__(PLAYER, lang=lang)
+        self.user.username = 'traveler'
+
+    async def _output(self, text=None, **kwargs):
+        return await self.output(text, **kwargs)
 
     async def output(self, text=None, **kwargs):
         text = text or ''
@@ -81,26 +81,36 @@ class Journey:
             effective_user=self.user, effective_message=message,
         ), self.context)
 
-    async def travel(self, *locations):
-        for location in locations:
-            with patch('handlers.location.asyncio.sleep', new=AsyncMock()):
-                await self.callback(f'goto_{location}', handle_location_buttons)
-            assert get_player(PLAYER)['location_id'] == location
-
     async def gather(self, profession, count):
-        from game.contextual_keyboard import resolve_lower_gather_profession_button
-        for _ in range(count):
-            player = dict(get_player(PLAYER))
-            keyboard = build_contextual_main_keyboard(player, self.lang)
-            label = next(b.text for row in keyboard.keyboard for b in row
-                         if resolve_lower_gather_profession_button(b.text, player, self.lang) == profession)
-            with patch('game.gathering_runtime.random.random', return_value=0.0):
-                await self.text(label, handle_lower_menu_gather_text)
+        from handlers.activities import handle_activity_buttons
+        from game.gathering_runtime import _source_snapshot, gather_tick_roll, start_gathering_session
+        from game.world_activity_tick import run_world_activity_tick
+        snapshot = _source_snapshot(get_player(PLAYER)['location_id'], profession)
+        # Control only the seed; each yield, wear, XP and objective uses the
+        # production SHA roll over the unchanged source probabilities.
+        seed = next(f'{n:032x}' for n in range(1000000)
+                    if all((entry := gather_tick_roll(f'{n:032x}', tick, snapshot))
+                           and entry['required_level'] == 1 and entry['required_tool_tier'] == 1
+                           for tick in range(1, count + 1)))
+        await self.callback('px:gatherpreview:' + profession, handle_activity_buttons)
+        start = next(c for c in buttons(self.messages[-1][1]) if c.startswith('px:gatherstart:'))
+        def seeded_start(*args, **kwargs):
+            return start_gathering_session(*args, **kwargs, seed=seed)
+        with patch('game.gathering_runtime.start_gathering_session', side_effect=seeded_start):
+            await self.callback(start, handle_activity_buttons)
+        session = rows("SELECT * FROM player_gathering_sessions WHERE player_id=? AND status='running'", (PLAYER,))[0]
+        for tick in range(1, count + 1):
+            run_world_activity_tick(now_ms=session['started_ms'] + tick * 8000)
+        with patch('handlers.activities.time.time', return_value=(session['started_ms'] + count * 8000) / 1000):
+            await self.callback('px:stop:gather:' + session['session_id'], handle_activity_buttons)
+        stored = rows('SELECT * FROM player_gathering_sessions WHERE session_id=?', (session['session_id'],))[0]
+        assert stored['last_tick'] == count and stored['yield_total'] == count
 
     async def accept(self, key):
         _, markup = build_quest_board_message(dict(get_player(PLAYER)), get_location(get_player(PLAYER)['location_id']))
         data = f'quest_board_accept_{key}'
-        assert data in buttons(markup)
+        await self.callback(f'quest_board_detail_{key}', handle_location_buttons)
+        assert data in buttons(self.messages[-1][1])
         await self.callback(data, handle_location_buttons)
         assert get_player_hunt_contract_state(PLAYER)['contract_key'] == key
 
@@ -123,21 +133,8 @@ class Journey:
         assert (get_player(PLAYER)['exp'], get_player(PLAYER)['gold']) == (after['exp'], after['gold'])
         assert state['contract_key'] in get_contract_history(PLAYER)
 
-    def v1_action_callback(self, *, kind, skill_id=None):
-        for callback in buttons(self.messages[-1][1]):
-            if not callback.startswith('battle_v1_'):
-                continue
-            token = callback.removeprefix('battle_v1_')
-            row = rows(
-                "SELECT payload FROM player_ui_actions WHERE player_id=? AND kind='combat_v1' AND token=?",
-                (PLAYER, token),
-            )
-            if not row:
-                continue
-            action = json.loads(row[0]['payload']).get('action') or {}
-            if action.get('kind') == kind and action.get('skill_id') == skill_id:
-                return callback
-        raise AssertionError((kind, skill_id, buttons(self.messages[-1][1])))
+    async def v1_action_callback(self, *, kind, skill_id=None):
+        return await self._find_combat_action(kind=kind, skill_id=skill_id)
 
     async def fight(self, mob, restart=False, opening_skill=None):
         location = get_player(PLAYER)['location_id']
@@ -152,6 +149,7 @@ class Journey:
         conn.close()
         await self.callback(f'fight_spawn_{spawn[0]}', handle_combat_buttons)
         encounter = rows("SELECT encounter_id FROM pve_encounters WHERE owner_player_id=? AND status='active'", (PLAYER,))[0]['encounter_id']
+        self.start_due_formation(encounter)
         await self.callback(f'pve_enter_{encounter}', handle_location_buttons)
         last_action = f'battle_attack_{mob}'
         for turn in range(100):
@@ -166,8 +164,9 @@ class Journey:
             if restart and turn == 1:
                 self.context.user_data.clear()
                 reset_solo_pve_runtime_store()
+                await self.callback(f'pve_enter_{encounter}', handle_location_buttons)
             if state.get('rules_version') == 'character_builds_combat_identity_v1':
-                last_action = self.v1_action_callback(
+                last_action = await self.v1_action_callback(
                     kind='skill' if turn == 0 and opening_skill else 'basic_attack',
                     skill_id=opening_skill if turn == 0 else None,
                 )
@@ -229,8 +228,9 @@ async def run_chapter(lang, build_case=None):
     if build_case:
         await j.callback('shop', handle_location_buttons)
         await j.callback(f'shop_preview_{item_id}|0', handle_location_buttons)
-        buy = next(value for value in buttons(j.messages[-1][1]) if value.startswith(f'shop_buy_{item_id}|'))
-        await j.callback(buy, handle_location_buttons)
+        buy = next(value for value in buttons(j.messages[-1][1]) if value.startswith('px:shop:purchase:'))
+        from handlers.activities import handle_activity_buttons
+        await j.callback(buy, handle_activity_buttons)
         instance = rows(
             'SELECT id FROM gear_instances WHERE telegram_id=? AND base_item_id=?',
             (PLAYER, item_id),
@@ -309,11 +309,14 @@ async def run_chapter(lang, build_case=None):
     from handlers.professions import handle_profession_buttons
     await j.callback(token, handle_profession_buttons)
     assert quantity('health_potion_small') == before
-    _, markup = build_sell_menu(dict(get_player(PLAYER)))
-    sale = next(b for b in buttons(markup) if b.startswith('alpha_sellone_'))
-    await j.callback(sale, handle_chapter_buttons)
+    from handlers.activities import handle_activity_buttons
+    await j.callback('px:shop:sell:material:0', handle_activity_buttons)
+    sale_view = next(b for b in buttons(j.messages[-1][1]) if b.startswith('px:shop:saleview:'))
+    await j.callback(sale_view, handle_activity_buttons)
+    sale = next(b for b in buttons(j.messages[-1][1]) if b.startswith('px:shop:commit:'))
+    await j.callback(sale, handle_activity_buttons)
     before = get_player(PLAYER)['gold']
-    await j.callback(sale, handle_chapter_buttons)
+    await j.callback(sale, handle_activity_buttons)
     assert get_player(PLAYER)['gold'] == before
     await j.claim()
     assert len(get_contract_history(PLAYER)) == 4

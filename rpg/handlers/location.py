@@ -464,6 +464,39 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
         )
     )
     mob_name = f"{profile_marker} {display_name}".strip()
+    if detail.get('lifecycle_version')==1:
+        import time
+        from html import escape
+        from game.player_ui import validate_surface
+        participant_ids = detail.get('participant_player_ids',[])
+        member = int(player['telegram_id']) in participant_ids
+        forming = detail['runtime_started_ms'] is None
+        if not forming and member:
+            from game.pve_live import load_active_pve_encounter
+            from handlers.combat_views import home
+            loaded = load_active_pve_encounter(encounter_id=encounter_id)
+            if loaded: return home(player,loaded[1],loaded[0])
+        conn = get_connection()
+        try:
+            names = [r['name'] for pid in participant_ids for r in conn.execute('SELECT name FROM players WHERE telegram_id=?',(pid,))]
+        finally: conn.close()
+        lines = ['⚔️ <b>'+escape(mob_name)+'</b>',t('battle.pack_remaining',lang,count=detail['enemy_count']),
+                 t('pxe1.combat.participants',lang)+f" · {len(names)}: "+escape(', '.join(names[:2]))]
+        rows = []
+        if forming:
+            left = max(0,(int(detail['formation_deadline_ms'])-int(time.time()*1000)+999)//1000)
+            lines += [t('pxe1.combat.formation',lang,seconds=left),t('pxe1.combat.forming_hint',lang)]
+            can_join,_ = can_join_open_world_pve_encounter(encounter_id=encounter_id,player_id=int(player['telegram_id']))
+            if can_join: rows.append([InlineKeyboardButton(t('pxe1.encounter.join',lang),callback_data='pve_join_'+encounter_id)])
+            if member: rows.append([InlineKeyboardButton(t('pxe1.encounter.leave',lang),callback_data='pve_leave_'+encounter_id)])
+        else: lines.append(t('location.pve_status_locked',lang))
+        rows.append([InlineKeyboardButton(t('pxe1.combat.participants',lang),callback_data='pve_people_'+encounter_id+'_0')])
+        rows.append([InlineKeyboardButton(t('common.refresh',lang),callback_data='pve_view_'+encounter_id),
+                     InlineKeyboardButton(t('keyboard.location',lang),callback_data='px:local:home:0')])
+        text = '\n'.join(lines)
+        keyboard = InlineKeyboardMarkup(rows)
+        validate_surface(text,keyboard)
+        return text,keyboard
     status_key = 'location.pve_status_locked'
     can_join, _ = can_join_open_world_pve_encounter(
         encounter_id=encounter_id,
@@ -501,12 +534,12 @@ def build_pve_encounter_detail_message(player: dict, encounter_id: str) -> tuple
 
     if can_join:
         keyboard_rows.append([InlineKeyboardButton(
-            t('location.pve_join_btn', lang),
+            t('pxe1.encounter.join', lang),
             callback_data=f"pve_join_{detail['encounter_id']}",
         )])
     if is_participant and bool(detail.get('joinable')):
         keyboard_rows.append([InlineKeyboardButton(
-            t('location.pve_leave_btn', lang),
+            t('pxe1.encounter.leave', lang),
             callback_data=f"pve_leave_{detail['encounter_id']}",
         )])
     if is_participant:
@@ -541,28 +574,46 @@ def get_curated_shop_stock(location_id: str, player_level: int) -> list[dict]:
 
 def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: int, item_id: str,
                              *, action_token: str | None = None) -> dict:
-    """Покупка предмета из витрины магазина. Возвращает статус операции."""
-    stock_by_id = {
-        row['item_id']: row
-        for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location_id), [])
-    }
-    stock_row = stock_by_id.get(item_id)
-    if not stock_row:
-        return {'ok': False, 'reason': 'not_available'}
-
-    item = get_item(item_id)
-    if not item:
-        return {'ok': False, 'reason': 'not_available'}
-
-    level_min = stock_row.get('level_min', item.get('req_level', 1))
-    price = item.get('buy_price', 0)
+    """Current vendor transaction, including old receipts and quantity previews."""
     conn = get_connection()
     from game.action_receipts import peaceful_player, consume_action, require_item_delivery, ActionRejected
     try:
         conn.execute('BEGIN IMMEDIATE')
-        player = peaceful_player(conn, telegram_id, service='shop', location_id=location_id)
+        quantity = 1
+        intent = None
         if action_token is not None:
-            consume_action(conn, telegram_id, 'shop_buy', action_token, payload=item_id)
+            receipt = conn.execute('''SELECT result_json FROM gear_mutation_receipts
+                WHERE action_token=? AND player_id=? AND action_kind='purchase' ''',
+                (action_token,telegram_id)).fetchone()
+            if receipt:
+                result = json.loads(receipt['result_json'])
+                if result.get('item_id')!=item_id:
+                    raise ActionRejected('stale_action')
+                conn.commit()
+                return {**result,'ok':True,'recovered':True}
+            raw = consume_action(conn, telegram_id, 'shop_buy', action_token)
+            if raw.startswith('{'):
+                intent = json.loads(raw)
+                if (intent.get('schema_version')!=1 or intent.get('catalog_version')!=2
+                        or intent.get('item_id')!=item_id or type(intent.get('quantity')) is not int):
+                    raise ActionRejected('stale_action')
+                quantity = intent['quantity']
+                location_id = intent['location_id']
+            elif raw!=item_id:
+                raise ActionRejected('stale_action')
+        player = peaceful_player(conn, telegram_id, service='shop', location_id=location_id)
+        stock_row = next((r for r in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location_id),[])
+                          if r['item_id']==item_id),None)
+        item = get_item(item_id)
+        if not stock_row or not item:
+            raise ActionRejected('not_available')
+        level_min = stock_row.get('level_min',item.get('req_level',1))
+        unit_price = int(item.get('buy_price',0))
+        if not 1<=quantity<=99 or (item['item_type'] in {'weapon','armor','accessory'} and quantity!=1):
+            raise ActionRejected('stale_action')
+        if intent and int(intent.get('unit_price',-1))!=unit_price:
+            raise ActionRejected('stale_action')
+        price = unit_price*quantity
         if player['level'] < level_min:
             return {'ok': False, 'reason': 'level_required', 'required_level': level_min}
         if price <= 0:
@@ -582,21 +633,24 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
                 'max_durability': 100,
             }
         delivery = grant_item_to_player(
-            telegram_id, item_id, quantity=1, source='shop',
+            telegram_id, item_id, quantity=quantity, source='shop',
             source_level=1 if is_field_item(item_id) else max(player['level'], level_min),
             conn=conn, provenance={'source': 'vendor', 'location_id': resolve_location_id(location_id)},
             **grant_kwargs,
         )
-        require_item_delivery(delivery, 1)
+        require_item_delivery(delivery, quantity)
+        from game.sale_policy import owned_count
+        result = {'schema_version':1,'catalog_version':2,'status':'purchased',
+                  'item_id':item_id,'quantity':quantity,'unit_price':unit_price,'price':price,
+                  'gold_delta':-price,'gold_after':int(player['gold'])-price,
+                  'remaining':owned_count(conn,telegram_id,item_id),
+                  'instance_ids':delivery.get('instance_ids',[])}
         if action_token is not None:
             conn.execute('''INSERT INTO gear_mutation_receipts
                 (action_token, player_id, action_kind, result_json) VALUES (?, ?, 'purchase', ?)''',
-                (action_token, telegram_id, json.dumps({
-                    'status': 'purchased', 'item_id': item_id, 'price': price,
-                    'instance_ids': delivery.get('instance_ids', []),
-                }, ensure_ascii=False, sort_keys=True)))
+                (action_token, telegram_id, json.dumps(result, ensure_ascii=False, sort_keys=True)))
         conn.commit()
-        return {'ok': True, 'price': price}
+        return {**result,'ok':True}
     except ActionRejected as exc:
         conn.rollback()
         return {'ok': False, 'reason': str(exc)}
@@ -610,183 +664,18 @@ def try_buy_curated_shop_item(telegram_id: int, location_id: str, player_level: 
 
 
 def build_shop_message(player: dict, location: dict, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
-    lang = player.get('lang', 'ru')
-    stock_rows = CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location['id']), [])
-    location_name = get_location_name(location['id'], lang)
-    text = t('location.shop_title_named', lang, place=location_name) + '\n\n'
-    keyboard = []
-    page_count = max(1, (len(stock_rows) + 7) // 8)
-    page = max(0, min(page_count - 1, int(page)))
-    visible_rows = stock_rows[page * 8:page * 8 + 8]
-
-    if not stock_rows:
-        text += t('location.shop_empty', lang)
-    else:
-        text += t('gear.page', lang, page=page + 1, pages=page_count) + '\n'
-        for stock_row in visible_rows:
-            item = get_item(stock_row['item_id'])
-            if not item:
-                continue
-            item_name = get_item_name(stock_row['item_id'], lang)
-            req_level = stock_row.get('level_min', item.get('req_level', 1))
-            price = item.get('buy_price', 0)
-            text += t(
-                'location.shop_entry',
-                lang,
-                name=item_name,
-                level=req_level,
-                price=price,
-            ) + '\n'
-            if player['level'] >= req_level:
-                keyboard.append([InlineKeyboardButton(
-                    t('location.shop_buy_btn', lang, name=item_name, price=price),
-                    callback_data=f"shop_preview_{stock_row['item_id']}|{page}",
-                )])
-
-    nav = []
-    if page > 0:
-        nav.append(InlineKeyboardButton('◀️', callback_data=f'shop_page_{page - 1}'))
-    if page + 1 < page_count:
-        nav.append(InlineKeyboardButton('▶️', callback_data=f'shop_page_{page + 1}'))
-    if nav:
-        keyboard.append(nav)
-
-    keyboard.append([InlineKeyboardButton(t('gear.catalog_btn', lang), callback_data='inv_catalog')])
-    keyboard.append([InlineKeyboardButton(t('chapter.sell', lang), callback_data='alpha_sell')])
-    keyboard.append([InlineKeyboardButton(t('location.shop_back_btn', lang), callback_data='shop_back')])
-    return text, InlineKeyboardMarkup(keyboard)
+    from handlers.shop_views import buy_list
+    return buy_list({**player,'location_id':player.get('location_id',location['id']),'gold':player.get('gold',0)},page)
 
 
 def build_shop_item_preview(player: dict, location: dict, item_id: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
-    stock = {row['item_id']: row for row in CURATED_EQUIPMENT_VENDOR_STOCK.get(resolve_location_id(location['id']), [])}
-    row = stock.get(item_id)
-    item = get_item(item_id)
-    lang = player.get('lang', 'ru')
-    if not row or not item:
-        return t('location.shop_not_available', lang), InlineKeyboardMarkup([[
-            InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'shop_page_{page}')]])
-    from game.action_receipts import issue_actions
-    token = issue_actions(int(player['telegram_id']), 'shop_buy', [item_id]).get(item_id)
-    lines = [f"<b>{get_item_name(item_id, lang)}</b>",
-             t('location.shop_entry', lang, name=get_item_name(item_id, lang),
-               level=row.get('level_min', item.get('req_level', 1)), price=item.get('buy_price', 0))]
-    if is_field_item(item_id):
-        lines.append(t('gear.tier_rarity', lang, tier=1, rarity=t('inventory.rarity_common', lang), enhance=0))
-    keyboard = []
-    if token:
-        keyboard.append([InlineKeyboardButton(
-            t('gear.buy_here_btn', lang, gold=item.get('buy_price', 0)),
-            callback_data=f'shop_buy_{item_id}|{token}',
-        )])
-    keyboard.append([InlineKeyboardButton(t('gear.back_btn', lang), callback_data=f'shop_page_{page}')])
-    return '\n'.join(lines), InlineKeyboardMarkup(keyboard)
+    from handlers.shop_views import buy_preview
+    return buy_preview(player,item_id)
 
 
 def build_quest_board_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
-    lang = player.get('lang', 'ru')
-    location_id = str(location.get('id') or '')
-    board_name = get_location_name(location_id, lang)
-    contract_split = list_hunt_contracts_for_player(
-        location_id=location_id,
-        player_id=int(player['telegram_id']),
-        lang=lang,
-    )
-    contracts = contract_split['available']
-    locked_contracts = contract_split['locked']
-    hunter_progress = contract_split['hunter_progress']
-    state = get_player_hunt_contract_state(int(player['telegram_id']))
-
-    text = t('location.quest_board_title', lang, board_name=board_name) + '\n'
-    current_rank_label = t(f"location.hunter_rank_{hunter_progress['current_rank']}", lang)
-    text += '\n' + t(
-        'location.quest_board_hunter_rank_line',
-        lang,
-        rank=current_rank_label,
-        points=int(hunter_progress['hunter_points']),
-    ) + '\n'
-    if hunter_progress.get('next_rank'):
-        text += t(
-            'location.quest_board_hunter_progress_line',
-            lang,
-            current=int(hunter_progress.get('current_span_progress', 0) or 0),
-            total=int(hunter_progress.get('current_span_total', 0) or 0),
-            points_left=int(hunter_progress.get('points_to_next', 0) or 0),
-            next_rank=t(f"location.hunter_rank_{hunter_progress['next_rank']}", lang),
-        ) + '\n'
-    else:
-        text += t('location.quest_board_hunter_max_rank_line', lang) + '\n'
-    keyboard: list[list[InlineKeyboardButton]] = []
-
-    active_contract = None
-    if state and state.get('status') in {'active', 'completed'}:
-        active_contract = state.get('contract')
-    if active_contract:
-        progress = int(state.get('progress_kills', 0) or 0)
-        required = int(active_contract.required_kills)
-        can_claim_on_this_board = resolve_location_id(location_id) in {
-            resolve_location_id(key) for key in (active_contract.claim_locations or active_contract.board_locations)}
-        status_key = 'location.quest_board_status_ready' if state.get('status') == 'completed' else 'location.quest_board_status_active'
-        text += '\n' + t(
-            'location.quest_board_active_row',
-            lang,
-            title=build_contract_title(active_contract, lang),
-            progress=progress,
-            required=required,
-            status=t(status_key, lang),
-        ) + '\n'
-        text += t('location.quest_board_active_target', lang, target=build_contract_row(active_contract, lang)) + '\n'
-        if active_contract.chapter_order:
-            from game.quest_board import build_objective_lines
-            text += '\n'.join(build_objective_lines(state, lang)) + '\n'
-        text += t(
-            'location.quest_board_active_claim_boards',
-            lang,
-            boards=build_contract_board_locations_line(active_contract, lang),
-        ) + '\n'
-        if state.get('status') == 'completed' and can_claim_on_this_board:
-            from game.action_receipts import issue_actions
-            token = issue_actions(player['telegram_id'], 'contract_claim', [active_contract.contract_key])[active_contract.contract_key]
-            keyboard.append([InlineKeyboardButton(
-                t('location.quest_board_claim_btn', lang),
-                callback_data=f'quest_board_claim_{token}',
-            )])
-        elif state.get('status') == 'completed':
-            text += t(
-                'location.quest_board_claim_on_other_board',
-                lang,
-                boards=build_contract_board_locations_line(active_contract, lang),
-            ) + '\n'
-        else:
-            from game.action_receipts import issue_actions
-            token = issue_actions(player['telegram_id'], 'contract_abandon', [active_contract.contract_key])[active_contract.contract_key]
-            keyboard.append([InlineKeyboardButton(
-                t('location.quest_board_abandon_btn', lang),
-                callback_data=f'quest_board_abandon_{token}',
-            )])
-    else:
-        text += '\n' + t('location.quest_board_no_active', lang) + '\n'
-
-    text += '\n' + t('location.quest_board_available_title', lang) + '\n'
-    if contracts:
-        for contract in contracts:
-            text += '• ' + build_contract_row(contract, lang) + '\n'
-            if active_contract is None:
-                keyboard.append([InlineKeyboardButton(
-                    t('location.quest_board_accept_btn', lang, title=build_contract_title(contract, lang)),
-                    callback_data=f'quest_board_accept_{contract.contract_key}',
-                )])
-    else:
-        text += t('location.quest_board_empty', lang) + '\n'
-
-    if locked_contracts:
-        text += '\n' + t('location.quest_board_locked_title', lang) + '\n'
-        for locked_row in locked_contracts:
-            contract = locked_row['contract']
-            text += '🔒 ' + build_contract_row(contract, lang) + '\n'
-            text += t('location.quest_board_locked_requirement', lang, reason=str(locked_row['reason'])) + '\n'
-
-    keyboard.append([InlineKeyboardButton(t('location.quest_board_back_btn', lang), callback_data='quest_board_back')])
-    return text, InlineKeyboardMarkup(keyboard)
+    from handlers.quest_views import board_card
+    return board_card(player, location)
 
 
 def build_inn_message(player: dict, location: dict) -> tuple[str, InlineKeyboardMarkup]:
@@ -815,7 +704,26 @@ def build_inn_message(player: dict, location: dict) -> tuple[str, InlineKeyboard
 # ОТОБРАЖЕНИЕ ЛОКАЦИИ
 # ────────────────────────────────────────
 
-def build_location_message(
+def build_location_message(player, location, *, pvp_only_view=False, include_action_map=False, snapshot_tag=None):
+    from game.pvp_live import get_pending_player_engagement, get_pending_reinforcement_engagement_for_player
+    engagement = get_pending_player_engagement(player['telegram_id']) or get_pending_reinforcement_engagement_for_player(player['telegram_id'])
+    if engagement:
+        if engagement['world_model_version'] == 1:
+            from handlers.pvp_group import preparation_or_live_card
+            text, keyboard = preparation_or_live_card(dict(engagement), player)
+        else:
+            text, keyboard = _legacy_location_message(player, location, pvp_only_view=True)
+    else:
+        from handlers.world_views import location_card
+        text, keyboard = location_card(player)
+    if include_action_map:
+        snapshot = {'snapshot_tag': snapshot_tag or 's1', 'player_id': player['telegram_id'],
+                    'location_id': location['id'], 'actions': {}}
+        return text, keyboard, snapshot
+    return text, keyboard
+
+
+def _legacy_location_message(
     player: dict,
     location: dict,
     *,
@@ -921,7 +829,7 @@ def build_location_message(
             int(engagement_row['defender_id']),
         }
         if state == 'pending':
-            text += t('location.pvp_pending', lang) + '\n'
+            text += t('pxe1.encounter.pvp_preparing', lang) + '\n'
             reinforcement_state = get_engagement_reinforcement_state(engagement_id=int(engagement_row['id']))
             initiator_state = reinforcement_state.get('initiator') or {}
             defender_state = reinforcement_state.get('defender') or {}
@@ -934,9 +842,18 @@ def build_location_message(
                 defender_status=t(f"location.pvp_reinforcement_status_{defender_state.get('status', 'none')}", lang),
             ) + '\n'
             if is_live_participant:
+                if engagement_row['world_model_version'] == 1:
+                    from game.action_receipts import issue_actions
+                    from game.pvp_world import encoded
+                    escape_payload = encoded({'schema_version':1,'catalog_version':2,'engagement_id':int(engagement_row['id']),
+                        'state_revision':int(engagement_row['state_revision'])})
+                    escape_token = issue_actions(player_id,'pvp_prep_escape',[escape_payload])[escape_payload]
+                    escape_callback = f"pvp_escape_{engagement_row['id']}_{escape_token}"
+                else:
+                    escape_callback = f"pvp_escape_{engagement_row['id']}"
                 keyboard.append([InlineKeyboardButton(
-                    t('location.pvp_escape_btn', lang),
-                    callback_data=f"pvp_escape_{engagement_row['id']}",
+                    t('pxe1.encounter.pvp_escape_attempt', lang),
+                    callback_data=escape_callback,
                 )])
                 candidates = list_reinforcement_candidates(
                     engagement_row=engagement_row,
@@ -960,7 +877,7 @@ def build_location_message(
                         callback_data=f"pvp_reinf_accept_{engagement_row['id']}",
                     ),
                     InlineKeyboardButton(
-                        t('location.pvp_reinforcement_decline_btn', lang),
+                        t('pxe1.encounter.pvp_decline', lang),
                         callback_data=f"pvp_reinf_decline_{engagement_row['id']}",
                     ),
                 ])
@@ -970,7 +887,15 @@ def build_location_message(
                     player_id=player_id,
                 ):
                     text += t('location.pvp_reinforcement_accepted_notice', lang) + '\n'
+                    if engagement_row['world_model_version'] == 1:
+                        keyboard.append([InlineKeyboardButton(t('location.pvp_leave_prep',lang),callback_data=f"pvp_leaveprep_{engagement_row['id']}")])
         elif state == 'converted_to_battle':
+            if engagement_row['world_model_version'] == 1:
+                from handlers.pvp_group import live_card
+                conn = get_connection()
+                current = conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement_row['id'],)).fetchone()
+                conn.close()
+                return live_card(current,payload,player_id,lang)
             if is_live_participant:
                 battle = payload.get('battle') or {}
                 runtime_stats = _build_live_pvp_runtime_stats(player, battle, engagement_row)
@@ -1160,11 +1085,8 @@ def build_location_message(
 async def _send_lower_menu_sync_message(message, player: dict) -> None:
     if not hasattr(message, 'reply_text'):
         return
-    lang = player.get('lang', 'ru')
-    await message.reply_text(
-        t('keyboard.sync_updated', lang),
-        reply_markup=build_contextual_main_keyboard(player, lang),
-    )
+    from game.player_ui import install_menu_on_message
+    await install_menu_on_message(message,player)
 
 
 # ────────────────────────────────────────
@@ -1179,19 +1101,14 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not p:
         await update.message.reply_text(t('common.no_character', lang))
         return
+    from game.player_feedback import present_pending_feedback
+    await present_pending_feedback(context.bot,user.id,recover_presented=True)
 
     from game.pve_reward_settlement import recover_player_settlements
     recovery = recover_player_settlements(user.id)
     p = get_player(user.id)
 
     in_live_pvp = bool(p['in_battle']) and is_player_busy_with_live_pvp(user.id)
-    if p['in_battle'] and not in_live_pvp:
-        await update.message.reply_text(t('location.in_battle_block', lang))
-        return
-
-    if is_in_battle(user.id) and not in_live_pvp:
-        await update.message.reply_text(t('location.in_battle', lang))
-        return
 
     location = get_location(p['location_id'])
     if not location:
@@ -1245,13 +1162,11 @@ async def map_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not player:
         await update.message.reply_text(t('common.no_character', lang))
         return
+    from handlers.world_views import map_card
     route_key = _parse_map_route_arg(update.message.text or '')
-    if not route_key:
-        text = t('location.map_overview', lang)
-        await update.message.reply_text(text, reply_markup=_build_map_route_keyboard(lang), parse_mode='HTML')
-        return
-    text = _build_route_map_text(route_key, player.get('location_id'), lang)
-    await update.message.reply_text(text, reply_markup=_build_map_route_keyboard(lang), parse_mode='HTML')
+    region = 'route_'+route_key if route_key else None
+    text, keyboard = map_card(dict(player), region=region)
+    await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def go_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1410,11 +1325,18 @@ async def handle_lower_menu_gather_text(update: Update, context: ContextTypes.DE
         if profession == '':
             await update.message.reply_text(t('location.lower_gather_stale', lang))
             return True
-        result = gather_resource(int(player['telegram_id']), profession,
-                                 location_id=player['location_id'],
-                                 travel_revision=int(player.get('travel_revision', 0)),
-                                 request_id=request_id)
+        from handlers.activities import gathering_preview_card
+        text,keyboard = gathering_preview_card(player,profession)
+        await update.message.reply_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return True
     status = result['status']
+    if result.get('session'):
+        from handlers.activities import activity_card
+        from game.player_ui import present_surface
+        session = result['session']
+        text,keyboard = activity_card(dict(get_player(player['telegram_id'])),session,'gather')
+        await present_surface(context.bot,player['telegram_id'],text,keyboard,kind='gather',ref=session['session_id'],revision=session['revision'],force_refresh=True)
+        return True
     if status == 'empty':
         await update.message.reply_text(t('location.gather_fail', lang))
         return True
@@ -1678,17 +1600,71 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
     p = get_player(user.id)
     lang = p['lang'] if p else 'ru'
 
+    if p and data.startswith(('quest_board_list_', 'quest_board_detail_')):
+        from handlers.quest_views import board_card, board_detail
+        location = get_location(p['location_id'])
+        if not location or 'quest_board' not in location.get('services', []):
+            await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
+            return
+        if data.startswith('quest_board_list_'):
+            category, page = data.removeprefix('quest_board_list_').rsplit('_', 1)
+            text, keyboard = board_card(dict(p), location, category=category, page=int(page))
+        else:
+            text, keyboard = board_detail(dict(p), location, data.removeprefix('quest_board_detail_'))
+        await query.answer()
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+
+
+    if data.startswith('goto_'):
+        from handlers.activities import travel_preview_card
+        from game.action_receipts import ActionRejected
+        destination=resolve_location_id(data.removeprefix('goto_'))
+        if destination==resolve_location_id(p['location_id']):
+            await query.answer(t('location.already_here',lang),show_alert=True)
+            return
+        try:
+            text,keyboard = travel_preview_card(dict(p),destination)
+        except ActionRejected:
+            await query.answer(t('location.long_route_unknown',lang),show_alert=True)
+            return
+        await query.answer()
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+
     if data.startswith('map_route_'):
         if not p:
             await query.answer(t('common.no_character', lang), show_alert=True)
             return
         route_key = data.replace('map_route_', '', 1)
-        text = _build_route_map_text(route_key, p['location_id'], lang)
+        from handlers.world_views import map_card
+        text, keyboard = map_card(dict(p), region='route_'+route_key)
         try:
-            await query.edit_message_text(text, reply_markup=_build_map_route_keyboard(lang), parse_mode='HTML')
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         except BadRequest as exc:
             if 'message is not modified' not in str(exc).lower():
                 raise
+        await query.answer()
+        return
+
+    if data.startswith('shop_buy_'):
+        # Successful old purchases remain recoverable after travel or combat.
+        from handlers.shop_views import result_card
+        raw = data.removeprefix('shop_buy_')
+        if '|' not in raw or not p:
+            await query.answer(t('chapter.stale_action',lang),show_alert=True)
+            return
+        item_id,token = raw.split('|',1)
+        result = try_buy_curated_shop_item(user.id,p['location_id'],p['level'],item_id,action_token=token)
+        if not result['ok']:
+            await query.answer(t('pxe1.shop.stale',lang),show_alert=True)
+            return
+        text,keyboard,keys = result_card(dict(get_player(user.id)),result,buy=True)
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        if keys:
+            from game.player_feedback import acknowledge_presented_facts
+            acknowledge_presented_facts(user.id,keys)
         await query.answer()
         return
 
@@ -1700,9 +1676,25 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         p
         and p['in_battle']
         and not data.startswith('pvp_')
-        and not data.startswith('pve_enter_')
+        and not data.startswith('pve_')
     ):
         await query.answer(t('location.in_battle_block', lang), show_alert=True)
+        return
+
+    if data.startswith('pvp_preview_'):
+        target_id = int(data.removeprefix('pvp_preview_'))
+        defender = get_player(target_id)
+        if not defender or not p or defender['location_id'] != p['location_id']:
+            await query.answer(t('location.pvp_target_missing',lang),show_alert=True)
+            return
+        from html import escape
+        illegal = is_aggression_illegal(attacker=dict(p),defender=dict(defender),location_id=p['location_id'])
+        text = escape(defender['name'])+' · '+t('common.level',lang)+' '+str(defender['level'])
+        text += '\n'+t('pxe1.encounter.pvp_illegal_assist_warning' if illegal else 'pxe1.pvp_attack_preview',lang)
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t('location.pvp_action_attack_btn',lang),callback_data=f'pvp_attack_{target_id}')],
+            [InlineKeyboardButton(t('common.back',lang),callback_data='px:local:encounters:0')]])
+        await query.answer()
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
         return
 
     if data.startswith('pvp_attack_'):
@@ -1722,7 +1714,6 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                 msg_key = 'location.pvp_respawn_protection_block'
             await query.answer(t(msg_key, lang), show_alert=True)
             return
-        clear_respawn_protection(player_id=int(attacker['telegram_id']))
         can_create, reason = can_create_live_engagement(
             attacker_id=int(attacker['telegram_id']),
             defender_id=int(defender['telegram_id']),
@@ -1765,7 +1756,8 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         return
 
     if data.startswith('pvp_escape_'):
-        engagement_id = int(data.replace('pvp_escape_', '', 1))
+        parts = data.replace('pvp_escape_', '', 1).split('_')
+        engagement_id = int(parts[0])
         conn = get_connection()
         engagement_row = conn.execute(
             'SELECT * FROM pvp_engagements WHERE id=?',
@@ -1775,12 +1767,32 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         if not engagement_row:
             await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
             return
-        success = random.randint(1, 100) <= 50
-        state, _ = resolve_engagement_escape(engagement_row, escape_succeeded=success)
-        if state == 'escaped':
-            await query.answer(t('location.pvp_escape_success', lang), show_alert=True)
+        from game.action_receipts import ActionRejected
+        if user.id not in {int(engagement_row['attacker_id']),int(engagement_row['defender_id'])}:
+            await query.answer(t('location.pvp_not_allowed',lang),show_alert=True)
+            return
+        try:
+            state, _ = resolve_engagement_escape(engagement_row,actor_id=user.id,
+                action_token=parts[1] if len(parts)==2 else None,
+                escape_succeeded=random.randint(1,100)<=50 if engagement_row['world_model_version']==0 else None)
+        except ActionRejected:
+            await query.answer(t('location.pvp_not_allowed',lang),show_alert=True)
+            return
+        rolled = engagement_row['world_model_version'] == 0
+        if engagement_row['world_model_version'] == 1:
+            conn = get_connection()
+            try:
+                receipt = conn.execute('SELECT result_json FROM economy_action_receipts WHERE player_id=? AND request_id=? AND action_kind=?',
+                    (user.id, 'ui:'+parts[1], 'pvp_prep_escape_pxe1')).fetchone()
+                rolled = bool(receipt and json.loads(receipt['result_json']).get('rolled'))
+            finally:
+                conn.close()
+        if rolled and state == 'escaped':
+            await query.answer(t('pxe1.encounter.pvp_escape_success', lang), show_alert=True)
+        elif rolled:
+            await query.answer(t('pxe1.encounter.pvp_escape_failed', lang), show_alert=True)
         else:
-            await query.answer(t('location.pvp_escape_fail', lang), show_alert=True)
+            await query.answer(t('pxe1.combat.turn_expired', lang), show_alert=True)
         location = get_location(get_player(user.id)['location_id'])
         refreshed_player = dict(get_player(user.id))
         text, keyboard = _build_location_message_with_snapshot(
@@ -1799,10 +1811,39 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
+    if data.startswith('pve_people_'):
+        from html import escape
+        from game.player_ui import validate_surface
+        encounter_id,page = data.removeprefix('pve_people_').rsplit('_',1)
+        page = int(page)
+        detail = get_open_world_pve_encounter_detail(encounter_id=encounter_id)
+        if not detail or detail['location_id']!=p['location_id']:
+            await query.answer(t('location.pve_no_encounter',lang),show_alert=True)
+            return
+        conn = get_connection()
+        try:
+            people = [r['name'] for pid in detail['participant_player_ids'] for r in conn.execute('SELECT name FROM players WHERE telegram_id=?',(pid,))]
+        finally: conn.close()
+        pages = max(1,(len(people)+5)//6);page = max(0,min(page,pages-1))
+        text = '\n'.join([t('pxe1.combat.participants',lang),t('gear.page',lang,page=page+1,pages=pages)]+[escape(n) for n in people[page*6:page*6+6]])
+        rows = []
+        nav = []
+        if page: nav.append(InlineKeyboardButton('◀️',callback_data=f'pve_people_{encounter_id}_{page-1}'))
+        if page+1<pages: nav.append(InlineKeyboardButton('▶️',callback_data=f'pve_people_{encounter_id}_{page+1}'))
+        if nav: rows.append(nav)
+        rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='pve_view_'+encounter_id)])
+        keyboard = InlineKeyboardMarkup(rows)
+        validate_surface(text,keyboard,list_view=True)
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        await query.answer()
+        return
+
     if data.startswith('pve_view_'):
         encounter_id = data.replace('pve_view_', '', 1)
         detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(p), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        from handlers.combat_delivery import remember_pve_card
+        remember_pve_card(query,user.id,encounter_id)
         await query.answer()
         return
 
@@ -1821,6 +1862,8 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t(key_by_reason.get(reason, 'location.pve_join_blocked'), lang), show_alert=True)
         detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(get_player(user.id)), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        from handlers.combat_delivery import remember_pve_card
+        remember_pve_card(query,user.id,encounter_id)
         return
 
     if data.startswith('pve_enter_'):
@@ -1845,6 +1888,8 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t(key_by_reason.get(reason, 'location.pve_leave_blocked'), lang), show_alert=True)
         detail_text, detail_keyboard = build_pve_encounter_detail_message(dict(get_player(user.id)), encounter_id)
         await query.edit_message_text(detail_text, reply_markup=detail_keyboard, parse_mode='HTML')
+        from handlers.combat_delivery import remember_pve_card
+        remember_pve_card(query,user.id,encounter_id)
         return
 
     if data.startswith('pvp_join_'):
@@ -1859,6 +1904,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         conn.close()
         if not engagement_row:
             await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        if engagement_row['world_model_version']==1:
+            from handlers.pvp_group import preparation_or_live_card
+            text,keyboard=preparation_or_live_card(engagement_row,dict(p))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
             return
         ok, _reason = join_pending_encounter_side(
             engagement_row=engagement_row,
@@ -1885,6 +1936,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         conn.close()
         if not engagement_row:
             await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
+            return
+        if engagement_row['world_model_version']==1:
+            from handlers.pvp_group import preparation_or_live_card
+            text,keyboard=preparation_or_live_card(engagement_row,dict(p))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
             return
         ok, reason = invite_reinforcement_ally(
             engagement_row=engagement_row,
@@ -1920,6 +1977,15 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         action = raw.split('_', 1)[0]
         engagement_id = int(raw.split('_', 1)[1])
         accepted = action == 'accept'
+        conn=get_connection()
+        try: current=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement_id,)).fetchone()
+        finally: conn.close()
+        if current and current['world_model_version']==1:
+            from handlers.pvp_group import preparation_or_live_card
+            text,keyboard=preparation_or_live_card(current,dict(p))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
+            return
         ok, reason = respond_to_reinforcement_invite(
             engagement_id=engagement_id,
             ally_id=int(user.id),
@@ -1942,10 +2008,91 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         return
 
+    if data == 'pvp_refresh' or data.startswith(('pvp_leaveprep_', 'pvp_revoke_')):
+        if data.startswith(('pvp_leaveprep_', 'pvp_revoke_')):
+            from game.pvp_world import leave_or_revoke
+            from game.pvp_live import _pxe1_membership_mutation
+            if data.startswith('pvp_revoke_'):
+                engagement_id, ally_id = map(int, data.removeprefix('pvp_revoke_').split('_'))
+                arguments = {'engagement_id': engagement_id, 'actor_id': user.id, 'ally_id': ally_id}
+            else:
+                arguments = {'engagement_id': int(data.removeprefix('pvp_leaveprep_')), 'actor_id': user.id}
+            conn=get_connection()
+            try: current=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(arguments['engagement_id'],)).fetchone()
+            finally: conn.close()
+            if current and current['world_model_version']==1:
+                from handlers.pvp_group import preparation_or_live_card
+                text,keyboard=preparation_or_live_card(current,dict(p))
+                await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+                await query.answer()
+                return
+            ok,_ = _pxe1_membership_mutation(leave_or_revoke, **arguments)
+            if not ok:
+                await query.answer(t('location.pvp_reinforcement_response_blocked',lang),show_alert=True)
+                return
+        refreshed_player = dict(get_player(user.id))
+        text,keyboard = _build_location_message_with_snapshot(context,refreshed_player,get_location(refreshed_player['location_id']),pvp_only_view=_should_use_pvp_only_location_view(refreshed_player))
+        await query.answer()
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+
+    if data.startswith('pvp_allies_'):
+        from handlers.pvp_group import allies_card
+        from game.action_receipts import ActionRejected
+        engagement_id,page=map(int,data.removeprefix('pvp_allies_').split('_'))
+        conn=get_connection()
+        try: row=conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(engagement_id,)).fetchone()
+        finally: conn.close()
+        try: text,keyboard=allies_card(row,dict(p),page)
+        except (ActionRejected,KeyError,TypeError):
+            await query.answer(t('location.pvp_reinforcement_invite_blocked',lang),show_alert=True)
+            return
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        await query.answer()
+        return
+
+    if data.startswith('pvp_result_'):
+        from handlers.combat_results import handle_result_details
+        await handle_result_details(update,context)
+        return
+
+    if data.startswith('pvp_member_'):
+        from handlers.pvp_group import handle_membership_choice
+        await handle_membership_choice(update,context)
+        return
+
+    if data.startswith('pvp_cv_'):
+        from handlers.pvp_group import handle_read_selection
+        await handle_read_selection(update,context)
+        return
+
+    if data.startswith('pvp_pick_'):
+        from handlers.pvp_group import target_card
+        from game.action_receipts import ActionRejected
+        engagement_id,revision,action_id = data.removeprefix('pvp_pick_').split('_',2)
+        conn = get_connection()
+        row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?',(int(engagement_id),)).fetchone()
+        conn.close()
+        try:
+            text,keyboard = target_card(row,user.id,action_id,int(revision),lang)
+        except (ActionRejected,TypeError,KeyError):
+            await query.answer(t('location.pvp_action_not_ready',lang),show_alert=True)
+            return
+        await query.answer()
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+
     if data.startswith('pvp_v1_'):
         consumed = consume_combat_intent(int(user.id), data.removeprefix('pvp_v1_'))
         if not consumed.get('accepted'):
             await query.answer(t('location.pvp_action_not_ready', lang), show_alert=True)
+            return
+        if consumed.get('already_applied'):
+            await query.answer(t('pxe1.combat.order_ack',lang))
+            refreshed_player=dict(get_player(user.id))
+            text,keyboard=_build_location_message_with_snapshot(context,refreshed_player,get_location(refreshed_player['location_id']),
+                pvp_only_view=_should_use_pvp_only_location_view(refreshed_player))
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
             return
         action = consumed.get('action') or {}
         kind = str(action.get('kind') or '')
@@ -1958,13 +2105,21 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         engagement_row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
         conn.close()
         status, _payload = resolve_live_battle_turn(
-            engagement_row, actor_id=int(user.id), selected_action_id=action_id,
+            engagement_row, actor_id=int(user.id), selected_action_id=action_id,target_id=action.get('target_id'),
         ) if engagement_row and action_id else ('invalid_action', {})
         status_key = {
             'waiting': 'location.pvp_wait_turn_timeout', 'invalid_action': 'location.pvp_action_not_ready',
-            'not_your_turn': 'location.pvp_not_your_turn', 'finished': 'location.pvp_battle_finished',
+            'not_your_turn': 'location.pvp_not_your_turn', 'finished': 'pxe1.encounter.finished',
         }.get(status, 'location.pvp_action_done')
-        await query.answer(t(status_key, lang), show_alert=True)
+        await query.answer(t(status_key, lang))
+        if engagement_row and engagement_row['world_model_version']==1:
+            from game.player_ui import record_surface
+            from game.pvp_live import _deliver_pxe1_pvp_event
+            # The originating message becomes this participant's combat surface.
+            record_surface(user.id,kind='pvp',ref=str(engagement_id),revision=max(0,int(consumed.get('turn_revision',0))-1),
+                           chat_id=query.message.chat_id,message_id=query.message.message_id)
+            await _deliver_pxe1_pvp_event(context.bot,{'row':engagement_row,'payload':_payload,'status':status,'type':'manual_order'})
+            return
         refreshed_player = dict(get_player(user.id))
         location = get_location(refreshed_player['location_id'])
         text, keyboard = _build_location_message_with_snapshot(
@@ -1987,6 +2142,18 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         if not engagement_row:
             await query.answer(t('location.pvp_no_engagement', lang), show_alert=True)
             return
+        if engagement_row['world_model_version']==1:
+            from handlers.pvp_group import target_card
+            from game.action_receipts import ActionRejected
+            selected = 'normal' if action_id=='normal_attack' else action_id.removeprefix('skill:')
+            try:
+                battle = json.loads(engagement_row['reason_context'])['battle']
+                text,keyboard = target_card(engagement_row,user.id,selected,battle['turn_revision'],lang)
+                await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+                await query.answer()
+            except (ActionRejected,ValueError,KeyError):
+                await query.answer(t('location.pvp_action_not_ready',lang),show_alert=True)
+            return
         status, _payload = resolve_live_battle_turn(
             engagement_row,
             actor_id=int(user.id),
@@ -1999,7 +2166,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         elif status == 'not_your_turn':
             await query.answer(t('location.pvp_not_your_turn', lang), show_alert=True)
         elif status == 'finished':
-            await query.answer(t('location.pvp_battle_finished', lang), show_alert=True)
+            await query.answer(t('pxe1.encounter.finished', lang), show_alert=True)
         else:
             await query.answer(t('location.pvp_action_done', lang), show_alert=True)
         location = get_location(get_player(user.id)['location_id'])
@@ -2171,10 +2338,6 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         if not location:
             await query.answer(t('location.not_found', lang), show_alert=True)
             return
-        if 'quest_board' not in location.get('services', []):
-            await query.answer(t('location.quest_board_not_available', lang), show_alert=True)
-            return
-
         text, keyboard = _build_location_message_with_snapshot(context, dict(p), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
         await query.answer()
@@ -2227,6 +2390,12 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             action_token=data.removeprefix('quest_board_claim_'),
             location_id=str(location['id']),
         )
+        if ok:
+            if getattr((reward_result or {}).get('contract'), 'contract_key', '') == 'chapter_homecoming':
+                from game.player_feedback import present_pending_feedback
+                if await present_pending_feedback(context.bot,user.id,originating_query=query):
+                    await query.answer()
+                    return
         if not ok:
             key_by_reason = {
                 'no_contract': 'location.quest_board_claim_not_ready',
@@ -2352,186 +2521,24 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         await query.answer()
         return
 
-    if data.startswith('shop_buy_'):
-        raw = data.replace('shop_buy_', '', 1)
-        if '|' not in raw:
-            await query.answer(t('chapter.stale_action', lang), show_alert=True)
-            return
-        item_id, action_token = raw.split('|', 1)
-        location = get_location(p['location_id'])
-        if not location:
-            await query.answer(t('location.not_found', lang), show_alert=True)
-            return
-        if 'shop' not in location.get('services', []):
-            await query.answer(t('location.shop_not_available', lang), show_alert=True)
-            return
-
-        result = try_buy_curated_shop_item(
-            telegram_id=user.id,
-            location_id=location['id'],
-            player_level=p['level'],
-            item_id=item_id,
-            action_token=action_token,
-        )
-        if not result['ok']:
-            if result['reason'] == 'level_required':
-                await query.answer(t('location.shop_level_required', lang, level=result['required_level']), show_alert=True)
-            elif result['reason'] == 'not_enough_gold':
-                await query.answer(t('location.shop_no_gold', lang, price=result['price']), show_alert=True)
-            else:
-                await query.answer(t('location.shop_not_available', lang), show_alert=True)
-            return
-
-        player_after = dict(get_player(user.id))
-        text, keyboard = build_shop_message(player_after, location)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
-        await query.answer(t('location.shop_buy_ok', lang, name=get_item_name(item_id, lang), price=result['price']))
-        return
-
-    if data.startswith('goto_') and (is_in_battle(user.id) or is_pvp_mobility_blocked(int(user.id))):
-        await query.answer(t('location.in_battle_move', lang), show_alert=True)
-        return
-
-    if data.startswith('goto_'):
-        raw_new_loc_id = data.replace('goto_', '')
-        new_loc = get_location(raw_new_loc_id)
-
-        if not new_loc:
-            await query.answer(t('location.not_found', lang), show_alert=True)
-            return
-
-        current_location_id = str(p['location_id'] or '')
-        canonical_current_location_id = resolve_location_id(current_location_id)
-        canonical_new_loc_id = resolve_location_id(raw_new_loc_id)
-        if canonical_new_loc_id == canonical_current_location_id:
-            await query.answer(t('location.already_here', lang), show_alert=True)
-            return
-        allowed_neighbors = set(get_location_neighbors(current_location_id))
-        allowed_canonical_neighbors = {resolve_location_id(location_id) for location_id in allowed_neighbors}
-
-        route_path = []
-        travel_seconds = GO_TRAVEL_SECONDS
-        if raw_new_loc_id not in allowed_neighbors and canonical_new_loc_id not in allowed_canonical_neighbors:
-            if not is_location_discovered(int(user.id), canonical_new_loc_id):
-                await query.answer(t('location.long_route_unknown', lang), show_alert=True)
-                return
-            route_path = _find_canonical_path(current_location_id, canonical_new_loc_id)
-            if len(route_path) < 2:
-                await query.answer(t('location.not_found', lang), show_alert=True)
-                return
-            travel_seconds = (len(route_path) - 1) * GO_TRAVEL_SECONDS * LONG_ROUTE_MULTIPLIER
-
-        await query.answer()
-        await query.edit_message_text(
-            t('location.traveling', lang,
-                name=get_location_name(canonical_new_loc_id, lang),
-                seconds=travel_seconds,
-                description=get_location_desc(canonical_new_loc_id, lang).lower()),
-            parse_mode='HTML'
-        )
-
-        await asyncio.sleep(travel_seconds)
-
-        if is_pvp_mobility_blocked(int(user.id)) or is_in_battle(user.id):
-            await query.edit_message_text(t('location.pvp_mobility_block', lang), parse_mode='HTML')
-            return
-
-        conn = get_connection()
-        from game.action_receipts import peaceful_player, ActionRejected
-        try:
-            conn.execute('BEGIN IMMEDIATE')
-            peaceful_player(conn, user.id, location_id=current_location_id)
-            changed = conn.execute('''UPDATE players SET location_id=?, travel_revision=travel_revision+1
-                WHERE telegram_id=? AND location_id=? AND in_battle=0 AND travel_revision=?''',
-                (canonical_new_loc_id, user.id, current_location_id, dict(p).get('travel_revision', 0)))
-            if not changed.rowcount:
-                raise ActionRejected('stale_action')
-            ensure_player_location_discovered(user.id, canonical_new_loc_id, conn=conn)
-            conn.commit()
-        except ActionRejected:
-            conn.rollback()
-            await query.edit_message_text(t('chapter.stale_action', lang))
-            return
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-        clear_respawn_protection_on_dangerous_reentry(
-            player_id=int(user.id),
-            location_id=canonical_new_loc_id,
-        )
-
-        p = dict(get_player(user.id))
-        new_loc = get_location(canonical_new_loc_id) or new_loc
-        text, keyboard = _build_location_message_with_snapshot(context, p, new_loc)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
-        await _send_lower_menu_sync_message(query.message, p)
-
-        if not new_loc['safe']:
-            context.application.create_task(
-                schedule_mob_aggro(context, user.id, new_loc, query.message.message_id)
-            )
 
 
-# ────────────────────────────────────────
-# АГРЕССИЯ МОБОВ (таймер)
-# ────────────────────────────────────────
 
 async def schedule_mob_aggro(context, telegram_id: int, location: dict, message_id: int):
-    aggressive_mobs = [
-        get_mob(mid) for mid in location['mobs']
-        if get_mob(mid) and get_mob(mid)['aggressive']
-    ]
-    tasks = [
-        aggro_attack(context, telegram_id, mob, location['id'], random.randint(5, 60))
-        for mob in aggressive_mobs
-    ]
-    await asyncio.gather(*tasks)
+    """Compatibility entry: visit deadlines are durable and never rerolled."""
+    from game.location_threats import seed_visit_threats
+    import time
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        seed_visit_threats(conn,telegram_id,now_ms=int(time.time()*1000))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 async def aggro_attack(context, telegram_id: int, mob: dict, location_id: str, delay: int):
-    await asyncio.sleep(delay)
-
-    p = get_player(telegram_id)
-    if not p:
-        return
-    if p['location_id'] != location_id:
-        return
-    if p['in_battle']:
-        return
-    if p['level'] > mob['level'] + 1:
-        return
-
-    lang = get_player_lang(telegram_id)
-
-    conn = get_connection()
-    conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id=?', (telegram_id,))
-    conn.commit()
-    conn.close()
-
-    try:
-        msg = await context.bot.send_message(
-            chat_id=telegram_id,
-            text=t('location.aggro_alert', lang,
-                   mob_name=mob['name'],
-                   level=mob['level'],
-                   hp=mob['hp']),
-            parse_mode='HTML',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    t('location.aggro_fight_btn', lang),
-                    callback_data=f"fight_{mob['id']}"
-                ),
-                InlineKeyboardButton(
-                    t('location.aggro_flee_btn', lang),
-                    callback_data=f"flee_{mob['id']}"
-                ),
-            ]])
-        )
-        context.user_data['aggro_message_id'] = msg.message_id
-    except Exception:
-        pass
+    await schedule_mob_aggro(context,telegram_id,get_location(location_id),0)
 
 
 # ────────────────────────────────────────

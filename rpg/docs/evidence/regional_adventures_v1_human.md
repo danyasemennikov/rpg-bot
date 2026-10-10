@@ -1,7 +1,9 @@
 # Regional Adventures & Opportunities V1 — Human Validation
 
 - Contract: RAV1-1
-- Status: **NOT YET RUN**
+- Status: **IN PROGRESS / interrupted during Session 1**
+- Reconciliation 2026-10-07: PROJECT_STATE_CURRENT records HV1-B01 on `f581eb204b40f4d52ee2b709822c71906a7a8cd5`; PR236 repaired start at `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`. Live revalidation and the remaining sessions are unverified. The original plan below is preserved.
+- PXE1 human validation is a separate plan and remains **NOT RUN**.
 - Candidate: `codex/regional-adventures-opportunities-v1`
 - Deployment/live account: not established
 

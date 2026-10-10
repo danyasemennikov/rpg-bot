@@ -32,11 +32,12 @@ def find_receipt(conn, player_id: int, request_id: str, action_kind: str, reques
 
 
 def store_receipt(conn, player_id: int, request_id: str, action_kind: str,
-                  request_hash: str, result: dict) -> None:
+                  request_hash: str, result: dict, *, catalog_version: int=1) -> None:
     conn.execute('''INSERT INTO economy_action_receipts
         (player_id, request_id, action_kind, request_hash, schema_version, catalog_version, result_json)
-        VALUES (?, ?, ?, ?, 1, 1, ?)''',
+        VALUES (?, ?, ?, ?, 1, ?, ?)''',
         (player_id, request_id, action_kind, request_hash,
+         catalog_version,
          json.dumps(result, ensure_ascii=False, sort_keys=True)))
 
 
@@ -47,10 +48,11 @@ def store_business_rejection(conn, *, player_id: int, request_id: str,
                              gold_after: int = 0,
                              source: dict | None = None,
                              details: dict | None = None,
-                             intent: dict | None = None) -> dict:
+                             intent: dict | None = None,
+                             catalog_version: int = 1) -> dict:
     """Commit a consumed, valid intent's language-neutral rejection result."""
     result = {
-        'schema_version': 1, 'action_kind': action_kind, 'status': status,
+        'schema_version': 1, 'catalog_version':catalog_version,'action_kind': action_kind, 'status': status,
         'player_id': player_id, 'location_id': location_id, 'recipe_id': recipe_id,
         'consumed': [], 'granted': [], 'gold_delta': 0, 'gold_after': int(gold_after),
         'progression': [], 'source': source or {},
@@ -58,7 +60,7 @@ def store_business_rejection(conn, *, player_id: int, request_id: str,
     }
     if intent is not None:
         result['intent'] = intent
-    store_receipt(conn, player_id, request_id, action_kind, request_hash, result)
+    store_receipt(conn, player_id, request_id, action_kind, request_hash, result,catalog_version=catalog_version)
     return result
 
 

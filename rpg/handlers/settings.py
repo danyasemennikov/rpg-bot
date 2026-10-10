@@ -15,7 +15,7 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     p    = get_player(user.id)
 
     if not p:
-        await update.message.reply_text('❌ Сначала создай персонажа — /start')
+        await update.message.reply_text(t('common.no_character','ru'))
         return
 
     lang = get_player_lang(user.id)
@@ -35,7 +35,7 @@ def build_settings(telegram_id: int, lang: str) -> tuple:
         lang_row.append(InlineKeyboardButton(
             label, callback_data=f"settings_lang_{code}"
         ))
-    keyboard.append(lang_row)
+    keyboard.extend([lang_row[i:i+2] for i in range(0,len(lang_row),2)])
 
     return text, InlineKeyboardMarkup(keyboard)
 
@@ -51,7 +51,7 @@ async def handle_settings_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer('❌ Неизвестный язык', show_alert=True)
             return
 
-        await query.answer(t('settings.language_set', new_lang), show_alert=True)
+        await query.answer()
         from handlers.profile import main_keyboard
         set_player_lang(user.id, new_lang)
 
@@ -60,6 +60,8 @@ async def handle_settings_buttons(update: Update, context: ContextTypes.DEFAULT_
             text=t('settings.language_set', new_lang),
             reply_markup=main_keyboard(new_lang)
         )
+        from game.player_ui import mark_menu_installed
+        mark_menu_installed(user.id,new_lang)
 
         text, keyboard = build_settings(user.id, new_lang)
         try:

@@ -54,7 +54,7 @@ from game.pve_reward_settlement import (
     recover_unprepared_terminal_victories,
     review_ambiguous_legacy_victories,
 )
-from game.pvp_live import create_live_engagement
+from game.pvp_live import _create_legacy_live_engagement as create_live_engagement
 from game.quest_board import get_contract_history, get_player_hunt_contract_state
 from game.skill_engine import get_battle_skills
 from game.skills import get_available_skills
@@ -139,6 +139,7 @@ async def _handler_callback(player_id: int, data: str, handler):
     )
     context = SimpleNamespace(
         user_data={},
+        bot=SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=80)),edit_message_text=AsyncMock(return_value=SimpleNamespace(message_id=80))),
         application=SimpleNamespace(
             user_data={player_id: {}},
             create_task=lambda coroutine: coroutine.close(),
@@ -191,8 +192,21 @@ def _create_anchored_encounter(
     return str(encounter_id), battle, mob
 
 
+def _start_runtime(*, player_id: int, battle_state: dict, mob: dict):
+    encounter_id = battle_state.get('pve_encounter_id')
+    rows = _rows('SELECT * FROM pve_encounters WHERE encounter_id=?', (encounter_id,))
+    if rows and rows[0]['lifecycle_version'] == 1 and rows[0]['runtime_started_ms'] is None:
+        from game.pve_live import process_due_pve_formations
+        process_due_pve_formations(now_ms=rows[0]['formation_deadline_ms'])
+        loaded = load_active_pve_encounter(encounter_id=encounter_id)
+        assert loaded is not None
+        battle_state.clear()
+        battle_state.update(loaded[0])
+    return ensure_runtime_for_battle(player_id=player_id, battle_state=battle_state, mob=mob)
+
+
 def _terminalize_anchored(encounter_id: str, battle: dict, mob: dict) -> None:
-    ensure_runtime_for_battle(player_id=int(battle['side_a_player_ids'][0]), battle_state=battle, mob=mob)
+    _start_runtime(player_id=int(battle['side_a_player_ids'][0]), battle_state=battle, mob=mob)
     source = json.loads(_rows(
         'SELECT source_units_json FROM pve_encounters WHERE encounter_id=?', (encounter_id,)
     )[0]['source_units_json'])
@@ -332,7 +346,7 @@ def test_f1_forming_join_leave_uses_locked_roster_and_owner_weapon(monkeypatch):
     assert join_open_world_pve_encounter(encounter_id=encounter_id, player_id=departed) == (True, 'joined')
     assert leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=departed) == (True, 'left')
 
-    ensure_runtime_for_battle(player_id=owner, battle_state=battle, mob=mob)
+    _start_runtime(player_id=owner, battle_state=battle, mob=mob)
     locked = json.loads(_rows(
         'SELECT locked_roster_json FROM pve_encounters WHERE encounter_id=?', (encounter_id,)
     )[0]['locked_roster_json'])['player_ids']
@@ -448,7 +462,7 @@ def test_r4_real_group_runtime_departure_defeat_restart_and_owner_mastery(
     )
     conn.commit()
     conn.close()
-    ensure_runtime_for_battle(player_id=owner, battle_state=battle, mob=mob)
+    _start_runtime(player_id=owner, battle_state=battle, mob=mob)
     persist_solo_pve_encounter_state(
         encounter_id=encounter_id, battle_state=battle, mob=mob)
     locked = json.loads(_rows(
@@ -552,6 +566,9 @@ def test_r4_gear_longevity_and_guild_bridge_use_production_handlers():
     grant_item_to_player(player_id, 'enhance_shard', quantity=8)
     board = build_quest_board_message(
         dict(get_player(player_id)), get_location('capital_city'))[1]
+    detail_callback = next(value for value in _callbacks(board) if value=='quest_board_detail_chapter_homecoming')
+    detail_query = asyncio.run(_handler_callback(player_id,detail_callback,handle_location_buttons))
+    board = detail_query.edit_message_text.await_args.kwargs['reply_markup']
     accept_callback = next(
         value for value in _callbacks(board)
         if value == 'quest_board_accept_chapter_homecoming')
@@ -564,18 +581,11 @@ def test_r4_gear_longevity_and_guild_bridge_use_production_handlers():
         value for value in _callbacks(workshop) if value.startswith('pe_a:'))
     asyncio.run(_handler_callback(player_id, craft_callback, handle_profession_buttons))
 
-    sellable_rows = _rows(
-        """SELECT inv.item_id FROM inventory inv JOIN items i ON i.item_id=inv.item_id
-           WHERE inv.telegram_id=? AND i.item_type='material'
-             AND i.sell_price>0 AND inv.quantity>0 ORDER BY inv.item_id LIMIT 20""",
-        (player_id,),
-    )
-    sell_markup = build_sell_menu(dict(get_player(player_id)))[1]
-    sale_callbacks = [
-        value for value in _callbacks(sell_markup) if value.startswith('alpha_sellone_')]
-    wolf_index = [row['item_id'] for row in sellable_rows].index('wolf_pelt')
-    asyncio.run(_handler_callback(
-        player_id, sale_callbacks[wolf_index], handle_chapter_buttons))
+    from handlers.shop_views import sale_preview,handle_shop_buttons
+    wolf_stack = _rows("SELECT id FROM inventory WHERE telegram_id=? AND item_id='wolf_pelt'",(player_id,))[0]['id']
+    _,sell_markup = sale_preview(dict(get_player(player_id)),f'i{wolf_stack}')
+    sale_callback = next(value for value in _callbacks(sell_markup) if value.startswith('px:shop:commit:i:'))
+    asyncio.run(_handler_callback(player_id,sale_callback,handle_shop_buttons))
     assert get_player_hunt_contract_state(player_id)['status'] == 'completed'
 
     claim_board = build_quest_board_message(
@@ -743,7 +753,7 @@ def test_r1_real_handler_terminal_gap_is_discovered_and_v1_cutover_cancels_old_f
     for player_id in (owner, other_pve, pvp_a, pvp_b):
         _make_player(player_id)
     encounter_id, battle, mob = _create_anchored_encounter(owner)
-    ensure_runtime_for_battle(player_id=owner, battle_state=battle, mob=mob)
+    _start_runtime(player_id=owner, battle_state=battle, mob=mob)
     conn = get_connection()
     conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id=?', (owner,))
     conn.commit()
@@ -861,6 +871,7 @@ def test_r1_each_player_entrypoint_recovers_unprepared_terminal_victory(entrypoi
     )
     context = SimpleNamespace(
         user_data={}, application=SimpleNamespace(user_data={player_id: {}}),
+        bot=SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=80)),edit_message_text=AsyncMock(return_value=SimpleNamespace(message_id=80))),
     )
 
     if entrypoint == 'start':
@@ -1017,7 +1028,7 @@ def test_f4_recovery_and_quarantine_preserve_other_pve_pvp_and_cooldowns():
         owner_player_id=player_id, side_a_player_ids=[player_id],
         battle_state=live_battle, mob=live_mob, encounter_id=live_id,
         location_id='westwild_n3')
-    runtime_before = ensure_runtime_for_battle(
+    runtime_before = _start_runtime(
         player_id=player_id, battle_state=live_battle, mob=live_mob)
     create_live_engagement(
         attacker=dict(get_player(player_id)), defender=dict(get_player(opponent_id)),
@@ -1157,15 +1168,15 @@ def test_r3_ordinary_inventory_pages_17_mixed_entries_in_all_locales():
 
     for lang in ('ru', 'en', 'es'):
         reached = []
-        for page, expected_rows in enumerate((8, 8, 1)):
+        for page, expected_rows in enumerate((6, 6, 5)):
             text, markup = build_inventory_list(player_id, 'weapon', lang, page=page)
             callbacks = _callbacks(markup)
             item_callbacks = [value for value in callbacks if value.startswith('inv_item_')]
             assert len(item_callbacks) == expected_rows <= INVENTORY_PAGE_SIZE
             assert len(text) <= 4096
             assert t('gear.page', lang, page=page + 1, pages=3) in text
-            route = 'weapon' if page == 0 else f'weapon~{page}'
-            assert f'inv_tab_{route}' in callbacks
+            route = 'gear' if page == 0 else f'gear~{page}'
+            assert all(value.endswith('_'+route) for value in item_callbacks)
             assert all(len(value.encode('utf-8')) <= 64 for value in callbacks)
             reached.extend(value.split('_')[2] for value in item_callbacks)
             for value in item_callbacks:
@@ -1184,7 +1195,7 @@ def test_r3_page_context_survives_equip_sale_and_stale_page_clamps_safely():
     last_item_callback = next(
         value for value in _callbacks(last_page_markup) if value.startswith('inv_item_'))
     entry_token, route = last_item_callback.split('_')[2:]
-    assert route == 'weapon~2'
+    assert route == 'gear~2'
 
     _, detail_markup = build_item_detail(player_id, entry_token, route, 'en')
     equip_callback = next(
@@ -1194,19 +1205,24 @@ def test_r3_page_context_survives_equip_sale_and_stale_page_clamps_safely():
     assert f'inv_tab_{route}' in _callbacks(equip_render)
 
     sale_instance = next(instance_id for instance_id in instance_ids if f'g{instance_id}' != entry_token)
-    _, sale_detail = build_item_detail(player_id, f'g{sale_instance}', route, 'en')
+    from handlers.inventory_views import item_card
+    _, sale_detail = item_card(player_id, f'g{sale_instance}', route, 'en', more=True)
     sale_ask = next(value for value in _callbacks(sale_detail) if value.startswith('inv_sellask_'))
     ask_query = asyncio.run(_inventory_callback(player_id, sale_ask))
     confirm_markup = ask_query.edit_message_text.await_args.kwargs['reply_markup']
-    sale_confirm = next(value for value in _callbacks(confirm_markup) if value.startswith('inv_gsell_'))
+    sale_confirm = next(value for value in _callbacks(confirm_markup) if value.startswith('px:shop:commit:g:'))
     gold_before = get_player(player_id)['gold']
-    sale_query = asyncio.run(_inventory_callback(player_id, sale_confirm))
+    from handlers.shop_views import handle_shop_buttons
+    sale_query = asyncio.run(_handler_callback(player_id,sale_confirm,handle_shop_buttons))
     sale_render = sale_query.edit_message_text.await_args.kwargs['reply_markup']
-    assert any(value.startswith('inv_item_') and value.endswith('_weapon~1') for value in _callbacks(sale_render))
+    assert 'px:shop:sell:all:0' in _callbacks(sale_render)
+    page_query = asyncio.run(_inventory_callback(player_id,'inv_tab_'+route))
+    page_render = page_query.edit_message_text.await_args.kwargs['reply_markup']
+    assert any(value.startswith('inv_item_') and value.endswith('_gear~2') for value in _callbacks(page_render))
     gold_after = get_player(player_id)['gold']
     assert gold_after > gold_before
 
-    stale_query = asyncio.run(_inventory_callback(player_id, sale_confirm))
+    stale_query = asyncio.run(_handler_callback(player_id,sale_confirm,handle_shop_buttons))
     stale_query.answer.assert_awaited()
     assert get_player(player_id)['gold'] == gold_after
     stale_page_query = asyncio.run(_inventory_callback(player_id, 'inv_tab_weapon~99'))
@@ -1326,7 +1342,7 @@ def test_f8_real_vendor_inventory_handler_skill_and_combat_journey(item_id):
         battle_state=battle, mob=mob, encounter_id=encounter_id,
         location_id='capital_city',
     )
-    ensure_runtime_for_battle(player_id=player_id, battle_state=battle, mob=mob)
+    _start_runtime(player_id=player_id, battle_state=battle, mob=mob)
     conn = get_connection()
     conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id=?', (player_id,))
     conn.commit()
@@ -1389,10 +1405,17 @@ def test_r4_regional_chase_uses_goal_travel_combat_receipt_comparison_and_equip(
         query = SimpleNamespace(
             data=f'goto_{destination}', from_user=SimpleNamespace(id=player_id),
             answer=AsyncMock(), edit_message_text=AsyncMock(),
-            message=SimpleNamespace(reply_text=AsyncMock(), message_id=1),
+            message=SimpleNamespace(reply_text=AsyncMock(), message_id=1,chat_id=player_id),
         )
-        with patch('handlers.location.asyncio.sleep', new=AsyncMock()):
-            asyncio.run(handle_location_buttons(SimpleNamespace(callback_query=query), context))
+        asyncio.run(handle_location_buttons(SimpleNamespace(callback_query=query), context))
+        assert get_player(player_id)['location_id']!=destination
+        preview_markup=query.edit_message_text.await_args.kwargs['reply_markup']
+        query.data=next(value for value in _callbacks(preview_markup) if value.startswith('px:travel:'))
+        from handlers.activities import handle_activity_buttons
+        asyncio.run(handle_activity_buttons(SimpleNamespace(callback_query=query),context))
+        session=_rows("SELECT * FROM player_travel_sessions WHERE player_id=? AND status='running'",(player_id,))[0]
+        from game.world_activity_tick import run_world_activity_tick
+        run_world_activity_tick(now_ms=session['next_due_ms'])
         assert get_player(player_id)['location_id'] == destination
 
     player = dict(get_player(player_id))
@@ -1406,7 +1429,7 @@ def test_r4_regional_chase_uses_goal_travel_combat_receipt_comparison_and_equip(
     assert status == 'created'
     battle['pve_encounter_id'] = encounter_id
     battle['side_a_player_ids'] = [player_id]
-    ensure_runtime_for_battle(player_id=player_id, battle_state=battle, mob=mob)
+    _start_runtime(player_id=player_id, battle_state=battle, mob=mob)
     conn = get_connection()
     conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id=?', (player_id,))
     conn.commit()
@@ -1480,7 +1503,7 @@ def test_f8_real_runtime_guarantee_survives_restart_and_recovers(monkeypatch):
                 battle_state=battle, mob=mob, encounter_id=encounter_id,
                 location_id='westwild_n3',
             )
-            ensure_runtime_for_battle(player_id=player_id, battle_state=battle, mob=mob)
+            _start_runtime(player_id=player_id, battle_state=battle, mob=mob)
             conn = get_connection()
             conn.execute('UPDATE players SET in_battle=1 WHERE telegram_id=?', (player_id,))
             conn.commit()
