@@ -34,7 +34,7 @@ from game.pvp_live import (
     _ensure_live_runtime_for_battle,
     _init_live_battle_payload,
     _write_engagement_state,
-    create_live_engagement,
+    _create_legacy_live_engagement as create_live_engagement,
     issue_manual_pvp_action_labels,
     recover_terminal_pvp_settlements,
     resolve_live_battle_turn,

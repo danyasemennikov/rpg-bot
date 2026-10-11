@@ -47,6 +47,9 @@ def peaceful_player(conn, player_id: int, *, service: str | None = None,
     if not row:
         raise ActionRejected('no_player')
     player = dict(row)
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name='player_travel_sessions'").fetchone():
+        from game.player_activity import require_available
+        require_available(conn, player_id)
     pve_busy = False
     pve_tables = conn.execute("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name IN ('pve_encounters','pve_encounter_participants')").fetchone()
     if pve_tables and int(pve_tables['c']) == 2:

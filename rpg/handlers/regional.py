@@ -57,16 +57,24 @@ def _journal_markup(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMar
 
 def _title(kind: str, content_id: str, lang: str) -> str:
     if kind == "region" or content_id.startswith("region_"):
-        return t(f"rav1.regions.{content_id}.title", lang)
+        return _history_text(f"rav1.regions.{content_id}.title",lang,title=True)
     if content_id in {"greyfang", "salt_ridge_drifter", "rav1_frostspine_n6_pass", "rav1_mireveil_n6_crosscurrent"}:
-        return t(f"rav1.encounters.{content_id}.title", lang)
+        return _history_text(f"rav1.encounters.{content_id}.title",lang,title=True)
     if kind == "encounter":
         from game.enemy_profiles import MIXED_ENCOUNTERS
         recipe = MIXED_ENCOUNTERS.get(content_id)
         if recipe:
             labels = recipe.get("label") or {}
-            return str(labels.get(lang) or labels.get("en") or content_id)
-    return t(f"rav1.content.{content_id}.title", lang)
+            return str(labels.get(lang) or t('pxe1.journal.earlier_records',lang))
+    return _history_text(f"rav1.content.{content_id}.title",lang,title=True)
+
+
+def _history_text(key,lang,*,title=False):
+    from game.i18n import _load_lang
+    from locales.pxe1_surface_keys import value_at
+    try: return value_at(_load_lang(lang),key)
+    except (KeyError,TypeError,ValueError):
+        return t('pxe1.journal.earlier_records' if title else 'pxe1.common.unknown_historical',lang)
 
 
 def _detail_kind(row: dict) -> str:
@@ -78,12 +86,10 @@ def build_regional_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
     lang, player_id = player.get("lang", "ru"), int(player["telegram_id"])
     pins = list_pins(player_id)
     lines = [f"🧭 <b>{t('rav1.nav.home', lang)}</b>",
-             t("rav1.help.nonlinear", lang),
-             t("rav1.progress.no_global", lang), "",
+             t("pxe1.journal.choose_direction", lang),
              f"📍 {get_location_name(player['location_id'], lang)}"]
     if pins:
-        lines.append("")
-        for pin in pins:
+        for pin in pins[:2]:
             if pin["owner_kind"] == "project":
                 label = _title("project", pin["owner_id"], lang)
             elif pin["owner_kind"] == "gear":
@@ -107,21 +113,21 @@ def build_regional_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
     if hunt:
         from game.quest_board import build_contract_title, get_hunt_contract
         contract = get_hunt_contract(str(hunt["contract_key"]))
-        lines += ["", f"🎯 {html.escape(str(build_contract_title(contract, lang) if contract else t('rav1.services.board', lang)))}"]
+        lines += [f"🎯 {html.escape(str(build_contract_title(contract, lang) if contract else t('rav1.services.board', lang)))}"]
     rows = [
-        [InlineKeyboardButton(t("rav1.nav.nearby", lang), callback_data="rv:v:n:0:all"),
-         InlineKeyboardButton(t("rav1.nav.leads", lang), callback_data="rv:v:l:0:all")],
-        [InlineKeyboardButton(t("rav1.nav.pursuits", lang), callback_data="rv:v:p:0:all"),
-         InlineKeyboardButton(t("rav1.nav.regions", lang), callback_data="rv:v:r:0:all")],
-        [InlineKeyboardButton(t("rav1.nav.resolved", lang), callback_data="rv:v:s:0:all"),
-         InlineKeyboardButton(t("rav1.nav.work", lang), callback_data="rv:v:w:0:all")],
-        [InlineKeyboardButton(t("rav1.nav.map", lang), callback_data=_map_callback(player)),
-         InlineKeyboardButton(t("rav1.nav.professions", lang), callback_data="pe_o:0")],
-        [InlineKeyboardButton(t("rav1.nav.equipment", lang), callback_data="inv_catalog"),
-         InlineKeyboardButton(t("rav1.nav.build", lang), callback_data="bv_main")],
-        [InlineKeyboardButton(t("rav1.nav.history", lang), callback_data="alpha_history")],
+        [InlineKeyboardButton(t("pxe1.journal.tracked", lang), callback_data="rv:v:p:0:all"),
+         InlineKeyboardButton(t("rav1.nav.nearby", lang), callback_data="quest_board_back")],
+        [InlineKeyboardButton(t("pxe1.journal.regions", lang), callback_data="rv:v:r:0:all"),
+         InlineKeyboardButton(t("pxe1.journal.clues", lang), callback_data="rv:v:l:0:all")],
+        [InlineKeyboardButton(t("pxe1.journal.regional_completed", lang), callback_data="rv:v:s:0:all")],
+        [InlineKeyboardButton(t("pxe1.journal.discoveries", lang), callback_data="rv:v:s:0:ww"),
+         InlineKeyboardButton(t("pxe1.journal.local_work", lang), callback_data="rv:v:w:0:all")],
+        [InlineKeyboardButton(t("gear.back_btn", lang), callback_data="alpha_history")],
     ]
-    return "\n".join(lines), _journal_markup(rows)
+    keyboard = _journal_markup(rows)
+    from game.player_ui import validate_surface
+    validate_surface('\n'.join(lines), keyboard)
+    return "\n".join(lines), keyboard
 
 
 def _list_screen(player: dict, view: str, requested_page: int, region: str) -> tuple[str, InlineKeyboardMarkup]:
@@ -129,18 +135,20 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
     if view == "n":
         title, rows = t("rav1.nav.nearby", lang), nearby(player)
     elif view == "l":
-        title, rows = t("rav1.nav.leads", lang), leads(player_id, region)
+        title, rows = t("pxe1.journal.clues", lang), leads(player_id, region)
     elif view == "p":
-        title, rows = t("rav1.nav.pursuits", lang), pursuits(player_id)
+        title, rows = t("pxe1.journal.tracked", lang), pursuits(player_id)
+        rows = [row for row in rows if (row['kind']=='project' and row.get('pinned') is not None)
+                or (row['kind']=='hunt' and row['status'] in {'active','completed'})]
     elif view == "r":
-        title = t("rav1.nav.regions", lang)
+        title = t("pxe1.journal.regions", lang)
         rows = [{"kind":"region","content_id":row["content_id"],"status":"available","data":row}
                 for row in REGIONAL_SUMMARIES]
     elif view == "s":
-        title = t("rav1.nav.resolved", lang)
+        title = t("pxe1.journal.regional_completed", lang)
         rows = resolved(player_id, findings=region == "ww")
     elif view == "w":
-        title, rows = t("rav1.nav.work", lang), local_work(player_id)
+        title, rows = t("pxe1.journal.local_work", lang), local_work(player_id)
     else:
         return build_regional_home(player)
     visible, current, pages = paginate(rows, requested_page)
@@ -151,7 +159,7 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
         lines += ["", t(f"rav1.help.{empty_key}", lang)]
     for row in visible:
         if row["kind"] == "work_link":
-            label, data = t("rav1.nav.work", lang), "rv:v:w:0:all"
+            label, data = t("pxe1.journal.local_work", lang), "rv:v:w:0:all"
         elif row["kind"] == "hunt":
             from game.quest_board import build_contract_title, get_hunt_contract
             contract = get_hunt_contract(row["content_id"])
@@ -168,13 +176,16 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
                       else 'active' if row['status']=='active' else 'resolved' if row['status']=='resolved'
                       else 'found' if row['status']=='found' else 'busy' if row['status']=='busy'
                       else 'respawning' if row['status']=='respawning' else 'available')
-        lines.append(f"\n• {marker}{html.escape(str(label))} — {t('rav1.status.' + status_key, lang)}")
+        stamp=row.get('timestamp')
+        lines.append(f"• {marker}{html.escape(str(label))} — {t('rav1.status.' + status_key, lang)}"+
+                     (' · '+html.escape(str(stamp)[:16]) if stamp else ''))
         if row["kind"] == "encounter" and row["status"] in {"busy", "respawning"}:
             error_key = "busy_target" if row["status"] == "busy" else "respawning_target"
-            lines.append(t(f"rav1.errors.{error_key}", lang))
+            lines[-1]+=' · '+t(f"rav1.errors.{error_key}", lang)
             seconds = int((row.get("data") or {}).get("respawn_seconds") or 0)
             if seconds:
-                lines.append(t("rav1.encounters.respawn_in", lang, seconds=seconds))
+                from handlers.activities import duration
+                lines[-1]+=' · '+t('pxe1.encounter.respawning',lang,time=duration(seconds))
         button_row = [InlineKeyboardButton(str(label)[:32], callback_data=data)]
         # Project pin controls live on project detail so six content rows still
         # fit with paging and Home. Hunt and gear have no RAV detail surface,
@@ -204,7 +215,11 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
             InlineKeyboardButton(t("rav1.status.found", lang), callback_data="rv:v:s:0:ww"),
         ])
     buttons.append(_button(t("rav1.nav.home", lang), "rv:v:h:0:all"))
-    return "\n".join(lines)[:3000], _journal_markup(buttons)
+    text='\n'.join(lines)
+    keyboard=_journal_markup(buttons)
+    from game.player_ui import validate_surface
+    validate_surface(text,keyboard,list_view=True)
+    return text,keyboard
 
 
 def _project_detail(player: dict, project_id: str) -> tuple[str, list[list[InlineKeyboardButton]]]:
@@ -374,7 +389,7 @@ def _work_detail(player: dict, content_id: str) -> tuple[str, list[list[InlineKe
     rows.append([InlineKeyboardButton(t("rav1.nav.inventory", lang)[:32], callback_data="inv_tab_all"),
                  InlineKeyboardButton(t("rav1.nav.professions", lang)[:32], callback_data="pe_o:0")])
     rows.append([InlineKeyboardButton(t("rav1.nav.map", lang), callback_data=_map_callback(player, (definition.location_id,))),
-                 InlineKeyboardButton(t("rav1.nav.history", lang), callback_data="pe_h:0")])
+                 InlineKeyboardButton(t("pxe1.journal.history", lang), callback_data="pe_h:0")])
     return "\n".join(lines), rows
 
 
@@ -386,7 +401,7 @@ def _region_detail(player: dict, content_id: str) -> tuple[str, list[list[Inline
              t(f"rav1.regions.{content_id}.risk", lang)]
     rows: list[list[InlineKeyboardButton]] = []
     for project in PROJECTS_BY_ID.values():
-        if project.region_id == summary["region_id"] and project.public:
+        if project.region_id == summary["region_id"] and (project.public or get_project_state(player['telegram_id'],project.project_id)):
             rows.append(_button(_title("project", project.project_id, lang), f"rv:d:p:{project.project_id}"))
 
     # Public work is always readable.  Private discoveries become region links
@@ -537,12 +552,12 @@ def build_receipt_history_label(result: dict, lang: str) -> str:
     source = result.get("source") if isinstance(result.get("source"), dict) else {}
     content_id = str(source.get("content_id") or "")
     operation = str(source.get("operation") or "")
-    title = (t("rav1.nav.pursuits", lang) if operation == "pin" else
+    title = (t("pxe1.journal.tracked", lang) if operation == "pin" else
              _title("project" if content_id in PROJECTS_BY_ID else "interaction", content_id, lang)
-             if content_id else t("rav1.nav.pursuits", lang))
+             if content_id else t("pxe1.journal.tracked", lang))
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     reason = str(details.get("reason") or "")
-    outcome = t(f"rav1.errors.{reason}", lang) if reason else t(f"rav1.actions.{operation}", lang)
+    outcome = _history_text(f"rav1.errors.{reason}" if reason else f"rav1.actions.{operation}",lang)
     return f"{title} · {outcome}"
 
 
@@ -553,7 +568,7 @@ def build_action_result(player: dict, result: dict) -> tuple[str, InlineKeyboard
     content_id = str(source.get("content_id") or "")
     status = str(result.get("status") or "stale_action")
     operation = str(source.get("operation") or "")
-    title = (t("rav1.nav.pursuits", lang) if operation == "pin" else
+    title = (t("pxe1.journal.tracked", lang) if operation == "pin" else
              _title("project" if content_id in PROJECTS_BY_ID else "interaction", content_id, lang)
              if content_id else t("rav1.nav.home", lang))
     lines = [f"<b>{html.escape(str(title))}</b>"]
@@ -588,7 +603,7 @@ def build_action_result(player: dict, result: dict) -> tuple[str, InlineKeyboard
         kind = "w" if INTERACTIONS_BY_ID[content_id].kind == "standing" else "i"
         rows.append(_button(t("rav1.nav.back", lang), f"rv:d:{kind}:{content_id}"))
     rows.append([InlineKeyboardButton(t("rav1.nav.inventory", lang), callback_data="inv_tab_all"),
-                 InlineKeyboardButton(t("rav1.nav.history", lang), callback_data="pe_h:0")])
+                 InlineKeyboardButton(t("pxe1.journal.history", lang), callback_data="pe_h:0")])
     rows.append(_button(t("rav1.nav.home", lang), "rv:v:h:0:all"))
     return "\n".join(lines)[:3000], InlineKeyboardMarkup(rows[:10])
 
@@ -629,8 +644,12 @@ async def handle_regional_buttons(update, context):
     match = _VIEW_RE.fullmatch(data)
     if match:
         view, raw_page, region = match.groups()
-        text, keyboard = (build_regional_home(player) if view == "h"
-                          else _list_screen(player, view, int(raw_page), region))
+        if view == 'n':
+            from handlers.location import build_location_message
+            text, keyboard = build_location_message(player, get_location(player['location_id']))
+        else:
+            text, keyboard = (build_regional_home(player) if view == "h"
+                              else _list_screen(player, view, int(raw_page), region))
         await query.answer()
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
         return

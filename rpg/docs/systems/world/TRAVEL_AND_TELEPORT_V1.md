@@ -1,5 +1,7 @@
 # TRAVEL_AND_TELEPORT_V1
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PXE1 section 6 supersedes sleeping final relocation and 15×h×3 discovered travel: a discovered BFS route costs 15h+3(h−1), with first edge 15 seconds and later edges 18 seconds, Stop at the last reached node, arrival-only discovery, durable visit threats, and at most one overdue edge on startup. Teleport activation remains disabled. See [the frozen PXE1 contract](../../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 - Status: Active supporting specification; teleport portion deferred
 - Authority: Ordinary-travel design context and proposed teleport design; current implementation is mapped in [systems/README.md](../README.md)
 - Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`

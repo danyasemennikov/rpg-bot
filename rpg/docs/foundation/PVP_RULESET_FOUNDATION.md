@@ -1,5 +1,7 @@
 # PVP_RULESET_FOUNDATION.md
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PXE1 section 5.4 supersedes the singleton current adapter: principal plus one approved ally per side, invitation and explicit acceptance, 300-second preparation, atomic lock, full actor batches, per-death and pooled group receipts. Maximum two per side is current PvP content policy only; the shared engine accepts arbitrary unequal actor collections. The six supported action types and outer legality/crime/loss rules remain. Larger/structured PvP remains deferred. See [the frozen PXE1 contract](../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 - Status: Active, scoped foundation
 - Authority: Canonical for durable outer PvP policy; current bounded implementation is mapped in [systems/README.md](../systems/README.md)
 - Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`

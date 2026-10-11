@@ -348,6 +348,13 @@ def init_db():
     ensure_gear_progression_schema(conn)
     from game.build_progression import ensure_build_schema
     ensure_build_schema(conn)
+    from game.pve_live import _ensure_pve_encounter_table, _ensure_world_spawn_table
+    from game.pvp_live import _ensure_reinforcement_table
+    from game.player_experience_schema import ensure_player_experience_schema
+    _ensure_pve_encounter_table(conn=conn)
+    _ensure_world_spawn_table(conn=conn)
+    _ensure_reinforcement_table(conn=conn)
+    ensure_player_experience_schema(conn)
     conn.commit()
     conn.close()
     print('✅ База данных создана!')
@@ -400,6 +407,9 @@ def create_player(telegram_id: int, username: str, name: str, stats: dict, *, la
         ensure_crafting_professions(conn, telegram_id)
         from game.profession_schema import grant_new_player_starters
         grant_new_player_starters(conn, telegram_id)
+        from game.player_experience_schema import grant_player_pxe1_starters
+        import time
+        grant_player_pxe1_starters(conn, telegram_id, now_ms=int(time.time() * 1000), acquired_via='starter')
         conn.commit()
     except Exception:
         conn.rollback()

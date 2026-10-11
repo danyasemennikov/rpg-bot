@@ -17,17 +17,35 @@ from game.pve_live import (
     get_open_world_pve_encounter_detail,
     join_open_world_pve_encounter,
     leave_open_world_pve_encounter,
-    lock_open_world_pve_roster_for_runtime_start,
+    lock_open_world_pve_roster_for_runtime_start as _lock_roster,
     load_active_pve_encounter,
     list_location_active_pve_encounters,
     list_location_available_spawn_instances,
     open_world_runtime_start_mode,
     resolve_world_spawn_profile_modifiers,
     resolve_available_spawn_for_group_click,
-    ensure_runtime_for_battle,
+    ensure_runtime_for_battle as _ensure_runtime,
     get_pve_encounter_player_ids,
 )
-from handlers.location import build_location_message, build_pve_encounter_detail_message
+from handlers.location import _legacy_location_message as build_location_message, build_pve_encounter_detail_message
+
+
+def _formation_clock(encounter_id):
+    conn=get_connection()
+    row=conn.execute('SELECT formation_deadline_ms FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+    conn.close()
+    import time
+    return row['formation_deadline_ms']/1000 if row and row['formation_deadline_ms'] is not None else time.time()
+
+
+def lock_open_world_pve_roster_for_runtime_start(*,encounter_id):
+    with patch('time.time',return_value=_formation_clock(encounter_id)):
+        return _lock_roster(encounter_id=encounter_id)
+
+
+def ensure_runtime_for_battle(**kwargs):
+    with patch('time.time',return_value=_formation_clock(kwargs['battle_state'].get('pve_encounter_id'))):
+        return _ensure_runtime(**kwargs)
 
 
 class WorldPveEncounterFoundationTests(unittest.TestCase):
@@ -420,8 +438,9 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             mob={'id': 'forest_wolf', 'hp': 20},
             side_a_player_ids=[self.player_id],
         )
-        self.assertEqual(second_status, 'spawn_busy')
-        self.assertEqual(second_id, encounter_id)
+        self.assertEqual(second_status, 'in_battle')
+        self.assertIsNone(second_id)
+        self.assertEqual(get_active_pve_encounter_id_for_player(player_id=self.player_id),encounter_id)
 
     def test_cleanup_releases_spawn_after_respawn_window(self):
         battle_state = {'mob_id': 'forest_wolf', 'log': []}
@@ -451,7 +470,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         available = list_location_available_spawn_instances(location_id=self.location_id)
         self.assertTrue(any(spawn['mob_id'] == 'forest_wolf' for spawn in available))
 
-    def test_location_render_split_shows_active_encounter_and_hides_same_mob_button(self):
+    def test_legacy_projection_location_render_split_shows_active_encounter_and_hides_same_mob_button(self):
         battle_state = {'mob_id': 'forest_wolf', 'log': []}
         encounter_id, status = create_or_load_open_world_pve_encounter(
             owner_player_id=self.player_id,
@@ -509,7 +528,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertEqual(detail['location_id'], self.location_id)
         self.assertTrue(str(detail['anchor_spawn_instance_id']).startswith('spawn-'))
 
-    def test_joinable_world_pve_rendered_in_location_and_detail(self):
+    def test_legacy_projection_joinable_world_pve_rendered_in_location_and_detail(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
             owner_player_id=self.player_id,
             location_id=self.location_id,
@@ -553,16 +572,16 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         detail_text, detail_keyboard = build_pve_encounter_detail_message(player, encounter_id)
         detail_callbacks = [btn.callback_data for row in detail_keyboard.inline_keyboard for btn in row]
         self.assertIn(f'pve_join_{encounter_id}', detail_callbacks)
-        self.assertIn('State: joinable', detail_text)
-        self.assertIn('Any joined participant can press', detail_text)
+        self.assertIn('12s', detail_text)
+        self.assertNotIn(f'pve_enter_{encounter_id}',detail_callbacks)
 
         joined_player = dict(player)
         joined_player['telegram_id'] = self.player_id
         owner_detail_text, owner_detail_keyboard = build_pve_encounter_detail_message(joined_player, encounter_id)
         owner_callbacks = [btn.callback_data for row in owner_detail_keyboard.inline_keyboard for btn in row]
         self.assertIn(f'pve_leave_{encounter_id}', owner_callbacks)
-        self.assertIn(f'pve_enter_{encounter_id}', owner_callbacks)
-        self.assertIn('already joined', owner_detail_text)
+        self.assertNotIn(f'pve_enter_{encounter_id}', owner_callbacks)
+        self.assertIn('12s',owner_detail_text)
 
     def test_second_player_can_join_before_lock_and_roster_reaches_runtime(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
@@ -585,7 +604,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         runtime = ensure_runtime_for_battle(player_id=self.player_id, battle_state=battle_state, mob={'id': 'forest_wolf', 'hp': 20})
         self.assertEqual(runtime.sides['side_a'].participant_order, [self.player_id, self.player2_id])
 
-    def test_location_keyboard_removes_legacy_gather_and_ordinary_navigation(self):
+    def test_legacy_projection_location_keyboard_removes_legacy_gather_and_ordinary_navigation(self):
         player = {
             'telegram_id': self.player_id,
             'lang': 'en',
@@ -647,7 +666,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?), updated_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
@@ -674,7 +693,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?), updated_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
@@ -724,7 +743,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?), updated_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
@@ -752,7 +771,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?), updated_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
@@ -820,7 +839,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?), updated_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
@@ -859,7 +878,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?), updated_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
@@ -898,7 +917,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?), updated_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?), updated_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', f'-{FORMING_ENCOUNTER_TTL_SECONDS + 1} seconds', encounter_id),
@@ -1025,7 +1044,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player_id), (False, 'not_found'))
+        self.assertEqual(leave_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player_id), (False, 'locked'))
 
     def test_player_cannot_join_after_lock_start(self):
         encounter_id, status = create_or_load_open_world_pve_encounter(
@@ -1260,7 +1279,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.close()
         self.assertEqual(
             join_open_world_pve_encounter(encounter_id=encounter_id, player_id=self.player2_id),
-            (False, 'not_found'),
+            (False, 'locked'),
         )
 
     def test_atomic_join_does_not_insert_when_encounter_locked_even_if_stale_precheck_says_ok(self):
@@ -1501,7 +1520,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         self.assertEqual(detail['encounter_id'], 'legacy-detail-1')
         self.assertEqual(detail['spawn_profile'], 'normal')
 
-    def test_supersede_transitions_old_anchored_spawn_to_respawning_and_releases_link(self):
+    def test_closed_encounter_releases_source_before_new_encounter(self):
         first_battle = {'mob_id': 'forest_wolf', 'log': []}
         first_encounter_id, first_status = create_or_load_open_world_pve_encounter(
             owner_player_id=self.player_id,
@@ -1512,6 +1531,8 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             side_a_player_ids=[self.player_id],
         )
         self.assertEqual(first_status, 'created')
+
+        finish_solo_pve_encounter(player_id=self.player_id,encounter_id=first_encounter_id,status='finished')
 
         second_battle = {'mob_id': 'forest_boar', 'log': []}
         second_encounter_id, second_status = create_or_load_open_world_pve_encounter(
@@ -1540,12 +1561,12 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         ).fetchone()
         conn.close()
 
-        self.assertEqual(first_row['status'], 'superseded')
+        self.assertEqual(first_row['status'], 'finished')
         self.assertEqual(spawn_row['state'], 'respawning')
         self.assertIsNone(spawn_row['linked_encounter_id'])
         self.assertIsNotNone(spawn_row['respawn_available_at'])
 
-    def test_superseded_spawn_does_not_stay_invisible_blocked(self):
+    def test_closed_spawn_returns_after_respawn_window(self):
         first_battle = {'mob_id': 'forest_wolf', 'log': []}
         first_encounter_id, first_status = create_or_load_open_world_pve_encounter(
             owner_player_id=self.player_id,
@@ -1556,6 +1577,8 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
             side_a_player_ids=[self.player_id],
         )
         self.assertEqual(first_status, 'created')
+
+        finish_solo_pve_encounter(player_id=self.player_id,encounter_id=first_encounter_id,status='finished')
 
         second_battle = {'mob_id': 'forest_boar', 'log': []}
         _second_encounter_id, second_status = create_or_load_open_world_pve_encounter(
@@ -1726,7 +1749,7 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.execute(
             '''
             UPDATE pve_encounters
-            SET created_at=datetime('now', ?)
+            SET lifecycle_version=0, created_at=datetime('now', ?)
             WHERE encounter_id=?
             ''',
             (f'-{FORMING_ENCOUNTER_TTL_SECONDS + 5} seconds', encounter_b),
@@ -1848,17 +1871,18 @@ class WorldPveEncounterFoundationTests(unittest.TestCase):
         conn.commit()
         conn.close()
 
-        retry_id, retry_status = create_or_load_open_world_pve_encounter(
-            owner_player_id=self.player2_id,
-            location_id=self.location_id,
-            mob_id='forest_wolf',
-            battle_state={'mob_id': 'forest_wolf', 'log': []},
-            mob={'id': 'forest_wolf', 'hp': 20},
-            side_a_player_ids=[self.player2_id],
-            spawn_instance_id=None,
-        )
-        self.assertEqual(retry_status, 'spawn_busy')
-        self.assertEqual(retry_id, encounter_a)
+        with patch('game.pve_live.get_location',return_value={'id':self.location_id,'mobs':['forest_wolf'],'world_spawn_counts':{'forest_wolf':2}}):
+            retry_id, retry_status = create_or_load_open_world_pve_encounter(
+                owner_player_id=self.player2_id,
+                location_id=self.location_id,
+                mob_id='forest_wolf',
+                battle_state={'mob_id': 'forest_wolf', 'log': []},
+                mob={'id': 'forest_wolf', 'hp': 20},
+                side_a_player_ids=[self.player2_id],
+                spawn_instance_id=None,
+            )
+            self.assertEqual(retry_status, 'spawn_busy')
+            self.assertEqual(retry_id, encounter_a)
 
     def test_group_click_fallback_resolves_idle_same_visible_group_spawn(self):
         with patch('game.pve_live.get_location', return_value={

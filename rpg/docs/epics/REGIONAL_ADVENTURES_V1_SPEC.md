@@ -1,5 +1,7 @@
 # RAV1-1 — Regional Adventures & Opportunities V1
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PXE1 section 5 supersedes the 90-second forming expiry and manual/direct start paths with a visible 12-second formation and atomic due start. Prelock owner departure transfers ownership deterministically. Immutable regional roster-lock bindings, the 34 records/seven independent projects, per-player eligibility and T1/T2 reward authority remain. Sections 4/11/12 supersede Journal/nearby/history presentation. See [the frozen PXE1 contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 Stage 2: final design and frozen implementation contract. Date: 2026-09-27.
 
 This document freezes the product and implementation contract; it is not an implementation report. No repository files, branch, or PR are created by this stage. Sections A–AB form one contract. Tables and defaults are normative: a record inherits the stated defaults unless its row explicitly overrides them. Wording may be polished or translated without changing content, quantities, gates, outcomes, or mechanics.

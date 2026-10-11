@@ -55,33 +55,42 @@ class SoloPveRuntimeHandlerFlowTests(unittest.IsolatedAsyncioTestCase):
             'stat_points': 0,
         }
 
-    async def test_delayed_aggro_persists_marker_with_readonly_application_data(self):
+    async def test_durable_aggro_with_readonly_application_data(self):
+        from database import create_player,get_connection,get_player
+        from game.mobs import get_mob
+        from game.location_threats import process_location_threat
+        from game.pve_live import process_due_pve_formations
         from handlers.location import aggro_attack
-
-        context = _DummyStartBattleContext(with_aggro_marker=False)
-        context.bot = SimpleNamespace(send_message=AsyncMock(
-            return_value=SimpleNamespace(message_id=1234),
-        ))
-        player = {**self._player_row(), 'in_battle': 0}
-        mob = {'id': 'forest_wolf', 'name': 'Forest Wolf', 'hp': 20, 'level': 2}
-        conn = Mock()
-        with patch('handlers.location.asyncio.sleep', new=AsyncMock()) as sleep_mock, \
-             patch('handlers.location.get_player', return_value=player), \
-             patch('handlers.location.get_player_lang', return_value='en'), \
-             patch('handlers.location.get_connection', return_value=conn):
-            await aggro_attack(context, 88001, mob, 'dark_forest', delay=5)
-
-        sleep_mock.assert_awaited_once_with(5)
-        conn.execute.assert_called_once_with(
-            'UPDATE players SET in_battle=1 WHERE telegram_id=?', (88001,),
-        )
-        conn.commit.assert_called_once()
-        conn.close.assert_called_once()
-        context.bot.send_message.assert_awaited_once()
-        self.assertEqual(context.bot.send_message.await_args.kwargs['chat_id'], 88001)
-        self.assertIs(context.application.user_data[88001], context.user_data)
-        self.assertEqual(context.user_data['aggro_message_id'], 1234)
-        self.assertEqual(list(context.application.user_data), [88001])
+        create_player(88001,'threat','Threat',dict(strength=5,agility=5,intuition=5,vitality=5,wisdom=5,luck=5),lang='en')
+        conn=get_connection()
+        conn.execute("UPDATE players SET location_id='dark_forest' WHERE telegram_id=88001")
+        conn.commit();conn.close()
+        context=_DummyStartBattleContext(with_aggro_marker=False)
+        context.bot=SimpleNamespace(send_message=AsyncMock())
+        with patch('time.time',return_value=1000),patch('game.location_threats.secrets.SystemRandom',return_value=SimpleNamespace(randint=lambda a,b:5)):
+            await aggro_attack(context,88001,get_mob('goblin_hunter'),'dark_forest',delay=5)
+            await aggro_attack(context,88001,get_mob('goblin_hunter'),'dark_forest',delay=5)
+        self.assertIs(context.application.user_data[88001],context.user_data)
+        self.assertEqual(context.user_data,{})
+        context.bot.send_message.assert_not_awaited()
+        self.assertEqual(get_player(88001)['in_battle'],0)
+        conn=get_connection()
+        threats=conn.execute("SELECT * FROM player_location_threats WHERE player_id=88001 AND mob_id='goblin_hunter'").fetchall()
+        self.assertEqual(len(threats),1)
+        threat=threats[0]
+        conn.execute('BEGIN IMMEDIATE')
+        result=process_location_threat(conn,player_id=88001,visit_revision=threat['visit_revision'],mob_id=threat['mob_id'],now_ms=threat['due_ms'])
+        conn.commit()
+        self.assertEqual(result['status'],'triggered')
+        encounter=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(result['encounter_id'],)).fetchone()
+        self.assertEqual(encounter['formation_deadline_ms'],threat['due_ms']+12000)
+        self.assertEqual(get_player(88001)['in_battle'],0)
+        self.assertEqual(process_location_threat(conn,player_id=88001,visit_revision=threat['visit_revision'],mob_id=threat['mob_id'],now_ms=threat['due_ms'])['status'],'unchanged')
+        conn.close()
+        process_due_pve_formations(now_ms=encounter['formation_deadline_ms'])
+        self.assertEqual(get_player(88001)['in_battle'],1)
+        self.assertIs(context.application.user_data[88001],context.user_data)
+        self.assertEqual(context.user_data,{})
 
     async def test_fight_first_spawn_unavailable_rolls_back_prelocated_battle_lock(self):
         update = _DummyUpdate('fight_first_forest_wolf')

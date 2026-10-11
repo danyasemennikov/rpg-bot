@@ -1,5 +1,7 @@
 # OPEN_WORLD_GAMEPLAY_ROLLOUT_PHASE1
 
+> **PXE1 candidate reconciliation — 2026-10-07.** Historical rollout scope is preserved. PXE1 sections 7–10 later promote previously excluded profession tools/durability; sections 5–6 replace the forming/travel/gathering orchestration. This dated successor pointer does not rewrite the original rollout. See [the frozen PXE1 contract](../../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 > **Archived rollout contract — historical only.** Current state and forward roadmap:
 > [PROJECT_STATE_CURRENT.md](../../PROJECT_STATE_CURRENT.md) and
 > [ROADMAP_CURRENT.md](../../ROADMAP_CURRENT.md).

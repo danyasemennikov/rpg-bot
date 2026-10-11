@@ -1,4 +1,4 @@
-"""Closed PEV1-1 catalog: exactly 63 active recipes and four inactive aliases."""
+"""PXE1 catalogue 2: preserve 63 recipes and add 20 dedicated tool outputs."""
 
 from __future__ import annotations
 
@@ -9,11 +9,20 @@ import json
 @dataclass(frozen=True)
 class RecipeOutputSpec:
     kind: str
-    item_id: str
+    item_id: str | None = None
     quantity: int = 1
     item_tier: int | None = None
     rarity: str = 'common'
     secondary_policy: str = 'not_applicable'
+    profession_key: str | None = None
+    tool_tier: int | None = None
+
+    def __post_init__(self):
+        if self.kind == 'tool':
+            if self.item_id is not None or self.quantity != 1 or self.tool_tier not in (1,2,3,4) or self.profession_key not in ('woodcutting','mining','herbalism','fishing','hunting'):
+                raise ValueError('invalid tool output')
+        elif self.kind not in ('gear','consumable') or not self.item_id or self.profession_key is not None or self.tool_tier is not None:
+            raise ValueError('invalid item output')
 
 
 @dataclass(frozen=True)
@@ -27,7 +36,9 @@ class ProfessionRecipe:
     starter: bool = False
     learning_gold: int = 0
     training_ceiling: int = 6
-    catalog_version: int = 1
+    catalog_version: int = 2
+    material_value: int = 0
+    xp_policy_version: int = 2
 
 
 def _band(level: int) -> tuple[int, str, str]:
@@ -123,7 +134,24 @@ for row in (
 ):
     _recipes.append(_consumable(*row))
 
-ACTIVE_RECIPES = tuple(_recipes)
+for profession in ('woodcutting','mining','herbalism','fishing','hunting'):
+    for tier in range(1,5):
+        inputs = [('wood_common',4*3**(tier-1)),('iron_ore',2*tier*tier),('coal',tier)]
+        if tier>=2:
+            inputs.append(('wood_dark',2*(tier-1)))
+        if tier>=3:
+            inputs.extend([('frostpine_wood',2*(tier-2)),('gem_common',tier-2)])
+        if tier==4:
+            inputs.extend([('ancient_bark',2),('sunscar_ore',4)])
+        level = {1:1,2:6,3:12,4:18}[tier]
+        _recipes.append(ProfessionRecipe(f'pxe_tool_{profession}_{tier}',
+            'arcane_engineer' if profession=='fishing' else 'blacksmith',level,tuple(inputs),
+            RecipeOutputSpec('tool',profession_key=profession,tool_tier=tier),
+            starter=tier==1,learning_gold=_price(level),training_ceiling=_ceiling(level)))
+
+from dataclasses import replace
+from game.profession_resources import RESOURCES
+ACTIVE_RECIPES = tuple(replace(r,material_value=sum(RESOURCES[i].sell_price*q for i,q in r.requirements)) for r in _recipes)
 RECIPE_BY_ID = {recipe.recipe_id: recipe for recipe in ACTIVE_RECIPES}
 ACTIVE_RECIPE_IDS = tuple(RECIPE_BY_ID)
 STARTER_RECIPE_IDS = tuple(recipe.recipe_id for recipe in ACTIVE_RECIPES if recipe.starter)
@@ -138,9 +166,17 @@ def get_recipe(recipe_id: str) -> ProfessionRecipe | None:
     return RECIPE_BY_ID.get(recipe_id)
 
 
-def recipe_intent_payload(recipe_id: str) -> str:
+def recipe_intent_payload(recipe_id: str, *, tool_revision: int | None=None,
+                          commission: bool=False,replacement_confirmed: bool=False,
+                          input_snapshot: dict | None=None) -> str:
+    payload = {'schema_version':1,'catalog_version':2,'recipe_id':recipe_id}
+    recipe = get_recipe(recipe_id)
+    if recipe and recipe.output_spec.kind=='tool':
+        payload.update(tool_revision=tool_revision,commission=commission,replacement_confirmed=replacement_confirmed)
+        if input_snapshot is not None:
+            payload['input_snapshot'] = input_snapshot
     return json.dumps(
-        {'schema_version': 1, 'catalog_version': 1, 'recipe_id': recipe_id},
+        payload,
         sort_keys=True, separators=(',', ':'),
     )
 
@@ -150,7 +186,7 @@ def parse_recipe_intent(payload: str) -> str | None:
         value = json.loads(payload)
     except (TypeError, ValueError):
         return None
-    if not isinstance(value, dict) or value.get('schema_version') != 1 or value.get('catalog_version') != 1:
+    if not isinstance(value, dict) or value.get('schema_version') != 1 or value.get('catalog_version') != 2:
         return None
     recipe_id = value.get('recipe_id')
     return str(recipe_id) if isinstance(recipe_id, str) else None
@@ -160,5 +196,5 @@ def recipe_consumers(item_id: str) -> tuple[str, ...]:
     return tuple(r.recipe_id for r in ACTIVE_RECIPES if any(i == item_id for i, _ in r.requirements))
 
 
-assert len(ACTIVE_RECIPES) == 63
-assert len(STARTER_RECIPE_IDS) == 17
+assert len(ACTIVE_RECIPES) == 83
+assert len(STARTER_RECIPE_IDS) == 22

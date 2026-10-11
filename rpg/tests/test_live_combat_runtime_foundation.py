@@ -1,4 +1,5 @@
 import unittest
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from game.live_combat_runtime import LiveCombatRuntime, LiveCombatRuntimeStore
@@ -249,6 +250,35 @@ class LiveCombatRuntimeFoundationTests(unittest.TestCase):
         self.assertTrue(second_advance.advanced)
         self.assertEqual(second_advance.new_active_side_id, 'side_a')
         self.assertEqual(second_advance.new_round_index, 2)
+
+
+@pytest.mark.parametrize('counts',[(3,7),(17,23)])
+def test_side_runtime_collects_arbitrary_rosters_in_stable_order(counts):
+    store=LiveCombatRuntimeStore();runtime=LiveCombatRuntime(store)
+    first=list(range(100,100+counts[0]));second=list(range(1000,1000+counts[1]))
+    state=runtime.create_encounter(encounter_id='many',side_a_participants=first,side_b_participants=second)
+    now=datetime(2026,10,7,tzinfo=timezone.utc)
+    runtime.open_side_turn(encounter_id='many',now=now)
+    assert runtime.get_active_side_eligible_participants(encounter_id='many')==first
+    revision=state.turn_revision
+    for pid in reversed(first):
+        result=runtime.commit_action(encounter_id='many',participant_id=pid,action_type='basic_attack',
+            target_info={'participant_id':second[-1]},skill_id=None,item_id=None,committed_at=now,turn_revision=revision)
+        assert result.accepted
+    assert runtime.is_active_side_fully_resolved(encounter_id='many')
+    assert runtime.claim_side_resolution(encounter_id='many',turn_revision=revision).claimed
+    assert not runtime.claim_side_resolution(encounter_id='many',turn_revision=revision).claimed
+    assert [action.participant_id for action in runtime.build_resolution_batch(encounter_id='many')]==first
+    assert runtime.complete_side_and_advance(encounter_id='many',turn_revision=revision).advanced
+    runtime.open_side_turn(encounter_id='many',now=now+timedelta(seconds=15))
+    # Every actor in the larger opposing roster receives exactly one timeout
+    # fallback, and unavailable actors are omitted independently of position.
+    for pid in second[::3]: state.participants[pid].phase_state='defeated'
+    eligible=[pid for pid in second if state.participants[pid].phase_state=='eligible']
+    assert runtime.apply_timeout_fallbacks(encounter_id='many',now=now+timedelta(seconds=29))==0
+    assert runtime.apply_timeout_fallbacks(encounter_id='many',now=now+timedelta(seconds=30))==len(eligible)
+    assert runtime.apply_timeout_fallbacks(encounter_id='many',now=now+timedelta(seconds=31))==0
+    assert [action.participant_id for action in runtime.build_resolution_batch(encounter_id='many')]==eligible
 
 
 if __name__ == '__main__':

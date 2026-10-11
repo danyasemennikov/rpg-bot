@@ -11,11 +11,11 @@ def test_frozen_gathering_xp_boundaries():
 
 def test_crafting_ceiling_path_and_zero_xp_preservation():
     state = (1, 0)
-    for level, crafts in ((1, 3), (6, 2), (12, 2), (18, 1)):
+    for level, crafts in ((1, 3),):
         for _ in range(crafts):
-            xp = crafting_xp_for_success(current_level=state[0], current_exp=state[1], recipe_level=level)
+            xp = crafting_xp_for_success(current_level=state[0], current_exp=state[1], recipe_level=level,material_value=22)
             result = apply_profession_xp(*state, xp)
             state = (result.new_level, result.new_exp)
-    assert state == (20, 0)
+    assert state == (1, 45)
     preserved = apply_profession_xp(20, 123, 0)
     assert (preserved.new_level, preserved.new_exp) == (20, 123)

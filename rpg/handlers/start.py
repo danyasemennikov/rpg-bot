@@ -67,6 +67,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         recovery = recover_player_settlements(user.id)
         player = get_player(user.id)
         from handlers.profile import main_keyboard
+        from game.player_ui import needs_menu,mark_menu_installed
+        install_menu = needs_menu(user.id,lang)
         next_steps = build_alpha_next_steps(
             {
                 **dict(player),
@@ -98,8 +100,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{t('start.alpha_next_steps_title', lang)}\n• " + "\n• ".join(next_steps[:3])
             ),
             parse_mode='HTML',
-            reply_markup=main_keyboard(lang)
+            reply_markup=main_keyboard(lang) if install_menu else None
         )
+        if install_menu:
+            mark_menu_installed(user.id,lang)
+        from game.player_feedback import present_pending_feedback
+        await present_pending_feedback(context.bot,user.id,recover_presented=True)
         return
 
     language_code = (getattr(user, 'language_code', '') or '').split('-')[0]
@@ -213,6 +219,8 @@ async def handle_stat_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             text=t('start.distribute', lang, name=name) + "\n\n" + t('start.alpha_intro', lang),
             reply_markup=main_keyboard(lang)
         )
+        from game.player_ui import mark_menu_installed
+        mark_menu_installed(user.id,lang)
         from handlers.chapter import build_journal
         text, keyboard = build_journal(dict(get_player(user.id)))
         await context.bot.send_message(chat_id=user.id, text=text, reply_markup=keyboard, parse_mode='HTML')

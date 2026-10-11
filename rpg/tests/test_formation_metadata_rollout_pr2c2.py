@@ -29,7 +29,7 @@ class FormationMetadataRolloutPR2C2Tests(unittest.TestCase):
                 'strength': 1, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1,
             }
             with patch('game.pve_live.get_player_effective_stats', return_value={'max_hp': 100, 'max_mana': 50}), \
-                 patch('game.pve_live.get_equipped_item_ids', return_value={'weapon': 'unarmed', 'offhand': 'wooden_shield'}), \
+                 patch('game.gear_instances.resolve_equipped_item_ids_with_fallback', return_value={'weapon': 'unarmed', 'offhand': 'wooden_shield'}), \
                  patch('game.pve_live.get_item', side_effect=lambda item_id: {'offhand_profile': 'shield'} if item_id == 'wooden_shield' else {'weapon_type': 'melee'}), \
                  patch('game.pve_live.get_item_archetype_metadata', return_value={'offhand_profile': 'shield'}), \
                  patch('game.pve_live.get_item_encumbrance', return_value=0):
@@ -56,7 +56,7 @@ class FormationMetadataRolloutPR2C2Tests(unittest.TestCase):
                 'strength': 1, 'agility': 1, 'intuition': 1, 'vitality': 1, 'wisdom': 1, 'luck': 1,
             }
             with patch('game.pve_live.get_player_effective_stats', return_value={'max_hp': 100, 'max_mana': 50}), \
-                 patch('game.pve_live.get_equipped_item_ids', return_value={'weapon': 'magic_staff', 'offhand': None}), \
+                 patch('game.gear_instances.resolve_equipped_item_ids_with_fallback', return_value={'weapon': 'magic_staff', 'offhand': None}), \
                  patch('game.pve_live.get_item', side_effect=lambda item_id: {'weapon_type': 'magic', 'weapon_profile': 'magic_staff'} if item_id == 'magic_staff' else {}), \
                  patch('game.pve_live.get_item_archetype_metadata', return_value={}), \
                  patch('game.pve_live.get_item_encumbrance', return_value=0):
@@ -84,11 +84,16 @@ class FormationMetadataRolloutPR2C2Tests(unittest.TestCase):
         mock_conn = patch('game.pve_live.get_connection').start()
         self.addCleanup(patch.stopall)
         conn = mock_conn.return_value
-        conn.execute.return_value.fetchone.return_value = {'spawn_profile': 'normal', 'special_spawn_key': '', 'special_spawn_name': ''}
+        cursor = conn.execute.return_value
+        cursor.fetchone.return_value = {
+            'spawn_instance_id': 's1', 'state': 'idle', 'linked_encounter_id': None,
+            'spawn_profile': 'normal', 'special_spawn_key': '', 'special_spawn_name': '',
+        }
+        cursor.fetchall.return_value = [{'spawn_instance_id': key} for key in ('s1', 's2', 's3')]
+        cursor.rowcount = 3
         with patch('game.pve_live._ensure_pve_encounter_table'), \
-             patch('game.pve_live._ensure_world_spawn_table'), \
-             patch('game.pve_live._claim_spawn_instance_for_encounter', return_value='s1'), \
-             patch('game.pve_live._claim_spawn_pack_for_encounter', return_value=['s1', 's2', 's3']), \
+             patch('game.pve_live.ensure_location_pve_spawn_instances'), \
+             patch('game.player_activity.require_available', return_value={'location_id': 'x'}), \
              patch('game.pve_live.create_pve_encounter') as create_mock:
             create_or_load_open_world_pve_encounter(
                 owner_player_id=1,
@@ -100,6 +105,7 @@ class FormationMetadataRolloutPR2C2Tests(unittest.TestCase):
                 pack_claim_from_visible_group=True,
             )
             created_state = create_mock.call_args.kwargs['battle_state']
+        self.assertEqual(len(created_state['enemy_units']), 3)
         self.assertTrue(all(unit.get('formation_line') == 'melee' for unit in created_state['enemy_units']))
 
     def test_pvp_profile_and_payload_include_formation_metadata(self):

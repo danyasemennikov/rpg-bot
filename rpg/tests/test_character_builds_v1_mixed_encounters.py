@@ -132,6 +132,9 @@ def test_partial_availability_never_claims_a_subset():
 def test_second_mixed_claim_loses_contention_without_extra_spawns():
     migrate_character_builds_v1()
     _move_player('westwild_n8')
+    conn=get_connection()
+    conn.execute("UPDATE players SET location_id='westwild_n8' WHERE telegram_id=777")
+    conn.commit();conn.close()
     first_id, first_status = create_mixed_open_world_pve_encounter(
         owner_player_id=1,
         recipe_id='westwild_n8_mixed',
@@ -173,10 +176,14 @@ def test_mixed_recipe_is_visibly_localized_beside_individual_spawns():
     }
     for lang, expected in expected_labels.items():
         player['lang'] = lang
-        text, keyboard = build_location_message(player, location)
-        callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
-        assert expected in text
-        assert '×3' in text
+        from handlers.world_views import location_card,local_entries
+        entries=local_entries(player)[1]['encounters']
+        text='';callbacks=[]
+        for page in range((len(entries)+5)//6):
+            page_text,keyboard=location_card(player,category='encounters',page=page)
+            text+=page_text
+            callbacks.extend(button.callback_data for row in keyboard.inline_keyboard for button in row)
+        assert expected in text and '×3' in text
         assert 'fight_mixed_westwild_n8_mixed' in callbacks
         assert any(value.startswith('fight_spawn_') for value in callbacks)
         assert all(len(value.encode('utf-8')) <= 64 for value in callbacks)

@@ -221,6 +221,8 @@ class CraftingRuntimePhase7Tests(unittest.TestCase):
     def test_duplicate_requirements_are_aggregated_for_validation_and_consume(self):
         duplicate_recipe = RecipeDefinition(
             recipe_id='dup_req_recipe',
+            # Static catalogue value, independent of mutable items prices.
+            material_value=37,  # Four herbs at 3 plus legacy venom at 25.
             output_item_id='health_potion_small',
             output_quantity=1,
             profession_key='alchemy',

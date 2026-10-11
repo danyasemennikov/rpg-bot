@@ -8,6 +8,7 @@ from handlers.build import (
     _KIND_LABELS,
     _SCHOOL_LABELS,
     _TARGET_LABELS,
+    _c,
     build_attributes_view,
     build_family_view,
     build_main_view,
@@ -16,6 +17,7 @@ from handlers.build import (
     build_skill_view,
 )
 from handlers.battle import _render_v1_event
+from handlers.character import skill_card, weapon_family_card
 
 
 def _callbacks(markup):
@@ -78,6 +80,8 @@ def test_every_frozen_skill_preview_localizes_structured_contract_fields():
     for lang in ("ru", "en", "es"):
         for skill_id, spec in SKILL_SPECS.items():
             text, markup = build_skill_view(1, skill_id, lang)
+            assert 'bv_skilldetails_'+skill_id in _callbacks(markup)
+            text, markup = skill_card(1, skill_id, lang, details=True)
             assert "[" not in text
             assert get_skill_desc(skill_id, lang) in text
             assert "parameters:" not in text and "параметры:" not in text and "parámetros:" not in text
@@ -123,8 +127,8 @@ def test_build_views_are_localized_authoritative_and_callback_safe():
         for text, markup in views:
             assert "[" not in text
             assert all(callback and len(callback.encode("utf-8")) <= 64 for callback in _callbacks(markup))
-        assert "1.365P" in views[3][0]
-        assert "PvP" in views[3][0]
+        assert "1.365P" in skill_card(1,'quick_shot',lang,details=True)[0]
+        assert _c(lang,'available_pvp') in views[3][0]
         if lang != "en":
             assert all(f"· {family}" not in views[4][0] for family in FAMILIES)
 
@@ -171,20 +175,21 @@ def test_corrected_support_and_last_roar_views_distinguish_remaining_semantics()
         },
     }
     for lang, copy in expected.items():
-        cleanse, _ = build_skill_view(1, 'cleanse', lang)
-        aura, _ = build_skill_view(1, 'aura_of_resolve', lang)
-        insight, _ = build_skill_view(1, 'insight', lang)
-        last_roar, _ = build_skill_view(1, 'last_roar', lang)
-        assert f"<b>{copy['target']}</b>" in cleanse
-        assert '<b>10</b>' in cleanse and '<b>3</b>' in cleanse
+        cleanse, _ = skill_card(1, 'cleanse', lang, details=True)
+        aura, _ = skill_card(1, 'aura_of_resolve', lang, details=True)
+        insight, _ = skill_card(1, 'insight', lang, details=True)
+        last_roar, _ = skill_card(1, 'last_roar', lang, details=True)
+        assert copy['target'] in cleanse
+        assert '10' in cleanse and '3' in cleanse
         assert all(fragment in cleanse for fragment in copy['cleanse'])
-        assert f"<b>{copy['target']}</b>" in aura
-        assert '<b>14</b>' in aura and '<b>4</b>' in aura
+        assert copy['target'] in aura
+        assert '14' in aura and '4' in aura
         assert all(fragment in aura for fragment in copy['aura'])
         assert all(fragment not in aura for fragment in copy['forbidden'][:1])
+        assert '1/3' in aura
         assert copy['rank'] in aura
         assert f"{copy['ward']}: 23%" in aura
-        assert f"<b>{copy['target']}</b>" in insight
+        assert copy['target'] in insight
         assert all(fragment in insight for fragment in copy['insight'])
         assert copy['forbidden'][1] not in insight
         assert all(fragment in last_roar for fragment in copy['last_roar'])
@@ -204,9 +209,15 @@ def test_each_family_tree_renders_both_frozen_branches():
     conn.close()
     for family in FAMILIES:
         text, markup = build_family_view(1, family, "en")
-        assert "A ·" in text and "B ·" in text
-        skill_buttons = [value for value in _callbacks(markup) if value.startswith("bv_skill_")]
-        assert len(skill_buttons) == 10
+        assert {f'bv_branch_{family}:A',f'bv_branch_{family}:B'} <= set(_callbacks(markup))
+        all_skills=set()
+        for branch in ('A','B'):
+            text,markup=weapon_family_card(1,family,'en',branch=branch)
+            skill_buttons=[value for value in _callbacks(markup) if value.startswith('bv_skill_')]
+            assert len(skill_buttons)==5
+            assert f"bv_branch_{family}:{'B' if branch=='A' else 'A'}" in _callbacks(markup)
+            all_skills.update(skill_buttons)
+        assert len(all_skills)==10
 
 
 def test_structured_battle_events_render_in_all_supported_locales():

@@ -14,7 +14,7 @@ from game.mobs import get_mob
 from game.pve_live import (
     claim_pve_encounter_victory,
     create_or_load_open_world_pve_encounter,
-    ensure_runtime_for_battle,
+    ensure_runtime_for_battle as _ensure_runtime,
     finish_solo_pve_encounter,
     load_active_pve_encounter,
     persist_solo_pve_encounter_state,
@@ -32,22 +32,38 @@ def _discard_task(coro):
     coro.close()
 
 
+def ensure_runtime_for_battle(**kwargs):
+    conn=get_connection()
+    deadline=conn.execute('SELECT formation_deadline_ms FROM pve_encounters WHERE encounter_id=?',(kwargs['battle_state']['pve_encounter_id'],)).fetchone()[0]
+    conn.close()
+    with patch('time.time',return_value=deadline/1000):
+        return _ensure_runtime(**kwargs)
+
+
 async def _travel(target):
-    query = SimpleNamespace(
-        data=f'goto_{target}', from_user=SimpleNamespace(id=PLAYER_ID),
-        answer=AsyncMock(), edit_message_text=AsyncMock(),
-        message=SimpleNamespace(message_id=226),
-    )
-    context = SimpleNamespace(user_data={}, application=SimpleNamespace(create_task=_discard_task))
-    with (
-        patch('handlers.location.asyncio.sleep', new=AsyncMock()),
-        patch('handlers.location.is_in_battle', return_value=False),
-        patch('handlers.location.is_pvp_mobility_blocked', return_value=False),
-        patch('handlers.location._build_location_message_with_snapshot', return_value=('ok', None)),
-        patch('handlers.location._send_lower_menu_sync_message', new=AsyncMock()),
-        patch('handlers.location.clear_respawn_protection_on_dangerous_reentry'),
-    ):
-        await handle_location_buttons(SimpleNamespace(callback_query=query), context)
+    from handlers.activities import handle_activity_buttons
+    from game.travel_runtime import advance_travel_edge
+    query=SimpleNamespace(data='goto_'+target,from_user=SimpleNamespace(id=PLAYER_ID),
+        answer=AsyncMock(),edit_message_text=AsyncMock(),message=SimpleNamespace(message_id=226,chat_id=PLAYER_ID))
+    context=SimpleNamespace(user_data={})
+    origin=get_player(PLAYER_ID)['location_id']
+    await handle_location_buttons(SimpleNamespace(callback_query=query),context)
+    assert get_player(PLAYER_ID)['location_id']==origin
+    if not query.edit_message_text.called:
+        return query
+    keyboard=query.edit_message_text.call_args.kwargs.get('reply_markup')
+    starts=[b.callback_data for row in keyboard.inline_keyboard for b in row if b.callback_data.startswith('px:travel:')] if keyboard else []
+    if not starts:
+        return query
+    query.data=starts[0]
+    with patch('time.time',return_value=1000):
+        await handle_activity_buttons(SimpleNamespace(callback_query=query),context)
+    conn=get_connection()
+    session=conn.execute("SELECT * FROM player_travel_sessions WHERE player_id=? AND status='running'",(PLAYER_ID,)).fetchone()
+    assert session
+    conn.execute('BEGIN IMMEDIATE')
+    advance_travel_edge(conn,session['session_id'],now_ms=session['next_due_ms'])
+    conn.commit();conn.close()
     return query
 
 
@@ -174,16 +190,9 @@ async def _run_complete_alpha_core_loop():
     conn.close()
 
     profile = build_location_gather_source_profiles('westwild_n3')[0]
-    message = SimpleNamespace(text='Gather', message_id=next(_message_ids), reply_text=AsyncMock())
-    update = SimpleNamespace(message=message, effective_user=SimpleNamespace(id=PLAYER_ID))
-    with (
-        patch('handlers.location.looks_like_lower_gather_button', return_value=True),
-        patch('handlers.location.resolve_lower_gather_profession_button', return_value=profile.profession_key),
-        patch('handlers.location.random.random', return_value=0.0),
-        patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
-        patch('handlers.location.is_in_battle', return_value=False),
-    ):
-        await handle_lower_menu_gather_text(update, SimpleNamespace())
+    from tests.pxe1_gather_fixture import one_tick
+    handled,_,tick=await one_tick(PLAYER_ID,profile.profession_key,0.0,next(_message_ids))
+    assert handled and tick['granted'][0]['item_id']==profile.item_id
     conn = get_connection()
     assert conn.execute(
         'SELECT quantity FROM inventory WHERE telegram_id=? AND item_id=?',
@@ -203,6 +212,7 @@ def test_claim_return_semantics_fail_closed_for_every_persisted_state():
     assert claim_pve_encounter_victory(encounter_id='') is None
     assert claim_pve_encounter_victory(encounter_id='unknown-non-empty') is False
 
+    conn=get_connection();conn.execute("UPDATE players SET location_id='westwild_n3' WHERE telegram_id=?",(PLAYER_ID,));conn.commit();conn.close()
     mob = get_mob('forest_wolf')
     battle_state = init_battle(dict(get_player(PLAYER_ID)), mob)
     encounter_id, _ = create_or_load_open_world_pve_encounter(
@@ -230,6 +240,7 @@ def test_pre_reward_failure_releases_claim_and_safe_retry_rewards_once():
 
 async def _run_pre_reward_failure_retry():
     _create_player()
+    conn=get_connection();conn.execute("UPDATE players SET location_id='westwild_n3' WHERE telegram_id=?",(PLAYER_ID,));conn.commit();conn.close()
     mob = get_mob('forest_wolf')
     battle_state = init_battle(dict(get_player(PLAYER_ID)), mob)
     battle_state.update({'location_id': 'westwild_n3', 'spawn_profile': 'normal'})
@@ -312,6 +323,7 @@ async def _run_negative_paths():
         owner_player_id=PLAYER_ID, location_id='westwild_n3',
         mob_id='forest_wolf', battle_state=battle_state, mob=mob,
     )
+    assert encounter_id is None
     battle_state['pve_encounter_id'] = encounter_id
     finish_solo_pve_encounter(
         player_id=PLAYER_ID, encounter_id=encounter_id, status='death',

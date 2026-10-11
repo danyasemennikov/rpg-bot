@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Canonical navigation map for current implementation ownership
-- Last reconciled: 2026-09-27, against `ebd8f73ade53fcadb89942b703a947782276ea1c`
+- Last reconciled: 2026-10-08, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 Draft separately identified
 
 This map points to current code and the documents that explain it. Code remains the
 exact implementation authority. Foundations express intent; Epic and pass reports
@@ -127,3 +127,33 @@ records for their pass, not current system specifications:
 
 Historical generated balance reports are catalogued with their provenance in
 [evidence/README.md](../evidence/README.md).
+
+
+## PXE1 candidate owners
+
+The unmerged [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237)
+implements the [PXE1 contract](../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) at
+baseline PR236. [The report](../epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md) maps
+sections to checks; historical merged owners above remain responsible for retained
+mechanics. Candidate additions are:
+
+| Boundary | Owners |
+|---|---|
+| Additive migration and cutover | `game/player_experience_schema.py`, `database.py`, `bot.py` |
+| Activity ownership and due/recovery order | `game/player_activity.py`, `game/world_activity_tick.py` |
+| Travel, arrival, threats | `game/travel_runtime.py`, `game/location_threats.py` |
+| Shared 12-second PvE formation / active combat | `game/pve_live.py`, `game/live_combat_runtime.py`, `game/combat_orders.py`; retained T1/T2 in `game/pve_reward_settlement.py` |
+| Current PvP invitation / lock / all-actor actions | `game/pvp_live.py`, `game/pvp_group_runtime.py`, existing PvP policy/settlement owners |
+| Finite SHA-derived gathering / wear | `game/gathering_runtime.py`, `game/profession_tools.py`, `game/hunting.py` |
+| Catalogue 2 / craft XP policy 2 / knowledge | `game/profession_recipes.py`, `game/crafting_runtime.py`, `game/recipe_knowledge.py` |
+| Durable objective, finale and recovery facts | `game/player_feedback.py`, `game/quest_board.py`, `handlers/chapter.py` |
+| Six-menu / local Map / Journal / Activities | `game/contextual_keyboard.py`, `game/player_ui.py`, `handlers/world_views.py`, `handlers/quest_views.py`, `handlers/activities.py`, `handlers/regional.py` |
+| Character / combat / inventory / Shop / recipes | `handlers/character.py`, `handlers/combat_views.py`, `handlers/inventory_views.py`, `handlers/shop_views.py`, `handlers/recipe_views.py` |
+| ru/en/es | `locales/pxe1.py` plus retained domain locale owners |
+
+Shared runtime has two opposing sides with arbitrary participant collections.
+Maximum two participants per side belongs to current PXE1 PvP content validation,
+never the generic engine. Version-zero pair adapters remain replay compatibility;
+summary representatives/source anchors are not actor limits. Lists, targets, details,
+orders, timeout fallback, authorization, death/victory and settlement iterate the
+collections. Candidate human validation remains NOT RUN.

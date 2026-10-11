@@ -1,7 +1,8 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from handlers.location import build_location_message, handle_location_buttons, location_command, pvp_command
+from handlers.location import _legacy_location_message as build_location_message, handle_location_buttons, location_command, pvp_command
 from handlers.profile import unstuck_command
 
 
@@ -38,6 +39,7 @@ class _FakeCallbackUpdate:
 class _FakeContext:
     def __init__(self):
         self.user_data = {}
+        self.bot = SimpleNamespace(send_message=AsyncMock(),edit_message_text=AsyncMock())
         self.application = type('A', (), {'create_task': lambda *args, **kwargs: None})()
 
 
@@ -69,77 +71,57 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
 
         update.message.reply_text.assert_awaited_once_with('ok', reply_markup=None, parse_mode='HTML')
 
-    async def test_location_command_keeps_non_pvp_battle_block(self):
-        update = _FakeUpdate(12345)
-        player = {
-            'telegram_id': 12345,
-            'lang': 'en',
-            'in_battle': 1,
-            'location_id': 'dark_forest',
-        }
-        with (
-            patch('handlers.location.get_player', return_value=player),
-            patch('handlers.location.is_player_busy_with_live_pvp', return_value=False),
-            patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
-        ):
-            await location_command(update, context=None)
+    async def test_location_command_resumes_current_non_pvp_battle(self):
+        from database import get_connection
+        from tests.test_pxe1_pve_world_tick import started
+        encounter,_=started()
+        conn=get_connection()
+        before=conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0]
+        update=_FakeUpdate(1)
+        with patch('time.time',return_value=1013):
+            await location_command(update,_FakeContext())
+        callbacks=[button.callback_data for call in update.message.reply_text.call_args_list
+            if getattr(call.kwargs.get('reply_markup'),'inline_keyboard',None)
+            for row in call.kwargs['reply_markup'].inline_keyboard for button in row]
+        self.assertIn('pve_enter_'+encounter,callbacks)
+        self.assertEqual(conn.execute('SELECT battle_state_json FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()[0],before)
+        self.assertEqual(conn.execute('SELECT in_battle FROM players WHERE telegram_id=1').fetchone()[0],1)
+        conn.close()
 
-        update.message.reply_text.assert_awaited_once_with('location.in_battle_block')
+    async def _assert_current_pvp_blocks_move(self,live):
+        from database import get_player,get_connection
+        from tests.test_pxe1_pvp_membership import prepare
+        from game.pvp_world import lock_preparation
+        conn,e=prepare()
+        if live:
+            conn.execute('BEGIN IMMEDIATE');lock_preparation(conn,engagement_id=e,now_ms=1300000);conn.commit()
+        update=_FakeCallbackUpdate(1,'goto_westwild_n5')
+        before=dict(get_player(1))
+        await handle_location_buttons(update,_FakeContext())
+        kb=update.callback_query.edit_message_text.call_args.kwargs['reply_markup']
+        self.assertFalse(any(b.callback_data.startswith('px:travel:') for row in kb.inline_keyboard for b in row))
+        self.assertEqual(dict(get_player(1)),before)
+        self.assertFalse(conn.execute('SELECT 1 FROM player_travel_sessions WHERE player_id=1').fetchone())
+        conn.close()
 
     async def test_pending_engagement_blocks_location_move(self):
-        update = _FakeCallbackUpdate(1001, 'goto_village')
-        player = {'telegram_id': 1001, 'lang': 'en', 'in_battle': 0, 'location_id': 'dark_forest', 'level': 10}
-        with (
-            patch('handlers.location.get_player', return_value=player),
-            patch('handlers.location.has_active_live_pvp_engagement', return_value=True),
-            patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
-        ):
-            await handle_location_buttons(update, context=None)
-        update.callback_query.answer.assert_awaited_once_with('location.pvp_context_block', show_alert=True)
+        await self._assert_current_pvp_blocks_move(False)
 
     async def test_converted_battle_blocks_location_move(self):
-        update = _FakeCallbackUpdate(1001, 'goto_village')
-        player = {'telegram_id': 1001, 'lang': 'en', 'in_battle': 1, 'location_id': 'dark_forest', 'level': 10}
-        with (
-            patch('handlers.location.get_player', return_value=player),
-            patch('handlers.location.has_active_live_pvp_engagement', return_value=True),
-            patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
-        ):
-            await handle_location_buttons(update, context=None)
-        update.callback_query.answer.assert_awaited_once_with('location.pvp_context_block', show_alert=True)
+        await self._assert_current_pvp_blocks_move(True)
 
     async def test_normal_player_can_still_move(self):
-        update = _FakeCallbackUpdate(1001, 'goto_westwild_n5')
-        from database import create_player, get_connection, get_player, is_location_discovered
-        create_player(1001, 'traveler', 'Traveler',
-                      dict(strength=4, vitality=4, agility=1, intuition=1, wisdom=1, luck=1), lang='en')
-        conn = get_connection()
-        conn.execute("UPDATE players SET location_id='dark_forest' WHERE telegram_id=1001")
-        conn.commit()
-        conn.close()
-        target_location = {'id': 'westwild_n5', 'safe': True, 'level_min': 1, 'level_max': 10, 'mobs': [], 'services': []}
-        context = _FakeContext()
-        with (
-            patch('handlers.location.has_active_live_pvp_engagement', return_value=False),
-            patch('handlers.location.is_in_battle', return_value=False),
-            patch('handlers.location.get_location_neighbors', return_value=['westwild_n5']),
-            patch('handlers.location.is_pvp_mobility_blocked', return_value=False),
-            patch('handlers.location.get_location', return_value=target_location),
-            patch('handlers.location.get_location_name', return_value='Village'),
-            patch('handlers.location.get_location_desc', return_value='road'),
-            patch('handlers.location.asyncio.sleep', new=AsyncMock()),
-            patch('handlers.location.build_location_message', side_effect=self._location_message_stub),
-            patch('handlers.location.clear_respawn_protection_on_dangerous_reentry'),
-            patch('handlers.location.t', side_effect=lambda key, _lang, **kwargs: key),
-        ):
-            await handle_location_buttons(update, context=context)
-        self.assertEqual(get_player(1001)['location_id'], 'westwild_n5')
-        self.assertEqual(get_player(1001)['travel_revision'], 1)
-        self.assertTrue(is_location_discovered(1001, 'westwild_n5'))
-        self.assertGreaterEqual(update.callback_query.edit_message_text.await_count, 2)
-        answered_keys = {call.args[0] for call in update.callback_query.answer.await_args_list if call.args}
-        self.assertNotIn('location.not_found', answered_keys)
-        self.assertNotIn('location.in_battle_move', answered_keys)
+        from tests.test_location_discovery_travel_migration import LocationDiscoveryTravelMigrationTests
+        from database import get_player,is_location_discovered
+        fixture=LocationDiscoveryTravelMigrationTests()
+        fixture.setUp()
+        try:
+            query=await fixture._travel_for_test(start_location_id='capital_city',target_location_id='westwild_n1')
+            self.assertEqual(get_player(9101)['location_id'],'westwild_n1')
+            self.assertEqual(get_player(9101)['travel_revision'],2)
+            self.assertTrue(is_location_discovered(9101,'westwild_n1'))
+            self.assertEqual(query.edit_message_text.await_count,2)
+        finally: fixture.tearDown()
 
     def test_pvp_only_view_hides_nearby_attack_buttons(self):
         player = {
@@ -179,7 +161,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             'gold': 20,
         }
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
-        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'world_model_version': 0}
         payload = {'battle': {'attacker_hp': 77, 'attacker_max_hp': 120, 'attacker_mana': 33, 'attacker_max_mana': 90, 'defender_hp': 22, 'turn_owner': 1001}}
         with (
             patch('handlers.location.get_connection') as conn_mock,
@@ -208,7 +190,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             'gold': 20,
         }
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
-        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'world_model_version': 0}
         payload = {'battle': {'defender_hp': 66, 'defender_max_hp': 111, 'defender_mana': 25, 'defender_max_mana': 70, 'attacker_hp': 88, 'turn_owner': 1001}}
         with (
             patch('handlers.location.get_connection') as conn_mock,
@@ -237,7 +219,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             'gold': 20,
         }
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
-        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'world_model_version': 0}
         payload = {'battle': {'defender_hp': 66, 'defender_max_hp': 111, 'defender_mana': 25, 'defender_max_mana': 70, 'attacker_hp': 88, 'turn_owner': 1001}}
         with (
             patch('handlers.location.get_connection') as conn_mock,
@@ -267,7 +249,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             'gold': 20,
         }
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
-        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'world_model_version': 0}
         payload = {'battle': {'attacker_hp': 77, 'attacker_max_hp': 120, 'attacker_mana': 33, 'attacker_max_mana': 90, 'defender_hp': 22, 'turn_owner': 1001}}
         with (
             patch('handlers.location.get_connection') as conn_mock,
@@ -340,7 +322,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             'gold': 20,
         }
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
-        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'engagement_state': 'pending'}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'engagement_state': 'pending','world_model_version':0}
         with (
             patch('handlers.location.get_connection') as conn_mock,
             patch('handlers.location.get_connected_locations', return_value=[]),
@@ -372,7 +354,7 @@ class LivePvpLocationCommandTests(unittest.IsolatedAsyncioTestCase):
             'gold': 20,
         }
         location = {'id': 'dark_forest', 'safe': False, 'level_min': 1, 'level_max': 30, 'mobs': [], 'services': []}
-        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'engagement_state': 'pending'}
+        engagement = {'id': 9, 'attacker_id': 1001, 'defender_id': 2002, 'engagement_state': 'pending','world_model_version':0}
         with (
             patch('handlers.location.get_connection') as conn_mock,
             patch('handlers.location.get_connected_locations', return_value=[]),

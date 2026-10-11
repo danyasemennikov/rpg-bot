@@ -25,15 +25,30 @@ def _callbacks(markup):
     return [button.callback_data for row in markup.inline_keyboard for button in row]
 
 
-def test_home_has_exact_six_peer_views_and_safe_callbacks():
+def test_home_has_frozen_journal_destinations_and_safe_callbacks():
     text, markup = build_regional_home(_player())
     callbacks = _callbacks(markup)
-    assert callbacks[:6] == [
-        'rv:v:n:0:all', 'rv:v:l:0:all', 'rv:v:p:0:all',
-        'rv:v:r:0:all', 'rv:v:s:0:all', 'rv:v:w:0:all',
+    assert callbacks == [
+        'rv:v:p:0:all','quest_board_back','rv:v:r:0:all','rv:v:l:0:all',
+        'rv:v:s:0:all','rv:v:s:0:ww','rv:v:w:0:all','alpha_history',
     ]
-    assert 'global completion' in text.lower()
+    from game.player_ui import validate_surface
+    validate_surface(text,markup)
+    assert 'Choose your own direction' in text
+    assert any(len(row)==1 and row[0].callback_data=='rv:v:s:0:all' for row in markup.inline_keyboard)
     assert all(len(value.encode('utf-8')) <= 64 for value in callbacks)
+
+
+def test_unknown_regional_history_uses_localized_earlier_record_without_raw_ids():
+    from game.i18n import t
+    from handlers.regional import _title,build_receipt_history_label
+    for lang in ('ru','en','es'):
+        for kind,content in (('project','removed_project'),('region','region_removed'),('encounter','removed_encounter')):
+            assert _title(kind,content,lang)==t('pxe1.journal.earlier_records',lang)
+            label=build_receipt_history_label({'source':{'content_id':content,'operation':'removed_operation'},
+                'details':{'reason':'removed_reason'}},lang)
+            assert label==t('pxe1.journal.earlier_records',lang)+' · '+t('pxe1.common.unknown_historical',lang)
+            assert 'removed_' not in label
 
 
 def test_pagination_is_six_stable_rows_and_clamped():

@@ -219,7 +219,7 @@ def test_all_ten_families_are_fixed_vendor_acquisitions_with_mastery_and_skills(
     for item_id in FIELD_WEAPON_IDS:
         token = issue_actions(PID, 'shop_buy', [item_id])[item_id]
         result = try_buy_curated_shop_item(PID, 'capital_city', 1, item_id, action_token=token)
-        assert result == {'ok': True, 'price': 45}
+        assert result['ok'] and result['price']==45 and result['quantity']==1
         instance = rows('SELECT * FROM gear_instances WHERE telegram_id=? AND base_item_id=?', (PID, item_id))[0]
         assert instance['item_tier'] == 1 and instance['rarity'] == 'common'
         assert json.loads(instance['secondary_rolls_json']) == []
@@ -265,7 +265,7 @@ def test_shop_and_catalog_ui_are_bounded_preview_driven_and_callbacks_fit():
     assert len(item_rows) <= 8 and len(text) <= 4096
     catalog_text, catalog_keyboard = build_field_catalog(player, 'armor', 0)
     catalog_rows = [row for row in catalog_keyboard.inline_keyboard if row and row[0].callback_data.startswith('inv_citem_')]
-    assert len(catalog_rows) == 8 and len(catalog_text) <= 4096
+    assert len(catalog_rows) == 6 and len(catalog_text.encode('utf-16-le')) // 2 <= 900
     for row in keyboard.inline_keyboard + catalog_keyboard.inline_keyboard:
         for button in row:
             assert len(button.callback_data.encode()) <= 64
@@ -329,7 +329,7 @@ def test_revision_bound_equip_enhance_sale_and_travel_staleness_are_atomic():
     instance_id = create_gear_instance(PID, 'field_sword_1h')
     equip_token = issue_gear_intent(PID, 'equip', instance_id, target_slot='weapon')
     assert apply_gear_intent(PID, 'equip', equip_token)['status'] == 'equipped'
-    assert apply_gear_intent(PID, 'equip', equip_token)['status'] == 'stale_action'
+    assert apply_gear_intent(PID, 'equip', equip_token)['recovered']
     assert get_equipped_gear_instances(PID)['weapon']['id'] == instance_id
 
     conn = get_connection()
@@ -338,11 +338,11 @@ def test_revision_bound_equip_enhance_sale_and_travel_staleness_are_atomic():
     enhance_token = issue_gear_intent(PID, 'enhance', instance_id)
     first = apply_gear_intent(PID, 'enhance', enhance_token, rng_roll=0.0)
     assert first['status'] == 'enhanced' and first['after'] == 1
-    assert apply_gear_intent(PID, 'enhance', enhance_token, rng_roll=0.0)['status'] == 'stale_action'
+    assert apply_gear_intent(PID, 'enhance', enhance_token, rng_roll=0.0)['recovered']
 
     unequip_token = issue_gear_intent(PID, 'unequip', instance_id, target_slot='weapon')
     assert apply_gear_intent(PID, 'unequip', unequip_token)['status'] == 'unequipped'
-    sale_token = issue_gear_intent(PID, 'sale', instance_id)
+    sale_token = issue_gear_intent(PID, 'sale', instance_id, sale_confirmed=True)
     before_gold = get_player(PID)['gold']
     with pytest.raises(RuntimeError):
         apply_gear_intent(PID, 'sale', sale_token, failure_hook=lambda point: (_ for _ in ()).throw(RuntimeError(point)))
@@ -350,7 +350,7 @@ def test_revision_bound_equip_enhance_sale_and_travel_staleness_are_atomic():
     assert get_player(PID)['gold'] == before_gold
     sold = apply_gear_intent(PID, 'sale', sale_token)
     assert sold['status'] == 'sold' and sold['gold'] == 5
-    assert apply_gear_intent(PID, 'sale', sale_token)['status'] == 'stale_action'
+    assert apply_gear_intent(PID, 'sale', sale_token)['recovered']
 
     stale_instance = create_gear_instance(PID, 'field_bow')
     stale_token = issue_gear_intent(PID, 'sale', stale_instance)
@@ -412,7 +412,8 @@ def test_wrong_slot_requirements_materials_equipped_sale_and_active_pve_fail_clo
     token = issue_gear_intent(PID, 'equip', sword, target_slot='weapon')
     assert apply_gear_intent(PID, 'equip', token)['status'] == 'equipped'
     token = issue_gear_intent(PID, 'sale', sword)
-    assert apply_gear_intent(PID, 'sale', token)['status'] == 'equipped_item'
+    assert token is None  # Equipped gear never receives a sale intent.
+    assert get_equipped_gear_instances(PID)['weapon']['id']==sword
 
     spare = create_gear_instance(PID, 'field_bow')
     sale_token = issue_gear_intent(PID, 'sale', spare)

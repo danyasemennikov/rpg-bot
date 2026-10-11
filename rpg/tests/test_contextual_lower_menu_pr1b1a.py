@@ -7,12 +7,13 @@ from game.contextual_keyboard import (
     LOWER_TRAVEL_PREFIX,
     build_contextual_main_keyboard,
     build_lower_travel_label,
+    get_contextual_travel_targets,
     looks_like_lower_gather_button,
     looks_like_lower_service_button,
     resolve_lower_gather_profession_button,
 )
 from handlers.location import (
-    build_location_message,
+    _legacy_location_message as build_location_message,
     handle_location_buttons,
     handle_lower_menu_gather_text,
     handle_lower_menu_service_text,
@@ -20,10 +21,19 @@ from handlers.location import (
     location_command,
 )
 from game.i18n import t
+from database import get_connection,get_player
+from handlers.world_views import location_card,local_entries
 
 
 def _keyboard_text_rows(keyboard):
     return [[button.text for button in row] for row in keyboard.keyboard]
+
+
+def _player_at(location_id):
+    conn=get_connection()
+    conn.execute('UPDATE players SET location_id=?,lang=? WHERE telegram_id=1',(location_id,'en'))
+    conn.commit();conn.close()
+    return dict(get_player(1))
 
 
 class ContextualLowerMenuTests(unittest.TestCase):
@@ -31,36 +41,34 @@ class ContextualLowerMenuTests(unittest.TestCase):
         keyboard = build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en')
         rows = _keyboard_text_rows(keyboard)
 
-        self.assertTrue(rows[0][0].startswith(LOWER_TRAVEL_PREFIX))
-        self.assertIn(build_lower_travel_label('westwild_n1', 'en'), [row[0] for row in rows if len(row) == 1])
-        self.assertGreater(rows.index(['📍 Location', '🗺️ Map']), 0)
+        self.assertEqual(rows[0],['📍 Location','🗺️ Map'])
+        self.assertEqual([len(row) for row in rows],[2,2,2])
+        _,inline=location_card(_player_at('capital_city'),category='exits')
+        self.assertIn('goto_westwild_n1',[b.callback_data for row in inline.inline_keyboard for b in row])
 
     def test_contextual_lower_menu_filters_invalid_neighbors(self):
         with patch('game.contextual_keyboard.get_location_neighbors', return_value=['westwild_n1', 'missing_place']):
+            targets=get_contextual_travel_targets('capital_city')
             keyboard = build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en')
 
         flat = [text for row in _keyboard_text_rows(keyboard) for text in row]
-        self.assertIn(build_lower_travel_label('westwild_n1', 'en'), flat)
+        self.assertEqual(targets,['westwild_n1'])
+        self.assertNotIn(build_lower_travel_label('westwild_n1', 'en'), flat)
         self.assertFalse(any('missing_place' in text for text in flat))
 
     def test_baseline_system_buttons_and_dedicated_map_label_remain_present(self):
         keyboard = build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en')
         flat = [text for row in _keyboard_text_rows(keyboard) for text in row]
 
-        for label in ['📍 Location', '🗺️ Map', '🎒 Inventory', '👤 Profile', '🔮 Skills', '📊 Stats', '⚙️ Settings', '❓ Help']:
-            self.assertIn(label, flat)
+        self.assertEqual(flat,[t('pxe1.menu.'+key,'en') for key in ('location','map','journal','inventory','character','activities')])
 
     def test_contextual_lower_menu_renders_profession_rows_between_travel_and_baseline(self):
-        with patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=[
-            SimpleNamespace(profession_key='herbalism'),
-            SimpleNamespace(profession_key='mining'),
-        ]):
+        with patch('game.profession_resources.location_sources',return_value=[('herb_common',.4),('iron_ore',.2)]):
             keyboard = build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en')
+            _,categories=local_entries(_player_at('capital_city'))
         rows = _keyboard_text_rows(keyboard)
-        baseline_index = rows.index(['📍 Location', '🗺️ Map'])
-        self.assertIn(['🌿 Gather', '⛏️ Mine'], rows)
-        self.assertLess(rows.index(['🌿 Gather', '⛏️ Mine']), baseline_index)
-        self.assertGreater(rows.index(['🌿 Gather', '⛏️ Mine']), 0)
+        self.assertEqual([len(row) for row in rows],[2,2,2])
+        self.assertEqual([callback for _,callback in categories['gathering']],['px:gatherpreview:herbalism','px:gatherpreview:mining'])
 
     def test_looks_like_lower_gather_button_accepts_cross_locale_labels(self):
         self.assertTrue(looks_like_lower_gather_button('🌿 Собирать'))
@@ -71,14 +79,13 @@ class ContextualLowerMenuTests(unittest.TestCase):
         with patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=[SimpleNamespace(profession_key='herbalism')]):
             keyboard = build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en')
         rows = _keyboard_text_rows(keyboard)
-        gather_idx = rows.index(['🌿 Gather'])
-        service_idx = rows.index(['🏪 Shop'])
-        baseline_idx = rows.index(['📍 Location', '🗺️ Map'])
-        self.assertLess(gather_idx, service_idx)
-        self.assertLess(service_idx, baseline_idx)
+        self.assertEqual([len(row) for row in rows],[2,2,2])
+        _,services=location_card(_player_at('capital_city'),category='services')
+        callbacks=[b.callback_data for row in services.inline_keyboard for b in row]
+        self.assertEqual(callbacks[:4],['shop','quest_board','craftsmen_guild','inn'])
 
 
-class LocationInlineRenderingTests(unittest.TestCase):
+class LegacyLocationInlineRenderingTests(unittest.TestCase):
     def _build_location(self, *, gather_profiles=None, services=None):
         player = {
             'telegram_id': 5001,
@@ -229,40 +236,28 @@ class LowerMenuTextDispatchTests(unittest.IsolatedAsyncioTestCase):
         update.message.reply_text.assert_awaited_once()
 
     async def test_valid_lower_gather_button_grants_profession_filtered_resource(self):
-        update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
-            effective_user=SimpleNamespace(id=1),
-        )
-        context = SimpleNamespace()
-        profiles = [SimpleNamespace(
-            item_id='herb_common', profession_key='herbalism', chance=1.0, zone_tier_band=1,
-        )]
-        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10}), \
-             patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=profiles), \
-             patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=profiles), \
-             patch('game.gathering_runtime.grant_item_to_player', wraps=grant_item_to_player) as grant_mock, \
-             patch('handlers.location.random.random', return_value=0.2):
-            handled = await handle_lower_menu_gather_text(update, context)
+        from tests.pxe1_gather_fixture import one_tick
+        from game.player_experience_schema import grant_player_pxe1_starters
+        _player_at('westwild_n1')
+        conn=get_connection();grant_player_pxe1_starters(conn,1,now_ms=0,acquired_via='starter');conn.commit();conn.close()
+        with patch('game.gathering_runtime.grant_item_to_player',wraps=grant_item_to_player) as grant_mock:
+            handled,_,result=await one_tick(1,'herbalism',.2,17)
         self.assertTrue(handled)
         grant_mock.assert_called_once()
+        self.assertEqual([row['item_id'] for row in result['granted']],['herb_common'])
 
     async def test_valid_lower_gather_button_fail_roll_replies_and_does_not_grant(self):
-        update = SimpleNamespace(
-            message=SimpleNamespace(text='🌿 Gather', message_id=17, reply_text=AsyncMock()),
-            effective_user=SimpleNamespace(id=1),
-        )
-        context = SimpleNamespace()
-        profiles = [SimpleNamespace(item_id='herb_common', profession_key='herbalism', chance=0.1)]
-        with patch('handlers.location.get_player', return_value={'telegram_id': 1, 'lang': 'en', 'location_id': 'capital_city', 'level': 10, 'in_battle': 0}), \
-             patch('game.gathering_runtime.build_location_gather_source_profiles', return_value=profiles), \
-             patch('game.contextual_keyboard.build_location_gather_source_profiles', return_value=profiles), \
-             patch('handlers.location.is_in_battle', return_value=False), \
-             patch('game.gathering_runtime.grant_item_to_player', wraps=grant_item_to_player) as grant_mock, \
-             patch('handlers.location.random.random', return_value=0.99):
-            handled = await handle_lower_menu_gather_text(update, context)
+        from tests.pxe1_gather_fixture import one_tick
+        from game.player_experience_schema import grant_player_pxe1_starters
+        _player_at('westwild_n1')
+        conn=get_connection();grant_player_pxe1_starters(conn,1,now_ms=0,acquired_via='starter');conn.commit();conn.close()
+        with patch('game.gathering_runtime.grant_item_to_player',wraps=grant_item_to_player) as grant_mock:
+            handled,message,result=await one_tick(1,'herbalism',.99,17)
         self.assertTrue(handled)
         grant_mock.assert_not_called()
-        update.message.reply_text.assert_awaited_once_with(t('location.gather_fail', 'en'))
+        self.assertEqual(result['granted'],[])
+        self.assertEqual(result['xp'],0)
+        message.reply_text.assert_awaited_once()
 
     async def test_lower_gather_recognized_without_character_stops_fallthrough(self):
         from bot import handle_text
@@ -313,9 +308,10 @@ class LowerMenuRefreshTests(unittest.IsolatedAsyncioTestCase):
             message=SimpleNamespace(text='/location', reply_text=reply_text),
             effective_user=SimpleNamespace(id=1),
         )
-        context = SimpleNamespace(user_data={})
+        context = SimpleNamespace(user_data={},bot=SimpleNamespace(send_message=AsyncMock(),edit_message_text=AsyncMock(),delete_message=AsyncMock()))
         player = {
             'telegram_id': 1,
+            'name': 'TestUser',
             'lang': 'en',
             'location_id': 'capital_city',
             'in_battle': 0,
@@ -337,47 +333,41 @@ class LowerMenuRefreshTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply_text.await_count, 2)
         first_call, second_call = reply_text.await_args_list
         self.assertEqual(first_call.args[0], 'location text')
-        self.assertEqual(second_call.args[0], '⌨️ Lower menu updated.')
+        self.assertEqual(second_call.args[0],t('pxe1.menu.welcome_status','en',name=get_player(1)['name'],location='🏛️ Aster'))
         self.assertIn('reply_markup', first_call.kwargs)
         self.assertIn('reply_markup', second_call.kwargs)
 
-    async def test_successful_travel_arrival_refreshes_lower_menu(self):
-        query_message = SimpleNamespace(message_id=10, reply_text=AsyncMock())
-        query = SimpleNamespace(
-            data='goto_westwild_n1',
-            from_user=SimpleNamespace(id=1),
-            answer=AsyncMock(),
-            edit_message_text=AsyncMock(),
-            message=query_message,
-        )
-        update = SimpleNamespace(callback_query=query)
-        context = SimpleNamespace(application=SimpleNamespace(create_task=lambda coro: coro), user_data={})
-        player_before = {'telegram_id': 1, 'lang': 'en', 'in_battle': 0, 'location_id': 'capital_city', 'level': 10}
-        player_after = {
-            'telegram_id': 1,
-            'lang': 'en',
-            'in_battle': 0,
-            'location_id': 'westwild_n1',
-            'level': 10,
-            'hp': 100,
-            'max_hp': 100,
-            'mana': 50,
-            'max_mana': 50,
-            'gold': 0,
-        }
-        conn = Mock()
-
-        with patch('handlers.location.get_player', side_effect=[player_before, player_after]), \
-             patch('handlers.location.has_active_live_pvp_engagement', return_value=False), \
-             patch('handlers.location.is_in_battle', return_value=False), \
-             patch('handlers.location.is_pvp_mobility_blocked', return_value=False), \
-             patch('handlers.location.asyncio.sleep', new=AsyncMock()), \
-             patch('handlers.location.get_location', return_value={'id': 'westwild_n1', 'safe': True}), \
-             patch('handlers.location.ensure_player_location_discovered'), \
-             patch('handlers.location.clear_respawn_protection_on_dangerous_reentry'), \
-             patch('handlers.location._build_location_message_with_snapshot', return_value=('arrived text', Mock())):
-            await handle_location_buttons(update, context)
-
-        query.edit_message_text.assert_any_await('arrived text', reply_markup=unittest.mock.ANY, parse_mode='HTML')
-        query_message.reply_text.assert_awaited_once()
-        self.assertEqual(query_message.reply_text.await_args.args[0], '⌨️ Lower menu updated.')
+    async def test_travel_arrival_keeps_fixed_menu_and_location_installs_it_once(self):
+        from handlers.activities import handle_activity_buttons
+        from game.travel_runtime import advance_travel_edge
+        from database import is_location_discovered
+        _player_at('capital_city')
+        message=SimpleNamespace(message_id=10,chat_id=1,reply_text=AsyncMock())
+        query=SimpleNamespace(data='goto_westwild_n1',from_user=SimpleNamespace(id=1),
+            answer=AsyncMock(),edit_message_text=AsyncMock(),message=message)
+        context=SimpleNamespace(user_data={},bot=SimpleNamespace(send_message=AsyncMock(),edit_message_text=AsyncMock(),delete_message=AsyncMock()))
+        await handle_location_buttons(SimpleNamespace(callback_query=query),context)
+        self.assertEqual(get_player(1)['location_id'],'capital_city')
+        self.assertFalse(is_location_discovered(1,'westwild_n1'))
+        keyboard=query.edit_message_text.call_args.kwargs['reply_markup']
+        query.data=next(b.callback_data for row in keyboard.inline_keyboard for b in row if b.callback_data.startswith('px:travel:'))
+        with patch('time.time',return_value=1000):
+            await handle_activity_buttons(SimpleNamespace(callback_query=query),context)
+        conn=get_connection()
+        session=conn.execute("SELECT * FROM player_travel_sessions WHERE player_id=1 AND status='running'").fetchone()
+        self.assertIsNotNone(session)
+        conn.execute('BEGIN IMMEDIATE')
+        advance_travel_edge(conn,session['session_id'],now_ms=session['next_due_ms'])
+        conn.commit();conn.close()
+        self.assertEqual(get_player(1)['location_id'],'westwild_n1')
+        self.assertTrue(is_location_discovered(1,'westwild_n1'))
+        message.reply_text.assert_not_awaited()
+        update=SimpleNamespace(message=message,effective_user=SimpleNamespace(id=1))
+        await location_command(update,context)
+        menus=[call.kwargs['reply_markup'] for call in message.reply_text.await_args_list
+               if hasattr(call.kwargs.get('reply_markup'),'keyboard')]
+        self.assertEqual(len(menus),1)
+        self.assertEqual([len(row) for row in menus[0].keyboard],[2,2,2])
+        await location_command(update,context)
+        self.assertEqual(len([call for call in message.reply_text.await_args_list
+            if hasattr(call.kwargs.get('reply_markup'),'keyboard')]),1)

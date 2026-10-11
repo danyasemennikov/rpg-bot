@@ -264,6 +264,7 @@ def register_contract_objective(conn, player_id: int, action: str, target: str,
     if not state or state['status'] not in {'active', 'completed'}:
         return
     contract = state['contract']
+    prior_status = conn.execute('SELECT status FROM player_hunt_contracts WHERE player_id=?',(player_id,)).fetchone()['status']
     for objective in contract.objectives:
         if objective.action != action or objective.target not in {target, '*'}:
             continue
@@ -273,11 +274,24 @@ def register_contract_objective(conn, player_id: int, action: str, target: str,
             VALUES (?, ?, ?, ?) ON CONFLICT(player_id, contract_key, objective_key)
             DO UPDATE SET progress=MIN(?, progress+excluded.progress)''',
                      (player_id, contract.contract_key, objective.key, min(objective.required, max(0, quantity)), objective.required))
+        after = _objective_progress(conn,player_id,contract).get(objective.key,0)
+        before = state.get('objective_progress',{}).get(objective.key,0)
+        if after>before:
+            from game.player_feedback import record_feedback
+            record_feedback(conn,player_id,event_key=f'objective:{contract.contract_key}:{objective.key}:{after}',
+                source_kind='chapter_objective',source_id=contract.contract_key,
+                event_kind='objective_complete' if after>=objective.required else 'progress',
+                payload={'contract_key':contract.contract_key,'objective_key':objective.key,'action':action,
+                         'target':target,'progress':after,'required':objective.required})
     refreshed = _get_player_hunt_contract_state_with_conn(conn, player_id)
     if refreshed:
         conn.execute('''UPDATE player_hunt_contracts SET status=?,
             completed_at=CASE WHEN ?='completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
             WHERE player_id=?''', (refreshed['status'], refreshed['status'], player_id))
+        if refreshed['status']=='completed' and prior_status!='completed':
+            from game.player_feedback import record_feedback
+            record_feedback(conn,player_id,event_key=f'ready:{contract.contract_key}',source_kind='chapter',
+                source_id=contract.contract_key,event_kind='ready',payload={'contract_key':contract.contract_key})
 
 
 def build_objective_lines(state: dict, lang: str) -> list[str]:
@@ -490,7 +504,10 @@ def list_hunt_contracts_for_player(*, location_id: str, player_id: int, lang: st
     available: list[HuntContract] = []
     locked: list[dict] = []
     history = get_contract_history(player_id)
+    active = get_player_hunt_contract_state(player_id)
     for contract in list_hunt_contracts_for_location(location_id):
+        if active and active['status'] in {'active','completed'} and active['contract_key']==contract.contract_key:
+            continue
         if contract.chapter_order and contract.contract_key in history:
             continue
         if contract.prerequisite and contract.prerequisite not in history:
@@ -647,6 +664,16 @@ def register_hunt_kill_progress(
             ''',
             (next_progress, next_status, next_status, int(player_id)),
         )
+        if next_progress > current_progress:
+            from game.player_feedback import record_feedback
+            record_feedback(conn,player_id,event_key=f'objective:{contract.contract_key}:kill:{next_progress}',
+                source_kind='chapter_objective',source_id=contract.contract_key,
+                event_kind='objective_complete' if next_progress>=contract.required_kills else 'progress',
+                payload={'contract_key':contract.contract_key,'objective_key':'kill','action':'kill','target':contract.target_mob_id,
+                         'progress':next_progress,'required':contract.required_kills})
+            if next_status=='completed':
+                record_feedback(conn,player_id,event_key=f'ready:{contract.contract_key}',source_kind='chapter',
+                    source_id=contract.contract_key,event_kind='ready',payload={'contract_key':contract.contract_key})
         if owns_connection:
             conn.commit()
         return {
@@ -780,6 +807,15 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str, action_to
         )
         conn.execute('INSERT OR IGNORE INTO player_contract_history(player_id, contract_key) VALUES (?, ?)',
                      (player_id, contract.contract_key))
+        from game.player_feedback import record_feedback
+        if levels_gained:
+            record_feedback(conn,player_id,event_key=f'character_level:{level}',source_kind='character',
+                source_id=contract.contract_key,event_kind='level_up',payload={'old_level':int(player['level']),'new_level':level})
+        record_feedback(conn,player_id,event_key=f'claim:{contract.contract_key}',source_kind='chapter_claim',
+            source_id=contract.contract_key,event_kind='claim',payload={'contract_key':contract.contract_key,'reward_gold':reward_gold,'reward_exp':reward_exp})
+        if contract.contract_key=='chapter_homecoming':
+            record_feedback(conn,player_id,event_key='chapter_finale:chapter_homecoming',source_kind='chapter_claim',
+                source_id=contract.contract_key,event_kind='chapter_finale',payload={'contract_key':contract.contract_key})
         conn.commit()
         return True, 'claimed', {
             'contract': contract,

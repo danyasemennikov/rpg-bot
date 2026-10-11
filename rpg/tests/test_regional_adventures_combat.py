@@ -5,7 +5,7 @@ import pytest
 from database import get_connection
 from game.mobs import get_mob
 from game.pve_live import (
-    create_mixed_open_world_pve_encounter, lock_open_world_pve_roster_for_runtime_start,
+    create_mixed_open_world_pve_encounter, process_due_pve_formations,
 )
 from game.regional_adventures import (
     execute_regional_action, get_project_state, issue_regional_action,
@@ -29,6 +29,17 @@ def _battle_state(mob_id):
             'player_max_hp':100,'player_mana':100,'player_max_mana':100,'log':[]}
 
 
+def _start_due_formation(encounter_id):
+    conn=get_connection()
+    deadline=conn.execute('SELECT formation_deadline_ms FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()[0]
+    conn.close()
+    assert any(event['encounter_id']==encounter_id for event in process_due_pve_formations(now_ms=deadline))
+    conn=get_connection()
+    roster=json.loads(conn.execute('SELECT locked_roster_json FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()[0])
+    conn.close()
+    return roster['player_ids']
+
+
 def _ferry_at_combat_step():
     _move('mireveil_n5'); _act('mv_ford_marks','inspect')
     _move('mireveil_n8'); _act('mv_channel_rope','inspect')
@@ -42,7 +53,7 @@ def test_roster_lock_captures_exact_mixed_binding_and_alive_t2_advances_once():
     encounter_id,status=create_mixed_open_world_pve_encounter(
         owner_player_id=1,recipe_id='rav1_mireveil_n6_crosscurrent',
         battle_state=_battle_state('giant_leech'))
-    assert status == 'created' and lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id) == [1]
+    assert status == 'created' and _start_due_formation(encounter_id) == [1]
     conn=get_connection(); row=conn.execute('SELECT * FROM rav1_combat_bindings WHERE encounter_id=? AND player_id=1',(encounter_id,)).fetchone()
     bindings=json.loads(row['bindings_json']); assert len(bindings)==1
     assert bindings[0]['mixed_encounter_id']=='rav1_mireveil_n6_crosscurrent'
@@ -57,7 +68,7 @@ def test_defeated_recipient_binding_is_applied_without_progress():
     _ferry_at_combat_step()
     encounter_id,status=create_mixed_open_world_pve_encounter(
         owner_player_id=1,recipe_id='rav1_mireveil_n6_crosscurrent',battle_state=_battle_state('giant_leech'))
-    assert status=='created'; lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
+    assert status=='created'; _start_due_formation(encounter_id)
     conn=get_connection(); conn.execute('BEGIN IMMEDIATE')
     assert apply_combat_bindings(conn,encounter_id=encounter_id,plan={'eligible_recipient_ids':[],'recipients':[]}) == {}
     conn.commit()
@@ -71,7 +82,7 @@ def test_acceptance_after_roster_lock_gets_no_old_encounter_credit():
     _move('mireveil_n6')
     encounter_id,status=create_mixed_open_world_pve_encounter(
         owner_player_id=1,recipe_id='rav1_mireveil_n6_crosscurrent',battle_state=_battle_state('giant_leech'))
-    assert status=='created'; lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
+    assert status=='created'; _start_due_formation(encounter_id)
     conn=get_connection(); assert json.loads(conn.execute('SELECT bindings_json FROM rav1_combat_bindings WHERE encounter_id=?',(encounter_id,)).fetchone()['bindings_json']) == []
     conn.close()
     # Exercise the domain start primitive directly: the public peaceful-action
@@ -91,7 +102,7 @@ def test_corrupt_or_missing_marked_binding_fails_closed():
     _ferry_at_combat_step()
     encounter_id,status=create_mixed_open_world_pve_encounter(
         owner_player_id=1,recipe_id='rav1_mireveil_n6_crosscurrent',battle_state=_battle_state('giant_leech'))
-    assert status=='created'; lock_open_world_pve_roster_for_runtime_start(encounter_id=encounter_id)
+    assert status=='created'; _start_due_formation(encounter_id)
     conn=get_connection(); conn.execute('DELETE FROM rav1_combat_bindings WHERE encounter_id=?',(encounter_id,)); conn.commit()
     conn.execute('BEGIN IMMEDIATE')
     with pytest.raises(RuntimeError, match='binding_missing'):

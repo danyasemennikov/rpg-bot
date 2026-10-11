@@ -50,3 +50,13 @@ def isolated_sqlite_db(tmp_path):
         yield
     finally:
         database.DB_PATH = original_db_path
+
+
+@pytest.fixture(scope='session')
+def pxe1_profession_checkpoint(tmp_path_factory):
+    # Defined once so profession and RAV modules share the same earned history.
+    from tests.test_professions_economy_v1_journeys import build_pxe1_profession_checkpoint,load_recorded_pxe1_checkpoint
+    recorded=os.environ.get('PXE1_EARNED_CHECKPOINT')
+    if recorded:
+        return load_recorded_pxe1_checkpoint(recorded)
+    return build_pxe1_profession_checkpoint(tmp_path_factory)

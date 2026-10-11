@@ -88,42 +88,11 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('common.no_character', lang))
         return
 
-    exp_needed = exp_to_next_level(p['level'])
-    effective_stats = get_player_effective_stats(user.id, p)
-    effective_max_hp = effective_stats['max_hp']
-    effective_max_mana = effective_stats['max_mana']
-    exp_pct    = int((p['exp'] / exp_needed) * 10)
-    exp_bar    = '█' * exp_pct + '░' * (10 - exp_pct)
-
-    hp_pct  = int((p['hp'] / max(1, effective_max_hp)) * 10)
-    hp_bar  = '█' * hp_pct + '░' * (10 - hp_pct)
-
-    mp_pct  = int((p['mana'] / max(1, effective_max_mana)) * 10)
-    mp_bar  = '█' * mp_pct + '░' * (10 - mp_pct)
-
-    text = (
-        f"{t('profile.title', lang, name=p['name'])}\n"
-        f"{t('profile.level', lang, level=p['level'])}  |  📍 {p['location_id']}\n\n"
-        f"❤️ HP:   {hp_bar} {p['hp']}/{effective_max_hp}\n"
-        f"🔵 {t('common.mana', lang)}: {mp_bar} {p['mana']}/{effective_max_mana}\n"
-        f"✨ {t('common.exp', lang)}: {exp_bar} {p['exp']}/{exp_needed}\n\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"{t('profile.strength',  lang, val=p['strength'])}\n"
-        f"{t('profile.agility',   lang, val=p['agility'])}\n"
-        f"{t('profile.intuition', lang, val=p['intuition'])}\n"
-        f"{t('profile.vitality',  lang, val=p['vitality'])}\n"
-        f"{t('profile.wisdom',    lang, val=p['wisdom'])}\n"
-        f"{t('profile.luck',      lang, val=p['luck'])}\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"💰 {t('common.gold', lang)}: <b>{p['gold']}</b>  |  "
-        f"🎒 {t('common.hp', lang)}: <b>{p['carry_weight']}</b>\n"
-    )
-    if p['stat_points'] > 0:
-        text += f"\n🔸 {t('profile.stat_points', lang, val=p['stat_points'])} — /stats"
-    text += _build_equipment_summary(user.id, lang)
-    text += "\n\n🧭 /build"
-
-    await update.message.reply_text(text, parse_mode='HTML')
+    from handlers.character import character_card
+    text, keyboard = character_card(user.id,lang)
+    from game.player_ui import install_menu_on_message
+    await install_menu_on_message(update.message,dict(p))
+    await update.message.reply_text(text,reply_markup=keyboard,parse_mode='HTML')
 
 # ─── Вспомогательные функции для меню статов ────────────────
 

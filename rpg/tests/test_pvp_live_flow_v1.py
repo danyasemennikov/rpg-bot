@@ -8,7 +8,7 @@ from game.pvp_live import (
     advance_engagement_to_live_battle_if_ready,
     apply_illegal_aggression_penalties,
     can_create_live_engagement,
-    create_live_engagement,
+    _create_legacy_live_engagement as create_live_engagement,
     get_engagement_reinforcement_state,
     get_pending_encounter_detail,
     get_pending_location_encounters,
@@ -35,6 +35,7 @@ from game.weapon_mastery import get_skill_cooldown
 
 
 class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
+    """Version0 compatibility fixtures; fresh PXE1 creation is covered separately."""
     ATTACKER_ID = 910001
     DEFENDER_ID = 910002
     ATTACKER_ALLY_ID = 910003
@@ -640,6 +641,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         conn = get_connection()
         payload = json.loads(conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()['reason_context'])
         payload['battle']['turn_started_at'] = (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat()
+        payload['battle']['side_deadline_at'] = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
         conn.execute('UPDATE pvp_engagements SET reason_context=? WHERE id=?', (json.dumps(payload), engagement_id))
         conn.commit()
         conn.close()
@@ -753,6 +755,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
         conn = get_connection()
         payload = json.loads(conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()['reason_context'])
         payload['battle']['turn_started_at'] = (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat()
+        payload['battle']['side_deadline_at'] = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
         conn.execute('UPDATE pvp_engagements SET reason_context=? WHERE id=?', (json.dumps(payload), engagement_id))
         conn.commit()
         row2 = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()
@@ -1137,6 +1140,7 @@ class OpenWorldPvpLiveFlowV1Tests(unittest.TestCase):
             conn = get_connection()
             payload = json.loads(conn.execute('SELECT reason_context FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()['reason_context'])
             payload['battle']['turn_started_at'] = (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat()
+            payload['battle']['side_deadline_at'] = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
             conn.execute('UPDATE pvp_engagements SET reason_context=? WHERE id=?', (json.dumps(payload), engagement_id))
             conn.commit()
             row = conn.execute('SELECT * FROM pvp_engagements WHERE id=?', (engagement_id,)).fetchone()

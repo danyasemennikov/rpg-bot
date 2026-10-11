@@ -1,7 +1,7 @@
 """RAV1 J01-J20 production-path acceptance journeys.
 
 The module creates one earned, post-Chapter-I checkpoint through the existing
-PEV1 production harness, records its SHA-256 provenance, and clones that whole
+PXE1 production harness, records its SHA-256 provenance, and clones that whole
 SQLite checkpoint for independent branches.  Cloning a recorded history is the
 only state accelerator; regional facts, projects, claims, goods, rewards, and
 combat credit are never injected.
@@ -12,11 +12,11 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
-import itertools
 import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -28,16 +28,14 @@ from game.crafting_runtime import craft_recipe
 from game.economy_actions import gift_inventory_item
 from game.enemy_profiles import MIXED_ENCOUNTERS
 from game.gear_progression import apply_gear_intent, issue_gear_intent, set_equipment_goal
-from game.gathering_runtime import gather_resource
 from game.locations import get_location
-from game.mobs import get_mob
 from game.hunting import harvest_victory, list_harvestable_victories
 from game.i18n import t, validate_rav1_locales
 from game.pve_live import (
     FORMING_ENCOUNTER_TTL_SECONDS, _prune_expired_forming_encounters,
-    create_or_load_open_world_pve_encounter, ensure_location_pve_spawn_instances,
+    ensure_location_pve_spawn_instances,
     finish_solo_pve_encounter, leave_open_world_pve_encounter,
-    lock_open_world_pve_roster_for_runtime_start, reset_solo_pve_runtime_store,
+    reset_solo_pve_runtime_store,
 )
 from game.pve_reward_settlement import (
     apply_prepared_settlement, get_settlement, recover_prepared_settlements,
@@ -56,15 +54,13 @@ from game.regional_adventures import (
 from game.regional_catalog import FACTS_BY_ID, PROJECTS_BY_ID
 from game.regional_opportunities import nearby
 from game.regional_schema import MIGRATION_VERSION, TABLES, ensure_regional_schema
-from game.seed import seed_items
-from game.pve_live import _ensure_pve_encounter_table, _ensure_world_spawn_table
-from handlers.chapter import build_journal, handle_chapter_buttons, journal_command
-from handlers.build import handle_build_buttons
+from handlers.chapter import handle_chapter_buttons, journal_command
 from handlers.location import (
-    handle_combat_buttons, handle_location_buttons, handle_lower_menu_service_text,
-    location_command,
+    handle_combat_buttons, handle_location_buttons,
+    location_command,map_command,
 )
-from handlers.inventory import handle_inventory_buttons, try_sell_inventory_item
+from handlers.inventory import handle_inventory_buttons, try_sell_inventory_item,inventory_command
+from handlers.profile import profile_command
 from handlers.professions import handle_profession_buttons
 from handlers.regional import (
     _list_screen, build_detail, build_regional_home, handle_regional_buttons,
@@ -76,17 +72,14 @@ from tests.test_character_builds_v1_group_journeys import (
 )
 from tests.test_professions_economy_v1_journeys import (
     PLAYER_ID as EARNED_PLAYER_ID,
-    FixedRoll, _complete_aster_elmor_chapter, _environment_source,
-    _fight_and_harvest, _move, _production_history, _quantity, _recover,
+    _complete_aster_elmor_chapter, _gather,
+    _fight_and_harvest, _move, _quantity, _recover,
 )
 
 
-_RAV_GATHER_SEQUENCE = itertools.count(1)
 PHYSICAL_PLAYER_ID = EARNED_PLAYER_ID + 1
 MAGIC_PLAYER_ID = EARNED_PLAYER_ID + 2
 BELOW_RANK_PLAYER_ID = EARNED_PLAYER_ID + 99
-EXPECTED_EARNED_CHECKPOINT_SHA256 = "7ee968b9861312799d743faf87d6afc3f9d099640b06e68e7e94f8cafdac9e6c"
-EXPECTED_PARTY_CHECKPOINT_SHA256 = "7510168ac9b5a03c06423ce9075906088e21cef2ca4a3716016eb5153d393a7b"
 
 
 def _callbacks(markup) -> list[str]:
@@ -114,55 +107,64 @@ async def _open_location(journey: ProductionJourney) -> tuple[str, object]:
     return card
 
 
+async def _location_encounter_controls(journey):
+    from handlers.activities import handle_activity_buttons
+    await _open_location(journey)
+    page=0
+    controls=[]
+    while True:
+        await journey.callback(f'px:local:encounters:{page}',handle_activity_buttons)
+        current=_callbacks(journey.messages[-1][1])
+        controls.extend(c for c in current if c.startswith(('fight_','pve_enter_')))
+        if f'px:local:encounters:{page+1}' not in current: break
+        page+=1
+    return controls
+
+
+async def _open_command(journey,command,handler):
+    before=len(journey.messages)
+    await journey.text(command,handler)
+    return next(message for message in journey.messages[before:] if _callbacks(message[1]))
+
+
 async def _open_quest_board(journey: ProductionJourney) -> tuple[str, object]:
-    first_new_message = len(journey.messages)
-    await journey.text('/location', location_command)
-    emitted = journey.messages[first_new_message:]
-    board_label = t('keyboard.service_quest_board', journey.lang)
-    assert any(board_label in _reply_labels(markup) for _text, markup in emitted), emitted
-    await journey.text(board_label, handle_lower_menu_service_text)
+    from handlers.activities import handle_activity_buttons
+    await _open_location(journey)
+    await journey.callback('px:local:services:0', handle_activity_buttons)
+    assert 'quest_board' in _callbacks(journey.messages[-1][1]), journey.messages[-1]
+    await journey.callback('quest_board', handle_location_buttons)
     return journey.messages[-1]
 
 
+async def _board_details(journey):
+    _,root=await _open_quest_board(journey)
+    categories=[c for c in _callbacks(root) if c.startswith('quest_board_list_')]
+    keys=[]
+    for callback in categories:
+        category=callback.removeprefix('quest_board_list_').rsplit('_',1)[0]
+        page=0
+        while True:
+            await journey.callback(f'quest_board_list_{category}_{page}',handle_location_buttons)
+            callbacks=_callbacks(journey.messages[-1][1])
+            keys.extend(c.removeprefix('quest_board_detail_') for c in callbacks if c.startswith('quest_board_detail_'))
+            if f'quest_board_list_{category}_{page+1}' not in callbacks: break
+            page+=1
+    details={}
+    for key in keys:
+        await journey.callback('quest_board_detail_'+key,handle_location_buttons)
+        details[key]=journey.messages[-1]
+    return details
+
+
 @pytest.fixture(scope='session')
-def rav1_earned_checkpoint(tmp_path_factory):
-    """Record one legal advanced history once, then expose an immutable clone."""
-    reusable = os.environ.get('RAV1_EARNED_CHECKPOINT')
-    if reusable and Path(reusable).is_file():
-        checkpoint = Path(reusable)
-        actual = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
-        assert actual == EXPECTED_EARNED_CHECKPOINT_SHA256
-        return {
-            'path': checkpoint,
-            'sha256': EXPECTED_EARNED_CHECKPOINT_SHA256,
-            'player_id': EARNED_PLAYER_ID,
-            'provenance': 'reused SHA-256 checkpoint from this suite’s prior legal PEV1 production history',
-            'accelerators': ['whole-checkpoint clone only'],
-        }
-    checkpoint_dir = tmp_path_factory.mktemp('rav1-earned-history')
-    checkpoint = checkpoint_dir / 'earned-rav1.sqlite3'
-    original = database.DB_PATH
-    database.DB_PATH = str(checkpoint)
-    try:
-        database.init_db()
-        seed_items()
-        _ensure_pve_encounter_table()
-        _ensure_world_spawn_table()
-        conn = get_connection(); ensure_regional_schema(conn); conn.close()
-        evidence = asyncio.run(_production_history())
-        conn = get_connection()
-        conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-        conn.close()
-        digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
-    finally:
-        database.DB_PATH = original
-    assert all(evidence['production_checks'].values())
+def rav1_earned_checkpoint(pxe1_profession_checkpoint):
+    """Reuse the current run's verified PXE1 history, never an old PEV1 hash."""
     return {
-        'path': checkpoint,
-        'sha256': digest,
+        'path': pxe1_profession_checkpoint['path'],
+        'sha256': pxe1_profession_checkpoint['sha256'],
         'player_id': EARNED_PLAYER_ID,
-        'provenance': 'PEV1 real registration, Chapter I, travel, gathering, crafting, hunts and combat',
-        'accelerators': ['mocked Telegram transport', 'zero sleep', 'controlled legal RNG/respawn clock'],
+        'provenance': 'current PXE1 timed gathering, all 83 recipes, 20 tools and XP-policy-2 production history',
+        'accelerators': ['mocked Telegram transport', 'controlled legal rolls and due clocks', 'whole-checkpoint clone only'],
     }
 
 
@@ -180,19 +182,6 @@ async def _earn_chapter_player(player_id: int, *, primary: str, starter: str, fa
 @pytest.fixture(scope='session')
 def rav1_party_checkpoint(tmp_path_factory, rav1_earned_checkpoint):
     """Add two independently earned Chapter-I builds to the legal advanced history."""
-    reusable = os.environ.get('RAV1_PARTY_CHECKPOINT')
-    if reusable and Path(reusable).is_file():
-        checkpoint = Path(reusable)
-        actual = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
-        assert actual == EXPECTED_PARTY_CHECKPOINT_SHA256
-        return {
-            'path': checkpoint,
-            'sha256': EXPECTED_PARTY_CHECKPOINT_SHA256,
-            'player_id': EARNED_PLAYER_ID,
-            'physical_id': PHYSICAL_PLAYER_ID,
-            'magic_id': MAGIC_PLAYER_ID,
-            'provenance': 'reused hash-verified checkpoint built by production registration and Chapter I handlers',
-        }
     checkpoint_dir = tmp_path_factory.mktemp('rav1-earned-party')
     checkpoint = checkpoint_dir / 'earned-rav1-party.sqlite3'
     shutil.copy2(rav1_earned_checkpoint['path'], checkpoint)
@@ -219,7 +208,7 @@ def rav1_party_checkpoint(tmp_path_factory, rav1_earned_checkpoint):
         'player_id': EARNED_PLAYER_ID,
         'physical_id': PHYSICAL_PLAYER_ID,
         'magic_id': MAGIC_PLAYER_ID,
-        'provenance': 'advanced PEV1 history plus two real registrations and complete Chapter-I handler histories',
+        'provenance': 'current PXE1 history plus two real registrations and complete Chapter-I handler histories',
     }
 
 
@@ -306,6 +295,10 @@ async def _choose(journey: ProductionJourney, project_id: str, objective_id: str
 async def _pin_from_emitted_control(journey: ProductionJourney, owner_kind: str, owner_id: str) -> dict:
     if owner_kind == 'project':
         await journey.callback(f'rv:d:p:{owner_id}', handle_regional_buttons)
+    elif owner_kind=='gear':
+        await journey.callback('inv_catalog',handle_inventory_buttons)
+        more=next(c for c in _callbacks(journey.messages[-1][1]) if c.startswith('inv_cmore_'))
+        await journey.callback(more,handle_inventory_buttons)
     else:
         await journey.callback('rv:v:p:0:all', handle_regional_buttons)
     conn = get_connection()
@@ -337,18 +330,19 @@ async def _inspect(journey: ProductionJourney, fact_id: str, location_id: str) -
 
 async def _fight_spawn(journey: ProductionJourney, callback: str) -> str:
     await journey.callback(callback, handle_combat_buttons)
-    enter = next(value for value in _callbacks(journey.messages[-1][1]) if value.startswith('pve_enter_'))
-    encounter_id = enter.removeprefix('pve_enter_')
-    await journey.callback(enter, handle_location_buttons)
+    enter = next(value for value in _callbacks(journey.messages[-1][1]) if value.startswith('pve_view_'))
+    encounter_id = enter.removeprefix('pve_view_')
+    journey.start_due_formation(encounter_id)
+    await journey.callback(f'pve_enter_{encounter_id}', handle_location_buttons)
     opening = (('skill', 'defensive_stance'), ('skill', 'shield_bash'), ('skill', 'sword_rush'))
     for turn in range(90):
         if 'battle' not in journey.context.user_data:
             break
         kind, skill = opening[turn] if turn < len(opening) else ('basic_attack', None)
         try:
-            action = journey._find_combat_action(kind=kind, skill_id=skill)
+            action = await journey._find_combat_action(kind=kind, skill_id=skill)
         except AssertionError:
-            action = journey._find_combat_action(kind='basic_attack', skill_id=None)
+            action = await journey._find_combat_action(kind='basic_attack', skill_id=None)
         await journey.callback(action, __import__('handlers.battle', fromlist=['handle_battle_buttons']).handle_battle_buttons)
     else:
         raise AssertionError(('battle did not finish', encounter_id))
@@ -393,9 +387,10 @@ async def _leave_real_prepared_settlement(
     spawn_id = journey._accelerate_respawn(mob_id)
     await journey.callback(f'fight_spawn_{spawn_id}', handle_combat_buttons)
     enter = next(value for value in _callbacks(journey.messages[-1][1])
-                 if value.startswith('pve_enter_'))
-    encounter_id = enter.removeprefix('pve_enter_')
-    await journey.callback(enter, handle_location_buttons)
+                 if value.startswith('pve_view_'))
+    encounter_id = enter.removeprefix('pve_view_')
+    journey.start_due_formation(encounter_id)
+    await journey.callback(f'pve_enter_{encounter_id}', handle_location_buttons)
     battle_handler = __import__('handlers.battle', fromlist=['handle_battle_buttons'])
     with patch(
         'game.pve_reward_settlement.apply_prepared_settlement',
@@ -408,9 +403,9 @@ async def _leave_real_prepared_settlement(
             opening = (('skill', 'defensive_stance'), ('skill', 'shield_bash'), ('skill', 'sword_rush'))
             kind, skill = opening[turn] if turn < len(opening) else ('basic_attack', None)
             try:
-                action = journey._find_combat_action(kind=kind, skill_id=skill)
+                action = await journey._find_combat_action(kind=kind, skill_id=skill)
             except AssertionError:
-                action = journey._find_combat_action(kind='basic_attack', skill_id=None)
+                action = await journey._find_combat_action(kind='basic_attack', skill_id=None)
             await journey.callback(action, battle_handler.handle_battle_buttons)
         else:
             raise AssertionError(('prepared settlement not reached', encounter_id))
@@ -536,18 +531,7 @@ async def _ensure_resource(journey, item_id: str, quantity: int, sequence: list[
     missing = max(0, quantity - _quantity(journey.player_id, item_id))
     if not missing:
         return
-    location_id, profession, roll = _environment_source(item_id)
-    await _move(journey, location_id)
-    before = _quantity(journey.player_id, item_id)
-    for _ in range(missing):
-        request_id = f'gather:rav1:{item_id}:{next(_RAV_GATHER_SEQUENCE)}'
-        result = gather_resource(
-            journey.player_id, profession, location_id=location_id,
-            request_id=request_id, rng=FixedRoll(roll),
-        )
-        assert result['status'] == 'gathered', result
-        sequence.append(request_id)
-    assert _quantity(journey.player_id, item_id) == before + missing
+    await _gather(journey, item_id, missing, sequence)
 
 
 async def _rest_if_needed(journey: ProductionJourney):
@@ -645,9 +629,10 @@ def test_j01_fresh_onboarding(rav1_earned_checkpoint, earned):
         assert not any(get_project_state(earned.player_id, key) for key in PROJECTS_BY_ID)
         await earned.text('/journal', journal_command)
         text, markup = earned.messages[-1]
-        assert len([value for value in _callbacks(markup) if value.startswith('rv:v:')][:6]) == 6
-        assert {'pe_o:0', 'inv_catalog', 'rv:v:r:0:all'} <= set(_callbacks(markup))
-        assert 'main quest' in text.lower()
+        assert len(_callbacks(markup))==8
+        assert {'rv:v:p:0:all','quest_board_back','rv:v:r:0:all','rv:v:l:0:all',
+                'rv:v:s:0:all','rv:v:s:0:ww','rv:v:w:0:all','alpha_history'}==set(_callbacks(markup))
+        assert t('pxe1.journal.choose_direction','en') in text
         await earned.callback('rv:v:r:0:all', handle_regional_buttons)
         region_text, region_markup = earned.messages[-1]
         assert len([value for value in _callbacks(region_markup) if value.startswith('rv:d:r:')]) == 5
@@ -674,16 +659,15 @@ def test_j02_five_way_choice_and_actual_entry_surfaces(earned):
         for location in ('capital_city', 'frostspine_n5', 'ashen_n3a2', 'mireveil_n5a1', 'hub_sunscar'):
             await _move(earned, location)
             if 'quest_board' in get_location(location).get('services', []):
-                board_text, board_markup = await _open_quest_board(earned)
-                assert 'rank' in board_text.lower()
+                details=await _board_details(earned)
                 for contract in list_hunt_contracts_for_location(location):
                     if contract.chapter_order:
                         continue
-                    if build_contract_row(contract, 'en') in board_text:
+                    if contract.contract_key in details and build_contract_row(contract,'en') in details[contract.contract_key][0]:
                         presented_hunts.add(contract.contract_key)
                 emitted_hunts.update(
                     value.removeprefix('quest_board_accept_')
-                    for value in _callbacks(board_markup) if value.startswith('quest_board_accept_')
+                    for _,markup in details.values() for value in _callbacks(markup) if value.startswith('quest_board_accept_')
                 )
         required = {
             'hunt_greyfang', 'hunt_frostspine_white_wolves', 'hunt_ashen_zombie_clusters',
@@ -700,7 +684,7 @@ def test_j02_five_way_choice_and_actual_entry_surfaces(earned):
         await novice.register(primary='agility', name='RAV1 Novice')
         assert get_player_hunter_progress(novice.player_id)['current_rank'] == 'novice'
         await _move(novice, 'hub_sunscar')
-        novice_text, novice_markup = await _open_quest_board(novice)
+        novice_text, novice_markup = (await _board_details(novice))['hunt_sunscar_air_elementals']
         air = HUNT_CONTRACTS_BY_KEY['hunt_sunscar_air_elementals']
         assert build_contract_row(air, 'en') in novice_text
         assert t('location.quest_board_locked_reason_rank', 'en',
@@ -863,7 +847,8 @@ def test_j05_concurrent_pursuits_pins_and_restart(earned):
         assert [(row['slot'], row['owner_kind'], row['owner_id']) for row in list_pins(earned.player_id)] == pins_before
         assert get_project_state(earned.player_id, 'ar_two_names')['state'] == 'active'
         text, markup = _list_screen(dict(get_player(earned.player_id)), 'p', 0, 'all')
-        assert text and {'rv:d:p:ar_two_names', 'rv:d:p:ar_unquiet_storehouse'} <= set(_callbacks(markup))
+        assert text and 'rv:d:p:ar_unquiet_storehouse' in _callbacks(markup)
+        assert 'rv:d:p:ar_two_names' not in _callbacks(markup)
     asyncio.run(run())
 
 
@@ -958,6 +943,25 @@ def test_j09_personal_practice(earned_party):
         assert pre_accept['result'].profession_xp > 0
         assert get_project_state(recipient.player_id, 'mv_medic_practice') is None
 
+        # XP policy 2 awards material-based XP rather than the old 250 XP.
+        # Earn the near-ceiling state before acceptance through actual crafts;
+        # the two post-acceptance crafts still prove positive then zero XP.
+        for _ in range(400):
+            conn = get_connection()
+            alchemy = conn.execute(
+                "SELECT level,exp FROM player_crafting_professions "
+                "WHERE player_id=? AND profession_key='alchemy'", (recipient.player_id,)
+            ).fetchone()
+            conn.close()
+            if int(alchemy['level']) == 5 and int(alchemy['exp']) >= 246:
+                break
+            assert int(alchemy['level']) < 6
+            await _ensure_resource(recipient, 'herb_common', 3, [])
+            await _move(recipient, 'capital_city')
+            assert (await _craft_known(recipient, 'field_tonic'))['result'].profession_xp > 0
+        else:
+            raise AssertionError('earned tonic practice did not approach its level-6 ceiling')
+
         await _move(recipient, 'hub_mireveil')
         await _rav_action(recipient, 'mv_medic_practice', 'start')
         premature = await _rav_action(
@@ -1022,6 +1026,12 @@ def test_j10_ordinary_delivery(earned_party):
         await _ensure_resource(donor, 'marsh_fish', _quantity(donor.player_id, 'marsh_fish') + 4, [])
         await _ensure_resource(donor, 'marsh_herb', _quantity(donor.player_id, 'marsh_herb') + 2, [])
         await _ensure_resource(donor, 'salt_crystal', _quantity(donor.player_id, 'salt_crystal') + 2, [])
+        # Full-catalogue training legitimately spends its earlier meat stock.
+        while _quantity(donor.player_id, 'boar_meat') < 4:
+            await _fight_and_harvest(
+                donor, location_id='westwild_n2', mob_id='forest_boar',
+                item_id='boar_meat', encounter_ids=[],
+            )
         await _move(donor, 'capital_city')
         for _ in range(4):
             assert (await _craft_known(donor, 'trail_ration'))['result'].status == 'crafted'
@@ -1476,8 +1486,8 @@ def test_j14_busy_shared_sources(earned_party):
         await _rav_action(pursuer, 'mv_ferry_crew', 'start')
         await _move(pursuer, 'mireveil_n6')
         ensure_location_pve_spawn_instances(location_id='mireveil_n6')
-        _, pursuer_location_markup = await _open_location(pursuer)
-        mixed_control = next(value for value in _callbacks(pursuer_location_markup)
+        pursuer_controls=await _location_encounter_controls(pursuer)
+        mixed_control = next(value for value in pursuer_controls
                              if value == 'fight_mixed_rav1_mireveil_n6_crosscurrent')
         await _move(holder, 'mireveil_n6')
 
@@ -1485,8 +1495,8 @@ def test_j14_busy_shared_sources(earned_party):
         # control. The exact mixed recipe must reject without reserving the
         # independently idle companion source.
         ensure_location_pve_spawn_instances(location_id='mireveil_n6')
-        _, holder_location_markup = await _open_location(holder)
-        emitted_spawns = [value for value in _callbacks(holder_location_markup)
+        holder_controls=await _location_encounter_controls(holder)
+        emitted_spawns = [value for value in holder_controls
                           if value.startswith('fight_spawn_')]
         conn = get_connection()
         source_by_callback = {
@@ -1501,8 +1511,8 @@ def test_j14_busy_shared_sources(earned_party):
                                if source_by_callback.get(value, {}).get('mob_id') == 'giant_leech')
         await holder.callback(source_callback, handle_combat_buttons)
         held_enter = next(value for value in _callbacks(holder.messages[-1][1])
-                          if value.startswith('pve_enter_'))
-        held_id = held_enter.removeprefix('pve_enter_')
+                          if value.startswith('pve_view_'))
+        held_id = held_enter.removeprefix('pve_view_')
         held_projection = next(row for row in nearby(dict(get_player(pursuer.player_id)))
                                if row['content_id']=='rav1_mireveil_n6_crosscurrent')
         assert held_projection['status'] == 'busy'
@@ -1522,8 +1532,8 @@ def test_j14_busy_shared_sources(earned_party):
         await holder.callback(
             'fight_mixed_rav1_mireveil_n6_crosscurrent', handle_combat_buttons)
         enter = next(value for value in _callbacks(holder.messages[-1][1])
-                     if value.startswith('pve_enter_'))
-        forming_id = enter.removeprefix('pve_enter_')
+                     if value.startswith('pve_view_'))
+        forming_id = enter.removeprefix('pve_view_')
         rows = nearby(dict(get_player(pursuer.player_id)))
         mixed = next(row for row in rows if row['content_id']=='rav1_mireveil_n6_crosscurrent')
         assert mixed['status'] == 'busy'
@@ -1549,19 +1559,27 @@ def test_j14_busy_shared_sources(earned_party):
         )
         conn.commit(); conn.close()
 
-        available = next(row for row in nearby(dict(get_player(pursuer.player_id)))
-                         if row['content_id']=='rav1_mireveil_n6_crosscurrent')
-        assert available['status'] == 'available'
-        conn = get_connection()
-        assert conn.execute(
-            'SELECT status FROM pve_encounters WHERE encounter_id=?',
-            (forming_id,),
-        ).fetchone()['status'] == 'expired'
-        assert conn.execute(
-            'SELECT COUNT(*) AS total FROM pve_spawn_instances WHERE linked_encounter_id=?',
-            (forming_id,),
-        ).fetchone()['total'] == 0
+        # Backdating a current formation must never expire it on read.
+        still_busy=next(row for row in nearby(dict(get_player(pursuer.player_id)))
+                        if row['content_id']=='rav1_mireveil_n6_crosscurrent')
+        assert still_busy['status']=='busy'
+        conn=get_connection()
+        forming=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(forming_id,)).fetchone()
+        assert forming['status']=='active' and forming['runtime_started_ms'] is None
         conn.close()
+        holder.start_due_formation(forming_id)
+        # Explicit non-victory closure releases both sources with no project
+        # credit or rewards, then the controlled respawn clock permits retry.
+        finish_solo_pve_encounter(player_id=holder.player_id,encounter_id=forming_id,status='finished')
+        assert get_project_state(pursuer.player_id,'mv_ferry_crew')['step_index']==1
+        assert get_settlement(forming_id) is None
+        conn=get_connection()
+        assert conn.execute('SELECT COUNT(*) FROM pve_spawn_instances WHERE linked_encounter_id=?',(forming_id,)).fetchone()[0]==0
+        conn.execute("UPDATE pve_spawn_instances SET respawn_available_at='2000-01-01 00:00:00' WHERE location_id='mireveil_n6' AND state='respawning'")
+        conn.commit();conn.close()
+        ensure_location_pve_spawn_instances(location_id='mireveil_n6')
+        assert next(row for row in nearby(dict(get_player(pursuer.player_id)))
+                    if row['content_id']=='rav1_mireveil_n6_crosscurrent')['status']=='available'
 
         completed_id = await _mixed_fight(pursuer, 'rav1_mireveil_n6_crosscurrent')
         assert get_settlement(completed_id)['status'] == 'applied'
@@ -1584,8 +1602,8 @@ def test_j14_busy_shared_sources(earned_party):
             await _move(member, 'westwild_n3')
         await holder.callback('fight_special_greyfang', handle_combat_buttons)
         grey_enter = next(value for value in _callbacks(holder.messages[-1][1])
-                          if value.startswith('pve_enter_'))
-        grey_id = grey_enter.removeprefix('pve_enter_')
+                          if value.startswith('pve_view_'))
+        grey_id = grey_enter.removeprefix('pve_view_')
         grey_busy = next(row for row in nearby(dict(get_player(pursuer.player_id)))
                          if row['content_id'] == 'greyfang')
         assert grey_busy['status'] == 'busy'
@@ -1608,9 +1626,12 @@ def test_j14_busy_shared_sources(earned_party):
         conn.commit(); conn.close()
         ensure_location_pve_spawn_instances(location_id='westwild_n3')
         await holder.callback('fight_special_greyfang', handle_combat_buttons)
-        active_enter = next(value for value in _callbacks(holder.messages[-1][1]) if value.startswith('pve_enter_'))
-        active_id = active_enter.removeprefix('pve_enter_')
-        assert lock_open_world_pve_roster_for_runtime_start(encounter_id=active_id) == [holder.player_id]
+        active_enter = next(value for value in _callbacks(holder.messages[-1][1]) if value.startswith('pve_view_'))
+        active_id = active_enter.removeprefix('pve_view_')
+        holder.start_due_formation(active_id)
+        conn=get_connection()
+        assert json.loads(conn.execute('SELECT locked_roster_json FROM pve_encounters WHERE encounter_id=?',(active_id,)).fetchone()[0])=={'player_ids':[holder.player_id]}
+        conn.close()
         conn = get_connection()
         conn.execute("UPDATE pve_encounters SET created_at=datetime('now','-10 minutes') WHERE encounter_id=?", (active_id,))
         conn.commit()
@@ -1946,10 +1967,7 @@ def test_j17_combat_t2_restart_and_response_loss(earned):
 def test_j17_separate_connection_delivery_races(earned_party, content_id, expected_status):
     sender, recipient = earned_party['advanced'], earned_party['physical']
     async def prepare():
-        while _quantity(sender.player_id, 'field_ration') < 2:
-            await _ensure_resource(sender, 'herb_common', 1, [])
-            await _move(sender, 'capital_city')
-            await _craft_known(sender, 'trail_ration')
+        await _ensure_rations(sender, 2)
         assert _quantity(sender.player_id, 'field_ration') == 2
         await _move(sender, 'hub_westwild')
     asyncio.run(prepare())
@@ -2031,17 +2049,38 @@ def test_j18_arbitrary_reward_order(rav1_earned_checkpoint, reverse):
     asyncio.run(run())
 
 
-def test_j18_all_finite_claims_in_two_regional_orders(rav1_earned_checkpoint):
+def test_j18_all_finite_claims_in_two_regional_orders(rav1_earned_checkpoint, tmp_path):
+    # Earn delivery stock once, then compare whole copies of exactly that state.
+    # Preparatory boar fights may consume a freshly crafted ration, adding legal
+    # combat XP. Repeating preparation separately cannot promise equal inputs.
+    prepared = _restore_checkpoint(rav1_earned_checkpoint)
+    asyncio.run(_ensure_rations(prepared, 2))
+    assert _quantity(prepared.player_id, 'field_ration') >= 2
+    prepared_player = dict(get_player(prepared.player_id))
+    prepared_path = tmp_path / 'ration-ready.sqlite3'
+    source = sqlite3.connect(Path(database.DB_PATH).resolve().as_uri() + '?mode=ro', uri=True)
+    destination = sqlite3.connect(prepared_path)
+    try:
+        source.backup(destination)
+    finally:
+        destination.close()
+        source.close()
+    prepared_checkpoint = {
+        'path': prepared_path,
+        'sha256': hashlib.sha256(prepared_path.read_bytes()).hexdigest(),
+        'player_id': prepared.player_id,
+    }
     orders = (
         ('westwild', 'frostspine', 'ashen_ruins', 'sunscar', 'mireveil'),
         ('mireveil', 'sunscar', 'ashen_ruins', 'frostspine', 'westwild'),
     )
     outcomes = []
     for order in orders:
-        journey = _restore_checkpoint(rav1_earned_checkpoint)
+        journey = _restore_checkpoint(prepared_checkpoint)
 
         async def run():
             before = dict(get_player(journey.player_id))
+            assert before == prepared_player
             await _complete_all_finite(journey, order)
             claims = list_claims(journey.player_id)
             assert set(claims) == {
@@ -2102,22 +2141,21 @@ def test_j19_localized_real_handlers(earned_party, lang):
         # Post-onboarding Journal and real Names evidence/choice handlers.
         await earned.text('/journal', journal_command)
         journal_callbacks = _callbacks(earned.messages[-1][1])
-        assert {'rv:v:r:0:all', 'inv_catalog', 'bv_main'} <= set(journal_callbacks)
-        map_callback = next(value for value in journal_callbacks if value.startswith('map_route_'))
-        await earned.callback(map_callback, handle_location_buttons)
-        assert all(value.startswith('map_route_') for value in _callbacks(earned.messages[-1][1]))
-        await earned.callback('inv_catalog', handle_inventory_buttons)
-        assert earned.messages[-1][0]
-        await earned.callback('bv_main', handle_build_buttons)
-        assert earned.messages[-1][0]
+        assert {'rv:v:r:0:all','quest_board_back','alpha_history'}<=set(journal_callbacks)
+        _,map_markup=await _open_command(earned,'/map',map_command)
+        assert any(value.startswith('px:world:') for value in _callbacks(map_markup))
+        assert (await _open_command(earned,'/inventory',inventory_command))[0]
+        assert (await _open_command(earned,'/profile',profile_command))[0]
 
         # Follow source and recipe guidance only from controls emitted by the
         # regional Journal and their destination handlers.
         await _inspect(earned, 'fs_survey_stone', 'frostspine_n4')
         await earned.text('/journal', journal_command)
-        nearby_callback = next(value for value in _callbacks(earned.messages[-1][1])
-                               if value.startswith('rv:v:n:'))
-        await earned.callback(nearby_callback, handle_regional_buttons)
+        nearby_callback = next(value for value in _callbacks(earned.messages[-1][1]) if value=='quest_board_back')
+        await earned.callback(nearby_callback, handle_location_buttons)
+        from handlers.activities import handle_activity_buttons
+        more_callback=next(value for value in _callbacks(earned.messages[-1][1]) if value.startswith('px:local:more:'))
+        await earned.callback(more_callback,handle_activity_buttons)
         survey_callback = next(value for value in _callbacks(earned.messages[-1][1])
                                if value.endswith(':fs_survey_stone'))
         await earned.callback(survey_callback, handle_regional_buttons)
@@ -2204,6 +2242,16 @@ def test_j19_localized_real_handlers(earned_party, lang):
         assert issue_regional_action(earned.player_id, 'ww_root_marks', 'inspect')
         stale = await earned.callback(f'rv:a:{stale_token}', handle_regional_buttons)
         assert stale.answer.await_args.args[0] == t('rav1.errors.stale_action', lang)
+        # XP policy 2 produces more ordinary food while training. Sell the
+        # earned surplus through the real protected Shop flow before testing
+        # the actual insufficient-goods denial.
+        from tests.test_professions_economy_v1_journeys import _sell_owned
+        await _move(earned,'capital_city')
+        while _quantity(earned.player_id,'pe_marsh_stew')>=2:
+            conn=get_connection()
+            stack=conn.execute("SELECT id,quantity FROM inventory WHERE telegram_id=? AND item_id='pe_marsh_stew'",(earned.player_id,)).fetchone()
+            conn.close()
+            await _sell_owned(earned,'i'+str(stack['id']),min(99,stack['quantity']))
         assert _quantity(earned.player_id, 'pe_marsh_stew') < 2
         await _move(earned, 'hub_mireveil')
         short_token = issue_regional_action(
@@ -2218,8 +2266,8 @@ def test_j19_localized_real_handlers(earned_party, lang):
         await holder.callback(
             'fight_mixed_rav1_mireveil_n6_crosscurrent', handle_combat_buttons)
         enter = next(value for value in _callbacks(holder.messages[-1][1])
-                     if value.startswith('pve_enter_'))
-        encounter_id = enter.removeprefix('pve_enter_')
+                     if value.startswith('pve_view_'))
+        encounter_id = enter.removeprefix('pve_view_')
         await earned.callback(
             'rv:d:e:rav1_mireveil_n6_crosscurrent', handle_regional_buttons)
         assert t('rav1.errors.busy_target', lang) in earned.messages[-1][0]
@@ -2371,8 +2419,8 @@ def test_j20_after_resolution(earned):
         assert list_claims(earned.player_id) == claims_before
 
         home_text, home_markup = build_regional_home(dict(get_player(earned.player_id)))
-        assert t('rav1.progress.no_global', 'en') in home_text
-        assert {'rv:v:w:0:all', 'pe_o:0', 'inv_catalog'} <= set(_callbacks(home_markup))
+        assert t('pxe1.journal.choose_direction','en') in home_text
+        assert {'rv:v:w:0:all','rv:v:r:0:all','alpha_history'}<=set(_callbacks(home_markup))
         assert set(list_claims(earned.player_id)) == finite_ids
         assert set(PROJECTS_BY_ID) == {
             'ww_tool_roll', 'fs_jammed_sled', 'ar_two_names',

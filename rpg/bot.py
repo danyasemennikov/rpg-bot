@@ -31,6 +31,7 @@ from handlers.inventory import inventory_command, handle_inventory_buttons, hand
 from handlers.settings import settings_command, handle_settings_buttons
 from handlers.chapter import journal_command, handle_chapter_buttons
 from handlers.professions import handle_profession_buttons
+from handlers.activities import activities_command,handle_activity_buttons
 from handlers.regional import handle_regional_buttons
 from handlers.build import (
     build_attributes_command,
@@ -67,6 +68,28 @@ async def pvp_tick(context):
     """Фоновый тик open-world PvP: таймеры engagement/turn timeout."""
     from game.pvp_live import run_live_pvp_tick
     await run_live_pvp_tick(context.bot)
+
+
+async def world_activity_tick(context):
+    import time
+    from game.world_activity_tick import run_world_activity_tick
+    from handlers.activities import deliver_activity_updates
+    results = run_world_activity_tick(now_ms=int(time.time()*1000),limit=100)
+    await deliver_activity_updates(context.bot,results)
+    from handlers.combat_delivery import deliver_pve_updates
+    await deliver_pve_updates(context.bot,results)
+
+
+async def register_pxe1_commands(application):
+    from telegram import BotCommand
+    from game.i18n import t
+    names = ('start','location','map','journal','inventory','profile','activities','stats','skills','build','settings','help')
+    for language_code,lang in ((None,'en'),('ru','ru'),('en','en'),('es','es')):
+        commands = [BotCommand(name,t('pxe1.command.'+name,lang)) for name in names]
+        try:
+            await application.bot.set_my_commands(commands,language_code=language_code)
+        except Exception:
+            logger.exception('Failed to register commands for language %s',language_code or 'default')
 
 async def handle_text(update, context):
     """Роутер текстовых сообщений."""
@@ -133,13 +156,29 @@ def initialize_runtime():
     recover_terminal_pvp_settlements(limit=100)
     from game.build_progression import migrate_character_builds_v1
     migrate_character_builds_v1()
+    import time
+    from game.gathering_runtime import interrupt_gathering_at_startup
+    from game.player_activity import recover_activity_overlaps
+    from game.world_activity_tick import run_world_activity_tick
+    conn = get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        interrupt_gathering_at_startup(conn,now_ms=int(time.time()*1000))
+        recover_activity_overlaps(conn,now_ms=int(time.time()*1000))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    run_world_activity_tick(now_ms=int(time.time()*1000),recovering=True)
 
 
 def main():
     initialize_runtime()
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN environment variable is not set")
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(register_pxe1_commands).build()
     app.add_error_handler(error_handler)
 
     # Фоновый реген каждую минуту
@@ -150,6 +189,7 @@ def main():
         )
     job_queue.run_repeating(regen_tick, interval=60, first=10)
     job_queue.run_repeating(pvp_tick, interval=3, first=3)
+    job_queue.run_repeating(world_activity_tick,interval=1,first=1)
 
     # Команды
     app.add_handler(CommandHandler('start',    start_command))
@@ -167,6 +207,7 @@ def main():
     app.add_handler(CommandHandler('build', build_command))
     app.add_handler(CommandHandler('settings', settings_command))
     app.add_handler(CommandHandler('journal', journal_command))
+    app.add_handler(CommandHandler('activities',activities_command))
 
     # Колбэки
     app.add_handler(CallbackQueryHandler(handle_stat_buttons,     pattern='^stat_'))
@@ -180,13 +221,14 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
     app.add_handler(CallbackQueryHandler(handle_chapter_buttons, pattern='^alpha_'))
     app.add_handler(CallbackQueryHandler(handle_profession_buttons, pattern='^pe_'))
+    app.add_handler(CallbackQueryHandler(handle_activity_buttons,pattern='^px:'))
     app.add_handler(CallbackQueryHandler(handle_regional_buttons, pattern='^rv:'))
 
     app.add_handler(MessageHandler(filters.COMMAND & filters.Regex(UNDERSCORE_NAV_COMMAND_PATTERN), handle_underscore_navigation_command))
 
     # Кнопки клавиатуры — матчим по emoji (работает на всех языках)
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📍"), location_command))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🗺️"), map_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🗺"), map_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^👤"), profile_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📊"), build_attributes_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^❓"), help_command))
@@ -194,6 +236,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🔮"), build_skills_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^⚙️"), settings_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📖"), journal_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🧰"),activities_command))
    # app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📋"), quests_command))  # когда будет готов
    
    # Текстовый роутер — всегда последним!

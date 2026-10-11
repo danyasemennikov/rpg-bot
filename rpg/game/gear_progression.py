@@ -114,12 +114,19 @@ def _next_live_tier(current_tier: int) -> int | None:
 
 
 def build_gear_mutation_preview(player_id: int, action: str, instance_id: int,
-                                *, target_slot: str | None = None) -> dict | None:
+                                *, target_slot: str | None = None, sale_confirmed: bool = False) -> dict | None:
     conn = get_connection()
     try:
         row = conn.execute('''SELECT g.*, p.gear_revision FROM gear_instances g
             JOIN players p ON p.telegram_id=g.telegram_id
             WHERE g.id=? AND g.telegram_id=?''', (instance_id, player_id)).fetchone()
+        quote = None
+        if action=='sale' and row:
+            from game.sale_policy import sale_quote
+            try:
+                quote = sale_quote(conn,player_id,'g',instance_id)
+            except ActionRejected:
+                return None
     finally:
         conn.close()
     if not row:
@@ -147,7 +154,7 @@ def build_gear_mutation_preview(player_id: int, action: str, instance_id: int,
         cost_ref = {**asdict(cost), 'target_tier': target}
     elif action not in {'equip', 'unequip'}:
         return None
-    payload = _json_payload(
+    parameters = dict(
         action=action,
         instance_id=int(instance['id']),
         instance_revision=int(instance['revision']),
@@ -155,11 +162,16 @@ def build_gear_mutation_preview(player_id: int, action: str, instance_id: int,
         target_slot=target_slot,
         cost_ref=cost_ref,
     )
+    if action=='sale':
+        parameters.update(sale_quote=quote,sale_confirmed=sale_confirmed)
+    payload = _json_payload(**parameters)
     return {'instance': instance, 'cost': cost_ref, 'payload': payload}
 
 
-def issue_gear_intent(player_id: int, action: str, instance_id: int, *, target_slot: str | None = None) -> str | None:
-    preview = build_gear_mutation_preview(player_id, action, instance_id, target_slot=target_slot)
+def issue_gear_intent(player_id: int, action: str, instance_id: int, *, target_slot: str | None = None,
+                      sale_confirmed: bool = False) -> str | None:
+    preview = build_gear_mutation_preview(player_id, action, instance_id, target_slot=target_slot,
+                                          sale_confirmed=sale_confirmed)
     if not preview:
         return None
     payload = str(preview['payload'])
@@ -274,6 +286,11 @@ def apply_legacy_gear_intent(player_id: int, action: str, token: str, *, failure
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        recovered = conn.execute('''SELECT result_json FROM gear_mutation_receipts
+            WHERE action_token=? AND player_id=? AND action_kind=?''',(token,player_id,action)).fetchone()
+        if recovered:
+            conn.commit()
+            return {**json.loads(recovered['result_json']),'recovered':True}
         player, inventory, payload, equipment = _load_legacy_intent(conn, player_id, action, token)
         inventory_id = int(inventory['id'])
         item = get_item(str(inventory['item_id'])) or {}
@@ -326,7 +343,8 @@ def apply_legacy_gear_intent(player_id: int, action: str, token: str, *, failure
 
 
 def _load_intent(conn, player_id: int, action: str, token: str) -> tuple[dict, dict, dict]:
-    player = peaceful_player(conn, player_id, service='craftsmen_guild' if action == 'advance' else None)
+    service = 'craftsmen_guild' if action=='advance' else 'shop' if action=='sale' else None
+    player = peaceful_player(conn, player_id, service=service)
     raw = consume_action(conn, player_id, f'gear_{action}', token)
     try:
         payload = json.loads(raw)
@@ -341,7 +359,7 @@ def _load_intent(conn, player_id: int, action: str, token: str) -> tuple[dict, d
     instance = dict(row)
     if int(instance.get('revision', 0)) != int(payload.get('instance_revision', -1)):
         raise ActionRejected('stale_action')
-    if int(player.get('gear_revision', 0)) != int(payload.get('gear_revision', -1)):
+    if action!='sale' and int(player.get('gear_revision', 0)) != int(payload.get('gear_revision', -1)):
         raise ActionRejected('stale_action')
     return player, instance, payload
 
@@ -369,6 +387,11 @@ def apply_gear_intent(player_id: int, action: str, token: str, *, rng_roll: floa
     conn = get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
+        recovered = conn.execute('''SELECT result_json FROM gear_mutation_receipts
+            WHERE action_token=? AND player_id=? AND action_kind=?''',(token,player_id,action)).fetchone()
+        if recovered:
+            conn.commit()
+            return {**json.loads(recovered['result_json']),'recovered':True}
         player, instance, payload = _load_intent(conn, player_id, action, token)
         item = get_item(str(instance['base_item_id'])) or {}
         instance_id = int(instance['id'])
@@ -398,12 +421,22 @@ def apply_gear_intent(player_id: int, action: str, token: str, *, rng_roll: floa
                 raise ActionRejected('stale_action')
             if price <= 0:
                 raise ActionRejected('not_sellable')
+            from game.sale_policy import sale_quote,validate_sale_quote
+            quote = payload.get('sale_quote') or sale_quote(conn,player_id,'g',instance_id)
+            warning = validate_sale_quote(conn,player_id,quote,confirmed=payload.get('sale_confirmed') is True)
+            if warning:
+                conn.rollback()
+                return warning
             conn.execute('DELETE FROM gear_instances WHERE id=? AND telegram_id=?', (instance_id, player_id))
             if failure_hook:
                 failure_hook('after_gear_deletion')
             conn.execute('UPDATE players SET gold=gold+?, gear_revision=gear_revision+1 WHERE telegram_id=?',
                          (price, player_id))
-            result = {'status': 'sold', 'instance_id': instance_id, 'gold': price}
+            from game.quest_board import register_contract_objective
+            register_contract_objective(conn,player_id,'sell',instance['base_item_id'],1,player['location_id'])
+            result = {'status':'sold','instance_id':instance_id,'item_id':instance['base_item_id'],
+                      'quantity':1,'gold':price,'gold_delta':price,'gold_after':int(player['gold'])+price,
+                      'remaining':quote['remaining'],'quote':quote}
 
         elif action == 'enhance':
             current = max(0, int(instance.get('enhance_level', 0)))

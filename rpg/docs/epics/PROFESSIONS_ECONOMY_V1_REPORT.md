@@ -1,5 +1,7 @@
 # Professions & Economy V1
 
+> **PXE1 candidate reconciliation — 2026-10-07.** This historical PR233 result remains unchanged. The PXE1 candidate extends the catalogue to 83 recipes/22 starters and adds five tools, timed gathering, maintenance, bootstrap commissions and XP policy 2. The old rapid progression and instant gathering evidence certifies its stated historical candidate only; it is not current PXE1 acceptance. See [the frozen PXE1 contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 - Status: Merged in [PR #233](https://github.com/danyasemennikov/rpg-bot/pull/233) at `ebd8f73ade53fcadb89942b703a947782276ea1c`; deployment not established
 - Contract: PEV1-1 Stage 3
 - Frozen base: `27347ece2b17108a1aed1f6eb01f2a395480e6c9` (merged PR #232)

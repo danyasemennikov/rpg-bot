@@ -112,7 +112,7 @@ def leads(player_id: int, region_code: str = "all", *, conn=None) -> list[dict]:
             rows.append(_record("region", summary["content_id"], "available", data=summary))
             region_id = summary["region_id"]
             for project in PROJECTS:
-                if project.public and project.region_id == region_id:
+                if (project.public or project.project_id in states) and project.region_id == region_id:
                     state = states.get(project.project_id)
                     status = "resolved" if project.project_id in claims else "active" if state else "available"
                     rows.append(_record("project", project.project_id, status))

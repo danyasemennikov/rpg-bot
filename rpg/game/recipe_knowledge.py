@@ -48,7 +48,7 @@ def learn_recipe(player_id: int, recipe_id: str, *, action_token: str, request_i
             result = {'schema_version': 1, 'action_kind': 'learn', 'status': 'already_known',
                       'player_id': player_id, 'location_id': player['location_id'], 'recipe_id': recipe_id,
                       'consumed': [], 'granted': [], 'gold_delta': 0, 'gold_after': player['gold'],
-                      'progression': [], 'source': {'catalog_version': 1}, 'details': {}}
+                      'progression': [], 'catalog_version':2,'source': {'catalog_version': 2}, 'details': {}}
         else:
             state = conn.execute('SELECT level FROM player_crafting_professions WHERE player_id=? AND profession_key=?',
                                  (player_id, recipe.profession_key)).fetchone()
@@ -62,14 +62,14 @@ def learn_recipe(player_id: int, recipe_id: str, *, action_token: str, request_i
                 raise ActionRejected('insufficient_gold')
             conn.execute('''INSERT INTO player_recipe_knowledge
                 (player_id, recipe_id, acquired_via, learned_location_id, gold_paid, catalog_version)
-                VALUES (?, ?, 'guild', ?, ?, 1)''',
+                VALUES (?, ?, 'guild', ?, ?, 2)''',
                 (player_id, recipe_id, player['location_id'], recipe.learning_gold))
             result = {'schema_version': 1, 'action_kind': 'learn', 'status': 'learned',
                       'player_id': player_id, 'location_id': player['location_id'], 'recipe_id': recipe_id,
                       'consumed': [], 'granted': [], 'gold_delta': -recipe.learning_gold,
                       'gold_after': player['gold'] - recipe.learning_gold, 'progression': [],
-                      'source': {'catalog_version': 1}, 'details': {}}
-        store_receipt(conn, player_id, request_id, 'learn', expected_hash, result)
+                      'catalog_version':2,'source': {'catalog_version': 2}, 'details': {}}
+        store_receipt(conn, player_id, request_id, 'learn', expected_hash, result,catalog_version=2)
         conn.commit()
         return result
     except ActionRejected as exc:
@@ -81,7 +81,7 @@ def learn_recipe(player_id: int, recipe_id: str, *, action_token: str, request_i
                 request_hash=expected_hash, status=status,
                 location_id=player['location_id'] if player else None,
                 recipe_id=recipe_id, gold_after=player['gold'] if player else 0,
-                source={'catalog_version': 1},
+                source={'catalog_version': 2},catalog_version=2,
             )
             conn.commit()
             return result

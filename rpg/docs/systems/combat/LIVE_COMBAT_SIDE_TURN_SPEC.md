@@ -1,5 +1,7 @@
 # LIVE COMBAT SIDE-TURN SPEC v1
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PXE1 section 5 replaces read-time 90-second forming expiry/direct start with 12-second shared formation and atomic job-driven start, deterministic owner transfer, and durable recovery. Active sides retain one 15-second deadline and affected-side effect scheduling. Generic runtime, target selection, batches, rendering and settlement iterate arbitrary unequal actor collections. The current maximum-two PvP policy is isolated in its group adapter. See [the frozen PXE1 contract](../../epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 - Status: Active supporting specification
 - Authority: Historical rationale and guardrails; exact affected-side scheduling and durability belong to code and the [system map](../README.md)
 - Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`

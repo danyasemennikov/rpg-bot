@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import sqlite3
 import threading
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -34,7 +35,7 @@ from game.pve_live import (
     leave_open_world_pve_encounter,
     list_location_mixed_encounter_availability,
     list_location_special_target_availability,
-    lock_open_world_pve_roster_for_runtime_start,
+    lock_open_world_pve_roster_for_runtime_start as _lock_roster,
     persist_solo_pve_encounter_state,
     resolve_pve_flee_intent,
 )
@@ -115,6 +116,17 @@ def _callbacks(markup) -> list[str]:
     return [str(button.callback_data) for row in markup.inline_keyboard for button in row]
 
 
+def lock_open_world_pve_roster_for_runtime_start(*,encounter_id):
+    """Advance only the clock to the saved PXE1 deadline, then use the real lock."""
+    conn=get_connection()
+    row=conn.execute('SELECT lifecycle_version,formation_deadline_ms FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+    conn.close()
+    if row and row['lifecycle_version']==1:
+        with patch('time.time',return_value=row['formation_deadline_ms']/1000):
+            return _lock_roster(encounter_id=encounter_id)
+    return _lock_roster(encounter_id=encounter_id)
+
+
 def _battle_state(mob_id: str) -> dict:
     mob = get_mob(mob_id)
     return {
@@ -171,7 +183,9 @@ def _source_availability(source_kind: str) -> str:
 def _backdate(encounter_id: str) -> None:
     conn = get_connection()
     conn.execute(
-        "UPDATE pve_encounters SET created_at=datetime('now','-10 minutes') WHERE encounter_id=?",
+        # These historical expiry cases explicitly retain the version-zero
+        # lifecycle. Current PXE1 formations never expire on a read.
+        "UPDATE pve_encounters SET lifecycle_version=0,created_at=datetime('now','-10 minutes') WHERE encounter_id=?",
         (encounter_id,),
     )
     conn.commit(); conn.close()
@@ -231,8 +245,8 @@ class _RaceConnection:
             return result
         if (
             self._transition_encounter_id is not None
-            and "SELECT s.spawn_instance_id" in normalized
-            and "JOIN pve_spawn_instances" in normalized
+            and (("SELECT s.spawn_instance_id" in normalized and "JOIN pve_spawn_instances" in normalized)
+                 or normalized.startswith('SELECT * FROM pve_spawn_instances WHERE linked_encounter_id='))
         ):
             self._inner.execute(
                 "UPDATE pve_encounters SET created_at=datetime('now','-10 minutes') WHERE encounter_id=?",
@@ -901,9 +915,11 @@ def test_f7_every_visible_hunt_gear_and_project_pin_token_has_distinct_scope_and
     player = dict(get_player(1))
     _text, pursuit_markup = _list_screen(player, "p", 1, "all")
     _text, project_markup = build_detail(player, "p", "ww_tool_roll")
+    from handlers.inventory import build_field_catalog_controls
+    _text,gear_markup=build_field_catalog_controls(player)
     tokens = [
         value.removeprefix("rv:a:")
-        for markup in (pursuit_markup, project_markup)
+        for markup in (pursuit_markup, project_markup,gear_markup)
         for value in _callbacks(markup)
         if value.startswith("rv:a:")
     ]
@@ -913,7 +929,8 @@ def test_f7_every_visible_hunt_gear_and_project_pin_token_has_distinct_scope_and
     assert len(tokens) == len(kinds) == 3 and len(set(kinds)) == 3
     assert all(execute_regional_action(1, token)["status"] == "pinned" for token in tokens)
     _text, refreshed = _list_screen(dict(get_player(1)), "p", 1, "all")
-    assert len([value for value in _callbacks(refreshed) if value.startswith("rv:a:")]) == 2
+    assert len([value for value in _callbacks(refreshed) if value.startswith("rv:a:")]) == 1
+    assert not {'inv_catalog','pe_o:0'} & set(_callbacks(refreshed))
     _text, project_refreshed = build_detail(dict(get_player(1)), "p", "ww_tool_roll")
     project_unpin = next(
         value.removeprefix("rv:a:") for value in _callbacks(project_refreshed)
@@ -940,7 +957,10 @@ def test_f7_every_visible_hunt_gear_and_project_pin_token_has_distinct_scope_and
 def test_f8_navigation_previews_risk_hidden_cache_and_resolved_leads_follow_emitted_buttons():
     player = _move(1, "hub_mireveil")
     home_text, home = build_regional_home(player)
-    assert home_text and any(value.startswith("map_route_") for value in _callbacks(home))
+    assert home_text and 'quest_board_back' in _callbacks(home)
+    nearby_update=_Update('quest_board_back')
+    asyncio.run(handle_location_buttons(nearby_update,SimpleNamespace(user_data={})))
+    assert nearby_update.callback_query.edits[-1][0]
     project_text, project = build_detail(player, "p", "mv_medic_practice")
     assert "field_tonic" not in project_text
     assert {"pe_r:field_tonic", "pe_p:alchemy"} & set(_callbacks(project)) == set()
@@ -970,10 +990,10 @@ def test_r3_every_journal_map_callback_is_accepted_by_production_map_handler(loc
     assert update.callback_query.answers
     text, kwargs = update.callback_query.edits[-1]
     assert text and kwargs["reply_markup"]
-    assert all(value in {
-        "map_route_westwild", "map_route_frostspine", "map_route_ashen_ruins",
-        "map_route_sunscar", "map_route_mireveil",
-    } for value in _callbacks(kwargs["reply_markup"]))
+    from game.player_ui import validate_surface
+    validate_surface(text,kwargs['reply_markup'],list_view=True)
+    assert 'px:world:0' in _callbacks(kwargs['reply_markup'])
+    assert all(len(value.encode('utf-8'))<=64 for value in _callbacks(kwargs['reply_markup']))
 
 
 def test_r4_camp_reward_secrecy_and_remote_finite_delivery_preview():
@@ -1003,7 +1023,11 @@ def test_r4_completed_chapter_history_button_opens_chapter_record_not_regional_h
     asyncio.run(handle_chapter_buttons(update, None))
     history_text, kwargs = update.callback_query.edits[-1]
     assert history_text
-    assert {"alpha_harvest", "rv:v:h:0:all"} <= set(_callbacks(kwargs["reply_markup"]))
+    assert {'alpha_history_chapter','rv:v:s:0:all','alpha_home'} <= set(_callbacks(kwargs['reply_markup']))
+    assert 'alpha_harvest' not in _callbacks(kwargs['reply_markup'])
+    story=_Update('alpha_history_chapter')
+    asyncio.run(handle_chapter_buttons(story,None))
+    assert story.callback_query.edits[-1][0] and _callbacks(story.callback_query.edits[-1][1]['reply_markup'])==['alpha_history']
 
 
 def test_r4_emitted_recipe_and_material_source_links_open_production_profession_views():
@@ -1034,8 +1058,11 @@ def test_r4_emitted_recipe_and_material_source_links_open_production_profession_
 
 @pytest.mark.parametrize("lang", ["ru", "en", "es"])
 @pytest.mark.parametrize("project_count", [6, 7])
-def test_r5_project_pagination_never_truncates_and_every_page_respects_button_budget(lang, project_count):
+def test_r5_active_projects_remain_reachable_through_paginated_clues(lang, project_count):
     _move(1, "hub_westwild", lang=lang)
+    _,unrevealed=build_detail(dict(get_player(1)),'r','region_sunscar')
+    assert 'rv:d:p:ss_camp_bearings' not in _callbacks(unrevealed)
+    assert not any(row['content_id']=='ss_camp_bearings' for row in leads(1,'all'))
     expected_projects = set(list(PROJECTS_BY_ID)[:project_count])
     for project_id in expected_projects:
         _insert_project(project_id, 0)
@@ -1050,9 +1077,11 @@ def test_r5_project_pagination_never_truncates_and_every_page_respects_button_bu
     seen: set[str] = set()
     seen_destinations: set[str] = set()
     page_index = 0
-    expected_total = len(pursuits(1))
+    assert len([row for row in pursuits(1) if row['kind']=='project'])==project_count
+    expected_rows=leads(1,'all')
+    expected_total=len(expected_rows)
     while True:
-        _text, markup = _list_screen(dict(get_player(1)), "p", page_index, "all")
+        _text, markup = _list_screen(dict(get_player(1)), "l", page_index, "all")
         rows = markup.inline_keyboard
         assert len(rows) <= 10
         assert sum(len(row) for row in rows) <= 12
@@ -1060,19 +1089,24 @@ def test_r5_project_pagination_never_truncates_and_every_page_respects_button_bu
         callbacks = _callbacks(markup)
         content_callbacks = [
             value for value in callbacks
-            if value.startswith("rv:d:p:") or value in {"quest_board", "inv_catalog", "pe_o:0"}
+            if value.startswith('rv:d:')
         ]
         assert len(content_callbacks) == min(6, expected_total - page_index * 6)
         seen.update(value.removeprefix("rv:d:p:") for value in content_callbacks if value.startswith("rv:d:p:"))
         seen_destinations.update(value for value in content_callbacks if not value.startswith("rv:d:p:"))
-        next_pages = [value for value in callbacks if value == f"rv:v:p:{page_index + 1}:all"]
+        next_pages = [value for value in callbacks if value == f"rv:v:l:{page_index + 1}:all"]
         if not next_pages:
             break
         page_index += 1
-    assert seen == expected_projects
-    assert seen_destinations == {"quest_board", "inv_catalog", "pe_o:0"}
-    assert page_index == 1
-    for project_id in seen:
+    assert seen=={row['content_id'] for row in expected_rows if row['kind']=='project'}
+    assert expected_projects<=seen
+    _,sunscar=build_detail(dict(get_player(1)),'r','region_sunscar')
+    assert 'rv:d:p:ss_camp_bearings' in _callbacks(sunscar)
+    assert len(seen_destinations)==len(expected_rows)-len(seen)
+    assert page_index==(expected_total-1)//6
+    _,tracked=_list_screen(dict(get_player(1)),'p',0,'all')
+    assert [value for value in _callbacks(tracked) if value=='quest_board' or value.startswith('rv:d:p:')]==['quest_board']
+    for project_id in expected_projects:
         _text, detail = build_detail(dict(get_player(1)), "p", project_id)
         assert any(value.startswith("rv:a:") for value in _callbacks(detail))
 

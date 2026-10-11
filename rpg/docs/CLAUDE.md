@@ -2,7 +2,7 @@
 
 - Status: Active
 - Authority: Supporting navigation; not a merged-state or roadmap authority
-- Last reconciled: 2026-09-23, against `ad5435e577e45e63da2ca57af2296203d88cedd5`
+- Last reconciled: 2026-10-08, baseline `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`; PXE1 Draft separately identified
 - Historical snapshot: [CLAUDE_AT_PR231.md](archive/status/CLAUDE_AT_PR231.md)
 
 This familiar path is retained as a compact adapter. Start with
@@ -54,3 +54,16 @@ every later final-main integration change.
 For older database tables, callbacks, skill lists, and repository snapshots, consult
 the preserved [CLAUDE PR231 snapshot](archive/status/CLAUDE_AT_PR231.md) as historical
 context only, then verify the current code.
+
+
+## PXE1 candidate navigation
+
+Verified baseline: PR236 / `3c5bfa62836c705a6327ce059f4e190b54ccf3e6`.
+The [PXE1 contract](epics/PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and
+[report](epics/PLAYER_EXPERIENCE_ECONOMY_V1_REPORT.md) own the unmerged extension in
+[Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237);
+[the candidate owner map](systems/README.md#pxe1-candidate-owners) locates its code.
+The public command/menu surface has six stable destinations. Timed activity writes
+belong to connection-scoped domain owners; Telegram callbacks carry actor-bound
+intents and never authorize reward reconstruction from user_data alone.
+Human PXE1 validation: NOT RUN. Larger structured PvP and teleport remain deferred.

@@ -15,10 +15,9 @@ LOWER_TRAVEL_PREFIX = '🧭 '
 
 def _baseline_keyboard_rows(lang: str) -> list[list[str]]:
     return [
-        [t('keyboard.location', lang), t('keyboard.map', lang)],
-        [t('keyboard.inventory', lang), t('keyboard.profile', lang)],
-        [t('keyboard.skills', lang), t('keyboard.stats', lang)],
-        [t('keyboard.settings', lang), t('keyboard.help', lang)],
+        [t('pxe1.menu.location', lang), t('pxe1.menu.map', lang)],
+        [t('pxe1.menu.journal', lang), t('pxe1.menu.inventory', lang)],
+        [t('pxe1.menu.character', lang), t('pxe1.menu.activities', lang)],
     ]
 
 
@@ -134,16 +133,8 @@ def resolve_lower_gather_profession_button(text: str, player: dict, lang: str) -
     return ''
 
 def build_contextual_main_keyboard(player: dict | None = None, lang: str = 'ru') -> ReplyKeyboardMarkup:
-    """Build the persistent lower menu, with contextual travel rows first."""
-    rows: list[list[str]] = []
-    if player:
-        for target_id in get_contextual_travel_targets(player.get('location_id')):
-            rows.append([build_lower_travel_label(target_id, lang)])
-        rows.extend(_build_contextual_gather_rows(player.get('location_id'), lang))
-        rows.extend(_build_contextual_service_rows(player.get('location_id'), lang))
-    rows.extend(_baseline_keyboard_rows(lang))
-    rows.append([t('chapter.journal', lang)])
-    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
+    """Six stable entries. Old contextual labels remain compatibility aliases."""
+    return ReplyKeyboardMarkup(_baseline_keyboard_rows(lang), resize_keyboard=True,is_persistent=True)
 
 
 def resolve_lower_travel_button(text: str, player: dict, lang: str) -> str | None:

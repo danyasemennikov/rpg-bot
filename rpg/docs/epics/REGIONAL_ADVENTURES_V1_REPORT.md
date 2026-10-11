@@ -1,5 +1,7 @@
 # Regional Adventures & Opportunities V1
 
+> **PXE1 candidate reconciliation — 2026-10-07.** PR234 subsequently merged at adcc0baeee96c03852ed75c09e379b0c49be01d1. The original open-Draft statements below describe the recorded acceptance checkpoint, not current merge state. PR236 later repaired live PvE start at 3c5bfa62836c705a6327ce059f4e190b54ccf3e6. PXE1 supersedes forming expiry and the old Journal layout while retaining regional facts, claims, choice gates and immutable combat credit. Historical automated evidence is preserved. See [the frozen PXE1 contract](PLAYER_EXPERIENCE_ECONOMY_V1_SPEC.md) and its implementation report. PXE1 is unmerged; this note is not deployment or review approval.
+
 - Status: automated acceptance complete; Draft PR remains open and not merge-ready
 - Contract: RAV1-1
 - Frozen base: `ebd8f73ade53fcadb89942b703a947782276ea1c`

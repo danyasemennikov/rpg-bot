@@ -1,3 +1,9 @@
+"""Legacy snapshot rendering and retained advanced command routing.
+
+Current compact Location/Nearby surfaces are exercised by PXE1 public-route tests.
+Synthetic old render fixtures intentionally call the version-zero projection.
+"""
+
 import re
 import unittest
 from types import SimpleNamespace
@@ -9,7 +15,7 @@ from handlers.location import (
     enc_command,
     handle_underscore_navigation_command,
     _build_location_message_with_snapshot,
-    build_location_message,
+    _legacy_location_message as build_location_message,
     build_shop_message,
     handle_location_action_text,
 )
@@ -43,7 +49,8 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         location = get_location('village')
         assert location is not None
         text, _keyboard = build_shop_message(player, location)
-        self.assertIn('Shop — 🏘️ Ashen Village', text)
+        self.assertIn('🏘️ Ashen Village', text)
+        self.assertIn('Shop ·',text)
         self.assertNotIn('Frontier Outpost', text)
 
     def test_shop_message_title_is_truthful_for_frontier_outpost(self):
@@ -51,10 +58,11 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         location = get_location('frontier_outpost')
         assert location is not None
         text, _keyboard = build_shop_message(player, location)
-        self.assertIn('Shop — 🏕️ Frontier Outpost', text)
+        self.assertIn('🏕️ Frontier Outpost', text)
+        self.assertIn('Shop ·',text)
         self.assertNotIn('Village vendor', text)
 
-    def test_frontier_outpost_does_not_expose_service_snapshot_commands(self):
+    def test_legacy_frontier_outpost_does_not_expose_service_snapshot_commands(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -87,7 +95,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('sv1 shop', text)
         self.assertFalse([k for k in snapshot['actions'] if ' sv' in k])
 
-    def test_shop_service_action_is_not_exposed_via_snapshot_text_command(self):
+    def test_legacy_shop_service_action_is_not_exposed_via_snapshot_text_command(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -120,7 +128,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(snapshot['actions'].get('s1 sv1 shop'))
         self.assertNotIn('snapshot_id', snapshot)
 
-    def test_supported_services_are_not_present_in_snapshot_commands(self):
+    def test_legacy_supported_services_are_not_present_in_snapshot_commands(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -159,7 +167,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         service_commands = [cmd for cmd in snapshot['actions'] if re.search(r'\ssv\d+\s', cmd)]
         self.assertEqual(service_commands, [])
 
-    def test_pve_and_mob_snapshot_actions_removed_from_location_quick_tokens(self):
+    def test_legacy_pve_and_mob_snapshot_actions_removed_from_location_quick_tokens(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -237,7 +245,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
             await handle_underscore_navigation_command(update, context)
         enc_mock.assert_awaited_once_with(update, context)
 
-    def test_location_inline_keyboard_removes_gather_and_ordinary_travel(self):
+    def test_legacy_location_inline_keyboard_removes_gather_and_ordinary_travel(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -274,7 +282,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('shop', flat_callbacks)
         self.assertNotIn('Travel to:', _text)
 
-    def test_snapshot_builder_initializes_missing_context_user_data(self):
+    def test_legacy_snapshot_builder_initializes_missing_context_user_data(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -302,12 +310,13 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
-            _build_location_message_with_snapshot(context, player, location, pvp_only_view=False)
+            with patch('handlers.location.build_location_message',new=build_location_message):
+                _build_location_message_with_snapshot(context, player, location, pvp_only_view=False)
 
         self.assertIsInstance(context.user_data, dict)
         self.assertIn(LOCATION_ACTION_SNAPSHOT_KEY, context.user_data)
 
-    def test_snapshot_tags_are_monotonic_per_user_context(self):
+    def test_legacy_snapshot_tags_are_monotonic_per_user_context(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -335,15 +344,17 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         ):
             conn_mock.return_value.execute.return_value.fetchall.return_value = []
             conn_mock.return_value.close.return_value = None
-            _build_location_message_with_snapshot(context, player, location, pvp_only_view=False)
+            with patch('handlers.location.build_location_message',new=build_location_message):
+                _build_location_message_with_snapshot(context, player, location, pvp_only_view=False)
             first_snapshot = context.user_data[LOCATION_ACTION_SNAPSHOT_KEY]
-            _build_location_message_with_snapshot(context, player, location, pvp_only_view=False)
+            with patch('handlers.location.build_location_message',new=build_location_message):
+                _build_location_message_with_snapshot(context, player, location, pvp_only_view=False)
             second_snapshot = context.user_data[LOCATION_ACTION_SNAPSHOT_KEY]
 
         self.assertEqual(first_snapshot['snapshot_tag'], 's1')
         self.assertEqual(second_snapshot['snapshot_tag'], 's2')
 
-    def test_location_message_shows_compact_active_contract_progress_line(self):
+    def test_legacy_location_message_shows_compact_active_contract_progress_line(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -374,7 +385,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn('📌 Contract: Hunt Wolves (2/5, in progress)', text)
 
-    def test_pvp_only_view_hides_active_contract_progress_line(self):
+    def test_legacy_pvp_only_view_hides_active_contract_progress_line(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -486,7 +497,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(handled)
         location_mock.assert_awaited_once()
 
-    def test_namespace_tokens_are_unique_between_entity_types(self):
+    def test_legacy_namespace_tokens_are_unique_between_entity_types(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -541,7 +552,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('/enc 77', text)
         self.assertIn('/enc pve-1', text)
 
-    def test_location_text_marks_elite_and_rare_spawn_profiles(self):
+    def test_legacy_location_text_marks_elite_and_rare_spawn_profiles(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',
@@ -589,7 +600,7 @@ class LocationActionTokenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('fight_spawn_spawn-dark_forest-forest_wolf-elite', callbacks)
         self.assertIn('fight_spawn_spawn-dark_forest-forest_wolf-rare', callbacks)
 
-    def test_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable(self):
+    def test_legacy_location_text_localizes_special_spawn_key_and_keeps_same_mob_targets_distinguishable(self):
         player = {
             'telegram_id': 5001,
             'lang': 'en',

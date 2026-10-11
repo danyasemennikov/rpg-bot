@@ -50,59 +50,87 @@ def test_craft_replay_after_new_preview_returns_exact_receipt_without_second_gra
     conn.close()
 
 
+def test_catalogue_one_craft_replay_preserves_original_large_xp_after_cutover(tmp_path,monkeypatch):
+    from game.economy_actions import intent_hash,store_receipt
+    player_id=_new_player(tmp_path,monkeypatch,location='capital_city')
+    conn=database.get_connection()
+    receipt={'schema_version':1,'catalog_version':1,'action_kind':'craft','status':'crafted',
+             'player_id':player_id,'location_id':'capital_city','recipe_id':'field_tonic',
+             'consumed':[{'item_id':'herb_common','quantity':3}],
+             'granted':[{'item_id':'health_potion_small','quantity':1,'instance_ids':[]}],
+             'progression':[{'profession_key':'alchemy','xp_awarded':250}],
+             'gold_delta':0,'gold_after':0,'details':{}}
+    token='historical_consumed'
+    store_receipt(conn,player_id,'ui:'+token,'craft',intent_hash('craft',player_id,{'recipe_id':'field_tonic'}),receipt,catalog_version=1)
+    conn.execute("UPDATE players SET location_id='frostspine_n6',travel_revision=8,in_battle=1 WHERE telegram_id=?",(player_id,))
+    conn.commit()
+    tables=('players','inventory','player_crafting_professions','player_profession_tools','economy_action_receipts')
+    before={table:[tuple(r) for r in conn.execute(f'SELECT * FROM {table}')] for table in tables}
+    result=craft_recipe(player_id,'field_tonic',action_token=token)
+    assert result.status=='crafted' and result.recovered and result.profession_xp==250
+    assert result.crafted_item_id=='health_potion_small' and result.crafted_quantity==1
+    assert before=={table:[tuple(r) for r in conn.execute(f'SELECT * FROM {table}')] for table in tables}
+    assert json.loads(conn.execute('SELECT result_json FROM economy_action_receipts WHERE request_id=?',('ui:'+token,)).fetchone()[0])==receipt
+    conn.close()
+
+
+def _historical_gather(conn,player_id,request_id,status):
+    """Fixture of a committed catalogue-1 result, not a fresh resource grant."""
+    from game.economy_actions import store_receipt
+    result={'schema_version':1,'catalog_version':1,'action_kind':'gather','status':status,
+            'player_id':player_id,'location_id':'old_mine_entrance','consumed':[],
+            'granted':[{'item_id':'iron_ore','quantity':1,'instance_ids':[],'gear_specs':[]}] if status=='gathered' else [],
+            'progression':[{'profession_key':'mining','xp_awarded':10}] if status=='gathered' else [],
+            'source':{'item_id':'gem_common'} if status=='denied' else {},
+            'details':{'required_level':12} if status=='denied' else {},
+            'gold_delta':0,'gold_after':0}
+    store_receipt(conn,player_id,request_id,'gather','historical',result,catalog_version=1)
+    return result
+
+
 def test_gather_receipts_recover_success_empty_locked_and_legacy(tmp_path, monkeypatch):
-    player_id = _new_player(tmp_path, monkeypatch)
-    success = gather_resource(player_id, 'mining', location_id='old_mine_entrance',
-                              travel_revision=0, request_id='gather:30:1', rng=FixedRng(0.0))
-    replay = gather_resource(player_id, 'mining', location_id='capital_city',
-                             travel_revision=99, request_id='gather:30:1', rng=FixedRng(0.99))
-    assert success['status'] == replay['status'] == 'gathered'
-    assert success['item_id'] == replay['item_id'] == 'iron_ore'
-    assert success['granted'] == replay['granted']
-    assert success['progression'] == replay['progression']
-
-    conn = database.get_connection()
-    conn.execute("UPDATE players SET location_id='south_coast_shore', travel_revision=1 WHERE telegram_id=?", (player_id,))
-    conn.commit(); conn.close()
-    empty = gather_resource(player_id, 'fishing', location_id='south_coast_shore',
-                            travel_revision=1, request_id='gather:30:2', rng=FixedRng(0.999))
-    assert empty['status'] == 'empty' and empty['granted'] == []
-
-    conn = database.get_connection()
-    conn.execute("UPDATE players SET location_id='frostspine_n6', travel_revision=2 WHERE telegram_id=?", (player_id,))
-    conn.commit(); conn.close()
-    locked = gather_resource(player_id, 'mining', location_id='frostspine_n6',
-                             travel_revision=2, request_id='gather:30:3', rng=FixedRng(0.5))
-    assert locked['status'] == 'denied'
-    assert locked['source']['item_id'] == 'gem_common'
-    assert locked['details']['required_level'] == 12
-
-    conn = database.get_connection()
-    conn.execute("INSERT INTO player_action_receipts(player_id,request_id) VALUES (?,'gather:30:legacy')", (player_id,))
-    conn.commit(); conn.close()
-    legacy = gather_resource(player_id, 'mining', location_id='frostspine_n6',
-                             travel_revision=2, request_id='gather:30:legacy', rng=FixedRng(0.0))
-    assert legacy == {'status': 'historical_receipt_unavailable', 'recovered': True}
+    player_id=_new_player(tmp_path,monkeypatch)
+    conn=database.get_connection()
+    expected={status:_historical_gather(conn,player_id,'historical:'+status,status)
+              for status in ('gathered','empty','denied')}
+    conn.execute("INSERT INTO player_action_receipts(player_id,request_id) VALUES (?,'gather:30:legacy')",(player_id,))
+    conn.execute("UPDATE players SET location_id='capital_city',travel_revision=99,in_battle=1 WHERE telegram_id=?",(player_id,))
+    conn.commit()
+    tables=('players','inventory','player_profession_tools','player_gathering_professions','economy_action_receipts')
+    before={table:[tuple(r) for r in conn.execute(f'SELECT * FROM {table}')] for table in tables}
+    for status,result in expected.items():
+        replay=gather_resource(player_id,'mining',location_id='old_mine_entrance',
+                               travel_revision=0,request_id='historical:'+status,rng=FixedRng(0.99))
+        assert {k:v for k,v in replay.items() if k not in {'recovered','item_id'}}==result
+        assert replay['recovered']
+        if status=='gathered': assert replay['item_id']=='iron_ore'
+        if status=='denied': assert replay['details']['required_level']==12
+    assert gather_resource(player_id,'mining',location_id='frostspine_n6',request_id='gather:30:legacy')=={
+        'status':'historical_receipt_unavailable','recovered':True}
+    assert before=={table:[tuple(r) for r in conn.execute(f'SELECT * FROM {table}')] for table in tables}
+    conn.close()
 
 
 def test_gather_replay_precedes_travel_and_battle_rejection_without_duplication(tmp_path, monkeypatch):
-    player_id = _new_player(tmp_path, monkeypatch, player_id=31)
-    first = gather_resource(player_id, 'mining', location_id='old_mine_entrance',
-                            travel_revision=0, request_id='gather:31:1', rng=FixedRng(0.0))
-    conn = database.get_connection()
-    quantity = conn.execute("SELECT quantity FROM inventory WHERE telegram_id=? AND item_id='iron_ore'", (player_id,)).fetchone()['quantity']
-    profession = tuple(conn.execute("SELECT level,exp FROM player_gathering_professions WHERE telegram_id=? AND profession_key='mining'", (player_id,)).fetchone())
-    conn.execute("UPDATE players SET location_id='capital_city',travel_revision=1,in_battle=1 WHERE telegram_id=?", (player_id,))
-    conn.commit(); conn.close()
-
-    replay = gather_resource(player_id, 'mining', location_id='old_mine_entrance',
-                             travel_revision=0, request_id='gather:31:1', rng=FixedRng(0.99))
-    assert replay['status'] == 'gathered' and replay['recovered'] is True
-    assert replay['granted'] == first['granted'] and replay['progression'] == first['progression']
-    conn = database.get_connection()
-    assert conn.execute("SELECT quantity FROM inventory WHERE telegram_id=? AND item_id='iron_ore'", (player_id,)).fetchone()['quantity'] == quantity
-    assert tuple(conn.execute("SELECT level,exp FROM player_gathering_professions WHERE telegram_id=? AND profession_key='mining'", (player_id,)).fetchone()) == profession
-    assert conn.execute("SELECT COUNT(*) c FROM economy_action_receipts WHERE player_id=?", (player_id,)).fetchone()['c'] == 1
+    player_id=_new_player(tmp_path,monkeypatch,player_id=31)
+    first=gather_resource(player_id,'mining',location_id='old_mine_entrance',
+                          travel_revision=0,request_id='gather:31:1',rng=FixedRng(0.0))
+    assert first['status']=='running'
+    conn=database.get_connection()
+    assert not conn.execute('SELECT 1 FROM inventory WHERE telegram_id=?',(player_id,)).fetchone()
+    profession=tuple(conn.execute("SELECT level,exp FROM player_gathering_professions WHERE telegram_id=? AND profession_key='mining'",(player_id,)).fetchone())
+    tool=tuple(conn.execute("SELECT * FROM player_profession_tools WHERE player_id=? AND profession_key='mining'",(player_id,)).fetchone())
+    conn.execute("UPDATE players SET location_id='capital_city',travel_revision=1,in_battle=1 WHERE telegram_id=?",(player_id,))
+    conn.commit()
+    replay=gather_resource(player_id,'mining',location_id='old_mine_entrance',
+                           travel_revision=0,request_id='gather:31:1',rng=FixedRng(0.99))
+    assert replay['status']=='running' and replay['recovered']
+    assert replay['session']==first['session']
+    assert not conn.execute('SELECT 1 FROM inventory WHERE telegram_id=?',(player_id,)).fetchone()
+    assert profession==tuple(conn.execute("SELECT level,exp FROM player_gathering_professions WHERE telegram_id=? AND profession_key='mining'",(player_id,)).fetchone())
+    assert tool==tuple(conn.execute("SELECT * FROM player_profession_tools WHERE player_id=? AND profession_key='mining'",(player_id,)).fetchone())
+    assert conn.execute('SELECT COUNT(*) FROM player_gathering_sessions WHERE player_id=?',(player_id,)).fetchone()[0]==1
+    assert not conn.execute('SELECT 1 FROM economy_action_receipts WHERE player_id=?',(player_id,)).fetchone()
     conn.close()
 
 

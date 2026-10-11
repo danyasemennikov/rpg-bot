@@ -11,7 +11,7 @@ import pytest
 from database import get_connection, get_player
 from game.build_contract import legal_family_budget
 from game.build_progression import migrate_character_builds_v1
-from game.i18n import get_skill_name
+from game.i18n import get_skill_name, t
 from game.pve_live import reset_solo_pve_runtime_store
 from game.weapon_mastery import get_mastery
 from handlers.build import build_command, handle_build_buttons, handle_legacy_build_button
@@ -20,17 +20,17 @@ from tests.test_character_builds_v1_journeys import ProductionJourney, _callback
 
 LANGUAGE_COPY = {
     "en": {
-        "title": "Character Build", "migration": "prior skill points were refunded",
+        "title": "Build & equipment", "migration": "prior skill points were refunded",
         "target": "one ally", "school": "support", "normal": "Normal attack",
         "stale": "That build action is stale", "old": "This old button cannot mutate V1",
     },
     "ru": {
-        "title": "Билд персонажа", "migration": "Прежние очки навыков возвращены",
+        "title": "Билд и снаряжение", "migration": "Прежние очки навыков возвращены",
         "target": "один союзник", "school": "поддержка", "normal": "Обычная атака",
         "stale": "Действие устарело", "old": "Старая кнопка не меняет V1",
     },
     "es": {
-        "title": "Configuración del personaje", "migration": "puntos de habilidad anteriores se devolvieron",
+        "title": "Desarrollo y equipo", "migration": "puntos de habilidad anteriores se devolvieron",
         "target": "un aliado", "school": "apoyo", "normal": "Ataque normal",
         "stale": "La acción caducó", "old": "El botón antiguo no puede cambiar V1",
     },
@@ -89,8 +89,9 @@ async def _run_language_journey(lang: str, player_id: int) -> None:
     await journey.buy_and_equip_field_weapon("holy_staff")
     before_learning = len(journey.messages)
     receipt = await journey.learn("holy_staff", "heal")
+    await journey.callback("bv_skilldetails_heal", handle_build_buttons)
     learning_messages = journey.messages[before_learning:]
-    preview = next(text for text, _ in learning_messages if copy["target"] in text)
+    preview = next(text for text, _ in learning_messages if "1.00H" in text)
     assert get_skill_name("heal", lang) in preview
     assert copy["school"] in preview
     assert "1.00H" in preview
@@ -114,12 +115,11 @@ async def _run_language_journey(lang: str, player_id: int) -> None:
         label
         for _, markup in combat_messages
         for label in _button_texts(markup)
-        if get_skill_name("heal", lang) in label
     ]
     assert any(name in label for label in target_buttons)
     combat_text = "\n".join(text for text, _ in combat_messages)
     assert escape(name) in combat_text
-    assert copy["normal"] in combat_text
+    assert t("battle.attack_btn", lang) in target_buttons
     assert any(
         event.get("kind") == "heal" and event.get("amount", 0) > 0
         for action in fight["actions"] for event in action["events"]

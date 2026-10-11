@@ -18,11 +18,12 @@ def test_exact_key_and_placeholder_parity_without_known_fallback():
             assert not t(f"rav1.regions.{region['content_id']}.title", lang).startswith('[')
 
 
-def test_home_has_exact_six_top_level_views_and_callback_budget():
+def test_home_has_exact_eight_destinations_and_callback_budget():
     for lang in ('ru','en','es'):
         text, keyboard = build_regional_home({'telegram_id':1,'lang':lang,'location_id':'capital_city'})
         callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
-        top = [value for value in callbacks if value.startswith('rv:v:')][:6]
-        assert top == ['rv:v:n:0:all','rv:v:l:0:all','rv:v:p:0:all','rv:v:r:0:all','rv:v:s:0:all','rv:v:w:0:all']
+        assert callbacks == ['rv:v:p:0:all','quest_board_back','rv:v:r:0:all','rv:v:l:0:all',
+                             'rv:v:s:0:all','rv:v:s:0:ww','rv:v:w:0:all','alpha_history']
+        assert len(keyboard.inline_keyboard)<=6 and all(len(row)<=2 for row in keyboard.inline_keyboard)
         assert all(len(value.encode('utf-8')) <= 64 for value in callbacks)
-        assert len(text) <= 3000
+        assert len(text.encode('utf-16-le'))//2 <= 900

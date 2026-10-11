@@ -3,4 +3,13 @@ from game.profession_recipes import ACTIVE_RECIPES
 
 
 def test_all_conversion_edges_are_strictly_negative_for_npc_resale():
-    assert all(get_item(r.output_spec.item_id)['sell_price'] < sum(get_item(i)['sell_price']*q for i,q in r.requirements) for r in ACTIVE_RECIPES)
+    for recipe in ACTIVE_RECIPES:
+        input_value = sum(get_item(item_id)['sell_price'] * quantity for item_id, quantity in recipe.requirements)
+        output = recipe.output_spec
+        if output.kind == 'tool':
+            # Dedicated profession slots have no inventory item or NPC resale.
+            assert output.item_id is None
+            resale_value = 0
+        else:
+            resale_value = get_item(output.item_id)['sell_price']
+        assert resale_value < input_value, recipe.recipe_id

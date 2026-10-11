@@ -12,16 +12,23 @@ def _keyboard_text_rows(keyboard):
 
 
 class LowerServiceMenuTests(unittest.IsolatedAsyncioTestCase):
-    def test_service_buttons_render_by_location_services_and_truthful_inn(self):
-        rows = _keyboard_text_rows(build_contextual_main_keyboard({'location_id': 'capital_city'}, 'en'))
-        flat = [x for row in rows for x in row]
-        self.assertIn('🏪 Shop', flat)
-        self.assertIn('🏨 Inn', flat)
-        self.assertIn('📋 Quest Board', flat)
-
-        rows_unsafe = _keyboard_text_rows(build_contextual_main_keyboard({'location_id': 'dark_forest'}, 'en'))
-        flat_unsafe = [x for row in rows_unsafe for x in row]
-        self.assertNotIn('🏨 Inn', flat_unsafe)
+    def test_fixed_menu_and_contextual_service_visibility(self):
+        from database import get_connection,get_player
+        from handlers.world_views import location_card
+        capital=build_contextual_main_keyboard({'location_id':'capital_city'},'en')
+        wilderness=build_contextual_main_keyboard({'location_id':'dark_forest'},'en')
+        self.assertEqual(_keyboard_text_rows(capital),_keyboard_text_rows(wilderness))
+        self.assertEqual([len(row) for row in capital.keyboard],[2,2,2])
+        for location,has_inn in (('capital_city',True),('dark_forest',False)):
+            conn=get_connection()
+            conn.execute('UPDATE players SET location_id=? WHERE telegram_id=1',(location,))
+            conn.commit();conn.close()
+            _,keyboard=location_card(dict(get_player(1)),category='services')
+            callbacks=[b.callback_data for row in keyboard.inline_keyboard for b in row]
+            self.assertEqual('inn' in callbacks,has_inn)
+            if has_inn:
+                self.assertIn('shop',callbacks)
+                self.assertIn('quest_board',callbacks)
 
     async def test_stale_service_label_returns_localized_message_and_stops(self):
         update = SimpleNamespace(message=SimpleNamespace(text='🏪 Shop', reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
