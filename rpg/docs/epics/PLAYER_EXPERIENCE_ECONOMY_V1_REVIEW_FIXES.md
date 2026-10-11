@@ -1,6 +1,7 @@
 # PXE1 PR237 bounded independent-review corrections
 
-Status: second bounded F2/F3 repairs FIXED; automated gates PASSED; READY FOR SECOND NARROW RE-REVIEW; independent narrow review of `5fea976` returned FIX.
+Status: final bounded P2 timeout-recovery correction FIXED; targeted tests PASSED; READY FOR FINAL STATIC INSPECTION.
+The second narrow static review of `3789129` confirmed the original F2/F3 P1 mechanisms corrected and found the residual P2 below. Earlier acceptance sections retain their historical candidates and results.
 Five other original findings independently FIXED. Prior acceptance below is historical.
 Date: 2026-10-09. Same [Draft PR #237](https://github.com/danyasemennikov/rpg-bot/pull/237).
 Branch: `feat/pxe1-player-experience-economy-v1`.
@@ -284,3 +285,58 @@ diagnostic failures remain explicitly historical. Frozen contract hash unchanged
 
 **READY FOR SECOND NARROW RE-REVIEW.** Human Telegram: **NOT RUN**. Independent
 review of this repair: **PENDING**. Same unmerged Draft PR237. Never merge/deploy.
+
+
+### Final bounded P2 correction — 2026-10-11
+
+Reviewed HEAD: `3789129a4294178860049ac1a6359ecdeabc039c`.
+Code/test correction: `f678824828c0a7b1841fdabad7e7b13673d0b2b0`. Same branch and Draft PR237.
+Original F2/F3 P1 mechanisms are not reopened or redesigned.
+
+**Root cause:** on a two-player timeout, the first SQLite timeout order can commit
+before the second write fails. Same-process retry hydrated the first order through
+`commit_action`, leaving source `commit` and participant phase `committed`.
+Restart hydration already corrected that identical authoritative timeout order to
+source `fallback` and phase `auto_fallback`. The discrepancy reached result action
+receipts and `ally_commit_status` despite identical durable orders.
+
+**Minimal correction:** in `resolve_due_player_timeout_if_any`, capture the commit
+result; only an accepted restored order with `order_kind == 'timeout'` gets source
+`fallback` and phase `auto_fallback`, using the established restart pattern.
+The order itself is not rewritten. Manual orders retain source `commit` and phase
+`committed`. No deadline, action-selection, engine, CAS or transaction change.
+
+**Permanent regression:** `tests/test_pxe1_partial_timeout_recovery.py` contains
+four cases (same-process/restart, both timed out/manual-first control). Each clones
+one isolated initial SQLite snapshot for uninterrupted and interrupted runs, fails
+the second timeout-order write, retries and compares action identity/order, full
+result/state receipts, ally phases, player rows and semantic committed orders.
+The first accepted complete SQLite row, including creation time, remains immutable;
+repeated resolution produces no additional action, receipt or durable mutation.
+Creation timestamps alone are excluded between separate control/recovery executions.
+
+**New focused gate:** unchanged regression before production edit: **1 failed,
+3 passed in 1.51s**; failure is same-process source `commit` versus `fallback`.
+After correction: **4 passed in 2.83s**. Direct timeout/recovery neighbors:
+**16 passed, 32 deselected in 4.97s**, normal exit **0**:
+
+```text
+python -m pytest -q tests/test_pxe1_partial_timeout_recovery.py tests/test_solo_pve_runtime_adapter.py tests/test_live_combat_runtime_foundation.py tests/test_pxe1_pve_world_tick.py::test_background_timeout_uses_actual_engine_and_durable_orders_without_context tests/test_pxe1_review_regressions.py::test_pve_write_fault_preserves_durable_orders_and_retries -k timeout --tb=short
+```
+
+Raw logs are `pxe1-p2-partial-timeout-reproduced-pytest.log`,
+`pxe1-p2-partial-timeout-after-pytest.log` and
+`pxe1-p2-partial-timeout-focused-pytest.log` in `rpg/`; hashes and exact results
+are durably recorded in workspace `acceptance-recovery/final-p2-237/targeted-result.json`.
+
+**Changed files:** `rpg/game/pve_live.py`,
+`rpg/tests/test_pxe1_partial_timeout_recovery.py`, and this repair report only.
+PROJECT_STATE_CURRENT.md not updated: no confirmed project state change.
+
+**Validation boundary:** complete pytest, full PXE1 journeys and broad acceptance
+were **NOT RUN**, as explicitly instructed. Earned profession history was **NOT
+GENERATED**. The earlier **2429 passed / 276 subtests** result remains historical
+for code/test `0977db1`; it does **not** validate this new correction. All historical
+test evidence above is retained. Human Telegram: **NOT RUN**.
+
+**READY FOR FINAL STATIC INSPECTION.** Same Draft PR237; no new PR, merge or deployment.
