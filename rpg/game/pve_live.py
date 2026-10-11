@@ -3669,13 +3669,17 @@ def resolve_due_player_timeout_if_any(
         if order:
             action = order.get('action') or {}
             kind = str(action.get('kind') or '')
-            _SOLO_PVE_RUNTIME.commit_action(
+            committed = _SOLO_PVE_RUNTIME.commit_action(
                 encounter_id=encounter_id, participant_id=int(participant_id),
                 action_type='fallback_guard' if kind == 'timeout_guard' else kind,
                 target_info=action.get('target_info'), skill_id=action.get('skill_id'),
                 item_id=action.get('item_id'), committed_at=check_now,
                 turn_revision=runtime_state.turn_revision,
             )
+            if committed.accepted and str(order.get('order_kind')) == 'timeout':
+                # Match restart restoration without changing the durable order.
+                runtime_state.participants[int(participant_id)].phase_state = 'auto_fallback'
+                runtime_state.submitted_actions[int(participant_id)].source = 'fallback'
             continue
         durable = submit_combat_order(
             encounter_kind='pve', encounter_id=encounter_id,
