@@ -28,6 +28,8 @@ Original file SHA-256 values (checked again before delivery):
 
 ## Dispositions
 
+The initial LIVE table below describes the original repairs. For LIVE-05, LIVE-09 and LIVE-10, the F1–F3 packet below supersedes its initial coverage and implementation details. Astra found those three LIVE dispositions PARTIAL at the reviewed HEAD; their new CODE_FIXED dispositions depend on the focused evidence below and await narrow re-review.
+
 Paths below are relative to `rpg/`. P means
 `tests/test_pxe1_live_presentation_repairs.py`; C means
 `tests/test_pxe1_live_callback_repairs.py`. Every row needs the narrow real-client
@@ -39,7 +41,7 @@ retest described in the last column. No row is live-accepted by these tests.
 | LIVE-02 / CODE_FIXED | Activities uses the formatted profession screen title as a plain Telegram button label. | `handlers/activities.py`, `locales/pxe1_surface_keys.py`: a plain RU/EN/ES profession label; same `pe_o:0` callback. | P `test_live02_*`: literal expected labels, no angle brackets, callback unchanged. | Open Activities in all three languages. |
 | LIVE-03 / CODE_FIXED | Three hand-maintained Help inventories predate the registered PXE1 commands. | `game/player_commands.py`, `bot.py`, `locales/{ru,en,es}.py`, `locales/pxe1_surface_keys.py`: shared public-menu command inventory, plus retained registered compatibility/recovery commands in Help. Retire all three obsolete Help lists. | P `test_live03_*`: actual Help response, mocked command registration, AST comparison against all registered handlers; `/journal` and `/activities` present, `/quests` absent. | Compare `/help` with Telegram autocomplete in RU/EN/ES; compatibility/recovery commands remain callable. |
 | LIVE-04 / CODE_FIXED | Preview and travel progress use invariant plural nouns. | `locales/pxe1_surface_keys.py`: existing plural resolver selects preview and progress forms by hops/total. Timing and edge calculations unchanged. | P `test_live04_*`: EN/ES 0,1,2,5,11,21; RU 0,1,2,4,5,11,12,14,21,22,25,111. Existing travel tests check exact durations/deadlines. | One-edge and multi-edge previews and travel progress in RU/EN/ES. |
-| LIVE-05 / CODE_FIXED | Successful board acceptance and claim use blocking Telegram alerts for ordinary feedback. | `handlers/location.py`: acceptance toast; edited claim result with XP/gold, bonus items, hunter reputation/rank and level-up, plus next-assignment/board/Journal links. Acknowledge the claimed contract's superseded minor facts only after successful edit. Finale retains its existing major chat card. | C `test_live05_*`: real accept/objective/claim owners, RU/EN/ES, duplicate claim, foreign token, wrong board, failed transport with one grant and pending feedback. Existing quest/feedback tests cover finale and reward paths. | Accept and claim First Watch; inspect reward breakdown and navigation without an OK modal; repeat old claim. Also check a rank/level-up claim and finale. |
+| LIVE-05 / CODE_FIXED | Successful board acceptance and claim use blocking Telegram alerts for ordinary feedback. | `handlers/location.py`: acceptance toast; edited claim result with XP/gold, bonus items, hunter reputation/rank and level-up, plus next-assignment/board/Journal links. The initial acknowledgement filter omitted `chapter_objective`; F3 below supplies the complete contract-scoped predicate. Finale retains its existing major chat card. | C `test_live05_*`: real accept/objective/claim owners, RU/EN/ES, duplicate claim, foreign token, wrong board, failed transport with one grant and pending feedback. Existing quest/feedback tests cover finale and reward paths. | Accept and claim First Watch; inspect reward breakdown and navigation without an OK modal; repeat old claim. Also check a rank/level-up claim and finale. |
 | LIVE-06 / CODE_FIXED | `pve_result` includes the settlement's level-up and `inline_feedback` appends the same pending fact. | `game/player_feedback.py`: omit exact feedback lines already on the result; keep their acknowledgement keys, including when no new line remains. No reward/progression owner changed. | P `test_live06_*`: actual progression fact plus PvE result, RU/EN/ES, with/without a separate profession level-up; one character line, both legitimate facts preserved, acknowledgement after display. Existing combat delivery/result recovery tests. | Victory crossing one character threshold; one notice and one SQL level-up; verify independent profession/quest feedback remains. |
 | LIVE-07 / CODE_FIXED | Build preview ignores its returned rejection reason. | `handlers/build.py`: use the existing localized rejection mapper for redistribution preview/apply. Existing authority order and rollback retained; an old hub intent invalidated by movement still reports stale. | C `test_live07_*`: RU/EN/ES fresh outdoor preview and moved hub-issued apply; player attributes/draft/receipts unchanged. Existing character tests cover spending and combat restrictions. | Fresh outdoor redistribution Preview gives the safe-hub restriction; verify unchanged attributes and receipts. |
 | LIVE-08 / CODE_FIXED | Post-Chapter Journal routes to regional home; its archive callback is misleadingly labelled Back, and Regional Completed has no Chapter history link. | `handlers/regional.py`, `locales/pxe1_surface_keys.py`: explicit Chapter history entry on home and Completed, using retained `alpha_history`/`alpha_history_chapter`. Separate regional records preserved. | P `test_live08_*`: fresh Journal → Completed → History → Chapter archive; full database dump unchanged in RU/EN/ES. Existing Journal tests retain eight home controls and archive grouping. | After finale open a fresh Journal, discover Chapter history from home and Completed; inspect four stories; no grants. |
@@ -50,9 +52,9 @@ retest described in the last column. No row is live-accepted by these tests.
 | LIVE-13 / CODE_FIXED | Spanish lacks the actual Guard key consumed by combat views; i18n falls back to RU. | `locales/es.py`: `location.pvp_action_guard_btn` is `🛡 Defensa`. Same action binding/evaluator. | P `test_live13_*`: direct Spanish dictionary entry (no fallback), actual PvE menu/action card and durable Guard intent kind. Existing combat UI checks all three languages. | Open Spanish PvE action menu and confirm Guard; check timeout/action behavior unchanged. |
 | LIVE-14 / CODE_FIXED | Missing EN/ES descriptions return a nonempty generic string interpolated with internal item ID. | `game/i18n.py`, `locales/professions.py`: neutral localized unavailable-description copy without IDs; valid descriptions and gear actions retained. | P `test_live14_*`: EN/ES absent/present translations and actual English Wooden Sword More card with unchanged unequip/enhance controls. Existing inventory tests. | English Wooden Sword → More: readable fallback, no `wooden_sword`; verify valid descriptions and equipment actions. |
 
-## Automated validation
+## Original implementation validation (historical)
 
-Final code/test commit above: **272 passed, 0 failed**, Python 3.12.10,
+Original code/test commit `6bb5be5461c69a1bc49c9d4949e60e8b63c5b008`: **272 passed, 0 failed**, Python 3.12.10,
 pytest 9.1.1, python-telegram-bot 21.11.1. Includes **74 new regression cases**
 and **198 existing focused cases**. Tests use the repository's autouse fixture
 with per-test temporary SQLite databases. Mock transports are unit evidence only.
@@ -63,9 +65,7 @@ Exact command, run from `rpg/`:
 python -m pytest tests/test_pxe1_live_presentation_repairs.py tests/test_pxe1_live_callback_repairs.py tests/test_pxe1_navigation_ui.py tests/test_pxe1_journal_surfaces.py tests/test_pxe1_feedback_journal.py tests/test_pxe1_local_surfaces.py tests/test_pxe1_travel.py tests/test_pxe1_tools_economy.py tests/test_pxe1_shop_transactions.py tests/test_pxe1_inventory_surfaces.py tests/test_pxe1_combat_ui.py tests/test_pxe1_combat_delivery.py tests/test_pxe1_combat_result_recovery.py tests/test_pxe1_character_spending.py tests/test_quest_board_phase1.py -q --tb=short --junitxml=../../pxe1-targeted-tests.xml
 ```
 
-`git diff --check` passed. Complete production/test diff reviewed. Final reporting
-commit changes documentation only; code and tests remain identical to the tested
-commit. The final branch/HEAD/PR identity is in the delivery handoff.
+`git diff --check` passed. Complete production/test diff reviewed. The original reporting commit `26ad28013145f186b9cb5451543c3a2dcbde262b` changed documentation only. That 272-pass run is historical evidence for the reviewed candidate, not validation of the F1–F3 repairs below.
 
 **No full pytest or broad acceptance suite was run. No complete H01–H20 gameplay
 replay was performed. No Telegram poller was launched, no live deployment was
@@ -105,3 +105,51 @@ review and owner approval; do not merge or mark Ready for Review.
 The existing current-state documentation still names its older reconciled baseline;
 this Draft repair records verified Git state above without rewriting unrelated
 historical implementation/acceptance reports or claiming the fixes are merged.
+
+## PR #238 focused F1–F3 correction packet
+
+Reviewed HEAD: `26ad28013145f186b9cb5451543c3a2dcbde262b`.
+Implementation/test commit: `26e3f466131e1fb138b7f614c9b8a330bfb5fe75`.
+Status: **CODE_FIXED — ready for Astra's narrow re-review**. Independent approval
+and real Telegram retest remain **PENDING**. Same branch, Draft PR #238 into `main`.
+No Issue #239 work or next development phase included.
+
+The source review was read from
+`C:/Users/masha/Documents/Codex/2026-10-13/pxe1-independent-acceptance-review-of-draft/outputs/PXE1_PR238_INDEPENDENT_REVIEW.md`.
+Its external report and probes are preserved; they remain evidence for the reviewed
+HEAD, including the three FIX REQUIRED findings. They are not rewritten as passes.
+
+| Finding / affected LIVE IDs | Root cause and correction | Regression evidence | Disposition |
+|---|---|---|---|
+| F1 / LIVE-05 | Full reward details lived only in the original handler return value. Extend the existing claim feedback JSON in the reward transaction with actual bonus grant, hunter points/rank transition, level transition and owner-bound action token. Render both initial delivery and recovery from this snapshot. Bind known card coordinates before editing; preserve replacement coordinates before acknowledgement. Accept Telegram not-modified as successful presentation; replace confirmed deleted/uneditable cards; other transport errors retain pending facts. Replay the owned snapshot before any reward mutation, even after intent cleanup. Repeatable contracts receive distinct notification keys rather than overwriting an older snapshot. Legacy events render only their stored XP/gold; missing historical details are not invented. Finale retains its separate navigation/presented/acknowledged lifecycle and includes its stored claim breakdown. | `tests/test_pxe1_pr238_focused_repairs.py::test_f1_*`: Astra First Watch bonus/reputation/rank/level reproducer in RU/EN/ES; failed edit, same-token retry, fresh Journal and Location with new delivery context; deleted/uneditable/not-modified/unknown errors; failed replacement; successful edit or replacement then acknowledgement failure; retained message coordinates across recovery; owner/foreign tokens after intent cleanup; legacy payload; repeatable claims; finale navigation/replacement; feedback snapshot failure rolls back the reward transaction. Economic snapshots include hunter progress, contract state/history and receipt tables. | **CODE_FIXED**, narrow review and live recovery retest PENDING |
+| F2 / LIVE-09, LIVE-10 | Sell pages counted six entries regardless of rendered label length. Keep full localized rarity/enhancement/secondary-roll/equipped labels and exact entry callbacks; form stable pages from sorted entries using both the six-row limit and actual escaped UTF-16 text length. The same bounded renderer serves stale/protected-sale recovery. No surface-limit increase or label truncation. | `test_f2_*`: reproduce exactly **916 UTF-16 units** for six Spanish legendary `amulet_of_kindled_prayer`, tier 50, +15, valid maximum four rolls **21/21/34/34**. RU/EN/ES pages stay ≤900; all six entries reachable once. Eighteen-instance varied-roll inventories verify distinguishable labels, middle-page previous/next, selected-instance previews and confirmation token IDs. Stale/equipped/foreign callbacks edit bounded current lists without changing gold/items/receipts. | **CODE_FIXED**, narrow review and long-button phone retest PENDING |
+| F3 / LIVE-05 | The claimed-contract acknowledgement query omitted the actual producer `chapter_objective`. Capture that claim's objective/progress/readiness/claim and represented character-level keys, bounded by its source and creation time, then acknowledge only after the full result is successfully displayed. Leave other claims, contracts, profession facts and finales untouched. Suppress the pending claim's superseded minor facts in unrelated inline cards until its complete result is recovered. | Combined `test_f1_f3_*` and `test_f3_*`: actual producer events pending during edit; all claimed-contract facts acknowledged afterward; failed presentation/ack leaves pending facts; no old Herb/Rabbit replay on next inline feedback; unrelated contract/profession/finale events remain pending. | **CODE_FIXED**, narrow review and post-claim interaction retest PENDING |
+
+Changed production files are limited to `game/quest_board.py`,
+`game/player_feedback.py`, `handlers/location.py`, and `handlers/shop_views.py`.
+The quest owner adds presentation metadata only; reward amounts, mutation order,
+authorization, repeatability, receipts and gameplay rules are unchanged. No schema
+change, new reward ledger, bot launch, deployment or production database access.
+
+Final focused validation: **79 passed, 0 failed, 0 skipped, 41 deselected**, including
+**41 new F1–F3 regression cases** and **38 directly affected existing cases**.
+Python 3.12.10 / pytest 9.1.1 / python-telegram-bot 21.11.1. JUnit time 19.758 seconds.
+The tested code/test tree is the implementation commit above; subsequent report
+changes are documentation only. No full pytest or previous 272-case rerun performed.
+
+Exact command from `rpg/`:
+
+```text
+python -m pytest tests/test_pxe1_pr238_focused_repairs.py tests/test_pxe1_feedback_journal.py tests/test_pxe1_shop_transactions.py tests/test_pxe1_live_callback_repairs.py::test_live05_accept_and_claim_are_inline_and_duplicate_claim_grants_nothing tests/test_pxe1_live_callback_repairs.py::test_live05_claim_transport_failure_keeps_reward_once_and_fact_pending tests/test_pxe1_live_callback_repairs.py::test_live05_foreign_claim_token_and_wrong_board_do_not_grant tests/test_pxe1_live_callback_repairs.py::test_live09_old_sell_quote_refreshes_remaining_quantity_without_sale tests/test_pxe1_live_callback_repairs.py::test_live09_10_protected_gear_callback_refreshes_without_sale tests/test_pxe1_live_presentation_repairs.py::test_live06_level_fact_is_shown_once_and_acknowledged_after_delivery tests/test_quest_board_phase1.py -q -k 'test_f or feedback or claim or sale or finale or objective_completion or live06 or protected_gear' --tb=short --junitxml=../../pxe1-f1-f3-targeted-tests.xml
+```
+
+Remaining narrow live scope: First Watch claim with bonus/reputation/rank/level,
+failed/deleted-card recovery and retry through Journal/Location; no post-claim
+objective replay; long four-roll gear Sell pages, exact-instance confirmation and
+stale/equipped rejection in RU/EN/ES. Actual phone clipping and Telegram transport
+latency remain unverified. Known-card edits are preferred, but an ambiguous timeout
+creating a replacement message cannot provide exactly-once Telegram message creation;
+the committed snapshot remains recoverable and rewards are never replayed. Old events
+without stored bonus/rank metadata retain their available copy without fabricated
+historical values. Astra should inspect scoped acknowledgement, payload compatibility,
+replacement-coordinate persistence and UTF-16 pagination boundaries.
