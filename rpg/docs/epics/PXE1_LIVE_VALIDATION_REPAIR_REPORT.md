@@ -110,8 +110,7 @@ historical implementation/acceptance reports or claiming the fixes are merged.
 
 Reviewed HEAD: `26ad28013145f186b9cb5451543c3a2dcbde262b`.
 Implementation/test commit: `26e3f466131e1fb138b7f614c9b8a330bfb5fe75`.
-Status: **CODE_FIXED — ready for Astra's narrow re-review**. Independent approval
-and real Telegram retest remain **PENDING**. Same branch, Draft PR #238 into `main`.
+Historical packet status: the narrow re-review of `6c098733e2f39d5e3fda0c805ede1fce121322e1` verified **F2 and F3 FIXED**, but returned **F1 FIX REQUIRED** for the two residual recovery cases. Their final correction packet follows below. Real Telegram retest remains **PENDING**. Same branch, Draft PR #238 into `main`.
 No Issue #239 work or next development phase included.
 
 The source review was read from
@@ -121,7 +120,7 @@ HEAD, including the three FIX REQUIRED findings. They are not rewritten as passe
 
 | Finding / affected LIVE IDs | Root cause and correction | Regression evidence | Disposition |
 |---|---|---|---|
-| F1 / LIVE-05 | Full reward details lived only in the original handler return value. Extend the existing claim feedback JSON in the reward transaction with actual bonus grant, hunter points/rank transition, level transition and owner-bound action token. Render both initial delivery and recovery from this snapshot. Bind known card coordinates before editing; preserve replacement coordinates before acknowledgement. Accept Telegram not-modified as successful presentation; replace confirmed deleted/uneditable cards; other transport errors retain pending facts. Replay the owned snapshot before any reward mutation, even after intent cleanup. Repeatable contracts receive distinct notification keys rather than overwriting an older snapshot. Legacy events render only their stored XP/gold; missing historical details are not invented. Finale retains its separate navigation/presented/acknowledged lifecycle and includes its stored claim breakdown. | `tests/test_pxe1_pr238_focused_repairs.py::test_f1_*`: Astra First Watch bonus/reputation/rank/level reproducer in RU/EN/ES; failed edit, same-token retry, fresh Journal and Location with new delivery context; deleted/uneditable/not-modified/unknown errors; failed replacement; successful edit or replacement then acknowledgement failure; retained message coordinates across recovery; owner/foreign tokens after intent cleanup; legacy payload; repeatable claims; finale navigation/replacement; feedback snapshot failure rolls back the reward transaction. Economic snapshots include hunter progress, contract state/history and receipt tables. | **CODE_FIXED**, narrow review and live recovery retest PENDING |
+| F1 / LIVE-05 | Full reward details lived only in the original handler return value. Extend the existing claim feedback JSON in the reward transaction with actual bonus grant, hunter points/rank transition, level transition and owner-bound action token. Render both initial delivery and recovery from this snapshot. Bind known card coordinates before editing; preserve replacement coordinates before acknowledgement. Accept Telegram not-modified as successful presentation; replace confirmed deleted/uneditable cards; other transport errors retain pending facts. Replay the owned snapshot before any reward mutation, even after intent cleanup. Repeatable contracts receive distinct notification keys rather than overwriting an older snapshot. Legacy events render only their stored XP/gold; missing historical details are not invented. Finale retains its separate navigation/presented/acknowledged lifecycle and includes its stored claim breakdown. | `tests/test_pxe1_pr238_focused_repairs.py::test_f1_*`: Astra First Watch bonus/reputation/rank/level reproducer in RU/EN/ES; failed edit, same-token retry, fresh Journal and Location with new delivery context; deleted/uneditable/not-modified/unknown errors; failed replacement; successful edit or replacement then acknowledgement failure; retained message coordinates across recovery; owner/foreign tokens after intent cleanup; legacy payload; repeatable claims; finale navigation/replacement; feedback snapshot failure rolls back the reward transaction. Economic snapshots include hunter progress, contract state/history and receipt tables. | **PARTIAL at reviewed HEAD**; see final F1-A/F1-B packet below |
 | F2 / LIVE-09, LIVE-10 | Sell pages counted six entries regardless of rendered label length. Keep full localized rarity/enhancement/secondary-roll/equipped labels and exact entry callbacks; form stable pages from sorted entries using both the six-row limit and actual escaped UTF-16 text length. The same bounded renderer serves stale/protected-sale recovery. No surface-limit increase or label truncation. | `test_f2_*`: reproduce exactly **916 UTF-16 units** for six Spanish legendary `amulet_of_kindled_prayer`, tier 50, +15, valid maximum four rolls **21/21/34/34**. RU/EN/ES pages stay ≤900; all six entries reachable once. Eighteen-instance varied-roll inventories verify distinguishable labels, middle-page previous/next, selected-instance previews and confirmation token IDs. Stale/equipped/foreign callbacks edit bounded current lists without changing gold/items/receipts. | **CODE_FIXED**, narrow review and long-button phone retest PENDING |
 | F3 / LIVE-05 | The claimed-contract acknowledgement query omitted the actual producer `chapter_objective`. Capture that claim's objective/progress/readiness/claim and represented character-level keys, bounded by its source and creation time, then acknowledge only after the full result is successfully displayed. Leave other claims, contracts, profession facts and finales untouched. Suppress the pending claim's superseded minor facts in unrelated inline cards until its complete result is recovered. | Combined `test_f1_f3_*` and `test_f3_*`: actual producer events pending during edit; all claimed-contract facts acknowledged afterward; failed presentation/ack leaves pending facts; no old Herb/Rabbit replay on next inline feedback; unrelated contract/profession/finale events remain pending. | **CODE_FIXED**, narrow review and post-claim interaction retest PENDING |
 
@@ -131,7 +130,7 @@ The quest owner adds presentation metadata only; reward amounts, mutation order,
 authorization, repeatability, receipts and gameplay rules are unchanged. No schema
 change, new reward ledger, bot launch, deployment or production database access.
 
-Final focused validation: **79 passed, 0 failed, 0 skipped, 41 deselected**, including
+Historical F1–F3 validation at `6c098733e2f39d5e3fda0c805ede1fce121322e1`: **79 passed, 0 failed, 0 skipped, 41 deselected**, including
 **41 new F1–F3 regression cases** and **38 directly affected existing cases**.
 Python 3.12.10 / pytest 9.1.1 / python-telegram-bot 21.11.1. JUnit time 19.758 seconds.
 The tested code/test tree is the implementation commit above; subsequent report
@@ -153,3 +152,54 @@ the committed snapshot remains recoverable and rewards are never replayed. Old e
 without stored bonus/rank metadata retain their available copy without fabricated
 historical values. Astra should inspect scoped acknowledgement, payload compatibility,
 replacement-coordinate persistence and UTF-16 pagination boundaries.
+
+## Final residual F1-A / F1-B recovery corrections
+
+Reviewed HEAD: `6c098733e2f39d5e3fda0c805ede1fce121322e1`.
+Tested implementation commit: `bea8b88662f4d1743b2e4cd263562989194075e6`.
+Current disposition: **F1-A CODE_FIXED; F1-B CODE_FIXED — ready for Astra's final
+narrow re-review**. F2 and F3 retain **VERIFIED FIXED** from the prior narrow review;
+they were not reopened, changed or retested in this packet. Real Telegram acceptance
+remains **PENDING**. Keep existing PR #238 Draft into `main`.
+
+The source narrow review was read from the same external evidence directory as the
+first review, file `PXE1_PR238_F1_F3_NARROW_REREVIEW.md`. Its FIX REQUIRED verdict and
+RU/EN/ES reproducers are preserved. Both exact new regression groups failed on the
+reviewed code before correction: **6 failed**, representing two findings in three
+languages. Earlier 272-pass and 79-pass results remain candidate-specific history.
+
+| Finding | Root cause | Correction | Permanent regression |
+|---|---|---|---|
+| F1-A / CODE_FIXED | `_present_feedback_card` overwrote the saved replacement coordinates with the obsolete callback's original coordinates before retry. A successful replacement followed by acknowledgement failure therefore caused another complete reward card. | Prefer the persisted binding. Use the callback's edit method only when it refers to that same saved card, or when no binding exists. A retry of an old callback edits the saved replacement through the bot API; only a confirmed missing/uneditable current target permits another replacement. Retain the current binding through edit/send/ack failures. | `tests/test_pxe1_pr238_final_f1_repairs.py::test_f1a_successful_replacement_ack_failure_old_callback_reuses_saved_card` reproduces original 42 → replacement 100 → ack failure → original callback again, in RU/EN/ES: one successful send, edit target 100, no overwrite even during transport, one reward/history mutation. `test_f1a_transport_ack_combinations_*` and `test_f1a_old_callback_failures_*` cover original edit success/failure, replacement success/failure, acknowledgement success/failure, not-modified, repeated old callbacks, restart, and legitimate replacement of a subsequently missing saved target. |
+| F1-B / CODE_FIXED | The claim acknowledgement set included all same-source character-level facts even when legacy claim payloads did not render them. | Separate level facts from the superseded-minor predicate. Build the claim card from its stored snapshot plus scoped durable level events, without consulting the player's current level. Avoid duplicate lines already in modern snapshots. Add acknowledgement keys only for level notifications actually present in the card. A level that exceeds the existing text/line budget remains pending for independent delivery. Use the same composition for the claim section of the finale. | `test_f1b_legacy_claim_displays_separate_durable_level_before_ack` uses a real committed First Watch and level event, downgrades only the claim payload to its legacy format, and deliberately changes current player level to 9: the stored level-2 notice appears once and remains pending during presentation, in RU/EN/ES. `test_f1b_legacy_level_stays_pending_*` covers failed presentation and failed acknowledgement; `test_f1b_level_that_does_not_fit_*` verifies no acknowledgement of an undisplayed level and successful later independent delivery. |
+
+Production delta: **only `game/player_feedback.py`**. New permanent test module:
+`tests/test_pxe1_pr238_final_f1_repairs.py`. No change to reward mutation owners,
+economy rules, receipts, schema, Sell pagination, quest objective cleanup, world,
+combat, Issue #239, merge or deployment. Tests compare canonical economic snapshots
+including hunter reputation, contract state/history and receipt tables across retries.
+
+Final focused result: **70 passed, 0 failed, 0 skipped, 21 deselected**, comprising
+**45 new final-F1 cases** and **25 directly affected existing recovery/feedback cases**.
+Runtime: 17.07 seconds (JUnit 16.915 seconds), Python 3.12.10, pytest 9.1.1, PTB 21.11.1.
+Per-test temporary SQLite and mocked Telegram transports. The production/test tree
+at the implementation commit above is exactly the tested tree; the subsequent report
+commit changes documentation only. `git diff --check` passed.
+
+Exact command from `rpg/`:
+
+```text
+python -m pytest tests/test_pxe1_pr238_final_f1_repairs.py tests/test_pxe1_pr238_focused_repairs.py tests/test_pxe1_feedback_journal.py -q -k 'not test_f2 and not test_f3 and not test_f1_f3' --tb=short --junitxml=../../pxe1-final-f1-targeted-tests.xml
+```
+
+No full pytest, 272-case suite, prior full 79-case command, F2/F3 validation, Telegram
+poller, gameplay replay or production database access was performed in this packet.
+Original real-client reports and independent review artifacts remain unchanged.
+
+Remaining recovery risks: actual Telegram callback latency, deleted/uneditable and
+not-modified responses still need narrow real-client observation. A send with an
+ambiguous timeout can leave an unknown replacement ID; semantic reward exactly-once
+does not guarantee exactly-once Telegram message creation. Successfully returned
+replacement IDs are retained and reused by old callbacks. Legacy events without
+bonus/rank metadata retain only their available stored details; no historical values
+are invented. Scoped level facts that cannot fit remain pending and recoverable.
