@@ -2377,6 +2377,14 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
         if data == 'quest_board_claim':
             await query.answer(t('chapter.stale_action', lang), show_alert=True)
             return
+        from game.player_feedback import claim_feedback_event,present_claim_feedback
+        token = data.removeprefix('quest_board_claim_')
+        committed = claim_feedback_event(user.id,token)
+        if committed:
+            if committed['state']=='pending':
+                await present_claim_feedback(context.bot,user.id,committed,originating_query=query)
+            await query.answer()
+            return
         location = get_location(p['location_id'])
         if not location:
             await query.answer(t('location.not_found', lang), show_alert=True)
@@ -2406,57 +2414,9 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             }
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_claim_not_ready'), lang), show_alert=True)
         else:
-            reward_data = reward_result or {}
-            from html import escape
-            claim_text = t(
-                'pxe1.quest.claimed',
-                lang,
-                xp=int(reward_data.get('reward_exp', 0)),
-                gold=int(reward_data.get('reward_gold', 0)),
-            )
-            bonus_item = reward_data.get('bonus_item') if isinstance(reward_data, dict) else None
-            if isinstance(bonus_item, dict) and bonus_item.get('item_id') and bool(bonus_item.get('granted')):
-                claim_text += '\n' + t(
-                    'location.quest_board_claim_bonus_item',
-                    lang,
-                    qty=int(bonus_item.get('quantity', 1) or 1),
-                    item=escape(get_item_name(str(bonus_item['item_id']), lang)),
-                )
-            hunter_progress = reward_data.get('hunter_progress') if isinstance(reward_data, dict) else None
-            if isinstance(hunter_progress, dict):
-                claim_text += '\n' + t(
-                    'location.quest_board_claim_hunter_points',
-                    lang,
-                    points=int(hunter_progress.get('points_gained', 0) or 0),
-                )
-                if bool(hunter_progress.get('rank_up')):
-                    claim_text += '\n' + t(
-                        'location.quest_board_claim_rank_up',
-                        lang,
-                        rank=t(f"location.hunter_rank_{hunter_progress.get('rank_after', 'novice')}", lang),
-                    )
-            from game.player_feedback import acknowledge_presented_facts
-            from game.player_ui import validate_surface
-            if reward_data.get('leveled_up'):
-                claim_text += '\n'+t('pxe1.character_level',lang,level=reward_data['new_level'])
-            contract_key = reward_data['contract'].contract_key
-            conn = get_connection()
-            try:
-                keys = [row['event_key'] for row in conn.execute("""SELECT event_key FROM player_feedback_events
-                    WHERE player_id=? AND state='pending' AND source_kind IN ('chapter','chapter_claim')
-                    AND source_id=? AND event_kind<>'chapter_finale'""",(user.id,contract_key))]
-            finally:
-                conn.close()
-            if reward_data.get('leveled_up'):
-                keys.append('character_level:'+str(reward_data['new_level']))
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(t('pxe1.open_assignment',lang),callback_data='alpha_assignment')],
-                [InlineKeyboardButton(t('location.quests_btn',lang),callback_data='quest_board'),
-                 InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')],
-            ])
-            validate_surface(claim_text,keyboard)
-            await query.edit_message_text(claim_text,reply_markup=keyboard,parse_mode='HTML')
-            acknowledge_presented_facts(user.id,keys)
+            committed = claim_feedback_event(user.id,token)
+            if committed:
+                await present_claim_feedback(context.bot,user.id,committed,originating_query=query)
             await query.answer()
             return
 

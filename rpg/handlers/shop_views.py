@@ -132,13 +132,25 @@ def sell_list(player,category='all',page=0):
         if int(item.get('sell_price',0))<=0: continue
         filtered.append((kind,row))
     filtered.sort(key=lambda e:(e[1]['item_id'],e[0],e[1]['id']))
-    pages = max(1,(len(filtered)+5)//6); page = max(0,min(int(page),pages-1))
-    lines,rows = [title(player),t(f'pxe1.inventory.{category}',lang)],[modes(lang,'sell')]
-    for kind,row in filtered[page*6:page*6+6]:
+    header = [title(player),t(f'pxe1.inventory.{category}',lang)]
+    # Stable boundaries depend on the rendered UTF-16 text as well as six rows.
+    # Keep the full instance labels; a long page simply contains fewer entries.
+    paginated = [[]]
+    page_lines = list(header)
+    for kind,row in filtered:
         name = sale_entry_label(player,row,kind)
         qty = row.get('quantity',1)
-        lines.append(f'{escape(name)} ×{qty}')
-        rows.append([button(f'{name} ×{qty}',f"px:shop:saleview:{kind}{row['id']}:1")])
+        line = f'{escape(name)} ×{qty}'
+        if paginated[-1] and (len(paginated[-1])==6 or len('\n'.join([*page_lines,line]).encode('utf-16-le'))//2>900):
+            paginated.append([])
+            page_lines = list(header)
+        paginated[-1].append((line,button(f'{name} ×{qty}',f"px:shop:saleview:{kind}{row['id']}:1")))
+        page_lines.append(line)
+    pages = len(paginated); page = max(0,min(int(page),pages-1))
+    lines,rows = list(header),[modes(lang,'sell')]
+    for line,entry_button in paginated[page]:
+        lines.append(line)
+        rows.append([entry_button])
     if not filtered:
         lines.append(t('pxe1.shop.tools_unsellable' if category=='tools' else 'inventory.empty',lang))
     nav = []
