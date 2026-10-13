@@ -87,10 +87,15 @@ def inline_feedback(player_id,lang,text):
     room = max(0,10-len(text.splitlines()))
     selected = ranked[-min(2,room):] if room else []
     rendered, _ = render_feedback(selected,lang)
-    if rendered and len((text+'\n'+rendered).encode('utf-16-le'))//2<=900:
-        text += '\n'+rendered
-    elif selected:
-        selected = []
+    # The action result may already contain the same committed fact (level-up,
+    # claim). It still needs acknowledgement after successful delivery.
+    existing_lines = set(text.splitlines())
+    rendered = '\n'.join(line for line in rendered.splitlines() if line not in existing_lines)
+    if rendered:
+        if len((text+'\n'+rendered).encode('utf-16-le'))//2<=900:
+            text += '\n'+rendered
+        else:
+            selected = []
     # Facts coalesce into one result, but an overflowing fact stays recoverable.
     selected_keys = {e['event_key'] for e in selected}
     represented = {key for key,event in latest.items() if event['event_key'] in selected_keys}

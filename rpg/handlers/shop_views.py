@@ -135,7 +135,7 @@ def sell_list(player,category='all',page=0):
     pages = max(1,(len(filtered)+5)//6); page = max(0,min(int(page),pages-1))
     lines,rows = [title(player),t(f'pxe1.inventory.{category}',lang)],[modes(lang,'sell')]
     for kind,row in filtered[page*6:page*6+6]:
-        name = get_item_name(row['item_id'],lang)
+        name = sale_entry_label(player,row,kind)
         qty = row.get('quantity',1)
         lines.append(f'{escape(name)} ×{qty}')
         rows.append([button(f'{name} ×{qty}',f"px:shop:saleview:{kind}{row['id']}:1")])
@@ -147,6 +147,31 @@ def sell_list(player,category='all',page=0):
     if nav: rows.append(nav)
     rows.append([button(t('pxe1.categories',lang),'px:shop:categories'),button(t('gear.back_btn',lang),'px:shop:buy:0')])
     return surface(lines,rows,list_view=True)
+
+
+def sale_entry_label(player,row,kind):
+    """Use the selected owned entry's presentation, including legacy gear."""
+    from handlers.inventory import (
+        RARITY_NAME,_get_entry_enhance_level,_get_entry_rarity_and_tier,
+        get_equipped,_get_localized_stat_label,
+    )
+    lang = player.get('lang','ru')
+    item = get_item(row['item_id']) or {}
+    label = get_item_name(row['item_id'],lang)
+    if item.get('item_type') in {'weapon','armor','accessory'}:
+        rarity,_ = _get_entry_rarity_and_tier(row,item)
+        label += ' · '+RARITY_NAME.get(lang,RARITY_NAME['en']).get(rarity,rarity)
+        enhance = _get_entry_enhance_level(row)
+        if enhance: label += f' +{enhance}'
+        if kind=='g':
+            from game.gear_instances import resolve_gear_instance_item_data
+            resolved = resolve_gear_instance_item_data(row['instance'])
+            if resolved['secondary_rolls']:
+                label += ' · '+', '.join(_get_localized_stat_label(str(roll['stat']),lang)+f" {int(roll['value']):+}"
+                                        for roll in resolved['secondary_rolls'])
+        if f"{kind}{row['id']}" in get_equipped(player['telegram_id']).values():
+            label += ' · '+t('inventory.equipped',lang)
+    return label
 
 
 def issue_sale(player_id,quote,confirmed=False):
@@ -169,7 +194,10 @@ def sale_preview(player,entry_token,quantity=1,*,confirmation_quote=None):
     try:
         quote = confirmation_quote or sale_quote(conn,player['telegram_id'],entry_token[0],int(entry_token[1:]),int(quantity))
     finally: conn.close()
-    lines = [f"<b>{escape(get_item_name(quote['item_id'],lang))}</b>",
+    from handlers.inventory import _load_inventory_entry
+    entry = _load_inventory_entry(player['telegram_id'],entry_token)
+    if not entry: raise ActionRejected('stale_action')
+    lines = [f"<b>{escape(sale_entry_label(player,entry,entry_token[0]))}</b>",
              t('pxe1.shop.quantity',lang,quantity=quote['quantity'],owned=quote['stack_count']),
              t('pxe1.shop.unit_price',lang,gold=quote['unit_price']),
              t('pxe1.shop.total',lang,gold=quote['total']),
@@ -270,7 +298,10 @@ async def handle_shop_buttons(update,context):
     except (ActionRejected,ValueError,KeyError,IndexError) as exc:
         reason = str(exc)
         key = 'cannot_sell_equipped' if reason=='equipped_item' else 'cannot_sell' if reason=='not_sellable' else 'stale'
-        await query.answer(t(f'pxe1.shop.{key}',lang),show_alert=True)
+        player = dict(get_player(player['telegram_id']))
+        text,keyboard = buy_list(player) if action in {'purchase','preview','buy'} else sell_list(player)
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        await query.answer(t(f'pxe1.shop.{key}',lang),show_alert=key!='stale')
         return
     await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
     if keys:

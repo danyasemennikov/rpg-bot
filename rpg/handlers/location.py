@@ -2367,7 +2367,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             }
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_accept_failed'), lang), show_alert=True)
         else:
-            await query.answer(t('location.quest_board_accept_ok', lang), show_alert=True)
+            await query.answer(t('location.quest_board_accept_ok', lang))
 
         text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -2407,10 +2407,11 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_claim_not_ready'), lang), show_alert=True)
         else:
             reward_data = reward_result or {}
+            from html import escape
             claim_text = t(
-                'location.quest_board_claim_ok',
+                'pxe1.quest.claimed',
                 lang,
-                exp=int(reward_data.get('reward_exp', 0)),
+                xp=int(reward_data.get('reward_exp', 0)),
                 gold=int(reward_data.get('reward_gold', 0)),
             )
             bonus_item = reward_data.get('bonus_item') if isinstance(reward_data, dict) else None
@@ -2419,7 +2420,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                     'location.quest_board_claim_bonus_item',
                     lang,
                     qty=int(bonus_item.get('quantity', 1) or 1),
-                    item=get_item_name(str(bonus_item['item_id']), lang),
+                    item=escape(get_item_name(str(bonus_item['item_id']), lang)),
                 )
             hunter_progress = reward_data.get('hunter_progress') if isinstance(reward_data, dict) else None
             if isinstance(hunter_progress, dict):
@@ -2434,7 +2435,30 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
                         lang,
                         rank=t(f"location.hunter_rank_{hunter_progress.get('rank_after', 'novice')}", lang),
                     )
-            await query.answer(claim_text, show_alert=True)
+            from game.player_feedback import acknowledge_presented_facts
+            from game.player_ui import validate_surface
+            if reward_data.get('leveled_up'):
+                claim_text += '\n'+t('pxe1.character_level',lang,level=reward_data['new_level'])
+            contract_key = reward_data['contract'].contract_key
+            conn = get_connection()
+            try:
+                keys = [row['event_key'] for row in conn.execute("""SELECT event_key FROM player_feedback_events
+                    WHERE player_id=? AND state='pending' AND source_kind IN ('chapter','chapter_claim')
+                    AND source_id=? AND event_kind<>'chapter_finale'""",(user.id,contract_key))]
+            finally:
+                conn.close()
+            if reward_data.get('leveled_up'):
+                keys.append('character_level:'+str(reward_data['new_level']))
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(t('pxe1.open_assignment',lang),callback_data='alpha_assignment')],
+                [InlineKeyboardButton(t('location.quests_btn',lang),callback_data='quest_board'),
+                 InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')],
+            ])
+            validate_surface(claim_text,keyboard)
+            await query.edit_message_text(claim_text,reply_markup=keyboard,parse_mode='HTML')
+            acknowledge_presented_facts(user.id,keys)
+            await query.answer()
+            return
 
         text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')

@@ -537,7 +537,7 @@ async def handle_build_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         draft = context.user_data.get("build_v1_attributes") or _new_attribute_draft(_load_model(user.id))
         preview = attribute_redistribution_preview(user.id, draft)
         if not preview.get("success"):
-            await query.answer(_c(lang, "stale"), show_alert=True)
+            await query.answer(_localized_rejection(lang, preview.get("reason")), show_alert=True)
             text, keyboard, draft = build_attributes_view(user.id, lang)
             context.user_data["build_v1_attributes"] = draft
         else:
@@ -557,7 +557,7 @@ async def handle_build_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             ])
     elif data.startswith("bv_attr_apply_"):
         result = apply_attribute_redistribution(user.id, data.removeprefix("bv_attr_apply_"))
-        await query.answer(_c(lang, "changed") if result.get("success") else _c(lang, "stale"), show_alert=True)
+        await query.answer(_c(lang, "changed") if result.get("success") else _localized_rejection(lang, result.get("reason")), show_alert=True)
         text, keyboard, draft = build_attributes_view(user.id, lang)
         context.user_data["build_v1_attributes"] = draft
     elif data == "bv_masteries":

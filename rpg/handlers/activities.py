@@ -28,7 +28,8 @@ def activity_card(player,session,kind,*,now_ms=None):
     lines = [t('pxe1.'+kind+'_title',lang),t('pxe1.status.'+status,lang)]
     if kind=='travel':
         path = json.loads(session['path_json'])
-        lines += [t('pxe1.travel.position',lang,name=escape(get_location_name(player['location_id'],lang))),
+        reached = player['location_id'] if status=='running' else path[session['edge_index']]
+        lines += [t('pxe1.travel.position',lang,name=escape(get_location_name(reached,lang))),
                   t('pxe1.travel.destination',lang,name=escape(get_location_name(session['destination_location_id'],lang))),
                   t('pxe1.travel.progress',lang,done=session['edge_index'],total=len(path)-1)]
         if status=='running':
@@ -79,7 +80,7 @@ def build_activities(player):
     lines = [t('keyboard.activities',lang),'📍 '+escape(get_location_name(player['location_id'],lang))]
     buttons = [InlineKeyboardButton(t('pxe1.gather.action_label',lang,profession=t('professions.names.'+source.profession_key,lang)),callback_data='px:gatherpreview:'+source.profession_key)
         for source in build_location_gather_source_profiles(player['location_id']) if source.profession_key!='hunting'][:4]
-    buttons += [InlineKeyboardButton(t('professions.title',lang),callback_data='pe_o:0'),
+    buttons += [InlineKeyboardButton(t('pxe1.professions_label',lang),callback_data='pe_o:0'),
         InlineKeyboardButton(t('pxe1.tools',lang),callback_data='px:tools'),
         InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')]
     keyboard = _kb([buttons[i:i+2] for i in range(0,len(buttons),2)])
@@ -373,7 +374,12 @@ async def handle_activity_buttons(update,context):
                 player = dict(get_player(player['telegram_id']))
                 text,keyboard = tool_card(player,result['quote']['profession_key']) if result.get('quote') else tool_list(player)
         except ActionRejected:
-            await query.answer(t('professions.stale_action',lang),show_alert=True)
+            # Rebuild the rejected quotation from current owned tools. The token
+            # is never consumed again and no economic owner is called here.
+            player = dict(get_player(player['telegram_id']))
+            text,keyboard = tool_list(player)
+            await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+            await query.answer(t('professions.stale_action',lang))
             return
         await query.answer()
         await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')

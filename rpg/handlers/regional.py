@@ -122,7 +122,7 @@ def build_regional_home(player: dict) -> tuple[str, InlineKeyboardMarkup]:
         [InlineKeyboardButton(t("pxe1.journal.regional_completed", lang), callback_data="rv:v:s:0:all")],
         [InlineKeyboardButton(t("pxe1.journal.discoveries", lang), callback_data="rv:v:s:0:ww"),
          InlineKeyboardButton(t("pxe1.journal.local_work", lang), callback_data="rv:v:w:0:all")],
-        [InlineKeyboardButton(t("gear.back_btn", lang), callback_data="alpha_history")],
+        [InlineKeyboardButton(t("pxe1.journal.chapter_history", lang), callback_data="alpha_history")],
     ]
     keyboard = _journal_markup(rows)
     from game.player_ui import validate_surface
@@ -214,7 +214,10 @@ def _list_screen(player: dict, view: str, requested_page: int, region: str) -> t
             InlineKeyboardButton(t("rav1.status.resolved", lang), callback_data="rv:v:s:0:all"),
             InlineKeyboardButton(t("rav1.status.found", lang), callback_data="rv:v:s:0:ww"),
         ])
-    buttons.append(_button(t("rav1.nav.home", lang), "rv:v:h:0:all"))
+    home_row = _button(t("rav1.nav.home", lang), "rv:v:h:0:all")
+    if view == "s":
+        home_row.insert(0, InlineKeyboardButton(t("pxe1.journal.chapter_history", lang), callback_data="alpha_history"))
+    buttons.append(home_row)
     text='\n'.join(lines)
     keyboard=_journal_markup(buttons)
     from game.player_ui import validate_surface

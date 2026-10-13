@@ -182,6 +182,9 @@ def map_card(player, *, region=None, page=0, world=False):
             # The mine opens its spur rather than a distant first page.
             if (get_location(current) or {}).get('route_id') == 'route_old_mine_stub' and page == 0:
                 nodes.sort(key=lambda k: (k != 'old_mine_entrance', k not in get_location_neighbors(current)))
+            if region == current_region(player):
+                # Keep the regional list first, then expose its real border exits.
+                nodes += [k for k in get_location_neighbors(current) if k not in nodes]
         entries = [(get_location_name(k, lang), f'goto_{k}') for k in nodes]
         prefix = f'px:mapregion:{region}:'
     visible, page, pages = _page(entries, page)

@@ -176,7 +176,7 @@ def get_item_description(item_id: str, lang: str) -> str:
     except (ImportError, AttributeError):
         pass
     if lang in {'en', 'es'}:
-        return t('professions.unknown_item_description', lang, id=item_id)
+        return t('professions.unknown_item_description', lang)
     from game.items_data import get_item
     item = get_item(item_id)
     return str(item.get('description') or '') if item else ''
