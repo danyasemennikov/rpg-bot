@@ -110,6 +110,7 @@ STRINGS = {
         'service_craftsmen_guild': '🛠️ Gremio de artesanos',
     },
     'location': {
+        'pvp_action_guard_btn': '🛡 Defensa',
         'title':        '📍 <b>{name}</b>',
         'description':  '{description}',
         'mobs_title':   '\n👾 <b>Criaturas:</b>',
@@ -683,17 +684,6 @@ STRINGS = {
     },
     'help': {
         'title':    '❓ <b>Ayuda</b>',
-        'commands': (
-            'Guía alpha: /location, /map, combate, contratos, inventario/equipo, mejora\n'
-            '/start — crear personaje\n'
-            '/profile — perfil\n'
-            '/inventory — inventario\n'
-            '/skills — habilidades\n'
-            '/quests — misiones\n'
-            '/settings — ajustes\n'
-            '/unstuck — ¿atascado? usa esto\n'
-            '/help — esta ayuda'
-        ),
     },
 }
 

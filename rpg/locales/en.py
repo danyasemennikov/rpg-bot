@@ -703,17 +703,6 @@ STRINGS = {
     },
     'help': {
         'title':    '❓ <b>Help</b>',
-        'commands': (
-            'Alpha guide: /location, /map, fight, contracts, inventory/equipment, enhancement\n'
-            '/start — create character\n'
-            '/profile — profile\n'
-            '/inventory — inventory\n'
-            '/skills — skills\n'
-            '/quests — quests\n'
-            '/settings — settings\n'
-            '/unstuck — stuck? use this\n'
-            '/help — this help'
-        ),
     },
 }
 

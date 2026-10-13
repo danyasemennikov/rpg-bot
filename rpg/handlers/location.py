@@ -2367,7 +2367,7 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             }
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_accept_failed'), lang), show_alert=True)
         else:
-            await query.answer(t('location.quest_board_accept_ok', lang), show_alert=True)
+            await query.answer(t('location.quest_board_accept_ok', lang))
 
         text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -2376,6 +2376,14 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
     if data == 'quest_board_claim' or data.startswith('quest_board_claim_'):
         if data == 'quest_board_claim':
             await query.answer(t('chapter.stale_action', lang), show_alert=True)
+            return
+        from game.player_feedback import claim_feedback_event,present_claim_feedback
+        token = data.removeprefix('quest_board_claim_')
+        committed = claim_feedback_event(user.id,token)
+        if committed:
+            if committed['state']=='pending':
+                await present_claim_feedback(context.bot,user.id,committed,originating_query=query)
+            await query.answer()
             return
         location = get_location(p['location_id'])
         if not location:
@@ -2406,35 +2414,11 @@ async def handle_location_buttons(update: Update, context: ContextTypes.DEFAULT_
             }
             await query.answer(t(key_by_reason.get(reason, 'location.quest_board_claim_not_ready'), lang), show_alert=True)
         else:
-            reward_data = reward_result or {}
-            claim_text = t(
-                'location.quest_board_claim_ok',
-                lang,
-                exp=int(reward_data.get('reward_exp', 0)),
-                gold=int(reward_data.get('reward_gold', 0)),
-            )
-            bonus_item = reward_data.get('bonus_item') if isinstance(reward_data, dict) else None
-            if isinstance(bonus_item, dict) and bonus_item.get('item_id') and bool(bonus_item.get('granted')):
-                claim_text += '\n' + t(
-                    'location.quest_board_claim_bonus_item',
-                    lang,
-                    qty=int(bonus_item.get('quantity', 1) or 1),
-                    item=get_item_name(str(bonus_item['item_id']), lang),
-                )
-            hunter_progress = reward_data.get('hunter_progress') if isinstance(reward_data, dict) else None
-            if isinstance(hunter_progress, dict):
-                claim_text += '\n' + t(
-                    'location.quest_board_claim_hunter_points',
-                    lang,
-                    points=int(hunter_progress.get('points_gained', 0) or 0),
-                )
-                if bool(hunter_progress.get('rank_up')):
-                    claim_text += '\n' + t(
-                        'location.quest_board_claim_rank_up',
-                        lang,
-                        rank=t(f"location.hunter_rank_{hunter_progress.get('rank_after', 'novice')}", lang),
-                    )
-            await query.answer(claim_text, show_alert=True)
+            committed = claim_feedback_event(user.id,token)
+            if committed:
+                await present_claim_feedback(context.bot,user.id,committed,originating_query=query)
+            await query.answer()
+            return
 
         text, keyboard = build_quest_board_message(dict(get_player(user.id)), location)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')

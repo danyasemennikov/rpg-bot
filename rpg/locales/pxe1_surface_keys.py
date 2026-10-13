@@ -62,6 +62,12 @@ for _category in ('all','gear','supplies','material','tools'):
 
 # Each tuple is English, Russian, Spanish. No language falls back to another.
 COPY = {
+    'command.go':('Travel to a destination','Путешествие к месту назначения','Viajar a un destino'),
+    'command.enc':('Nearby encounters','Бои поблизости','Encuentros cercanos'),
+    'command.pvp':('Nearby player combat','Бои с игроками поблизости','Combates con jugadores cercanos'),
+    'command.unstuck':('Recover a stuck character outside combat','Восстановить застрявшего персонажа вне боя','Recuperar un personaje atascado fuera de combate'),
+    'professions_label':('🛠 Professions','🛠 Профессии','🛠 Profesiones'),
+    'journal.chapter_history':('Chapter history','История главы','Historia del capítulo'),
     'common.next':('Next','Далее','Siguiente'),
     'common.previous':('Previous','Назад','Anterior'),
     'common.continue':('Continue','Продолжить','Continuar'),
@@ -251,6 +257,14 @@ def value_at(strings,path):
 
 
 PLURALS = {
+    'map.route_preview':('hops',(
+        ('{hops} edge · {time} · 0 gold','{hops} edges · {time} · 0 gold','{hops} edges · {time} · 0 gold','{hops} edges · {time} · 0 gold'),
+        ('{hops} переход · {time} · 0 золота','{hops} перехода · {time} · 0 золота','{hops} переходов · {time} · 0 золота','{hops} перехода · {time} · 0 золота'),
+        ('{hops} tramo · {time} · 0 oro','{hops} tramos · {time} · 0 oro','{hops} tramos · {time} · 0 oro','{hops} tramos · {time} · 0 oro'))),
+    'travel.progress':('total',(
+        ('Route: {done}/{total} edge','Route: {done}/{total} edges','Route: {done}/{total} edges','Route: {done}/{total} edges'),
+        ('Путь: {done}/{total} переход','Путь: {done}/{total} перехода','Путь: {done}/{total} переходов','Путь: {done}/{total} перехода'),
+        ('Ruta: {done}/{total} tramo','Ruta: {done}/{total} tramos','Ruta: {done}/{total} tramos','Ruta: {done}/{total} tramos'))),
     'character.free_points':('count',(
         ('{count} free point','{count} free points','{count} free points','{count} free points'),
         ('{count} свободное очко','{count} свободных очка','{count} свободных очков','{count} свободного очка'),
@@ -298,3 +312,7 @@ def install_surface_keys(strings,lang):
                 parent[part]={}
             parent=parent.setdefault(part,{})
         parent[parts[-1]]=text
+    from game.player_commands import HELP_COMMANDS
+    strings['help']['commands'] = '\n'.join(
+        f"/{name} — {value_at(strings,'pxe1.command.'+name)}" for name in HELP_COMMANDS
+    )

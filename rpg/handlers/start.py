@@ -210,14 +210,16 @@ async def handle_stat_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data.clear()
 
         await query.edit_message_text(
-            t('start.created', lang, name=name),
+            t('start.created', lang, name=escape(name)),
+            parse_mode='HTML',
         )
 
         from handlers.profile import main_keyboard
         await context.bot.send_message(
             chat_id=user.id,
-            text=t('start.distribute', lang, name=name) + "\n\n" + t('start.alpha_intro', lang),
-            reply_markup=main_keyboard(lang)
+            text=t('start.alpha_intro', lang),
+            reply_markup=main_keyboard(lang),
+            parse_mode='HTML',
         )
         from game.player_ui import mark_menu_installed
         mark_menu_installed(user.id,lang)

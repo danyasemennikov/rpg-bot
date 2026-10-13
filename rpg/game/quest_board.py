@@ -811,8 +811,19 @@ def claim_completed_hunt_contract(*, player_id: int, location_id: str, action_to
         if levels_gained:
             record_feedback(conn,player_id,event_key=f'character_level:{level}',source_kind='character',
                 source_id=contract.contract_key,event_kind='level_up',payload={'old_level':int(player['level']),'new_level':level})
-        record_feedback(conn,player_id,event_key=f'claim:{contract.contract_key}',source_kind='chapter_claim',
-            source_id=contract.contract_key,event_kind='claim',payload={'contract_key':contract.contract_key,'reward_gold':reward_gold,'reward_exp':reward_exp})
+        claim_key = f'claim:{contract.contract_key}'
+        if conn.execute('SELECT 1 FROM player_feedback_events WHERE player_id=? AND event_key=?',(player_id,claim_key)).fetchone():
+            # Repeatable contracts need a separate immutable notification too.
+            from uuid import uuid4
+            claim_key += ':'+str(action_token or uuid4().hex)
+        record_feedback(conn,player_id,event_key=claim_key,source_kind='chapter_claim',
+            source_id=contract.contract_key,event_kind='claim',payload={
+                'contract_key':contract.contract_key,'reward_gold':reward_gold,'reward_exp':reward_exp,
+                'presentation_version':1,'action_token':action_token,
+                'bonus_item':{key:bonus_item_result[key] for key in ('item_id','quantity','granted')} if bonus_item_result else None,
+                'hunter_progress':hunter_progress,'leveled_up':leveled_up,
+                'old_level':int(player['level']),'new_level':level,
+            })
         if contract.contract_key=='chapter_homecoming':
             record_feedback(conn,player_id,event_key='chapter_finale:chapter_homecoming',source_kind='chapter_claim',
                 source_id=contract.contract_key,event_kind='chapter_finale',payload={'contract_key':contract.contract_key})
