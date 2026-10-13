@@ -73,8 +73,25 @@ def claim_feedback_keys(conn,player_id,event):
         WHERE player_id=? AND state='pending' AND source_id=? AND created_ms<=? AND (
             (source_kind IN ('chapter','chapter_claim','chapter_objective')
              AND event_kind IN ('progress','objective_complete','ready'))
-            OR (event_kind='claim' AND event_key=?) OR (source_kind='character' AND event_kind='level_up'))""",
+            OR (event_kind='claim' AND event_key=?))""",
             (player_id,contract,event['created_ms'],event['event_key']))]
+
+
+def claim_feedback_card(conn,player_id,event,lang):
+    text = render_claim_feedback(json.loads(event['payload_json']),lang)
+    keys = claim_feedback_keys(conn,player_id,event)
+    levels = conn.execute("""SELECT * FROM player_feedback_events WHERE player_id=? AND state='pending'
+        AND source_id=? AND source_kind='character' AND event_kind='level_up' AND created_ms<=?
+        ORDER BY created_ms,event_key""",(player_id,event['source_id'],event['created_ms'])).fetchall()
+    for level in levels:
+        line,_ = render_feedback([dict(level)],lang)
+        if line not in text.splitlines():
+            expanded = text+'\n'+line
+            if len(expanded.splitlines())>10 or len(expanded.encode('utf-16-le'))//2>900:
+                continue  # Unrepresented level facts remain pending for their own delivery.
+            text = expanded
+        keys.append(level['event_key'])
+    return text,keys
 
 
 def _remember_feedback_message(player_id,event_key,chat_id,message_id):
@@ -93,14 +110,18 @@ async def _present_feedback_card(bot,player_id,event,text,keyboard,originating_q
     """Retry known cards; only a confirmed missing/uneditable card is replaced."""
     from telegram.error import BadRequest
     chat_id,message_id = event.get('chat_id') or player_id,event.get('message_id')
+    use_query = originating_query is not None
     if originating_query:
         original = getattr(originating_query,'message',None)
         if original:
-            chat_id,message_id = original.chat_id,original.message_id
-            # Bind the known card before transport, without acknowledging facts.
-            _remember_feedback_message(player_id,event['event_key'],chat_id,message_id)
+            if message_id:
+                # A prior replacement is the recovery target, even on an old callback.
+                use_query = (chat_id,message_id)==(original.chat_id,original.message_id)
+            else:
+                chat_id,message_id = original.chat_id,original.message_id
+                _remember_feedback_message(player_id,event['event_key'],chat_id,message_id)
     try:
-        if originating_query:
+        if use_query:
             await originating_query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
         elif message_id:
             await bot.edit_message_text(text,chat_id=chat_id,message_id=message_id,reply_markup=keyboard,parse_mode='HTML')
@@ -127,18 +148,17 @@ async def present_claim_feedback(bot,player_id,event,*,originating_query=None):
     from telegram import InlineKeyboardButton,InlineKeyboardMarkup
     from game.player_ui import validate_surface
     lang = get_player_lang(player_id)
-    text = render_claim_feedback(json.loads(event['payload_json']),lang)
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(t('pxe1.open_assignment',lang),callback_data='alpha_assignment')],
         [InlineKeyboardButton(t('location.quests_btn',lang),callback_data='quest_board'),
          InlineKeyboardButton(t('chapter.journal',lang),callback_data='alpha_home')],
     ])
-    validate_surface(text,keyboard)
     conn = get_connection()
     try:
-        keys = claim_feedback_keys(conn,player_id,event)
+        text,keys = claim_feedback_card(conn,player_id,event,lang)
     finally:
         conn.close()
+    validate_surface(text,keyboard)
     await _present_feedback_card(bot,player_id,event,text,keyboard,originating_query)
     acknowledge_presented_facts(player_id,keys)
     return True
@@ -250,11 +270,14 @@ async def present_pending_feedback(bot,player_id,*,recover_presented=False,origi
         try:
             claim = conn.execute("SELECT * FROM player_feedback_events WHERE player_id=? AND source_id=? AND event_kind='claim' ORDER BY created_ms DESC,event_key DESC LIMIT 1",
                                  (player_id,finale['source_id'])).fetchone()
-            keys = claim_feedback_keys(conn,player_id,dict(claim) if claim else finale)
+            if claim:
+                claim_text,keys = claim_feedback_card(conn,player_id,dict(claim),get_player_lang(player_id))
+            else:
+                keys = claim_feedback_keys(conn,player_id,finale)
         finally:
             conn.close()
         if claim:
-            text += '\n\n'+render_claim_feedback(json.loads(claim['payload_json']),get_player_lang(player_id))
+            text += '\n\n'+claim_text
         chat_id,message_id = await _present_feedback_card(bot,player_id,finale,text,keyboard,originating_query)
         acknowledge_presented_facts(player_id,keys)
         conn = get_connection()
