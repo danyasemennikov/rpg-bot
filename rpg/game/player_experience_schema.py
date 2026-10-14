@@ -38,7 +38,7 @@ _DDL = {
         location_id TEXT NOT NULL, location_visit_revision INTEGER NOT NULL CHECK(location_visit_revision>=0),
         source_snapshot_json TEXT NOT NULL, seed TEXT NOT NULL
           CHECK(length(seed)=32 AND seed NOT GLOB '*[^0-9a-f]*'),
-        tool_tier INTEGER NOT NULL CHECK(tool_tier BETWEEN 1 AND 4),
+        tool_tier INTEGER NOT NULL CHECK(tool_tier BETWEEN 1 AND 6),
         expected_tool_revision INTEGER NOT NULL CHECK(expected_tool_revision>=0),
         status TEXT NOT NULL CHECK(status IN ('running','completed','cancelled','interrupted','broken')),
         started_ms INTEGER NOT NULL, next_due_ms INTEGER, ends_ms INTEGER NOT NULL,
@@ -50,8 +50,8 @@ _DDL = {
     'player_profession_tools': """CREATE TABLE player_profession_tools (
         player_id INTEGER NOT NULL REFERENCES players(telegram_id),
         profession_key TEXT NOT NULL CHECK(profession_key IN ('woodcutting','mining','herbalism','fishing','hunting')),
-        tier INTEGER NOT NULL CHECK(tier BETWEEN 1 AND 4),
-        durability INTEGER NOT NULL CHECK(durability BETWEEN 0 AND 60*tier),
+        tier INTEGER NOT NULL CHECK(tier BETWEEN 1 AND 6),
+        durability INTEGER NOT NULL CHECK(durability BETWEEN 0 AND CASE tier WHEN 1 THEN 90 WHEN 2 THEN 150 WHEN 3 THEN 210 WHEN 4 THEN 240 WHEN 5 THEN 300 WHEN 6 THEN 360 END),
         revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>=0),
         bootstrap_used_mask INTEGER NOT NULL DEFAULT 0 CHECK(bootstrap_used_mask BETWEEN 0 AND 7),
         schema_version INTEGER NOT NULL CHECK(schema_version=1),
@@ -182,11 +182,8 @@ def grant_player_pxe1_starters(conn, player_id: int, *, now_ms: int, acquired_vi
     """INSERT only: repeated welcome/migration never repairs an existing tool."""
     conn.executemany('''INSERT OR IGNORE INTO player_profession_tools
         (player_id,profession_key,tier,durability,revision,bootstrap_used_mask,schema_version,created_ms,updated_ms)
-        VALUES (?,?,1,60,1,0,1,?,?)''',
+        VALUES (?,?,1,90,1,0,1,?,?)''',
         ((player_id, key, now_ms, now_ms) for key in GATHERING_KEYS))
-    conn.executemany('''INSERT OR IGNORE INTO player_recipe_knowledge
-        (player_id,recipe_id,acquired_via,gold_paid,catalog_version) VALUES (?,?,?,0,2)''',
-        ((player_id, f'pxe_tool_{key}_1', acquired_via) for key in GATHERING_KEYS))
     conn.execute('''INSERT OR IGNORE INTO player_pxe1_ui(player_id,schema_version,updated_ms)
         VALUES (?,1,?)''', (player_id, now_ms))
 

@@ -11,14 +11,6 @@ def ensure_alpha_schema(conn):
         weapon_id TEXT NOT NULL REFERENCES items(item_id),
         claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )''')
-    conn.execute('''CREATE TABLE IF NOT EXISTS player_crafting_professions (
-        player_id INTEGER NOT NULL REFERENCES players(telegram_id),
-        profession_key TEXT NOT NULL CHECK (profession_key IN
-            ('alchemy', 'cooking', 'medium_armor')),
-        level INTEGER NOT NULL DEFAULT 1 CHECK (level BETWEEN 1 AND 20),
-        exp INTEGER NOT NULL DEFAULT 0 CHECK (exp >= 0),
-        PRIMARY KEY (player_id, profession_key)
-    )''')
     conn.execute('''CREATE TABLE IF NOT EXISTS player_contract_history (
         player_id INTEGER NOT NULL REFERENCES players(telegram_id),
         contract_key TEXT NOT NULL,

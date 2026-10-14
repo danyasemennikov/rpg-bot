@@ -4,7 +4,7 @@ from game.action_receipts import ActionRejected
 
 
 def player_activity(conn, player_id: int, *, exclude_pve=None, exclude_pvp=None,
-                    exclude_travel=None, exclude_gather=None) -> dict | None:
+                    exclude_travel=None, exclude_gather=None, exclude_guild=None) -> dict | None:
     player = conn.execute('SELECT * FROM players WHERE telegram_id=?', (player_id,)).fetchone()
     if not player:
         raise ActionRejected('no_player')
@@ -38,6 +38,9 @@ def player_activity(conn, player_id: int, *, exclude_pve=None, exclude_pvp=None,
         row = conn.execute(f"SELECT session_id FROM {table} WHERE player_id=? AND status='running'", (player_id,)).fetchone()
         if row and row['session_id'] != excluded:
             return {'kind': kind, 'ref': row['session_id']}
+    row = conn.execute("SELECT job_id FROM guild_job WHERE player_id=? AND status IN ('active','ready_to_claim')", (player_id,)).fetchone()
+    if row and row['job_id'] != exclude_guild:
+        return {'kind':'guild','ref':row['job_id']}
     return None
 
 
@@ -45,7 +48,7 @@ def require_available(conn, player_id: int, *, spend_attributes=False, **exclusi
     activity = player_activity(conn, player_id, **exclusions)
     if activity and not (spend_attributes and activity['kind'] in {'travel','gather'}):
         reason = 'dead' if activity['kind'] == 'dead' else (
-            'stop_activity_first' if activity['kind'] in {'travel','gather'} else 'in_battle')
+            'stop_activity_first' if activity['kind'] in {'travel','gather','guild'} else 'in_battle')
         raise ActionRejected(reason)
     return dict(conn.execute('SELECT * FROM players WHERE telegram_id=?', (player_id,)).fetchone())
 

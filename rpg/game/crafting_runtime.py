@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import json
 from typing import Literal
 
+from game.profession_state import write_progression
 from database import get_connection
 from game.crafting_foundation import (
     CRAFTING_PROFESSION_CONTRACTS,
@@ -356,9 +357,8 @@ def craft_recipe(telegram_id: int, recipe_id: str,
         from game.player_feedback import record_progression
         record_progression(conn,telegram_id,recipe.profession_key,progression,request_id or recipe.recipe_id)
         if xp:
-            conn.execute('''UPDATE player_crafting_professions SET level=?, exp=?
-                WHERE player_id=? AND profession_key=?''',
-                         (progression.new_level, progression.new_exp, telegram_id, recipe.profession_key))
+            write_progression(
+                conn,telegram_id,recipe.profession_key,progression)
         from game.quest_board import register_contract_objective
         register_contract_objective(conn, telegram_id, 'craft', recipe.output_item_id,
                                     crafted_quantity, player['location_id'])

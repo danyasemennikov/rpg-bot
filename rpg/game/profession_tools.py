@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 
+from game.profession_state import write_progression
 from game.action_receipts import ActionRejected, consume_action, peaceful_player
 from game.economy_actions import find_receipt, intent_hash, store_receipt
 from game.locations import get_location
@@ -184,8 +185,8 @@ def craft_tool(player_id: int, recipe_id: str, *, action_token: str | None,
         from game.player_feedback import record_progression
         record_progression(conn,player_id,recipe.profession_key,progression,request_id)
         if xp:
-            conn.execute('UPDATE player_crafting_professions SET level=?,exp=? WHERE player_id=? AND profession_key=?',
-                (progression.new_level,progression.new_exp,player_id,recipe.profession_key))
+            write_progression(
+                conn,player_id,recipe.profession_key,progression)
         kind = 'tool_commission_pxe1' if commission else 'tool_craft_pxe1'
         result = {'schema_version':1,'catalog_version':2,'xp_policy_version':2,'action_kind':kind,'status':'crafted',
             'player_id':player_id,'location_id':player['location_id'],'recipe_id':recipe_id,
