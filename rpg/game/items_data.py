@@ -480,6 +480,46 @@ ITEMS.update(FIELD_ITEMS)
 ITEM_REWARD_TAGS.update({item_id: {'reward_family': 'gear'} for item_id in FIELD_ITEMS})
 
 
+# Epic I extends the same item authority; outputs are real seeded items.
+from game.profession_resources import RESOURCES as _epic_resources
+from game.profession_recipes import ACTIVE_RECIPES as _epic_recipes
+for _resource in _epic_resources.values():
+    if _resource.item_id not in ITEMS:
+        ITEMS[_resource.item_id] = _pev1_stackable(_resource.item_id,_resource.item_id,
+            'Profession material.',sell_price=_resource.sell_price)
+    ITEMS[_resource.item_id].update(buy_price=3*_resource.sell_price,sell_price=_resource.sell_price)
+    ITEM_REWARD_TAGS[_resource.item_id]={'reward_family':'gathering_material','material_subtype':_resource.resource_group}
+
+for _variant,_base,_bonuses in (
+    ('a25_heavy_resist_chest','field_heavy_chest',{'max_hp':9.6,'magic_defense':2.4}),
+    ('a25_medium_survival_chest','field_medium_chest',{'accuracy':1.6,'evasion':0.8,'max_hp':0.6}),
+    ('a25_light_survival_chest','field_light_chest',{'max_mana':9.6,'magic_defense':1.6,'max_hp':2.8}),
+    ('a25_heavy_precision_chest','field_heavy_chest',{'max_hp':9.6,'accuracy':2.4}),
+    ('a25_medium_precision_chest','field_medium_chest',{'accuracy':2.2,'evasion':0.8}),
+    ('a25_light_support_chest','field_light_chest',{'max_mana':9.6,'magic_defense':1.6,'healing_power':2.8}),
+    ('a25_precision_ring','field_precision_ring',{'accuracy':2,'evasion':1}),
+    ('a25_reserve_amulet','field_prayer_amulet',{'max_mana':2,'magic_defense':1}),
+    ('a25_support_amulet','field_prayer_amulet',{'healing_power':2,'max_hp':1}),
+    ('a25_anchor_ring','field_guard_ring',{'max_hp':7,'accuracy':2}),
+):
+    import json as _json
+    ITEMS[_variant]={**ITEMS[_base],'item_id':_variant,'name':_variant,
+                     'stat_bonus_json':_json.dumps(_bonuses)}
+    ITEM_REWARD_TAGS[_variant]={'reward_family':'gear'}
+
+for _recipe in _epic_recipes:
+    _output=_recipe.output_spec
+    if _output.kind=='tool':
+        continue
+    if _output.item_id not in ITEMS:
+        ITEMS[_output.item_id]=_pev1_stackable(_output.item_id,_output.item_id,
+            'Profession consumable.',item_type='potion',
+            consumable_family='food' if _recipe.profession_key=='cooking' else None)
+    _item=ITEMS[_output.item_id]
+    _price_cap=(3*_recipe.material_value)//(5*_output.quantity)
+    _item['sell_price']=min(_item['sell_price'],_price_cap)
+
+
 def get_item(item_id: str) -> dict:
     item = ITEMS.get(item_id)
     if item is not None:

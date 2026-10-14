@@ -12,7 +12,8 @@ from game.locations import get_location
 
 PROFESSIONS = ('woodcutting','mining','herbalism','fishing','hunting')
 TOOL_NAMES = dict(zip(PROFESSIONS,('axe','pick','sickle','rod','knife')))
-ACCESS_LEVELS = {1:1,2:6,3:12,4:18}
+ACCESS_LEVELS = {1:1,2:1,3:1,4:16,5:16,6:16}
+TOOL_CAPACITY = {1:90,2:150,3:210,4:240,5:300,6:360}
 MATERIAL_PRICES = {'wood_common':3,'iron_ore':6,'coal':4}
 
 
@@ -39,7 +40,7 @@ def wear_tool(conn, tool: dict, *, now_ms: int) -> dict:
     if changed.rowcount != 1:
         raise ActionRejected('tool_changed')
     updated = get_tool(conn,tool['player_id'],tool['profession_key'])
-    capacity = 60*tool['tier']
+    capacity = TOOL_CAPACITY[tool['tier']]
     updated['worn_warning'] = tool['durability']*5>capacity and updated['durability']*5<=capacity
     return updated
 
@@ -54,25 +55,18 @@ def install_tool(conn, player_id: int, profession: str, tier: int, *, expected_r
     if tier < old['tier']:
         raise ActionRejected('tool_no_downgrade')
     mask = int(old['bootstrap_used_mask'])
-    if commission:
-        if profession not in {'woodcutting','mining'} or tier<2 or old['tier'] != tier-1:
-            raise ActionRejected('commission_previous_tier')
-        bit = 1 << (tier-2)
-        if mask & bit:
-            raise ActionRejected('commission_used')
-        mask |= bit
     conn.execute('''UPDATE player_profession_tools SET tier=?,durability=?,revision=revision+1,
         bootstrap_used_mask=?,updated_ms=? WHERE player_id=? AND profession_key=? AND revision=?''',
-        (tier,60*tier,mask,now_ms,player_id,profession,expected_revision))
+        (tier,TOOL_CAPACITY[tier],mask,now_ms,player_id,profession,expected_revision))
     return get_tool(conn,player_id,profession)
 
 
 def repair_costs(tier: int, durability: int) -> dict:
-    if tier not in ACCESS_LEVELS or not 0<=durability<=60*tier:
+    if tier not in ACCESS_LEVELS or not 0<=durability<=TOOL_CAPACITY[tier]:
         raise ValueError('invalid_tool')
     if tier == 1:
         raise ActionRejected('tool_t1_no_repair')
-    missing = 60*tier-durability
+    missing = TOOL_CAPACITY[tier]-durability
     return {'materials':{item:(missing*tier+denominator-1)//denominator
             for item,denominator in [('wood_common',60),('iron_ore',120),('coal',240)]},
             'gold':(missing*tier+19)//20,'restored':missing}
@@ -94,7 +88,7 @@ def repair_quote(conn, player_id: int, profession: str) -> dict:
     return {'schema_version':1,'profession_key':profession,'tool_revision':tool['revision'],
             'tool_tier':tool['tier'],'durability':tool['durability'],'repair_mode':mode,
             'consumed':consumed,'supplied':supplied,'owned':owned,'gold':gold,
-            'restored':costs['restored'],'durability_after':60*tool['tier']}
+            'restored':costs['restored'],'durability_after':TOOL_CAPACITY[tool['tier']]}
 
 
 def commission_inputs(conn, player_id: int, recipe) -> tuple[dict,int,dict]:
@@ -102,25 +96,11 @@ def commission_inputs(conn, player_id: int, recipe) -> tuple[dict,int,dict]:
     output = recipe.output_spec
     tier,profession = output.tool_tier,output.profession_key
     tool = get_tool(conn,player_id,profession)
-    if profession not in {'woodcutting','mining'} or tier not in (2,3,4):
-        raise ActionRejected('commission_unavailable')
-    if not tool or tool['tier'] != tier-1:
-        raise ActionRejected('commission_previous_tier')
-    if tool['bootstrap_used_mask'] & (1 << (tier-2)):
-        raise ActionRejected('commission_used')
-    state = conn.execute('SELECT level FROM player_gathering_professions WHERE telegram_id=? AND profession_key=?', (player_id,profession)).fetchone()
-    if not state or state['level'] < ACCESS_LEVELS[tier]:
+    from game.profession_state import get_state
+    state=get_state(conn,player_id,profession,registered=True)
+    if tier not in ACCESS_LEVELS or state['level']<ACCESS_LEVELS[tier]:
         raise ActionRejected('profession_level_too_low')
-    inputs = dict(recipe.requirements)
-    contributed = {i:q for i,q in recipe.requirements if RESOURCES[i].resource_tier==tier}
-    visited = {r['location_id'] for r in conn.execute('SELECT location_id FROM player_location_discovery WHERE telegram_id=?', (player_id,))}
-    for item in contributed:
-        sources = {loc for loc,rows in ENVIRONMENTAL_SOURCES.items() if any(i==item for i,_ in rows)}
-        if not sources & visited:
-            raise ActionRejected('commission_visit_required')
-        inputs.pop(item)
-    inputs['wood_common'] *= 3
-    return inputs,20*tier*tier,contributed
+    return dict(recipe.requirements),5*tier,{}
 
 
 def craft_tool(player_id: int, recipe_id: str, *, action_token: str | None,
@@ -253,9 +233,9 @@ def commit_tool_maintenance(player_id: int, *, action_token: str, replace: bool=
         if replace:
             updated = install_tool(conn,player_id,profession,1,expected_revision=tool['revision'],now_ms=int(time.time()*1000))
         else:
-            conn.execute('''UPDATE player_profession_tools SET durability=60*tier,revision=revision+1,
+            conn.execute('''UPDATE player_profession_tools SET durability=?,revision=revision+1,
                 updated_ms=? WHERE player_id=? AND profession_key=? AND revision=?''',
-                (int(time.time()*1000),player_id,profession,tool['revision']))
+                (TOOL_CAPACITY[tool['tier']],int(time.time()*1000),player_id,profession,tool['revision']))
             updated = get_tool(conn,player_id,profession)
         result = {'schema_version':1,'catalog_version':2,'action_kind':kind,'status':'replaced' if replace else 'repaired',
             'player_id':player_id,'location_id':player['location_id'],'recipe_id':None,'quote':current,

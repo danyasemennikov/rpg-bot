@@ -37,38 +37,7 @@ def learn_recipe(player_id: int, recipe_id: str, *, action_token: str, request_i
         if token_recipe != recipe_id:
             raise ActionRejected('stale_action')
         authorized = True
-        recipe = get_recipe(recipe_id)
-        if recipe is None:
-            raise ActionRejected('recipe_not_found')
-        player = peaceful_player(conn, player_id, service='craftsmen_guild')
-        ensure_profession_rows(conn, player_id)
-        known = conn.execute('SELECT 1 FROM player_recipe_knowledge WHERE player_id=? AND recipe_id=?',
-                             (player_id, recipe_id)).fetchone()
-        if known:
-            result = {'schema_version': 1, 'action_kind': 'learn', 'status': 'already_known',
-                      'player_id': player_id, 'location_id': player['location_id'], 'recipe_id': recipe_id,
-                      'consumed': [], 'granted': [], 'gold_delta': 0, 'gold_after': player['gold'],
-                      'progression': [], 'catalog_version':2,'source': {'catalog_version': 2}, 'details': {}}
-        else:
-            state = conn.execute('SELECT level FROM player_crafting_professions WHERE player_id=? AND profession_key=?',
-                                 (player_id, recipe.profession_key)).fetchone()
-            if not state or state['level'] < recipe.required_level:
-                raise ActionRejected('profession_level_too_low')
-            if player['gold'] < recipe.learning_gold:
-                raise ActionRejected('insufficient_gold')
-            changed = conn.execute('UPDATE players SET gold=gold-? WHERE telegram_id=? AND gold>=?',
-                                   (recipe.learning_gold, player_id, recipe.learning_gold))
-            if changed.rowcount != 1:
-                raise ActionRejected('insufficient_gold')
-            conn.execute('''INSERT INTO player_recipe_knowledge
-                (player_id, recipe_id, acquired_via, learned_location_id, gold_paid, catalog_version)
-                VALUES (?, ?, 'guild', ?, ?, 2)''',
-                (player_id, recipe_id, player['location_id'], recipe.learning_gold))
-            result = {'schema_version': 1, 'action_kind': 'learn', 'status': 'learned',
-                      'player_id': player_id, 'location_id': player['location_id'], 'recipe_id': recipe_id,
-                      'consumed': [], 'granted': [], 'gold_delta': -recipe.learning_gold,
-                      'gold_after': player['gold'] - recipe.learning_gold, 'progression': [],
-                      'catalog_version':2,'source': {'catalog_version': 2}, 'details': {}}
+        result = learn_knowledge(conn,player_id,recipe_id)
         store_receipt(conn, player_id, request_id, 'learn', expected_hash, result,catalog_version=2)
         conn.commit()
         return result
@@ -92,3 +61,61 @@ def learn_recipe(player_id: int, recipe_id: str, *, action_token: str, request_i
         raise
     finally:
         conn.close()
+
+
+def knowledge_spec(knowledge_id):
+    from game.profession_recipes import GATHERING_MANUALS
+    recipe=get_recipe(knowledge_id)
+    if recipe:
+        return {'knowledge_id':knowledge_id,'profession_key':recipe.profession_key,
+                'tier':recipe.tier,'learning_gold':recipe.learning_gold}
+    return GATHERING_MANUALS.get(knowledge_id)
+
+
+def require_knowledge(conn,player_id,profession,tier,knowledge_id=None):
+    from game.profession_recipes import GATHERING_MANUALS
+    if knowledge_id:
+        spec=knowledge_spec(knowledge_id)
+        if not spec or spec['profession_key']!=profession or spec['tier']!=tier:
+            raise ActionRejected('invalid_knowledge')
+        ids=[knowledge_id]
+    else:
+        ids=[k for k,v in GATHERING_MANUALS.items() if v['profession_key']==profession and v['tier']==tier]
+    if not any(conn.execute('SELECT 1 FROM player_recipe_knowledge WHERE player_id=? AND recipe_id=?',
+                            (player_id,k)).fetchone() for k in ids):
+        raise ActionRejected('recipe_not_known')
+
+
+def learn_knowledge(conn,player_id,knowledge_id):
+    from game.profession_state import get_state
+    import time
+    if not conn.in_transaction:
+        raise RuntimeError('learning requires writer transaction')
+    player=peaceful_player(conn,player_id,service='craftsmen_guild')
+    spec=knowledge_spec(knowledge_id)
+    if not spec:
+        raise ActionRejected('recipe_not_found')
+    state=get_state(conn,player_id,spec['profession_key'],registered=True)
+    if state['tier']<spec['tier']:
+        raise ActionRejected('profession_level_too_low')
+    known=conn.execute('SELECT 1 FROM player_recipe_knowledge WHERE player_id=? AND recipe_id=?',
+                       (player_id,knowledge_id)).fetchone()
+    cost=0
+    via='guild'
+    if not known:
+        voucher=conn.execute("SELECT slot FROM profession_vouchers WHERE player_id=? AND profession_key=? AND knowledge_id IS NULL ORDER BY slot LIMIT 1",
+                             (player_id,spec['profession_key'])).fetchone() if spec['tier']==1 else None
+        cost=0 if voucher else spec['learning_gold']
+        if player['gold']<cost:
+            raise ActionRejected('insufficient_gold')
+        if voucher:
+            via='voucher'
+            conn.execute('UPDATE profession_vouchers SET knowledge_id=?,redeemed_ms=? WHERE player_id=? AND profession_key=? AND slot=?',
+                         (knowledge_id,int(time.time()*1000),player_id,spec['profession_key'],voucher['slot']))
+        conn.execute('UPDATE players SET gold=gold-? WHERE telegram_id=?',(cost,player_id))
+        conn.execute("INSERT INTO player_recipe_knowledge(player_id,recipe_id,acquired_via,learned_location_id,gold_paid,catalog_version) VALUES (?,?,?,?,?,3)",
+                     (player_id,knowledge_id,via,player['location_id'],cost))
+    return {'schema_version':1,'catalog_version':3,'action_kind':'learn','status':'already_known' if known else 'learned',
+            'player_id':player_id,'location_id':player['location_id'],'recipe_id':knowledge_id,
+            'consumed':[],'granted':[],'gold_delta':-cost,'gold_after':player['gold']-cost,
+            'progression':[],'source':{'catalog_version':3},'details':{'acquired_via':via}}

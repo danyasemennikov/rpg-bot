@@ -426,7 +426,7 @@ def validate_recipe_contract(recipe: RecipeDefinition) -> list[str]:
         return errors
 
     if recipe.output_kind=='tool':
-        if recipe.output_item_id is not None or recipe.output_quantity!=1 or recipe.tool_tier not in (1,2,3,4):
+        if recipe.output_item_id is not None or recipe.output_quantity!=1 or recipe.tool_tier not in (1,2,3,4,5,6):
             errors.append('invalid tool output')
         return errors
 
