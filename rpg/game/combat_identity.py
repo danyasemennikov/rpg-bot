@@ -922,12 +922,13 @@ def evaluate_action(
 
     if action_kind == "cleanse":
         poisons=_find_effect(actor,"poison")
-        if not poisons:
-            return {"accepted":False,"reason":"no_poison","actor":actor,"allies":allies,"opponents":opponents,"events":events}
-        _effects(actor).remove(poisons[0])
+        if poisons:
+            _effects(actor).remove(poisons[0])
+        # Eligibility was checked when the durable order reserved the item.
+        # An earlier ally can remove poison; the committed opportunity still runs.
         actor['opportunity_index']=cast_index+1
         actor['manual_contribution']=True
-        events.append({'kind':'consumable_cleanse','actor_id':actor_id,'item_id':'a25_cleanse_draught'})
+        events.append({'kind':'consumable_cleanse','actor_id':actor_id,'item_id':'a25_cleanse_draught','removed':bool(poisons)})
         return {"accepted":True,"actor":actor,"allies":allies,"opponents":opponents,"events":events}
 
     if action_kind in {"guard", "timeout_guard"}:

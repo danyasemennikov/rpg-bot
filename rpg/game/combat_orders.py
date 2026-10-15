@@ -190,6 +190,8 @@ def _validate_pxe1_pve_order(conn,encounter,player_id,action):
     if kind=='cleanse':
         if action.get('item_id')!='a25_cleanse_draught' or target not in {None,str(player_id)}:
             raise ActionRejected('invalid_action')
+        if not any(e.get('kind')=='poison' for e in actor.get('effects',[])):
+            raise ActionRejected('no_poison')
         if any(e.get('kind')=='freeze' for e in actor.get('effects',[])):
             raise ActionRejected('not_your_turn')
         selected={'kind':'cleanse','manual':True}

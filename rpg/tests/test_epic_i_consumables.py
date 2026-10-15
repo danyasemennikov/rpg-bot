@@ -282,3 +282,58 @@ def test_pvp_roster_lock_binds_preparation_but_pvp_orders_still_reject_cleanse()
         authorize_order(conn,row,battle,1,{'kind':'cleanse','item_id':'a25_cleanse_draught'})
     assert pending_slot(conn,1,'preparation')['item_id'] is None
     conn.rollback();conn.close()
+
+
+def test_replacement_confirmation_recovers_success_after_lost_ack_and_token_cleanup():
+    from handlers.inventory import handle_inventory_buttons
+    a=stock('a25_dry_ration');b=stock('a25_hunters_stew')
+    use_inventory_consumable(1,intent(a))
+    query=SimpleNamespace(from_user=SimpleNamespace(id=1),data=f'inv_use_{intent(b)}_supplies',answer=AsyncMock(),edit_message_text=AsyncMock())
+    asyncio.run(handle_inventory_buttons(SimpleNamespace(callback_query=query),SimpleNamespace(user_data={})))
+    query.data=query.edit_message_text.call_args.kwargs['reply_markup'].inline_keyboard[0][0].callback_data
+    query.answer=AsyncMock(side_effect=TimeoutError('lost ack'))
+    with pytest.raises(TimeoutError,match='lost ack'):
+        asyncio.run(handle_inventory_buttons(SimpleNamespace(callback_query=query),SimpleNamespace(user_data={})))
+    conn=database.get_connection()
+    callback_token=query.data.split('_')[2]
+    assert conn.execute('SELECT 1 FROM economy_action_receipts WHERE player_id=1 AND request_id=?',('ui:'+callback_token,)).fetchone()
+    conn.execute('DELETE FROM player_ui_actions WHERE player_id=1');conn.commit();conn.close()
+    query.answer=AsyncMock();query.edit_message_text=AsyncMock()
+    asyncio.run(handle_inventory_buttons(SimpleNamespace(callback_query=query),SimpleNamespace(user_data={})))
+    assert query.edit_message_text.await_count==1
+    conn=database.get_connection()
+    assert pending_slot(conn,1,'food')['revision']==2
+    assert conn.execute('SELECT quantity FROM inventory WHERE id=?',(b,)).fetchone()[0]==2
+    conn.close()
+
+
+def test_accepted_draught_still_spends_opportunity_when_earlier_ally_cleanses_first():
+    from tests.test_pxe1_pve_world_tick import started_group
+    from tests.test_pxe1_combat_order_replay import consume
+    from game import pve_live
+    from game.combat_orders import issue_combat_intents
+    conn=database.get_connection()
+    inv=conn.execute("INSERT INTO inventory(telegram_id,item_id,quantity) VALUES (777,'a25_cleanse_draught',3)").lastrowid
+    conn.commit();conn.close()
+    encounter,_=started_group()
+    state,mob=pve_live.load_active_pve_encounter(encounter_id=encounter)
+    healer=state['participant_states_v1']['1'];healer['family']='holy_staff';healer['skill_ranks']['cleanse']=1;healer['mana']=100
+    consumer=state['participant_states_v1']['777']
+    consumer['effects']=[{'kind':'poison','source_id':'enemy','duration':3,'value':0,'raw_tick':1,'created_side_index':0}]
+    conn=database.get_connection();conn.execute('UPDATE pve_encounters SET battle_state_json=? WHERE encounter_id=?',(json.dumps(state),encounter));conn.commit();conn.close()
+    for player_id,action in [(1,{'kind':'skill','skill_id':'cleanse','item_id':None,'target_info':{'id':777}}),
+                             (777,{'kind':'cleanse','skill_id':None,'item_id':'a25_cleanse_draught','target_info':{'id':777}})]:
+        with patch('time.time',return_value=1013):
+            token=next(iter(issue_combat_intents(player_id,encounter_id=encounter,turn_revision=state['turn_revision'],deadline_at=state['side_deadline_at'],actions=[action]).values()))
+        assert consume(player_id,token,1013)['accepted']
+    pve_live.reset_solo_pve_runtime_store();state,mob=pve_live.load_active_pve_encounter(encounter_id=encounter)
+    now=datetime.fromtimestamp(1013,timezone.utc)
+    pve_live.ensure_runtime_for_battle(player_id=1,battle_state=state,mob=mob,now=now)
+    with patch('game.pve_live._utc_now',return_value=now):
+        assert pve_live.resolve_current_side_if_ready(player_id=1,battle_state=state,
+            on_player_action=lambda action:pve_live._dispatch_v1_player_action(action,battle_state=state),on_enemy_action=lambda action:None)
+    assert state['participant_states_v1']['777']['opportunity_index']==1
+    assert not any(e['kind']=='poison' for e in state['participant_states_v1']['777']['effects'])
+    event=next(e for e in state['combat_events_v1'] if e['kind']=='consumable_cleanse')
+    assert event['removed'] is False
+    conn=database.get_connection();assert conn.execute('SELECT quantity FROM inventory WHERE id=?',(inv,)).fetchone()[0]==2;conn.close()

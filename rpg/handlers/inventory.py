@@ -1377,22 +1377,13 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         return
 
     if data.startswith('inv_prepconfirm_'):
-        from game.action_receipts import issue_actions
-        from game.profession_consumables import use_payload
         parts=data.split('_')
-        conn=get_connection()
-        try:
-            original=conn.execute("SELECT payload FROM player_ui_actions WHERE player_id=? AND token=? AND kind='use' AND used=0",(user.id,parts[2])).fetchone()
-            options=json.loads(original['payload']) if original else {}
-            payload=use_payload(conn,user.id,options['inventory_id'],options['quantity'],confirmed=True)
-            if json.loads(payload)['slot_revision']!=options['slot_revision']:
-                raise ValueError('stale')
-        except (KeyError,TypeError,ValueError):
+        if len(parts)!=4:
             await query.answer(t('chapter.stale_action',lang),show_alert=True)
             return
-        finally:conn.close()
-        token=issue_actions(user.id,'use',[payload])[payload]
-        result=use_inventory_consumable(user.id,token)
+        # The confirmation button already holds the final persisted use intent.
+        # Its token is also the receipt identity after a lost response/restart.
+        result=use_inventory_consumable(user.id,parts[2])
         await query.answer(t('epic_i.consumable_ready' if result['status']=='used' else 'epic_i.changed',lang),show_alert=True)
         text,keyboard=build_inventory_list(user.id,parts[3],lang)
         await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
@@ -1414,7 +1405,14 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
             existing=pending_slot(conn,user.id,spec['slot']) if 'slot' in spec else {}
         finally:conn.close()
         if existing.get('item_id'):
-            keyboard=InlineKeyboardMarkup([[InlineKeyboardButton(t('common.confirm',lang),callback_data=f'inv_prepconfirm_{parts[2]}_{parts[3]}')],
+            if options.get('slot_revision')!=existing['revision']:
+                await query.answer(t('epic_i.changed',lang),show_alert=True)
+                return
+            from game.action_receipts import issue_actions
+            options['confirmed']=True
+            payload=json.dumps(options,sort_keys=True,separators=(',',':'))
+            confirmed_token=issue_actions(user.id,'use',[payload])[payload]
+            keyboard=InlineKeyboardMarkup([[InlineKeyboardButton(t('common.confirm',lang),callback_data=f'inv_prepconfirm_{confirmed_token}_{parts[3]}')],
                 [InlineKeyboardButton(t('common.back',lang),callback_data=f'inv_tab_{parts[3]}')]])
             await query.edit_message_text(t('epic_i.consumable_replace',lang,name=get_item_name(existing['item_id'],lang)),reply_markup=keyboard,parse_mode='HTML')
             await query.answer()

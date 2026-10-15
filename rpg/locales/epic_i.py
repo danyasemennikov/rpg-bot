@@ -102,6 +102,7 @@ _CONSUMABLE_COPY={
 for _index,_lang in enumerate(('ru','en','es')):
     STRINGS[_lang].update({'effect_'+key:values[_index] for key,values in _CONSUMABLE_COPY.items()})
 _EXTRA={
+ 'cleanse_spent':('Яд уже снят союзником; расходник и боевая возможность потрачены.','An ally already removed the poison; consumable and combat opportunity spent.','Un aliado ya eliminó el veneno; consumible y oportunidad de combate gastados.'),
  'cleanse_used':('Очищение: снят один яд; использована боевая возможность.','Cleanse: one poison removed; combat opportunity spent.','Limpieza: un veneno eliminado; oportunidad de combate gastada.'),
  'consumable_ready':('Сохранено в слоте следующего боя.','Saved in the next-battle slot.','Guardado en la ranura del próximo combate.'),
  'consumable_replace':('В слоте уже есть: {name}. Заменить? Предыдущий расходник не возвращается.','Already prepared: {name}. Replace it? The previous consumable will not be returned.','Ya preparado: {name}. ¿Sustituirlo? No se devuelve el consumible anterior.'),

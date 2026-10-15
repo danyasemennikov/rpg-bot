@@ -366,7 +366,7 @@ def _v1_name_map(battle_state: dict, lang: str) -> dict[str, str]:
 
 def _render_v1_event(event: dict, battle_state: dict, lang: str) -> str | None:
     if event.get('kind')=='consumable_cleanse':
-        return t('epic_i.cleanse_used',lang)
+        return t('epic_i.cleanse_used' if event.get('removed',True) else 'epic_i.cleanse_spent',lang)
     copy = _V1_EVENT_COPY.get(lang, _V1_EVENT_COPY['en'])
     names = _v1_name_map(battle_state, lang)
     actor = escape(names.get(str(event.get('actor_id')), str(event.get('actor_id') or '?')))
