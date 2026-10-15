@@ -90,3 +90,16 @@ def test_unknown_future_field_policy_fails_closed_and_intermediate_t_uses_lower_
     assert req['req_level']==7 and req['req_agility']==4
     with pytest.raises(ActionRejected,match='unsupported_equipment_policy'):
         resolve_effective_equip_requirements(ITEMS['field_bow'],25)
+
+
+@pytest.mark.parametrize('lang',('ru','en','es'))
+def test_compact_card_uses_actual_instance_requirements(lang):
+    from handlers.inventory_views import item_card
+    from handlers.inventory import make_entry_token,STAT_NAMES
+    from game.i18n import t
+    conn=database.get_connection();conn.execute('BEGIN IMMEDIATE')
+    instance=create_gear_instance(1,'field_sword_1h',item_tier=20,conn=conn)
+    conn.commit();conn.close()
+    text,_=item_card(1,make_entry_token('gear_instance',instance),'gear',lang)
+    assert t('common.level',lang)+' 20' in text
+    assert STAT_NAMES[lang]['strength']+' 13' in text

@@ -42,3 +42,32 @@ def test_installed_tool_does_not_imply_registration_or_tier_entitlement():
             require_tool(conn,1,'mining')
     finally:
         conn.rollback();conn.close()
+
+
+def test_authorized_harvest_without_manual_keeps_inventory_tool_and_claim_unchanged():
+    import json
+    from tests.test_professions_economy_v1_hunting import _settlement
+    from game.action_receipts import issue_actions
+    from game.hunting import harvest_victory
+    conn=database.get_connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE');ensure_profession_rows(conn,1)
+        register_profession(conn,1,'hunting')
+        install_tool(conn,1,'hunting',1,expected_revision=0,now_ms=0)
+        conn.execute("UPDATE players SET location_id='westwild_n2' WHERE telegram_id=1")
+        conn.commit()
+    finally:conn.close()
+    _settlement(1,'no-knowledge',eligible=True)
+    payload=json.dumps({'encounter_id':'no-knowledge','unit_id':'unit-1','item_id':'boar_meat'},sort_keys=True,separators=(',',':'))
+    token=issue_actions(1,'harvest',[payload])[payload]
+    result=harvest_victory(1,'no-knowledge',unit_id='unit-1',item_id='boar_meat',action_token=token)
+    assert result['status']=='recipe_not_known'
+    assert harvest_victory(1,'no-knowledge',action_token=token)['status']=='recipe_not_known'
+    conn=database.get_connection()
+    try:
+        assert conn.execute("SELECT COALESCE(SUM(quantity),0) FROM inventory WHERE telegram_id=1 AND item_id='boar_meat'").fetchone()[0]==0
+        assert conn.execute("SELECT durability FROM player_profession_tools WHERE player_id=1 AND profession_key='hunting'").fetchone()[0]==90
+        assert conn.execute("SELECT COUNT(*) FROM pve_harvest_claims WHERE encounter_id='no-knowledge'").fetchone()[0]==0
+        assert conn.execute("SELECT COUNT(*) FROM profession_operation_receipts WHERE player_id=1").fetchone()[0]==0
+    finally:conn.close()
+

@@ -126,8 +126,8 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
             lines.append(t('inventory.damage',lang,min=resolved['damage_min'],max=resolved['damage_max']))
         else:
             lines.append(t('inventory.defense',lang,val=resolved['defense']))
-        requirements = [t('common.level',lang)+' '+str(item['req_level'])]
-        requirements += [STAT_NAMES.get(lang,STAT_NAMES['en'])[key]+' '+str(item['req_'+key]) for key in ('strength','agility','intuition','wisdom') if item['req_'+key]>0]
+        requirements = [t('common.level',lang)+' '+str(resolved['req_level'])]
+        requirements += [STAT_NAMES.get(lang,STAT_NAMES['en'])[key]+' '+str(resolved['req_'+key]) for key in ('strength','agility','intuition','wisdom') if resolved['req_'+key]>0]
         lines.append(t('inventory.reqs',lang,val=', '.join(requirements)))
         bonuses = resolved.get('resolved_stat_bonus') if entry['entry_type']=='gear_instance' else json.loads(item['stat_bonus_json'] or '{}')
         if bonuses:

@@ -151,6 +151,9 @@ def harvest_victory(player_id: int, encounter_id: str, *, unit_id: str | None = 
         from game.profession_tools import require_tool,wear_tool
         import time
         knife = require_tool(conn,player_id,'hunting',required_tier=RESOURCES[item_id].required_tool_tier)
+        from game.recipe_knowledge import require_knowledge
+        resource = RESOURCES[item_id]
+        require_knowledge(conn, player_id, 'hunting', resource.resource_tier)
         inserted = conn.execute('INSERT OR IGNORE INTO pve_harvest_claims(encounter_id, player_id, item_id) VALUES (?, ?, ?)',
                                 (encounter_id, player_id, item_id))
         if inserted.rowcount != 1:
@@ -159,10 +162,7 @@ def harvest_victory(player_id: int, encounter_id: str, *, unit_id: str | None = 
         updated_knife = wear_tool(conn,knife,now_ms=int(time.time()*1000))
         from game.profession_state import award_operation
         from game.profession_progression import work_xp
-        from game.recipe_knowledge import require_knowledge
         from types import SimpleNamespace
-        resource=RESOURCES[item_id]
-        require_knowledge(conn,player_id,'hunting',resource.resource_tier)
         attempted=work_xp(gathering=True,work_tier=resource.resource_tier,category=resource.work_category,current_level=state['level'])
         fact=award_operation(conn,player_id,'hunting',operation_id=f'harvest:{encounter_id}:{player_id}',mode='personal',
             source_id=item_id,context_id=encounter_id,attempted=attempted)
