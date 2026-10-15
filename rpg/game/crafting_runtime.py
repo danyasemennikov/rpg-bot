@@ -394,6 +394,11 @@ def execute_craft_operation(conn,player_id,recipe_id,*,operation_id,mode,context
                 or operation_id!=f"{context_id}:stage:{job['stage_cursor']}"
                 or input_escrow_id!=f"{context_id}:input:{job['stage_cursor']}"):
             raise ActionRejected('invalid_input_authority')
+    elif mode=='profession_exam':
+        if recipe_snapshot is not None or attempted_xp is not None:
+            raise ActionRejected('invalid_input_authority')
+        from game.profession_exams import validate_exam_craft_context
+        recipe_snapshot=validate_exam_craft_context(conn,player_id,context_id,recipe_id,operation_id,input_escrow_id)
     elif recipe_snapshot is not None or attempted_xp is not None:
         raise ActionRejected('invalid_input_authority')
     if recipe_snapshot is not None:
