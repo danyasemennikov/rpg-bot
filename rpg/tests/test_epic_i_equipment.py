@@ -103,3 +103,53 @@ def test_compact_card_uses_actual_instance_requirements(lang):
     text,_=item_card(1,make_entry_token('gear_instance',instance),'gear',lang)
     assert t('common.level',lang)+' 20' in text
     assert STAT_NAMES[lang]['strength']+' 13' in text
+
+
+@pytest.mark.parametrize('item_id,primary',[(f'field_{armor}_chest',stat) for armor,stat in [('heavy','strength'),('medium','agility'),('light','wisdom')]]+
+                         [('field_shield','strength'),('field_focus','intuition'),('field_censer','wisdom')])
+@pytest.mark.parametrize('tier,minimum',[(1,1),(5,3),(10,5),(15,7),(20,9)])
+def test_armor_and_offhand_use_a_progression_without_dropping_template_minima(item_id,primary,tier,minimum):
+    item=ITEMS[item_id]
+    req=resolve_effective_equip_requirements(item,tier)
+    assert req['req_level']==max(tier,item['req_level'])
+    assert req['req_'+primary]==max(minimum,item['req_'+primary])
+    player={'level':tier,'strength':30,'agility':30,'intuition':30,'wisdom':30}
+    require_equip(player,item,tier)
+    player[primary]=req['req_'+primary]-1
+    with pytest.raises(ActionRejected,match='equipment_requirements'):require_equip(player,item,tier)
+
+
+@pytest.mark.parametrize('slot',('ring1','ring2'))
+def test_ring_writers_enforce_actual_c_and_equipment_bonus_cannot_bootstrap_attributes(slot):
+    from game.equipment_stats import get_player_effective_stats
+    conn=database.get_connection();conn.execute('BEGIN IMMEDIATE')
+    ring=create_gear_instance(1,'field_precision_ring',item_tier=20,conn=conn)
+    dagger=create_gear_instance(1,'field_daggers',item_tier=20,conn=conn)
+    conn.commit();conn.close()
+    token=issue_gear_intent(1,'equip',ring,target_slot=slot)
+    assert apply_gear_intent(1,'equip',token)['status']=='equipment_requirements'
+    conn=database.get_connection();conn.execute('UPDATE players SET level=20,agility=12 WHERE telegram_id=1');conn.commit();conn.close()
+    token=issue_gear_intent(1,'equip',ring,target_slot=slot)
+    assert apply_gear_intent(1,'equip',token)['status']=='equipped'
+    assert get_player_effective_stats(1,dict(database.get_player(1)))['agility']>=13
+    token=issue_gear_intent(1,'equip',dagger,target_slot='weapon')
+    assert apply_gear_intent(1,'equip',token)['status']=='equipment_requirements'
+
+
+@pytest.mark.parametrize('writer',('legacy_owner','legacy_intent'))
+def test_legacy_entry_uses_explicit_template_minima_without_instance_tier(writer):
+    from game.gear_instances import equip_legacy_inventory_in_slot
+    from game.gear_progression import issue_legacy_gear_intent,apply_legacy_gear_intent
+    conn=database.get_connection()
+    inv=conn.execute("INSERT INTO inventory(telegram_id,item_id,quantity) VALUES (1,'iron_sword',1)").lastrowid
+    conn.execute('UPDATE players SET level=3,strength=4 WHERE telegram_id=1');conn.commit();conn.close()
+    if writer=='legacy_owner':
+        with pytest.raises(ActionRejected,match='equipment_requirements'):equip_legacy_inventory_in_slot(1,inv,'weapon')
+    else:
+        token=issue_legacy_gear_intent(1,'equip',inv,target_slot='weapon')
+        assert apply_legacy_gear_intent(1,'equip',token)['status']=='equipment_requirements'
+    conn=database.get_connection();conn.execute('UPDATE players SET strength=5 WHERE telegram_id=1');conn.commit();conn.close()
+    if writer=='legacy_owner':equip_legacy_inventory_in_slot(1,inv,'weapon')
+    else:
+        token=issue_legacy_gear_intent(1,'equip',inv,target_slot='weapon')
+        assert apply_legacy_gear_intent(1,'equip',token)['status']=='equipped'
