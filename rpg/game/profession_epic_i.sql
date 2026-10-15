@@ -6,6 +6,18 @@ CREATE TABLE IF NOT EXISTS profession_vouchers (
  PRIMARY KEY(player_id,profession_key,slot),
  CHECK((knowledge_id IS NULL)=(redeemed_ms IS NULL))
 );
+CREATE TABLE IF NOT EXISTS player_consumable_slots (
+ player_id INTEGER NOT NULL REFERENCES players(telegram_id),
+ slot TEXT NOT NULL CHECK(slot IN ('food','preparation')),
+ item_id TEXT, revision INTEGER NOT NULL CHECK(revision>=0),
+ PRIMARY KEY(player_id,slot)
+);
+CREATE TABLE IF NOT EXISTS consumable_battle_bindings (
+ player_id INTEGER NOT NULL REFERENCES players(telegram_id),
+ encounter_kind TEXT NOT NULL CHECK(encounter_kind IN ('pve','pvp')),
+ encounter_id TEXT NOT NULL, actor_json TEXT NOT NULL,
+ PRIMARY KEY(player_id,encounter_kind,encounter_id)
+);
 CREATE TABLE IF NOT EXISTS profession_operation_receipts (
  operation_id TEXT PRIMARY KEY,
  player_id INTEGER NOT NULL REFERENCES players(telegram_id),

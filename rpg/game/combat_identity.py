@@ -153,6 +153,8 @@ def _add_effect(target: dict[str, Any], effect: dict[str, Any]) -> None:
         target["effects"] = [old for old in effects if old.get("kind") != "slow"]
         effects = _effects(target)
     elif kind == "poison":
+        from game.profession_consumables import shorten_poison
+        shorten_poison(target,effect)
         own = [old for old in effects if old.get("kind") == "poison" and str(old.get("source_id")) == str(source_id)]
         if len(own) >= 3:
             oldest = min(own, key=lambda old: (int(old.get("created_side_index", 0)), effects.index(old)))
@@ -173,7 +175,8 @@ def _ranked(base: float, rank: int) -> float:
 
 
 def hit_chance(actor: dict[str, Any], target: dict[str, Any], *, accuracy_bonus: int = 0) -> int:
-    accuracy = int(actor.get("accuracy", 100)) + int(accuracy_bonus)
+    from game.profession_consumables import accuracy_rating
+    accuracy = accuracy_rating(actor) + int(accuracy_bonus)
     accuracy += int(_strongest(actor, "accuracy_up"))
     if _has(actor, "slow"):
         accuracy -= 40
@@ -916,6 +919,16 @@ def evaluate_action(
         actor["opportunity_index"] = cast_index + 1
         events.append({"kind": "controlled_skip", "actor_id": actor_id})
         return {"accepted": True, "skipped": True, "actor": actor, "allies": allies, "opponents": opponents, "events": events}
+
+    if action_kind == "cleanse":
+        poisons=_find_effect(actor,"poison")
+        if not poisons:
+            return {"accepted":False,"reason":"no_poison","actor":actor,"allies":allies,"opponents":opponents,"events":events}
+        _effects(actor).remove(poisons[0])
+        actor['opportunity_index']=cast_index+1
+        actor['manual_contribution']=True
+        events.append({'kind':'consumable_cleanse','actor_id':actor_id,'item_id':'a25_cleanse_draught'})
+        return {"accepted":True,"actor":actor,"allies":allies,"opponents":opponents,"events":events}
 
     if action_kind in {"guard", "timeout_guard"}:
         _resolve_guard(actor, side_index=side_index, timeout=timeout, events=events)

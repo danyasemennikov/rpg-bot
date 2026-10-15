@@ -169,6 +169,8 @@ def supplies_card(player,state,page=0,inventory_id=None):
         encounter = conn.execute('SELECT turn_revision,state_revision FROM pve_encounters WHERE encounter_id=?',
                                  (state['pve_encounter_id'],)).fetchone()
     finally: conn.close()
+    from game.profession_consumables import CONSUMABLES
+    supplies=[r for r in supplies if r['item_id'] not in CONSUMABLES or r['item_id']=='a25_cleanse_draught']
     if inventory_id is not None:
         supply = next((r for r in supplies if r['id']==inventory_id),None)
         if not supply or not encounter: raise ActionRejected('stale_action')
@@ -177,9 +179,17 @@ def supplies_card(player,state,page=0,inventory_id=None):
         bonuses = json.loads(item['stat_bonus_json'])
         for key,locale in (('heal','battle.potion_heal'),('mana','battle.potion_mana')):
             if bonuses.get(key): lines.append(t(locale,lang,amount=bonuses[key]))
-        payload = f"{state['pve_encounter_id']}:{supply['id']}:{supply['quantity']}:{encounter['turn_revision']}:{encounter['state_revision']}"
-        token = issue_actions(player['telegram_id'],'battle_use',[payload])[payload]
-        rows = [[InlineKeyboardButton(t('pxe1.combat.use',lang),callback_data='battle_use_potion_'+token)]]
+        if supply['item_id']=='a25_cleanse_draught':
+            from game.i18n import get_item_description
+            lines.append(get_item_description(supply['item_id'],lang))
+            action={'kind':'cleanse','skill_id':None,'item_id':'a25_cleanse_draught','target_info':{'id':player['telegram_id']}}
+            tokens=issue_combat_intents(player['telegram_id'],encounter_id=state['pve_encounter_id'],
+                turn_revision=int(state['turn_revision']),deadline_at=state['side_deadline_at'],actions=[action])
+            rows=[[InlineKeyboardButton(t('epic_i.cleanse_opportunity',lang),callback_data='battle_v1_'+next(iter(tokens.values())))]]
+        else:
+            payload = f"{state['pve_encounter_id']}:{supply['id']}:{supply['quantity']}:{encounter['turn_revision']}:{encounter['state_revision']}"
+            token = issue_actions(player['telegram_id'],'battle_use',[payload])[payload]
+            rows = [[InlineKeyboardButton(t('pxe1.combat.use',lang),callback_data='battle_use_potion_'+token)]]
         rows.extend(view_rows(player,state,[(t('common.back',lang),{'view':'supplies','page':page})]))
     else:
         pages = max(1,(len(supplies)+5)//6); page = max(0,min(int(page),pages-1))
@@ -219,6 +229,9 @@ def details_card(player,state,section=None,page=0):
                 stats=[copy[label]+': '+str(entity[key]) for key,label in (
                     ('physical_defense','pdef'),('magic_defense','mdef'),('accuracy','accuracy'),('evasion','evasion')) if key in entity]
                 if stats: lines.append(' · '.join(stats))
+                from game.i18n import get_item_description
+                for prepared in entity.get('profession_consumables',[]):
+                    lines.append(escape(get_item_name(prepared['item_id'],lang))+': '+get_item_description(prepared['item_id'],lang))
                 for effect in entity.get('effects',[]):
                     label=_V1_EFFECT_COPY.get(lang,_V1_EFFECT_COPY['en']).get(effect.get('kind'),t('pxe1.common.details',lang))
                     lines.append(escape(label)+f" · {effect.get('value',effect.get('raw_tick',''))} · ⏳{effect.get('duration',0)}")

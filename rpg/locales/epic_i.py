@@ -84,3 +84,31 @@ _ITEMS={
  'a25_anchor_ring':('Опорное кольцо','Anchor ring','Anillo de anclaje'),
 }
 ITEM_NAMES={lang:{key:values[index] for key,values in _ITEMS.items()} for index,lang in enumerate(('ru','en','es'))}
+
+_CONSUMABLE_COPY={
+ 'a25_resin_salve':('Вне боя: восстановить 25% maxHP.','Outside combat: restore 25% maxHP.','Fuera de combate: restaura el 25% de maxHP.'),
+ 'a25_antivenom':('Подготовка следующего боя: первые два яда короче на 1 возможность, минимум 1.','Preparation for the next battle: the first two poisons last 1 opportunity less, minimum 1.','Preparación para el próximo combate: los dos primeros venenos duran 1 oportunidad menos, mínimo 1.'),
+ 'a25_clear_sight':('Подготовка: +8% рейтинга точности на первые 3 возможности следующего боя.','Preparation: +8% accuracy rating for the first 3 opportunities of the next battle.','Preparación: +8% de precisión durante las 3 primeras oportunidades del próximo combate.'),
+ 'a25_mana_infusion':('Подготовка: +12% maxMP на следующий бой, без заполнения.','Preparation: +12% maxMP for the next battle, without refilling it.','Preparación: +12% de maxMP para el próximo combate, sin rellenarlo.'),
+ 'a25_cleanse_draught':('В PvE: снять один яд с себя за обычную боевую возможность.','In PvE: remove one poison from yourself using a normal combat opportunity.','En PvE: elimina un veneno propio gastando una oportunidad de combate normal.'),
+ 'a25_balanced_elixir':('Подготовка: +8% maxHP и maxMP на следующий бой, без заполнения.','Preparation: +8% maxHP and maxMP for the next battle, without refilling.','Preparación: +8% de maxHP y maxMP para el próximo combate, sin rellenarlos.'),
+ 'a25_mushroom_soup':('Вне боя: восстановить 15% HP и 15% MP.','Outside combat: restore 15% HP and 15% MP.','Fuera de combate: restaura el 15% de HP y MP.'),
+ 'a25_dry_ration':('Пища: +6% maxHP на следующий бой, без заполнения.','Food: +6% maxHP for the next battle, without refilling.','Comida: +6% de maxHP para el próximo combate, sin rellenarlo.'),
+ 'a25_hunters_stew':('Пища: +6% рейтинга точности и +4% maxHP на следующий бой, без заполнения.','Food: +6% accuracy rating and +4% maxHP for the next battle, without refilling.','Comida: +6% de precisión y +4% de maxHP para el próximo combate, sin rellenarlo.'),
+ 'a25_oil_fish_broth':('Пища: +8% maxMP на следующий бой, без заполнения.','Food: +8% maxMP for the next battle, without refilling.','Comida: +8% de maxMP para el próximo combate, sin rellenarlo.'),
+ 'a25_long_trail_meal':('Вне боя: восстановить 30% HP и 20% MP.','Outside combat: restore 30% HP and 20% MP.','Fuera de combate: restaura el 30% de HP y el 20% de MP.'),
+ 'a25_deepwater_supper':('Пища: +6% рейтинга физической и магической защиты на следующий бой.','Food: +6% physical and magic defense ratings for the next battle.','Comida: +6% de defensa física y mágica para el próximo combate.'),
+}
+for _index,_lang in enumerate(('ru','en','es')):
+    STRINGS[_lang].update({'effect_'+key:values[_index] for key,values in _CONSUMABLE_COPY.items()})
+_EXTRA={
+ 'cleanse_used':('Очищение: снят один яд; использована боевая возможность.','Cleanse: one poison removed; combat opportunity spent.','Limpieza: un veneno eliminado; oportunidad de combate gastada.'),
+ 'consumable_ready':('Сохранено в слоте следующего боя.','Saved in the next-battle slot.','Guardado en la ranura del próximo combate.'),
+ 'consumable_replace':('В слоте уже есть: {name}. Заменить? Предыдущий расходник не возвращается.','Already prepared: {name}. Replace it? The previous consumable will not be returned.','Ya preparado: {name}. ¿Sustituirlo? No se devuelve el consumible anterior.'),
+ 'cleanse_opportunity':('Обычная боевая возможность','Normal combat opportunity','Oportunidad de combate normal'),
+ 'consumable_wrong_context':('Этот расходник нельзя применить здесь. Очищение доступно в меню расходников PvE.','This consumable cannot be used here. Cleanse is available in the PvE supplies menu.','Este consumible no se puede usar aquí. La limpieza está en el menú de suministros PvE.'),
+ 'prepared_food':('Пища: {name}','Food: {name}','Comida: {name}'),
+ 'prepared_preparation':('Подготовка: {name}','Preparation: {name}','Preparación: {name}'),
+}
+for _index,_lang in enumerate(('ru','en','es')):
+    STRINGS[_lang].update({key:values[_index] for key,values in _EXTRA.items()})

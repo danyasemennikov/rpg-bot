@@ -164,6 +164,9 @@ def get_item_name(item_id: str, lang: str) -> str:
 
 def get_item_description(item_id: str, lang: str) -> str:
     """Return localized item copy without making translated text authoritative."""
+    from game.profession_consumables import CONSUMABLES
+    if item_id in CONSUMABLES:
+        return t('epic_i.effect_'+item_id,lang)
     from locales.epic_i import ITEM_NAMES as EPIC_NAMES
     if item_id in EPIC_NAMES.get(lang,EPIC_NAMES['ru']):
         from game.profession_resources import RESOURCES

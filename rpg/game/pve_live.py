@@ -1450,7 +1450,8 @@ def start_due_pve_formation(conn, *, encounter_id: str, now_ms: int) -> dict:
         projection = _build_participant_bootstrap_snapshot_for_player(battle_state=state,participant_id=pid,conn=conn)
         state['participant_states'][str(pid)] = _normalize_projection_snapshot(projection,fallback_snapshot=projection)
     if row['rules_version'] == RULES_VERSION:
-        state['participant_states_v1'] = {str(pid):build_actor_snapshot(pid,conn=conn) for pid in roster}
+        from game.profession_consumables import bind_next_battle
+        state['participant_states_v1'] = {str(pid):bind_next_battle(conn,pid,'pve',encounter_id,build_actor_snapshot(pid,conn=conn)) for pid in roster}
     state['side_a_player_ids'] = roster
     state['pve_encounter_id'] = encounter_id
     sync_projection_for_participant(battle_state=state,player_id=int(row['owner_player_id']))
@@ -2119,6 +2120,9 @@ def create_pve_encounter(
             str(pid): build_actor_snapshot(pid, conn=conn)
             for pid in participant_ids
         }
+        if not resolved_anchor_id:
+            from game.profession_consumables import bind_next_battle
+            participant_v1={pid:bind_next_battle(conn,int(pid),'pve',encounter_id,actor) for pid,actor in participant_v1.items()}
         battle_state['participant_states_v1'] = participant_v1
 
         from game.enemy_profiles import resolve_enemy_snapshot
@@ -2759,6 +2763,8 @@ def finish_solo_pve_encounter(*, player_id: int, encounter_id: str | None = None
                 activity = player_activity(conn, member_id, exclude_pve=resolved_encounter_id)
                 if not activity or activity['kind'] not in {'pve', 'pvp'}:
                     conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?', (member_id,))
+                    from game.profession_consumables import clamp_after_battle
+                    clamp_after_battle(conn,member_id)
             conn.commit()
         except Exception:
             conn.rollback()
@@ -2968,6 +2974,9 @@ def resolve_pve_flee_intent(
                 updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND player_id=? AND status='active' ''', (
                     encounter_id, int(player_id),
                 ))
+            from game.equipment_stats import get_player_effective_stats
+            outside_caps=get_player_effective_stats(player_id,dict(conn.execute('SELECT * FROM players WHERE telegram_id=?',(player_id,)).fetchone()),conn=conn)
+            hp=min(hp,outside_caps['max_hp']);mana=min(mana,outside_caps['max_mana'])
             conn.execute('UPDATE players SET hp=MAX(0, ?), mana=MAX(0, ?), in_battle=0 WHERE telegram_id=?', (
                 hp, mana, int(player_id),
             ))
@@ -3956,6 +3965,8 @@ def apply_pxe1_pve_death(player_id: int, encounter_id: str, *, now_ms: int) -> d
         conn.execute('''UPDATE players SET exp=?,gold=?,hp=?,mana=?,in_battle=0 WHERE telegram_id=?''',
             (max(0,player['exp']-penalty['exp_loss']),max(0,player['gold']-penalty['gold_loss']),
              max(1,int(calc_max_hp(player['vitality'])*.30)),max(0,int(actor['mana'])),player_id))
+        from game.profession_consumables import clamp_after_battle
+        clamp_after_battle(conn,player_id)
         conn.execute('DELETE FROM skill_cooldowns WHERE telegram_id=?',(player_id,))
         conn.execute("UPDATE pve_encounter_participants SET status='defeated',updated_at=CURRENT_TIMESTAMP WHERE encounter_id=? AND player_id=? AND status='active'",(encounter_id,player_id))
         state.setdefault('group_death_penalties',{})[str(player_id)] = penalty
@@ -4066,6 +4077,8 @@ def _quarantine_pxe1_active_encounter(conn,row,*,now_ms,reason):
         activity=player_activity(conn,actor_id,exclude_pve=encounter_id)
         if not activity or activity['kind'] not in {'pve','pvp'}:
             conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?',(actor_id,))
+            from game.profession_consumables import clamp_after_battle
+            clamp_after_battle(conn,actor_id)
         _recovery_notice(conn,actor_id,domain='pve',ref=encounter_id,reason='state_lost',now_ms=now_ms)
     import logging
     logging.getLogger(__name__).error('PXE1 quarantined active encounter %s: %s',encounter_id,reason)
@@ -4243,6 +4256,8 @@ def _dispatch_v1_player_action(action, *, battle_state: dict) -> None:
             'target_id': (getattr(action, 'target_info', None) or {}).get('id'),
             'manual': True,
         }
+    elif action_type == 'cleanse':
+        action_payload = {'kind':'cleanse','manual':True}
     elif action_type == 'fallback_guard':
         action_payload = {'kind': 'timeout_guard', 'manual': False}
     elif action_type == 'flee_failed':

@@ -19,7 +19,7 @@ Status: implementation plan; no runtime acceptance claimed.
 | Activity | existing `player_activity.py` projection + writer transaction | Guild rows join travel/gather/combat projection; all starters and instant professional operations check same owner under BEGIN IMMEDIATE |
 | Equipped instances | `gear_progression.py`, `gear_instances.py` | Normal/ring/compare/legacy/starter/setters all call `equip_requirements.py` |
 | Retention | `tier_advancement.py`, `gear_progression.py`, `build_progression.py` | Future T/prospective permanent stats; atomic auto-unequip/cost/revision/resource clamp; actor snapshot normalization |
-| Consumable effects | existing item-use/evaluator and snapshot owners | 12 effects, one food/preparation slot, duration/settlement; no PvP allowlist expansion |
+| Consumable effects | `profession_consumables.py` pending slots; existing item-use, encounter writers and evaluator own consumption/binding/runtime | 12 effects, one food/preparation slot, duration/settlement; no PvP allowlist expansion |
 | Telegram UI | profession/recipe/inventory/location/activity handlers, `bot.py` routing | Mentor/jobs/exams/material supply/quotes/batch/retry/requirements; RU/EN/ES |
 
 All gameplay mutations use a caller-owned writer transaction. Existing `economy_action_receipts` remains the request/result authority; operation receipts below own individual XP facts. No second writable copy of P/XP is added. Tier is derived from P (1..15 => I,16..30 => II), with eight ranges represented as policy metadata.
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS profession_exam (
  exam_id TEXT PRIMARY KEY,
  player_id INTEGER NOT NULL REFERENCES players(telegram_id),
  profession_key TEXT NOT NULL, target_tier INTEGER NOT NULL CHECK(target_tier=2),
- registered_ms INTEGER NOT NULL,
+ registered_ms INTEGER NOT NULL, plan_json TEXT NOT NULL,
  status TEXT NOT NULL CHECK(status IN ('registered','sample_submitted','confirmed')),
  revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),
  reward_knowledge_id TEXT, result_json TEXT,
@@ -135,3 +135,9 @@ CREATE TABLE IF NOT EXISTS profession_exam_proof (
 8. exact-HEAD integration/journeys/economy evidence and independent Astra High review
 
 One branch and one Draft PR throughout. No Telegram poller or working database execution. Tests use disposable clean databases. STATIC, UNIT/INTEGRATION, SIMULATED and REAL_TELEGRAM are reported separately.
+
+## Effects checkpoint DDL and ownership
+
+`player_consumable_slots` has PK `(player_id,slot)`, `slot CHECK IN ('food','preparation')`, nullable `item_id` and nonnegative `revision`. Null slots retain revision to reject stale replacement previews. Inventory debit, slot replacement and existing economy receipt commit together in `use_inventory_consumable`; confirmation binds the observed slot revision.
+
+`consumable_battle_bindings` has PK `(player_id,encounter_kind,encounter_id)`, kind CHECK `pve/pvp`, and immutable initial `actor_json`. Only actual PvE creation/roster lock and PvP roster lock bind and clear pending slots within their existing writer. Preview `build_actor_snapshot` never binds. During battle the established actor JSON owns remaining poison charges/opportunity counters; initial bindings are retry evidence, never an additional mutable runtime projection. Exit/settlement owners clamp HP/MP to effective permanent/equipment caps. Cleanse debits one item in the durable PvE order transaction; existing order and side receipts own replay/restart and the evaluator spends one ordinary opportunity. PvP order allowlists remain unchanged.

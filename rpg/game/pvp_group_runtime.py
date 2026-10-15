@@ -113,6 +113,8 @@ def quarantine_live_group(conn,row,*,reason,now_ms):
             (row['id'],actor_id,actor_id,actor_id)).fetchone()
         if not other_pve and not other_pvp:
             conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?',(actor_id,))
+            from game.profession_consumables import clamp_after_battle
+            clamp_after_battle(conn,actor_id)
         _recovery_notice(conn,actor_id,domain='pvp',ref=row['id'],reason='cancelled',now_ms=now_ms)
     import logging
     logging.getLogger(__name__).error('PXE1 quarantined live PvP engagement %s: %s',row['id'],reason)
@@ -254,10 +256,13 @@ def settle_deaths(conn, row, context, *, turn_revision, now_ms, failure_hook=Non
         arrive_at_location(conn,victim_id,hub,now_ms=now_ms)
         conn.execute('''UPDATE players SET hp=?,mana=?,in_battle=0,pvp_respawn_protection_until=?
             WHERE telegram_id=?''', (max(1,int(victim['max_hp'])*30//100),max(0,int(snapshot['mana'])),now_ms//1000+480,victim_id))
+        from game.profession_consumables import clamp_after_battle
+        clamp_after_battle(conn,victim_id)
+        outside=conn.execute('SELECT hp,mana FROM players WHERE telegram_id=?',(victim_id,)).fetchone()
         result = {'schema_version':1,'engagement_id':row['id'],'player_id':victim_id,'side':side,
             'credited_actor_id':credited,'prior_pair_counts':counts,'repeat_scale':float(scale),
             'inventory_before':quantities,'loss_pool':pool,'log_id':log_id,'infamy_delta':infamy,
-            'respawn_hub':hub,'hp_after':max(1,int(victim['max_hp'])*30//100),'mana_after':max(0,int(snapshot['mana']))}
+            'respawn_hub':hub,'hp_after':outside['hp'],'mana_after':outside['mana']}
         result['damage_dealt']=sum(int(sources.get(str(victim_id),0)) for sources in battle.get('damage_by_source',{}).values())
         result['damage_taken']=sum(int(n) for n in battle.get('damage_by_source',{}).get(str(victim_id),{}).values())
         new_deaths.append(result)
@@ -315,6 +320,8 @@ def settle_group(conn, row, context, *, turn_revision, now_ms, failure_hook=None
         for player_id in ids:
             actor = battle['participants_v1'][str(player_id)]
             conn.execute('UPDATE players SET hp=?,mana=?,in_battle=0 WHERE telegram_id=?',(actor['hp'],actor['mana'],player_id))
+            from game.profession_consumables import clamp_after_battle
+            clamp_after_battle(conn,player_id)
     battle['state'] = 'finished'
     battle['winner_side'] = winner
     battle['side_turn_state'] = 'completed'
