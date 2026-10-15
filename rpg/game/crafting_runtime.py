@@ -215,208 +215,239 @@ def _craft_rejection(conn, *, player_id, player, request_id, receipt_hash, recip
                        required_profession_level=recipe.minimum_profession_level)
 
 
-def craft_recipe(telegram_id: int, recipe_id: str,
-                 profession_levels: dict[CraftingProfessionKey, int] | None = None,
-                 *, action_token: str | None = None, request_id: str | None = None,
-                 rng=None) -> CraftResult:
-    """Execute a recipe with locked validation and atomic delivery.
-
-    The original explicit-level API remains for foundation callers. Live recipes
-    always use persisted levels, even if a caller supplies a level dictionary.
-    Telegram only submits a server-issued intent; it cannot select a locked recipe.
-    """
-    from game.action_receipts import ActionRejected, peaceful_player, consume_action, require_item_delivery
-    from game.alpha_schema import ensure_crafting_professions
-    from game.economy_actions import find_receipt, intent_hash, store_business_rejection, store_receipt
-    from game.profession_progression import apply_profession_xp, crafting_xp_for_success
-
-    tool_recipe = get_recipe(recipe_id)
-    if tool_recipe and tool_recipe.output_kind=='tool':
-        from game.profession_tools import craft_tool
-        result = craft_tool(telegram_id,recipe_id,action_token=action_token,request_id=request_id)
-        return CraftResult(status=result['status'],recipe_id=recipe_id,
-            profession_key=tool_recipe.profession_key,crafted_quantity=1 if result['status']=='crafted' else 0,
-            profession_xp=int((result.get('progression') or [{}])[0].get('xp_awarded',0)),
-            recovered=bool(result.get('recovered')))
-
-    conn = get_connection()
-    recipe = None
-    authorized = False
-    receipt_hash = ''
+def craft_recipe(telegram_id, recipe_id, profession_levels=None, *, action_token=None, request_id=None, rng=None):
+    """Telegram singleton adapter; the same executor serves durable batches."""
+    from game.action_receipts import consume_action, ActionRejected
+    conn=get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
-        committed_receipt = None
-        if action_token is not None:
-            request_id = request_id or f'ui:{action_token}'
-            committed_receipt = conn.execute('SELECT action_kind,result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?',(telegram_id,request_id)).fetchone()
-            if committed_receipt:
-                if committed_receipt['action_kind']!='craft':
-                    raise ActionRejected('stale_action')
-                committed_id = str(json.loads(committed_receipt['result_json']).get('recipe_id') or '')
-                if recipe_id and recipe_id!=committed_id:
-                    raise ActionRejected('stale_action')
-                recipe_id = committed_id
-        if action_token is not None and not committed_receipt:
-            request_id = request_id or f'ui:{action_token}'
-            token_row = conn.execute('''SELECT payload FROM player_ui_actions
-                WHERE token=? AND player_id=? AND kind='craft' ''', (action_token, telegram_id)).fetchone()
-            if token_row:
-                recipe_id = parse_recipe_intent(str(token_row['payload'])) or ''
-            else:
-                # A newer recipe preview replaces this menu's pending intents. The
-                # committed receipt remains authoritative for a lost-response replay.
-                receipt_row = conn.execute('''SELECT action_kind, result_json
-                    FROM economy_action_receipts WHERE player_id=? AND request_id=?''',
-                    (telegram_id, request_id)).fetchone()
-                if receipt_row:
-                    if str(receipt_row['action_kind']) != 'craft':
-                        raise ActionRejected('stale_action')
-                    committed = json.loads(str(receipt_row['result_json']))
-                    committed_recipe_id = str(committed.get('recipe_id') or '')
-                    if recipe_id and recipe_id != committed_recipe_id:
-                        raise ActionRejected('stale_action')
-                    recipe_id = committed_recipe_id
-                else:
-                    consume_action(conn, telegram_id, 'craft', action_token)
-        recipe = get_recipe(recipe_id)
-        if recipe is None or recipe_id not in LIVE_RECIPE_IDS:
-            return CraftResult(status='recipe_not_found', recipe_id=recipe_id)
-        receipt_hash = intent_hash('craft', telegram_id, {'recipe_id': recipe_id})
-        if request_id:
-            recovered = find_receipt(conn, telegram_id, request_id, 'craft', receipt_hash)
-            if recovered is not None:
-                conn.commit()
-                if recovered.get('status') != 'crafted':
-                    return CraftResult(status=recovered.get('status', 'craft_failed_atomic'), recipe_id=recipe_id,
-                        profession_key=recipe.profession_key, recovered=True)
-                granted = recovered.get('granted') or [{}]
-                return CraftResult(status='crafted', recipe_id=recipe_id,
-                    profession_key=recipe.profession_key, crafted_item_id=recipe.output_item_id,
-                    crafted_quantity=recipe.output_quantity,
-                    profession_xp=int((recovered.get('progression') or [{}])[0].get('xp_awarded', 0)),
-                    instance_ids=tuple(granted[0].get('instance_ids') or ()), recovered=True)
-        if action_token is not None:
-            raw_payload = consume_action(conn, telegram_id, 'craft', action_token)
-            if parse_recipe_intent(raw_payload) != recipe_id:
+        if not action_token:
+            raise ActionRejected('stale_action')
+        request_id=request_id or 'ui:'+action_token
+        prior=conn.execute('SELECT result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?',
+                           (telegram_id,request_id)).fetchone()
+        if prior:
+            result=json.loads(prior['result_json'])
+            if result.get('recipe_id')!=recipe_id:
                 raise ActionRejected('stale_action')
-            authorized = True
-        if validate_recipe_contract(recipe):
-            return CraftResult(status='invalid_recipe_contract', recipe_id=recipe_id)
-        player = peaceful_player(conn, telegram_id, service='craftsmen_guild')
-        ensure_crafting_professions(conn, telegram_id)
-        profession = conn.execute('''SELECT level, exp FROM player_crafting_professions
-            WHERE player_id=? AND profession_key=?''', (telegram_id, recipe.profession_key)).fetchone()
-        player_level = profession['level']
-        known = conn.execute('SELECT 1 FROM player_recipe_knowledge WHERE player_id=? AND recipe_id=?',
-                             (telegram_id, recipe_id)).fetchone()
-        if not known:
-            return _craft_rejection(conn, player_id=telegram_id, player=player, request_id=request_id,
-                receipt_hash=receipt_hash, recipe=recipe, status='recipe_not_found')
-        if player_level < recipe.minimum_profession_level:
-            result = _craft_rejection(conn, player_id=telegram_id, player=player, request_id=request_id,
-                receipt_hash=receipt_hash, recipe=recipe, status='profession_level_too_low',
-                details={'player_level':player_level,'required_level':recipe.minimum_profession_level})
-            return CraftResult(**{**result.__dict__, 'player_profession_level': player_level})
-        aggregated_requirements = _aggregate_recipe_requirements(recipe)
-        missing = _find_missing_materials(telegram_id, aggregated_requirements, conn=conn)
-        if missing:
-            result = _craft_rejection(conn, player_id=telegram_id, player=player, request_id=request_id,
-                receipt_hash=receipt_hash, recipe=recipe, status='missing_materials',
-                details={'missing':[m.__dict__ for m in missing]})
-            return CraftResult(**{**result.__dict__, 'missing_materials': tuple(missing)})
-        _consume_recipe_materials(conn, telegram_id, aggregated_requirements)
-        secondary_rolls = []
-        gear_spec = None
-        if recipe.output_kind == 'gear':
-            if recipe.secondary_policy == 'ordinary_one':
-                secondary_rolls = generate_secondary_rolls_for_item(
-                    get_item(recipe.output_item_id) or {}, rarity=recipe.output_rarity,
-                    item_tier=recipe.item_tier or 1, rng=rng,
-                )
-                secondary_rolls = secondary_rolls[:1]
-            gear_spec = {'base_item_id': recipe.output_item_id, 'item_tier': recipe.item_tier,
-                         'rarity': recipe.output_rarity, 'secondary_rolls': secondary_rolls,
-                         'enhance_level': 0, 'durability': 100, 'max_durability': 100}
-        grant = grant_item_to_player(
-            telegram_id,
-            recipe.output_item_id,
-            recipe.output_quantity,
-            source='crafting',
-            gear_spec=gear_spec,
-            provenance={'source': 'crafting', 'catalog_version': 2, 'recipe_id': recipe_id,
-                        'profession_key': recipe.profession_key, 'crafter_player_id': telegram_id,
-                        'location_id': player['location_id'], 'craft_request_id': request_id},
-            rng=rng,
-            conn=conn,
-        )
-        require_item_delivery(grant, recipe.output_quantity)
-        crafted_quantity = int(grant.get('stackable_added', 0) + grant.get('gear_instances_created', 0))
-        xp = crafting_xp_for_success(current_level=player_level, current_exp=profession['exp'],
-                                     recipe_level=recipe.minimum_profession_level,material_value=recipe.material_value)
-        progression = apply_profession_xp(player_level, profession['exp'], xp)
-        from game.player_feedback import record_progression
-        record_progression(conn,telegram_id,recipe.profession_key,progression,request_id or recipe.recipe_id)
-        if xp:
-            write_progression(
-                conn,telegram_id,recipe.profession_key,progression)
-        from game.quest_board import register_contract_objective
-        register_contract_objective(conn, telegram_id, 'craft', recipe.output_item_id,
-                                    crafted_quantity, player['location_id'])
-        from game.regional_objectives import observe_successful_craft
-        observe_successful_craft(
-            conn,
-            player_id=telegram_id,
-            recipe_id=recipe.recipe_id,
-            output_item_id=recipe.output_item_id,
-        )
-        if request_id:
-            receipt = {
-                'schema_version': 1, 'action_kind': 'craft', 'status': 'crafted',
-                'player_id': telegram_id, 'location_id': player['location_id'], 'recipe_id': recipe_id,
-                'consumed': [{'item_id': item_id, 'quantity': quantity}
-                             for kind in ('bulk', 'special') for item_id, quantity in aggregated_requirements[kind].items()],
-                'granted': [{'item_id': recipe.output_item_id, 'quantity': crafted_quantity,
-                             'instance_ids': grant.get('instance_ids', []), 'gear_specs': [gear_spec] if gear_spec else []}],
-                'gold_delta': 0, 'gold_after': player['gold'],
-                'progression': [{'profession_key': recipe.profession_key,
-                    'old_level': progression.old_level, 'old_exp': progression.old_exp,
-                    'new_level': progression.new_level, 'new_exp': progression.new_exp, 'xp_awarded': xp}],
-                'source': {'catalog_version': 2}, 'details': {}, 'xp_policy_version':2,
-            }
-            store_receipt(conn, telegram_id, request_id, 'craft', receipt_hash, receipt,catalog_version=2)
+            return _craft_result(result,recovered=True)
+        payload=json.loads(consume_action(conn,telegram_id,'craft',action_token))
+        if payload.get('recipe_id')!=recipe_id or payload.get('catalog_version')!=3:
+            raise ActionRejected('stale_action')
+        from game.profession_recipes import get_recipe as catalog_recipe
+        recipe=catalog_recipe(recipe_id)
+        if not recipe:
+            raise ActionRejected('recipe_not_found')
+        if payload.get('commission'):
+            from game.profession_supply import execute_commission
+            result=execute_commission(conn,telegram_id,recipe_id,expected_revision=payload.get('tool_revision'),
+                confirmed=payload.get('replacement_confirmed'),request_id=request_id,
+                expected_quote=payload.get('commission_quote'))
+        elif recipe.output_spec.kind=='tool':
+            if payload.get('count',1)!=1 or payload.get('replacement_confirmed') is not True:
+                raise ActionRejected('tool_confirmation_required')
+            result=execute_craft_operation(conn,telegram_id,recipe_id,operation_id=request_id,
+                mode='personal',expected_tool_revision=payload.get('tool_revision'))
+        else:
+            batch_id=payload.get('batch_id')
+            if not batch_id:
+                batch=create_craft_batch(conn,telegram_id,recipe_id,payload.get('count',1),batch_id=request_id)
+                batch_id=batch['batch_id']
+            result=execute_craft_batch(conn,telegram_id,batch_id)
+        from game.economy_actions import store_receipt,intent_hash
+        store_receipt(conn,telegram_id,request_id,'craft',intent_hash('craft',telegram_id,payload),result,catalog_version=3)
         conn.commit()
-        return CraftResult(
-            status='crafted',
-            recipe_id=recipe.recipe_id,
-            profession_key=recipe.profession_key,
-            crafted_item_id=recipe.output_item_id,
-            crafted_quantity=crafted_quantity,
-            profession_xp=xp,
-            instance_ids=tuple(grant.get('instance_ids', ())),
-        )
+        return _craft_result(result)
     except ActionRejected as exc:
-        status = str(exc)
-        if authorized and request_id and recipe is not None and status != 'stale_action':
-            player = conn.execute('SELECT location_id, gold FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
-            store_business_rejection(
-                conn, player_id=telegram_id, request_id=request_id, action_kind='craft',
-                request_hash=receipt_hash, status=status,
-                location_id=player['location_id'] if player else None, recipe_id=recipe_id,
-                gold_after=player['gold'] if player else 0, source={'catalog_version': 2},catalog_version=2,
-            )
-            conn.commit()
-            return CraftResult(status=status, recipe_id=recipe_id,
-                               profession_key=recipe.profession_key)
         conn.rollback()
-        return CraftResult(status=status, recipe_id=recipe_id)
+        return CraftResult(status=str(exc),recipe_id=recipe_id)
     except Exception:
         conn.rollback()
-        return CraftResult(
-            status='craft_failed_atomic',
-            recipe_id=recipe_id,
-        )
+        raise
     finally:
         conn.close()
+
+
+def _craft_result(result, *, recovered=False):
+    progression=result.get('progression',[])
+    grants=result.get('granted',[])
+    return CraftResult(status=result.get('status','crafted'),recipe_id=result['recipe_id'],
+        crafted_quantity=sum(g.get('quantity',0) for g in grants),
+        profession_xp=sum(p.get('applied',0) for p in progression),
+        instance_ids=tuple(i for g in grants for i in g.get('instance_ids',[])),recovered=recovered)
+
+
+def create_craft_batch(conn,player_id,recipe_id,count,*,batch_id=None):
+    import secrets,time
+    from game.profession_recipes import get_recipe as catalog_recipe
+    from game.profession_state import get_state
+    from game.profession_progression import personal_batch_limit
+    from game.action_receipts import peaceful_player,ActionRejected
+    from game.economy_actions import intent_hash
+    if not conn.in_transaction:
+        raise RuntimeError('batch preview requires writer transaction')
+    peaceful_player(conn,player_id,service='craftsmen_guild')
+    recipe=catalog_recipe(recipe_id)
+    if not recipe or recipe.output_spec.kind not in ('gear','consumable'):
+        raise ActionRejected('invalid_batch_recipe')
+    state=get_state(conn,player_id,recipe.profession_key,registered=True)
+    from game.recipe_knowledge import require_knowledge
+    require_knowledge(conn,player_id,recipe.profession_key,recipe.tier,recipe_id)
+    if state['tier']<recipe.tier:
+        raise ActionRejected('profession_level_too_low')
+    if type(count) is not int or not 1<=count<=personal_batch_limit(state['level']):
+        raise ActionRejected('batch_limit')
+    batch_id=batch_id or secrets.token_hex(16)
+    payload={'player_id':player_id,'profession_key':recipe.profession_key,'recipe_id':recipe_id,
+             'count':count,'catalog_version':3,'policy_version':3,'destination':'inventory',
+             'knowledge_version':3,'profession_revision':state['revision'],
+             'requirements':dict(recipe.requirements)}
+    fingerprint=intent_hash('profession_batch',player_id,payload)
+    conn.execute('INSERT INTO profession_batch(batch_id,player_id,fingerprint,payload_json,created_ms) VALUES (?,?,?,?,?)',
+                 (batch_id,player_id,fingerprint,json.dumps(payload,sort_keys=True),int(time.time()*1000)))
+    return {'batch_id':batch_id,'payload':payload,'fingerprint':fingerprint}
+
+
+def execute_craft_batch(conn,player_id,batch_id,*,expected_fingerprint=None):
+    from game.action_receipts import ActionRejected,peaceful_player
+    from game.profession_state import get_state
+    from game.profession_progression import personal_batch_limit
+    from game.profession_recipes import get_recipe as catalog_recipe
+    from game.economy_actions import intent_hash
+    if not conn.in_transaction:
+        raise RuntimeError('batch requires writer transaction')
+    batch=conn.execute('SELECT * FROM profession_batch WHERE batch_id=? AND player_id=?',(batch_id,player_id)).fetchone()
+    if not batch:
+        raise ActionRejected('stale_action')
+    payload=json.loads(batch['payload_json'])
+    if (intent_hash('profession_batch',player_id,payload)!=batch['fingerprint']
+            or expected_fingerprint is not None and batch['fingerprint']!=expected_fingerprint):
+        raise ActionRejected('batch_fingerprint_mismatch')
+    if batch['result_json']:
+        return json.loads(batch['result_json'])
+    player=peaceful_player(conn,player_id,service='craftsmen_guild')
+    recipe=catalog_recipe(payload['recipe_id'])
+    state=get_state(conn,player_id,payload['profession_key'],registered=True)
+    if (state['revision']!=payload['profession_revision'] or not recipe
+            or recipe.output_spec.kind not in ('gear','consumable') or payload['destination']!='inventory'
+            or payload['catalog_version']!=3 or payload['policy_version']!=3
+            or payload['count']>personal_batch_limit(state['level'])
+            or payload['requirements']!=dict(recipe.requirements)):
+        raise ActionRejected('stale_action')
+    count=payload['count']
+    required={'bulk':{i:q*count for i,q in recipe.requirements},'special':{}}
+    if _find_missing_materials(player_id,required,conn=conn):
+        raise ActionRejected('missing_materials')
+    # SAVEPOINT also makes the executor safe when a caller catches an error.
+    conn.execute('SAVEPOINT personal_batch')
+    try:
+        children=[]
+        for index in range(count):
+            operation_id=f'batch:{batch_id}:{index}'
+            children.append(execute_craft_operation(conn,player_id,recipe.recipe_id,
+                operation_id=operation_id,mode='personal'))
+            conn.execute('INSERT INTO profession_batch_child VALUES (?,?,?)',(batch_id,index,operation_id))
+        result={'schema_version':1,'catalog_version':3,'status':'crafted','action_kind':'craft',
+                'player_id':player_id,'recipe_id':recipe.recipe_id,'batch_id':batch_id,
+                'consumed':[{'item_id':i,'quantity':q*count} for i,q in recipe.requirements],
+                'granted':[g for child in children for g in child['granted']],
+                'progression':[p for child in children for p in child['progression']],
+                'gold_delta':0,'gold_after':player['gold'],'children':children}
+        conn.execute('UPDATE profession_batch SET result_json=? WHERE batch_id=?',
+                     (json.dumps(result,sort_keys=True),batch_id))
+        conn.execute('RELEASE personal_batch')
+        return result
+    except Exception:
+        conn.execute('ROLLBACK TO personal_batch')
+        conn.execute('RELEASE personal_batch')
+        raise
+
+
+def execute_craft_operation(conn,player_id,recipe_id,*,operation_id,mode,context_id=None,input_escrow_id=None,
+                            expected_tool_revision=None,now_ms=None):
+    """No commit/close. Inputs, outputs, observers and XP join the caller's writer."""
+    import time,random,hashlib
+    from game.action_receipts import ActionRejected,peaceful_player,require_item_delivery
+    from game.profession_recipes import get_recipe as catalog_recipe
+    from game.profession_state import get_state,award_operation
+    from game.profession_progression import work_xp
+    from game.recipe_knowledge import require_knowledge
+    if not conn.in_transaction:
+        raise RuntimeError('craft operation requires writer transaction')
+    prior=conn.execute('SELECT * FROM profession_operation_receipts WHERE operation_id=?',(operation_id,)).fetchone()
+    if prior:
+        if (prior['player_id'],prior['source_id'],prior['origin_mode'],prior['context_id'])!=(player_id,recipe_id,mode,context_id):
+            raise ActionRejected('operation_identity_mismatch')
+        return json.loads(prior['result_json'])['craft_result']
+    recipe=catalog_recipe(recipe_id)
+    if not recipe:
+        raise ActionRejected('recipe_not_found')
+    state=get_state(conn,player_id,recipe.profession_key,registered=True)
+    if state['tier']<recipe.tier:
+        raise ActionRejected('profession_level_too_low')
+    require_knowledge(conn,player_id,recipe.profession_key,recipe.tier,recipe_id)
+    now_ms=int(time.time()*1000) if now_ms is None else now_ms
+    if mode=='personal':
+        player=peaceful_player(conn,player_id,service='craftsmen_guild')
+        required={'bulk':dict(recipe.requirements),'special':{}}
+        if _find_missing_materials(player_id,required,conn=conn):
+            raise ActionRejected('missing_materials')
+        _consume_recipe_materials(conn,player_id,required)
+    elif mode in ('paid_job','profession_exam'):
+        escrow=conn.execute("SELECT * FROM guild_escrow WHERE escrow_id=? AND player_id=? AND context_id=? AND direction='input' AND status='reserved'",
+                             (input_escrow_id,player_id,context_id)).fetchone()
+        expected_owner='npc' if mode=='paid_job' else 'exam'
+        if not escrow or escrow['owner']!=expected_owner or json.loads(escrow['contents_json'])!=dict(recipe.requirements):
+            raise ActionRejected('invalid_input_authority')
+        conn.execute("UPDATE guild_escrow SET status='consumed' WHERE escrow_id=?",(input_escrow_id,))
+        player=dict(conn.execute('SELECT * FROM players WHERE telegram_id=?',(player_id,)).fetchone())
+    else:
+        raise ActionRejected('invalid_profession_mode')
+    output=recipe.output_spec
+    if mode!='personal':
+        from dataclasses import asdict
+        output_ref='output:'+operation_id
+        conn.execute("INSERT INTO guild_escrow VALUES (?,?,?,?,?,'output',?,'reserved')",
+            (output_ref,player_id,'job' if mode=='paid_job' else 'exam',context_id,
+             'npc' if mode=='paid_job' else 'exam',json.dumps(asdict(output),sort_keys=True)))
+        granted=[]
+    elif output.kind=='tool':
+        from game.profession_tools import install_tool
+        installed=install_tool(conn,player_id,output.profession_key,output.tool_tier,
+            expected_revision=expected_tool_revision,now_ms=now_ms)
+        output_ref=None
+        granted=[{'kind':'tool','quantity':1,'tool':installed}]
+    else:
+        deterministic_rng=random.Random(int.from_bytes(hashlib.sha256(operation_id.encode()).digest(),'big'))
+        secondary=[]
+        spec=None
+        if output.kind=='gear':
+            if output.secondary_policy=='ordinary_one':
+                secondary=generate_secondary_rolls_for_item(get_item(output.item_id),rarity=output.rarity,
+                    item_tier=output.item_tier,rng=deterministic_rng)[:1]
+            spec={'base_item_id':output.item_id,'item_tier':output.item_tier,'rarity':output.rarity,
+                  'secondary_rolls':secondary,'enhance_level':0,'durability':100,'max_durability':100}
+        grant=grant_item_to_player(player_id,output.item_id,output.quantity,source='crafting',gear_spec=spec,
+            provenance={'source':'personal_adventure_craft','recipe_id':recipe_id,'operation_id':operation_id,'catalog_version':3},
+            rng=deterministic_rng,conn=conn)
+        require_item_delivery(grant,output.quantity)
+        output_ref=None
+        granted=[{'item_id':output.item_id,'quantity':output.quantity,'instance_ids':grant.get('instance_ids',[]),'gear_specs':[spec] if spec else []}]
+        from game.quest_board import register_contract_objective
+        from game.regional_objectives import observe_successful_craft
+        register_contract_objective(conn,player_id,'craft',output.item_id,output.quantity,player['location_id'])
+        observe_successful_craft(conn,player_id=player_id,recipe_id=recipe_id,output_item_id=output.item_id)
+    xp=work_xp(gathering=False,work_tier=recipe.tier,category=recipe.work_category,current_level=state['level'])
+    result={'status':'crafted','recipe_id':recipe_id,'player_id':player_id,'mode':mode,'operation_id':operation_id,
+            'consumed':[{'item_id':i,'quantity':q} for i,q in recipe.requirements] if mode=='personal' else [],
+            'granted':granted,'output_escrow_ref':output_ref,'gold_delta':0,'gold_after':player['gold']}
+    progression=award_operation(conn,player_id,recipe.profession_key,operation_id=operation_id,mode=mode,
+        source_id=recipe_id,context_id=context_id,attempted=xp,result={'craft_result':result},now_ms=now_ms)
+    result['progression']=[{k:v for k,v in progression.items() if k!='craft_result'}]
+    # Persist the complete response, including progression, for lost-response replay.
+    conn.execute('UPDATE profession_operation_receipts SET result_json=? WHERE operation_id=?',
+                 (json.dumps({**progression,'craft_result':result},sort_keys=True),operation_id))
+    return result
 
 
 def validate_recipe_contract(recipe: RecipeDefinition) -> list[str]:

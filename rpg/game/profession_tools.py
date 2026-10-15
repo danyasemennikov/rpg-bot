@@ -50,6 +50,11 @@ def install_tool(conn, player_id: int, profession: str, tier: int, *, expected_r
     old = get_tool(conn,player_id,profession)
     if tier not in ACCESS_LEVELS or profession not in PROFESSIONS:
         raise ActionRejected('invalid_tool')
+    if old is None and expected_revision==0:
+        conn.execute('''INSERT INTO player_profession_tools(player_id,profession_key,tier,durability,
+            revision,bootstrap_used_mask,schema_version,created_ms,updated_ms) VALUES (?,?,1,90,0,0,1,?,?)''',
+            (player_id,profession,now_ms,now_ms))
+        old=get_tool(conn,player_id,profession)
     if not old or old['revision'] != expected_revision:
         raise ActionRejected('tool_changed')
     if tier < old['tier']:
@@ -105,87 +110,10 @@ def commission_inputs(conn, player_id: int, recipe) -> tuple[dict,int,dict]:
 
 def craft_tool(player_id: int, recipe_id: str, *, action_token: str | None,
                request_id: str | None=None) -> dict:
-    from database import get_connection
-    from game.crafting_runtime import _consume_recipe_materials
-    from game.profession_recipes import get_recipe
-    from game.profession_progression import apply_profession_xp, crafting_xp_for_success
-    conn = get_connection()
-    try:
-        conn.execute('BEGIN IMMEDIATE')
-        if not action_token:
-            raise ActionRejected('stale_action')
-        request_id = request_id or f'ui:{action_token}'
-        prior = conn.execute('SELECT action_kind,result_json FROM economy_action_receipts WHERE player_id=? AND request_id=?', (player_id,request_id)).fetchone()
-        if prior:
-            result = json.loads(prior['result_json'])
-            if prior['action_kind'] not in {'tool_craft_pxe1','tool_commission_pxe1'} or result['recipe_id']!=recipe_id:
-                raise ActionRejected('stale_action')
-            conn.commit()
-            return {**result,'recovered':True}
-        payload = json.loads(consume_action(conn,player_id,'craft',action_token))
-        if payload.get('schema_version')!=1 or payload.get('catalog_version')!=2 or payload.get('recipe_id')!=recipe_id:
-            raise ActionRejected('stale_action')
-        recipe = get_recipe(recipe_id)
-        if not recipe or recipe.output_spec.kind!='tool':
-            raise ActionRejected('recipe_not_found')
-        player = peaceful_player(conn,player_id,service='craftsmen_guild')
-        from game.profession_schema import ensure_profession_rows
-        ensure_profession_rows(conn,player_id)
-        known = conn.execute('SELECT 1 FROM player_recipe_knowledge WHERE player_id=? AND recipe_id=?', (player_id,recipe_id)).fetchone()
-        if not known:
-            raise ActionRejected('recipe_not_known')
-        state = conn.execute('SELECT level,exp FROM player_crafting_professions WHERE player_id=? AND profession_key=?', (player_id,recipe.profession_key)).fetchone()
-        if not state or state['level']<recipe.required_level:
-            raise ActionRejected('profession_level_too_low')
-        tool = get_tool(conn,player_id,recipe.output_spec.profession_key)
-        if not tool or tool['revision']!=payload.get('tool_revision'):
-            raise ActionRejected('tool_changed')
-        if tool['tier']>recipe.output_spec.tool_tier:
-            raise ActionRejected('tool_no_downgrade')
-        if payload.get('replacement_confirmed') is not True:
-            raise ActionRejected('tool_confirmation_required')
-        commission = payload.get('commission') is True
-        inputs,gold,supplied = commission_inputs(conn,player_id,recipe) if commission else (dict(recipe.requirements),0,{})
-        # Aggregate duplicate stacks; never credit guild contributions to inventory.
-        for item,quantity in inputs.items():
-            owned = conn.execute('SELECT COALESCE(SUM(quantity),0) FROM inventory WHERE telegram_id=? AND item_id=?', (player_id,item)).fetchone()[0]
-            if 'input_snapshot' in payload and payload['input_snapshot'].get(item)!=owned:
-                raise ActionRejected('tool_quote_changed')
-            if owned<quantity:
-                raise ActionRejected('missing_materials')
-        if player['gold']<gold:
-            raise ActionRejected('insufficient_gold')
-        _consume_recipe_materials(conn,player_id,{'bulk':inputs,'special':{}})
-        conn.execute('UPDATE players SET gold=gold-? WHERE telegram_id=?', (gold,player_id))
-        installed = install_tool(conn,player_id,recipe.output_spec.profession_key,recipe.output_spec.tool_tier,
-            expected_revision=tool['revision'],now_ms=int(time.time()*1000),commission=commission)
-        xp = crafting_xp_for_success(current_level=state['level'],current_exp=state['exp'],
-            recipe_level=recipe.required_level,material_value=recipe.material_value)
-        progression = apply_profession_xp(state['level'],state['exp'],xp)
-        from game.player_feedback import record_progression
-        record_progression(conn,player_id,recipe.profession_key,progression,request_id)
-        if xp:
-            write_progression(
-                conn,player_id,recipe.profession_key,progression)
-        kind = 'tool_commission_pxe1' if commission else 'tool_craft_pxe1'
-        result = {'schema_version':1,'catalog_version':2,'xp_policy_version':2,'action_kind':kind,'status':'crafted',
-            'player_id':player_id,'location_id':player['location_id'],'recipe_id':recipe_id,
-            'consumed':[{'item_id':i,'quantity':q} for i,q in inputs.items()],
-            'granted':[{'kind':'tool','profession_key':recipe.output_spec.profession_key,'tool_tier':recipe.output_spec.tool_tier,'quantity':1}],
-            'gold_delta':-gold,'gold_after':player['gold']-gold,
-            'progression':[{'profession_key':recipe.profession_key,**progression.__dict__}],
-            'source':{'catalog_version':2},'details':{'tool':installed,'guild_supplied':supplied}}
-        store_receipt(conn,player_id,request_id,kind,intent_hash(kind,player_id,payload),result,catalog_version=2)
-        conn.commit()
-        return result
-    except ActionRejected as exc:
-        conn.rollback()
-        return {'status':str(exc)}
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    from game.crafting_runtime import craft_recipe
+    result=craft_recipe(player_id,recipe_id,action_token=action_token,request_id=request_id)
+    return {'status':result.status,'recipe_id':recipe_id,'recovered':result.recovered,
+            'progression':[{'xp_awarded':result.profession_xp}]}
 
 
 def commit_tool_maintenance(player_id: int, *, action_token: str, replace: bool=False) -> dict:

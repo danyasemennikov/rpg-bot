@@ -41,6 +41,18 @@ def store_receipt(conn, player_id: int, request_id: str, action_kind: str,
          json.dumps(result, ensure_ascii=False, sort_keys=True)))
 
 
+def find_exact_receipt(conn, player_id, request_id, action_kind, request_hash):
+    """Immutable Epic I identity; UI refresh never permits a different payload."""
+    from game.action_receipts import ActionRejected
+    row = conn.execute('''SELECT action_kind,request_hash,result_json FROM economy_action_receipts
+        WHERE player_id=? AND request_id=?''', (player_id,request_id)).fetchone()
+    if row is None:
+        return None
+    if row['action_kind'] != action_kind or row['request_hash'] != request_hash:
+        raise ActionRejected('request_receipt_mismatch')
+    return json.loads(row['result_json'])
+
+
 def store_business_rejection(conn, *, player_id: int, request_id: str,
                              action_kind: str, request_hash: str, status: str,
                              location_id: str | None = None,
