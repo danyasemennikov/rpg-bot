@@ -827,3 +827,7 @@ from locales.pxe1_surface_keys import install_surface_keys
 install_surface_keys(STRINGS, 'ru')
 
 STRINGS['gear']['advance_unequip_warning'] = 'После повышения предмет будет снят: постоянные уровень или атрибуты персонажа не соответствуют новым требованиям.'
+
+from locales.epic_i import STRINGS as EPIC_I_STRINGS
+STRINGS['epic_i']=EPIC_I_STRINGS['ru']
+STRINGS['pxe1']['tool']['tier'].update({'5':'U5','6':'U6'})

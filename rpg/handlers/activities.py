@@ -1,4 +1,6 @@
 """Activities home and durable travel/gather cards."""
+from game.profession_tools import TOOL_CAPACITY
+
 
 from html import escape
 import json
@@ -48,7 +50,7 @@ def activity_card(player,session,kind,*,now_ms=None):
             lines.append(' · '.join(f'{escape(get_item_name(item,lang))} ×{quantity}'
                                    for item,quantity in list(accounting['items'].items())[:4]))
         if tool:
-            lines.append(t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier']))
+            lines.append(t('pxe1.tool.durability',lang,current=tool['durability'],maximum=TOOL_CAPACITY[tool['tier']]))
         warning=accounting.get('tool_warning') or {}
         if warning and not warning['acknowledged']:
             lines.append(t('pxe1.tool.worn_warning',lang))
@@ -71,6 +73,10 @@ def build_activities(player):
     lang = player.get('lang','ru')
     conn = get_connection()
     try:
+        guild=conn.execute("SELECT job_id FROM guild_job WHERE player_id=? AND status IN ('active','ready_to_claim')",(player['telegram_id'],)).fetchone()
+        if guild:
+            from handlers.profession_guild_views import job_view
+            return job_view(player,guild['job_id'])
         for table,kind in (('player_travel_sessions','travel'),('player_gathering_sessions','gather')):
             active = conn.execute(f"SELECT * FROM {table} WHERE player_id=? AND status='running'",(player['telegram_id'],)).fetchone()
             if active:
@@ -113,7 +119,7 @@ def gathering_preview_card(player,profession):
     for entry in snapshot['entries'][:4]:
         lines.append(t('pxe1.gather.source_probability',lang,name=escape(get_item_name(entry['item_id'],lang)),
                        chance=entry['chance_bp']/100,level=entry['required_level'],tier=entry['required_tool_tier']))
-    if tool: lines.append(t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier']))
+    if tool: lines.append(t('pxe1.tool.durability',lang,current=tool['durability'],maximum=TOOL_CAPACITY[tool['tier']]))
     rows = []
     if reason: lines.append(t('pxe1.'+reason,lang))
     else:
@@ -170,7 +176,7 @@ def tool_list(player):
         tools = conn.execute('SELECT * FROM player_profession_tools WHERE player_id=? ORDER BY profession_key',(player['telegram_id'],)).fetchall()
     finally:
         conn.close()
-    rows = [[InlineKeyboardButton(f"{t('pxe1.tool.'+TOOL_NAMES[tool['profession_key']],lang)} · {tool['durability']}/{60*tool['tier']}",callback_data='px:tool:'+tool['profession_key'])] for tool in tools]
+    rows = [[InlineKeyboardButton(f"{t('pxe1.tool.'+TOOL_NAMES[tool['profession_key']],lang)} · {tool['durability']}/{TOOL_CAPACITY[tool['tier']]}",callback_data='px:tool:'+tool['profession_key'])] for tool in tools]
     rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='px:home')])
     return t('pxe1.tools',lang),_kb(rows)
 
@@ -221,7 +227,7 @@ def tool_card(player,profession):
         conn.close()
     lang = player.get('lang','ru')
     lines = [t('pxe1.tool.'+TOOL_NAMES[profession],lang)+' · '+t('pxe1.tool.tier.'+str(tool['tier']),lang),
-             t('pxe1.tool.durability',lang,current=tool['durability'],maximum=60*tool['tier'])]
+             t('pxe1.tool.durability',lang,current=tool['durability'],maximum=TOOL_CAPACITY[tool['tier']])]
     rows = []
     location = get_location(player['location_id']) or {}
     if tool['durability']==0:
@@ -252,8 +258,10 @@ def tool_card(player,profession):
         hub,destination=route
         lines.append(t('pxe1.tool.nearest_service',lang,name=escape(get_location_name(hub,lang))))
         rows.append([InlineKeyboardButton(t('pxe1.tool.route',lang),callback_data='goto_'+destination)])
-    next_tier = min(4,tool['tier']+1)
-    rows.append([InlineKeyboardButton(t('pxe1.tool_recipe',lang),callback_data=f'pe_r:pxe_tool_{profession}_{next_tier}')])
+    next_tier=min(6,tool['tier']+1)
+    recipe_id=f'pxe_tool_{profession}_{next_tier}' if next_tier<=4 else f'a25_tool_{profession}_{next_tier}'
+    rows.append([InlineKeyboardButton(t('pxe1.tool_recipe',lang),callback_data='pe_r:'+recipe_id)])
+    rows.append([InlineKeyboardButton(t('epic_i.tools',lang),callback_data='ei:tools:'+profession)])
     rows.append([InlineKeyboardButton(t('common.back',lang),callback_data='px:tools')])
     keyboard = _kb(rows)
     validate_surface('\n'.join(lines),keyboard)

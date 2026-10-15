@@ -157,8 +157,17 @@ def harvest_victory(player_id: int, encounter_id: str, *, unit_id: str | None = 
             raise ActionRejected('stale_action')
         require_item_delivery(grant_item_to_player(player_id, item_id, 1, source='hunting', conn=conn), 1)
         updated_knife = wear_tool(conn,knife,now_ms=int(time.time()*1000))
-        xp = gathering_profession_xp_for_success(current_profession_level=state['level'], required_profession_level=required)
-        progression = add_gathering_profession_exp(player_id, 'hunting', xp, conn=conn)
+        from game.profession_state import award_operation
+        from game.profession_progression import work_xp
+        from game.recipe_knowledge import require_knowledge
+        from types import SimpleNamespace
+        resource=RESOURCES[item_id]
+        require_knowledge(conn,player_id,'hunting',resource.resource_tier)
+        attempted=work_xp(gathering=True,work_tier=resource.resource_tier,category=resource.work_category,current_level=state['level'])
+        fact=award_operation(conn,player_id,'hunting',operation_id=f'harvest:{encounter_id}:{player_id}',mode='personal',
+            source_id=item_id,context_id=encounter_id,attempted=attempted)
+        progression=SimpleNamespace(**fact)
+        xp=fact['applied']
         from game.player_feedback import record_progression
         record_progression(conn,player_id,'hunting',progression,request_id or encounter_id)
         from game.quest_board import register_contract_objective

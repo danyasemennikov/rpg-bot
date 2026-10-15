@@ -33,7 +33,8 @@ def work_xp(*, gathering: bool, work_tier: int, category: str, current_level: in
 
 def crafting_xp_for_success(*, current_level: int, current_exp: int, recipe_level: int,
                             material_value: int, category: str = 'S') -> int:
-    return work_xp(gathering=False,work_tier=profession_tier(recipe_level),category=category,current_level=current_level)
+    attempted=work_xp(gathering=False,work_tier=profession_tier(recipe_level),category=category,current_level=current_level)
+    return apply_profession_xp(current_level,current_exp,attempted).applied
 
 
 @dataclass(frozen=True)

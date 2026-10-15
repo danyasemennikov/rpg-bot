@@ -137,6 +137,9 @@ def set_player_lang(telegram_id: int, lang: str):
 
 def get_item_name(item_id: str, lang: str) -> str:
     """Получить локализованное название предмета."""
+    from locales.epic_i import ITEM_NAMES as EPIC_NAMES
+    if item_id in EPIC_NAMES.get(lang,EPIC_NAMES['ru']):
+        return EPIC_NAMES.get(lang,EPIC_NAMES['ru'])[item_id]
     try:
         if lang == 'ru':
             from locales.items_ru import ITEM_NAMES
@@ -161,6 +164,10 @@ def get_item_name(item_id: str, lang: str) -> str:
 
 def get_item_description(item_id: str, lang: str) -> str:
     """Return localized item copy without making translated text authoritative."""
+    from locales.epic_i import ITEM_NAMES as EPIC_NAMES
+    if item_id in EPIC_NAMES.get(lang,EPIC_NAMES['ru']):
+        from game.profession_resources import RESOURCES
+        return t('epic_i.material_desc' if item_id in RESOURCES else 'epic_i.crafted_desc',lang)
     try:
         if lang == 'ru':
             from locales.items_ru import ITEM_DESCRIPTIONS

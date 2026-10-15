@@ -766,3 +766,7 @@ from locales.pxe1_surface_keys import install_surface_keys
 install_surface_keys(STRINGS, 'es')
 
 STRINGS['gear']['advance_unequip_warning'] = 'El objeto mejorado se desequipará: el nivel o los atributos permanentes del personaje no cumplen sus nuevos requisitos.'
+
+from locales.epic_i import STRINGS as EPIC_I_STRINGS
+STRINGS['epic_i']=EPIC_I_STRINGS['es']
+STRINGS['pxe1']['tool']['tier'].update({'5':'U5','6':'U6'})

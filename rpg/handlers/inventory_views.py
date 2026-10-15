@@ -1,4 +1,6 @@
 """Compact inventory projections over existing gear, inventory and tool owners."""
+from game.profession_tools import TOOL_CAPACITY
+
 
 from html import escape
 import json
@@ -65,7 +67,7 @@ def inventory_card(player_id,category,lang,page=0):
         finally:
             conn.close()
         for tool in tools:
-            label = t('pxe1.tool.'+TOOL_NAMES[tool['profession_key']],lang)+f" · {tool['durability']}/{60*tool['tier']}"
+            label = t('pxe1.tool.'+TOOL_NAMES[tool['profession_key']],lang)+f" · {tool['durability']}/{TOOL_CAPACITY[tool['tier']]}"
             entries.append((True,'tool:'+tool['profession_key'],0,label,'px:tool:'+tool['profession_key']))
     entries.sort(key=lambda row:row[:3])
     pages = max(1,(len(entries)+5)//6)

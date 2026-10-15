@@ -785,3 +785,7 @@ from locales.pxe1_surface_keys import install_surface_keys
 install_surface_keys(STRINGS, 'en')
 
 STRINGS['gear']['advance_unequip_warning'] = 'The upgraded item will be unequipped: permanent character level or attributes do not meet its new requirements.'
+
+from locales.epic_i import STRINGS as EPIC_I_STRINGS
+STRINGS['epic_i']=EPIC_I_STRINGS['en']
+STRINGS['pxe1']['tool']['tier'].update({'5':'U5','6':'U6'})

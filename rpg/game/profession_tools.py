@@ -26,6 +26,10 @@ def require_tool(conn, player_id: int, profession: str, *, required_tier: int=1)
     tool = get_tool(conn,player_id,profession)
     if not tool:
         raise ActionRejected('tool_missing')
+    from game.profession_state import get_state
+    state=get_state(conn,player_id,profession,registered=True)
+    if state['level']<ACCESS_LEVELS[tool['tier']]:
+        raise ActionRejected('tool_tier_locked')
     if tool['tier'] < required_tier:
         raise ActionRejected('tool_tier_locked')
     if tool['durability'] <= 0:

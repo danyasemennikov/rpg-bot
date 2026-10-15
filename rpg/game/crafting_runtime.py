@@ -445,7 +445,7 @@ def execute_craft_operation(conn,player_id,recipe_id,*,operation_id,mode,context
         installed=install_tool(conn,player_id,output.profession_key,output.tool_tier,
             expected_revision=expected_tool_revision,now_ms=now_ms)
         output_ref=None
-        granted=[{'kind':'tool','quantity':1,'tool':installed}]
+        granted=[{'kind':'tool','quantity':1,'tool':installed,'profession_key':output.profession_key,'tool_tier':output.tool_tier}]
     else:
         deterministic_rng=random.Random(int.from_bytes(hashlib.sha256(operation_id.encode()).digest(),'big'))
         secondary=[]
@@ -468,7 +468,9 @@ def execute_craft_operation(conn,player_id,recipe_id,*,operation_id,mode,context
         observe_successful_craft(conn,player_id=player_id,recipe_id=recipe_id,output_item_id=output.item_id)
     xp=attempted_xp if attempted_xp is not None else work_xp(
         gathering=False,work_tier=recipe.tier,category=recipe.work_category,current_level=state['level'])
-    result={'status':'crafted','recipe_id':recipe_id,'player_id':player_id,'mode':mode,'operation_id':operation_id,
+    result={'schema_version':1,'catalog_version':3,'action_kind':'craft','location_id':player['location_id'],
+            'source':{'catalog_version':3,'origin_mode':mode},'details':{},
+            'status':'crafted','recipe_id':recipe_id,'player_id':player_id,'mode':mode,'operation_id':operation_id,
             'consumed':[{'item_id':i,'quantity':q} for i,q in recipe.requirements] if mode=='personal' else [],
             'granted':granted,'output_escrow_ref':output_ref,'gold_delta':0,'gold_after':player['gold']}
     progression=award_operation(conn,player_id,recipe.profession_key,operation_id=operation_id,mode=mode,

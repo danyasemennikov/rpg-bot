@@ -25,7 +25,11 @@ def buy_material(conn, player_id, item_id, quantity, *, request_id):
     from game.gear_instances import grant_item_to_player
     conn.execute('UPDATE players SET gold=gold-? WHERE telegram_id=?',(cost,player_id))
     require_item_delivery(grant_item_to_player(player_id,item_id,quantity,source='profession_supply',conn=conn),quantity)
-    result={'status':'purchased','item_id':item_id,'quantity':quantity,'gold_delta':-cost,'gold_after':player['gold']-cost}
+    result={'schema_version':1,'catalog_version':3,'action_kind':'profession_supply','status':'purchased',
+        'player_id':player_id,'location_id':player['location_id'],'recipe_id':None,
+        'item_id':item_id,'quantity':quantity,'gold_delta':-cost,'gold_after':player['gold']-cost,
+        'consumed':[],'granted':[{'item_id':item_id,'quantity':quantity}],'progression':[],
+        'source':{'catalog_version':3},'details':{}}
     store_receipt(conn,player_id,request_id,'profession_supply',fingerprint,result,catalog_version=3)
     return result
 
@@ -72,9 +76,11 @@ def execute_commission(conn,player_id,recipe_id,*,expected_revision,confirmed,re
     conn.execute('UPDATE players SET gold=gold-? WHERE telegram_id=?',(quote['gold'],player_id))
     tool=install_tool(conn,player_id,quote['profession_key'],quote['tool_tier'],
                       expected_revision=expected_revision,now_ms=int(time.time()*1000))
-    result={'status':'crafted','recipe_id':recipe_id,'mode':'npc_commission','progression':[],
+    result={'schema_version':1,'catalog_version':3,'action_kind':'profession_commission','player_id':player_id,
+            'location_id':player['location_id'],'source':{'catalog_version':3},'details':{},
+            'status':'crafted','recipe_id':recipe_id,'mode':'npc_commission','progression':[],
             'consumed':[{'item_id':i,'quantity':q} for i,q in quote['consumed'].items()],
-            'granted':[{'kind':'tool','quantity':1,'tool':tool}],
+            'granted':[{'kind':'tool','quantity':1,'tool':tool,'profession_key':quote['profession_key'],'tool_tier':quote['tool_tier']}],
             'gold_delta':-quote['gold'],'gold_after':player['gold']-quote['gold'],'quote':quote}
     store_receipt(conn,player_id,receipt_id,'profession_commission',fingerprint,result,catalog_version=3)
     return result

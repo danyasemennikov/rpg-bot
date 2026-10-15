@@ -71,6 +71,8 @@ def award_operation(conn, player_id, profession, *, operation_id, mode, source_i
     state = get_state(conn, player_id, profession, registered=True)
     progression = apply_profession_xp(state['level'], state['exp'], attempted)
     write_progression(conn, player_id, profession, progression)
+    from game.player_feedback import record_progression
+    record_progression(conn,player_id,profession,progression,operation_id)
     outcome = {**(result or {}), 'profession_key': profession, **progression.__dict__}
     conn.execute('''INSERT INTO profession_operation_receipts
         (operation_id,player_id,profession_key,origin_mode,source_id,context_id,
