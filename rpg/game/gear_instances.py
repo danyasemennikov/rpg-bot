@@ -241,7 +241,7 @@ def _normalize_secondary_rolls(raw_value: Any) -> list[dict[str, int | str]]:
     return normalized
 
 
-def _parse_stat_bonus_json(raw_bonus: Any) -> dict[str, int]:
+def _parse_stat_bonus_json(raw_bonus: Any) -> dict[str, int | float]:
     if isinstance(raw_bonus, dict):
         parsed = raw_bonus
     else:
@@ -253,9 +253,14 @@ def _parse_stat_bonus_json(raw_bonus: Any) -> dict[str, int]:
     if not isinstance(parsed, dict):
         return {}
 
-    out: dict[str, int] = {}
+    import math
+    out: dict[str, int | float] = {}
     for key, value in parsed.items():
-        out[str(key)] = _safe_int(value, 0)
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            number = 0.0
+        out[str(key)] = number if math.isfinite(number) else 0.0
     return out
 
 
@@ -269,11 +274,12 @@ def _secondary_strength_multiplier(item_tier: int) -> float:
     return 1.0 + max(0, normalized_tier - 1) * 0.12
 
 
-def _scale_stat_dict(base_stats: dict[str, int], item_tier: int) -> dict[str, int]:
+def _scale_stat_dict(base_stats: dict[str, int | float], item_tier: int) -> dict[str, int]:
     multiplier = _tier_scale_multiplier(item_tier)
     scaled: dict[str, int] = {}
     for stat_key, stat_value in base_stats.items():
-        scaled[stat_key] = int(round(_safe_int(stat_value, 0) * multiplier))
+        # Fractional budget transfers must survive until instance-tier scaling.
+        scaled[stat_key] = int(round(stat_value * multiplier))
     return scaled
 
 

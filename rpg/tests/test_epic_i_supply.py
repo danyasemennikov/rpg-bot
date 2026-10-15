@@ -72,6 +72,17 @@ def test_every_catalog_recipe_has_executable_personal_output():
                 mode='personal',expected_tool_revision=tool_revision)
             assert result['status']=='crafted',recipe.recipe_id
             assert sum(g['quantity'] for g in result['granted'])==1
+            if recipe.recipe_id in ('a25_M_03','a25_M_07'):
+                from game.gear_instances import resolve_gear_instance_item_data
+                instance_id=result['granted'][0]['instance_ids'][0]
+                instance=dict(conn.execute('SELECT * FROM gear_instances WHERE id=?',(instance_id,)).fetchone())
+                # Ignore random secondary rolls: verify the template allocation.
+                instance['secondary_rolls_json']='[]'
+                bonuses=resolve_gear_instance_item_data(instance)['resolved_stat_bonus']
+                if recipe.recipe_id=='a25_M_03':
+                    assert bonuses=={'accuracy':3,'evasion':1,'max_hp':1}
+                else:
+                    assert bonuses=={'accuracy':6,'evasion':2}
         assert conn.execute('SELECT COUNT(*) FROM profession_operation_receipts').fetchone()[0]==153
     finally:
         conn.rollback();conn.close()
