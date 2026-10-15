@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS profession_exam (
  player_id INTEGER NOT NULL REFERENCES players(telegram_id),
  profession_key TEXT NOT NULL, target_tier INTEGER NOT NULL CHECK(target_tier=2),
  registered_ms INTEGER NOT NULL,
+ plan_json TEXT NOT NULL,
  status TEXT NOT NULL CHECK(status IN ('registered','sample_submitted','confirmed')),
  revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),
  reward_knowledge_id TEXT, result_json TEXT,

@@ -364,7 +364,7 @@ def execute_craft_batch(conn,player_id,batch_id,*,expected_fingerprint=None):
 
 
 def execute_craft_operation(conn,player_id,recipe_id,*,operation_id,mode,context_id=None,input_escrow_id=None,
-                            expected_tool_revision=None,now_ms=None):
+                            expected_tool_revision=None,now_ms=None,recipe_snapshot=None,attempted_xp=None):
     """No commit/close. Inputs, outputs, observers and XP join the caller's writer."""
     import time,random,hashlib
     from game.action_receipts import ActionRejected,peaceful_player,require_item_delivery
@@ -379,7 +379,31 @@ def execute_craft_operation(conn,player_id,recipe_id,*,operation_id,mode,context
         if (prior['player_id'],prior['source_id'],prior['origin_mode'],prior['context_id'])!=(player_id,recipe_id,mode,context_id):
             raise ActionRejected('operation_identity_mismatch')
         return json.loads(prior['result_json'])['craft_result']
-    recipe=catalog_recipe(recipe_id)
+    now_ms=int(time.time()*1000) if now_ms is None else now_ms
+    if mode=='paid_job':
+        from game.profession_guild import get_job
+        job=get_job(conn,player_id,context_id)
+        plan=json.loads(job['plan_json'])
+        if job['status']!='active' or not 0<=job['stage_cursor']<len(plan['stages']):
+            raise ActionRejected('invalid_input_authority')
+        if now_ms<job['next_stage_earliest_ms']:
+            raise ActionRejected('guild_stage_not_due')
+        stage=plan['stages'][job['stage_cursor']]
+        if (stage['source_id']!=recipe_id or stage['snapshot']!=recipe_snapshot
+                or stage['attempted_xp']!=attempted_xp
+                or operation_id!=f"{context_id}:stage:{job['stage_cursor']}"
+                or input_escrow_id!=f"{context_id}:input:{job['stage_cursor']}"):
+            raise ActionRejected('invalid_input_authority')
+    elif recipe_snapshot is not None or attempted_xp is not None:
+        raise ActionRejected('invalid_input_authority')
+    if recipe_snapshot is not None:
+        from game.profession_recipes import ProfessionRecipe,RecipeOutputSpec
+        raw=dict(recipe_snapshot)
+        raw['output_spec']=RecipeOutputSpec(**raw['output_spec'])
+        raw['requirements']=tuple((i,q) for i,q in raw['requirements'])
+        recipe=ProfessionRecipe(**raw)
+    else:
+        recipe=catalog_recipe(recipe_id)
     if not recipe:
         raise ActionRejected('recipe_not_found')
     state=get_state(conn,player_id,recipe.profession_key,registered=True)
@@ -437,7 +461,8 @@ def execute_craft_operation(conn,player_id,recipe_id,*,operation_id,mode,context
         from game.regional_objectives import observe_successful_craft
         register_contract_objective(conn,player_id,'craft',output.item_id,output.quantity,player['location_id'])
         observe_successful_craft(conn,player_id=player_id,recipe_id=recipe_id,output_item_id=output.item_id)
-    xp=work_xp(gathering=False,work_tier=recipe.tier,category=recipe.work_category,current_level=state['level'])
+    xp=attempted_xp if attempted_xp is not None else work_xp(
+        gathering=False,work_tier=recipe.tier,category=recipe.work_category,current_level=state['level'])
     result={'status':'crafted','recipe_id':recipe_id,'player_id':player_id,'mode':mode,'operation_id':operation_id,
             'consumed':[{'item_id':i,'quantity':q} for i,q in recipe.requirements] if mode=='personal' else [],
             'granted':granted,'output_escrow_ref':output_ref,'gold_delta':0,'gold_after':player['gold']}
