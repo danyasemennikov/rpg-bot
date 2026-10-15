@@ -812,21 +812,14 @@ def apply_skill_purchase(player_id: int, token: str) -> dict[str, Any]:
 
 def _required_unequips(conn: sqlite3.Connection, player_id: int, attributes: dict[str, int], level: int) -> list[dict[str, Any]]:
     from game.gear_instances import get_equipped_gear_instances, resolve_gear_instance_item_data
+    from game.equip_requirements import resolve_effective_equip_requirements,meets_requirements
 
     result = []
     equipped_instances = get_equipped_gear_instances(player_id, conn=conn)
     for slot, instance in equipped_instances.items():
         item = resolve_gear_instance_item_data(instance)
-        requirements = {
-            "level": int(item.get("req_level", 1) or 1),
-            "strength": int(item.get("req_strength", 0) or 0),
-            "agility": int(item.get("req_agility", 0) or 0),
-            "intuition": int(item.get("req_intuition", 0) or 0),
-            "wisdom": int(item.get("req_wisdom", 0) or 0),
-        }
-        valid = level >= requirements["level"] and all(
-            attributes[key] >= requirements[key] for key in ("strength", "agility", "intuition", "wisdom")
-        )
+        requirements=resolve_effective_equip_requirements(get_item(instance['base_item_id']),int(instance['item_tier']))
+        valid=meets_requirements({'level':level,**attributes},requirements)
         if not valid:
             result.append({
                 "source": "instance",
@@ -849,16 +842,8 @@ def _required_unequips(conn: sqlite3.Connection, player_id: int, attributes: dic
             if not inventory:
                 continue
             item = get_item(str(inventory["item_id"])) or {}
-            requirements = {
-                "level": int(item.get("req_level", 1) or 1),
-                "strength": int(item.get("req_strength", 0) or 0),
-                "agility": int(item.get("req_agility", 0) or 0),
-                "intuition": int(item.get("req_intuition", 0) or 0),
-                "wisdom": int(item.get("req_wisdom", 0) or 0),
-            }
-            valid = level >= requirements["level"] and all(
-                attributes[key] >= requirements[key] for key in ("strength", "agility", "intuition", "wisdom")
-            )
+            requirements=resolve_effective_equip_requirements(item)
+            valid=meets_requirements({'level':level,**attributes},requirements)
             if not valid:
                 result.append({
                     "source": "legacy", "slot": slot, "inventory_id": inventory_id,

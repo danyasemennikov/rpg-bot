@@ -825,3 +825,5 @@ STRINGS['gear'] = {
 
 from locales.pxe1_surface_keys import install_surface_keys
 install_surface_keys(STRINGS, 'ru')
+
+STRINGS['gear']['advance_unequip_warning'] = 'После повышения предмет будет снят: постоянные уровень или атрибуты персонажа не соответствуют новым требованиям.'

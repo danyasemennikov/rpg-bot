@@ -121,8 +121,8 @@ class TierAdvancementPhase8Tests(unittest.TestCase):
         self.assertEqual(result.status, 'not_eligible')
 
     def test_minimal_runtime_slice_advances_higher_rarity_instance(self):
-        instance_id = create_gear_instance(9201, 'magic_staff', item_tier=20, rarity='epic', enhance_level=6)
-        before_cost = resolve_advancement_cost(current_tier=20, target_tier=25, rarity='epic')
+        instance_id = create_gear_instance(9201, 'magic_staff', item_tier=10, rarity='epic', enhance_level=6)
+        before_cost = resolve_advancement_cost(current_tier=10, target_tier=15, rarity='epic')
 
         conn = get_connection()
         gold_before = conn.execute('SELECT gold FROM players WHERE telegram_id=?', (9201,)).fetchone()['gold']
@@ -132,7 +132,7 @@ class TierAdvancementPhase8Tests(unittest.TestCase):
         ).fetchone()['quantity']
         conn.close()
 
-        result = advance_gear_instance_tier(AdvancementRequest(telegram_id=9201, instance_id=instance_id, target_tier=25))
+        result = advance_gear_instance_tier(AdvancementRequest(telegram_id=9201, instance_id=instance_id, target_tier=15))
         self.assertTrue(result.is_success)
         self.assertIsNotNone(result.cost)
 
@@ -147,7 +147,7 @@ class TierAdvancementPhase8Tests(unittest.TestCase):
 
         self.assertEqual(gold_after, gold_before - before_cost.gold)
         self.assertEqual(material_after, material_before - before_cost.material_qty)
-        self.assertEqual(row['item_tier'], 25)
+        self.assertEqual(row['item_tier'], 15)
         self.assertEqual(row['rarity'], 'epic')
         self.assertEqual(row['enhance_level'], 6)
 

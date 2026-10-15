@@ -764,3 +764,5 @@ STRINGS['gear'] = {
 
 from locales.pxe1_surface_keys import install_surface_keys
 install_surface_keys(STRINGS, 'es')
+
+STRINGS['gear']['advance_unequip_warning'] = 'El objeto mejorado se desequipará: el nivel o los atributos permanentes del personaje no cumplen sus nuevos requisitos.'

@@ -147,6 +147,8 @@ def create_gear_instance(
     if not is_gear_item(item):
         raise ValueError(f'Item {base_item_id} is not gear')
 
+    from game.equip_requirements import resolve_effective_equip_requirements
+    resolve_effective_equip_requirements(item,item_tier)
     resolved_slot = slot_identity or _resolve_instance_slot_identity(base_item_id)
     resolved_rarity = rarity or item.get('rarity', 'common')
 
@@ -420,7 +422,8 @@ def resolve_gear_instance_item_data(instance_row: dict[str, Any]) -> dict[str, A
     damage_max = max(damage_min, _apply_enhancement_to_value(base_damage_max, enhance_level))
     defense = _apply_enhancement_to_value(base_defense, enhance_level)
 
-    merged = dict(base_item)
+    from game.equip_requirements import resolve_effective_equip_requirements
+    merged = {**base_item,**resolve_effective_equip_requirements(base_item,item_tier)}
     merged.update({
         'instance_id': instance_row['id'],
         'item_id': instance_row['base_item_id'],
@@ -557,19 +560,20 @@ def resolve_equipped_item_ids_with_fallback(telegram_id: int, *, conn=None) -> d
 
 
 def set_gear_instance_equipped_slot(telegram_id: int, instance_id: int, equipped_slot: str | None):
-    conn = get_connection()
+    conn=get_connection()
     try:
+        conn.execute('BEGIN IMMEDIATE')
         if equipped_slot is not None:
-            conn.execute(
-                'UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 WHERE telegram_id=? AND equipped_slot=?',
-                (telegram_id, equipped_slot),
-            )
-        conn.execute(
-            'UPDATE gear_instances SET equipped_slot=?, revision=revision+1 WHERE telegram_id=? AND id=?',
-            (equipped_slot, telegram_id, instance_id),
-        )
-        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
+            equip_gear_instance_in_slot(telegram_id,instance_id,equipped_slot,conn=conn)
+        else:
+            conn.execute('UPDATE gear_instances SET equipped_slot=NULL,revision=revision+1 WHERE telegram_id=? AND id=?',
+                         (telegram_id,instance_id))
+            conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?',(telegram_id,))
+        from game.equipment_stats import clamp_player_resources_to_effective_caps
+        clamp_player_resources_to_effective_caps(telegram_id,conn=conn)
         conn.commit()
+    except Exception:
+        conn.rollback();raise
     finally:
         conn.close()
 
@@ -583,12 +587,15 @@ def clear_slot_ownership_across_models(telegram_id: int, slot: str):
     _validate_slot_name(slot)
     conn = get_connection()
     try:
+        conn.execute('BEGIN IMMEDIATE')
         conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (telegram_id,))
         conn.execute(
             'UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 WHERE telegram_id=? AND equipped_slot=?',
             (telegram_id, slot),
         )
         conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
+        from game.equipment_stats import clamp_player_resources_to_effective_caps
+        clamp_player_resources_to_effective_caps(telegram_id,conn=conn)
         conn.commit()
     finally:
         conn.close()
@@ -602,7 +609,7 @@ def equip_gear_instance_in_slot(telegram_id: int, instance_id: int, slot: str, *
     try:
         if owns_connection:
             conn.execute('BEGIN IMMEDIATE')
-        row = conn.execute('SELECT base_item_id FROM gear_instances WHERE id=? AND telegram_id=?',
+        row = conn.execute('SELECT base_item_id,item_tier FROM gear_instances WHERE id=? AND telegram_id=?',
                            (instance_id, telegram_id)).fetchone()
         if not row:
             raise ValueError('gear_not_owned')
@@ -611,15 +618,16 @@ def equip_gear_instance_in_slot(telegram_id: int, instance_id: int, slot: str, *
             raise ValueError('wrong_equipment_slot')
         item = get_item(row['base_item_id'])
         player = conn.execute('SELECT * FROM players WHERE telegram_id=?', (telegram_id,)).fetchone()
-        for stat in ('level', 'strength', 'agility', 'intuition', 'wisdom'):
-            if player[stat] < item.get(f'req_{stat}', 0):
-                raise ValueError('equipment_requirements')
+        from game.equip_requirements import require_equip
+        require_equip(player,item,row['item_tier'])
         conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (telegram_id,))
         conn.execute('UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 WHERE telegram_id=? AND equipped_slot=?',
                      (telegram_id, slot))
         conn.execute('UPDATE gear_instances SET equipped_slot=?, revision=revision+1 WHERE telegram_id=? AND id=?',
                      (slot, telegram_id, instance_id))
         conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
+        from game.equipment_stats import clamp_player_resources_to_effective_caps
+        clamp_player_resources_to_effective_caps(telegram_id,conn=conn)
         if owns_connection:
             conn.commit()
     except Exception:
@@ -633,12 +641,27 @@ def equip_gear_instance_in_slot(telegram_id: int, instance_id: int, slot: str, *
 
 def equip_legacy_inventory_in_slot(telegram_id: int, inventory_id: int, slot: str):
     _validate_slot_name(slot)
-    clear_slot_ownership_across_models(telegram_id, slot)
-    conn = get_connection()
+    conn=get_connection()
     try:
-        conn.execute(f'UPDATE equipment SET {slot}=? WHERE telegram_id=?', (inventory_id, telegram_id))
-        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (telegram_id,))
+        conn.execute('BEGIN IMMEDIATE')
+        row=conn.execute('SELECT item_id FROM inventory WHERE telegram_id=? AND id=?',(telegram_id,inventory_id)).fetchone()
+        if not row:
+            raise ValueError('gear_not_owned')
+        identity=_resolve_instance_slot_identity(row['item_id'])
+        if identity!=slot and not (identity=='ring' and slot in ('ring1','ring2')):
+            raise ValueError('wrong_equipment_slot')
+        from game.equip_requirements import require_equip
+        require_equip(conn.execute('SELECT * FROM players WHERE telegram_id=?',(telegram_id,)).fetchone(),get_item(row['item_id']))
+        conn.execute('UPDATE gear_instances SET equipped_slot=NULL,revision=revision+1 WHERE telegram_id=? AND equipped_slot=?',(telegram_id,slot))
+        for previous in LEGACY_EQUIPMENT_SLOT_KEYS:
+            conn.execute(f'UPDATE equipment SET {previous}=NULL WHERE telegram_id=? AND {previous}=?',(telegram_id,inventory_id))
+        conn.execute(f'UPDATE equipment SET {slot}=? WHERE telegram_id=?',(inventory_id,telegram_id))
+        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?',(telegram_id,))
+        from game.equipment_stats import clamp_player_resources_to_effective_caps
+        clamp_player_resources_to_effective_caps(telegram_id,conn=conn)
         conn.commit()
+    except Exception:
+        conn.rollback();raise
     finally:
         conn.close()
 

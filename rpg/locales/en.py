@@ -783,3 +783,5 @@ STRINGS['gear'] = {
 
 from locales.pxe1_surface_keys import install_surface_keys
 install_surface_keys(STRINGS, 'en')
+
+STRINGS['gear']['advance_unequip_warning'] = 'The upgraded item will be unequipped: permanent character level or attributes do not meet its new requirements.'

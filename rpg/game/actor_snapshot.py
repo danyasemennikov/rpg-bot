@@ -53,6 +53,8 @@ def build_actor_snapshot(
     ``conn`` is required so encounter creation, PvP and UI preview can share one
     transaction and cannot observe mismatched gear/build revisions.
     """
+    from game.equip_requirements import normalize_equipment
+    normalize_equipment(conn,player_id)
     row = conn.execute("SELECT * FROM players WHERE telegram_id=?", (player_id,)).fetchone()
     if not row:
         raise ValueError("player_not_found")

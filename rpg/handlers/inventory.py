@@ -629,6 +629,7 @@ def _legacy_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang:
         resolved_instance = resolve_gear_instance_item_data(inv_row.get('instance', {}))
         rarity_key = resolved_instance.get('instance_rarity', rarity_key)
         tier_value = int(resolved_instance.get('item_tier', 1))
+        item={**item,**{key:value for key,value in resolved_instance.items() if key.startswith('req_')}}
 
     rarity_emoji = t(f"inventory.{RARITY_KEYS.get(rarity_key, 'rarity_common')}", lang)
     rarity_name  = RARITY_NAME.get(lang, RARITY_NAME['ru']).get(rarity_key, '')
