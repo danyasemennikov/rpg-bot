@@ -337,3 +337,40 @@ def test_accepted_draught_still_spends_opportunity_when_earlier_ally_cleanses_fi
     event=next(e for e in state['combat_events_v1'] if e['kind']=='consumable_cleanse')
     assert event['removed'] is False
     conn=database.get_connection();assert conn.execute('SELECT quantity FROM inventory WHERE id=?',(inv,)).fetchone()[0]==2;conn.close()
+
+
+@pytest.mark.parametrize('status',('finished','state_lost'))
+def test_unanchored_current_rules_finalizer_clamps_capacity_after_actual_battle_potion(status):
+    from game.build_progression import migrate_character_builds_v1
+    from game.equipment_stats import get_player_effective_stats
+    from game.combat import init_battle
+    from game.mobs import get_mob
+    from game.pve_live import create_solo_pve_encounter,load_active_pve_encounter,finish_solo_pve_encounter
+    from handlers.inventory import use_battle_consumable
+    migrate_character_builds_v1()
+    preparation=stock('a25_balanced_elixir')
+    assert use_inventory_consumable(1,intent(preparation))['status']=='used'
+    player=dict(database.get_player(1));caps=get_player_effective_stats(1,player)
+    conn=database.get_connection()
+    conn.execute('UPDATE players SET hp=? WHERE telegram_id=1',(caps['max_hp'],))
+    potion=conn.execute("INSERT INTO inventory(telegram_id,item_id,quantity) VALUES (1,'health_potion_small',1)").lastrowid
+    conn.commit();conn.close()
+    mob=get_mob('westwild_rabbit');player=dict(database.get_player(1))
+    encounter=create_solo_pve_encounter(player_id=1,battle_state=init_battle(player,mob),mob=mob)
+    state,_=load_active_pve_encounter(encounter_id=encounter)
+    actor=state['participant_states_v1']['1']
+    assert actor['max_hp']>caps['max_hp'] and actor['hp']==caps['max_hp']
+    conn=database.get_connection()
+    row=conn.execute('SELECT turn_revision,state_revision,lifecycle_version FROM pve_encounters WHERE encounter_id=?',(encounter,)).fetchone()
+    assert row['lifecycle_version']==0
+    payload=f"{encounter}:{potion}:1:{row['turn_revision']}:{row['state_revision']}"
+    conn.close()
+    token=issue_actions(1,'battle_use',[payload])[payload]
+    used=use_battle_consumable(1,token,encounter)
+    assert used['status']=='used' and used['heal']>0
+    assert database.get_player(1)['hp']>caps['max_hp']
+    finish_solo_pve_encounter(player_id=1,encounter_id=encounter,status=status)
+    after=database.get_player(1)
+    assert after['hp']==caps['max_hp'] and after['mana']<=caps['max_mana']
+    finish_solo_pve_encounter(player_id=1,encounter_id=encounter,status=status)
+    assert database.get_player(1)['hp']==after['hp']

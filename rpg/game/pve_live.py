@@ -2732,8 +2732,8 @@ def finish_solo_pve_encounter(*, player_id: int, encounter_id: str | None = None
             members = [row['player_id'] for row in conn.execute(
                 "SELECT player_id FROM pve_encounter_participants "
                 "WHERE encounter_id=? AND status='active'", (resolved_encounter_id,)
-            )] if (encounter and 'lifecycle_version' in encounter.keys()
-                   and encounter['lifecycle_version'] == 1) else []
+            )] if (encounter and (encounter['lifecycle_version'] == 1
+                                 or encounter['rules_version'] == RULES_VERSION)) else []
             conn.execute(
                 '''
                 UPDATE pve_encounters
