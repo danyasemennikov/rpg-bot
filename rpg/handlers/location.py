@@ -1541,6 +1541,8 @@ def build_craftsmen_advancement_detail(player: dict, instance_id: int, page: int
         t('gear.advance_cost', lang, before=instance['item_tier'], after=cost['target_tier'],
           gold=cost['gold'], qty=cost['material_qty'], material=get_item_name(cost['material_id'], lang)),
     ])
+    if preview.get('will_unequip'):
+        text+='\n'+t('gear.advance_unequip_warning',lang)
     rows = []
     if token:
         rows.append([InlineKeyboardButton(t('common.confirm', lang), callback_data=f'craftsmen_advance_apply_{token}_{instance_id}_{page}')])

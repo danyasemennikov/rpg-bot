@@ -365,6 +365,8 @@ def _v1_name_map(battle_state: dict, lang: str) -> dict[str, str]:
 
 
 def _render_v1_event(event: dict, battle_state: dict, lang: str) -> str | None:
+    if event.get('kind')=='consumable_cleanse':
+        return t('epic_i.cleanse_used' if event.get('removed',True) else 'epic_i.cleanse_spent',lang)
     copy = _V1_EVENT_COPY.get(lang, _V1_EVENT_COPY['en'])
     names = _v1_name_map(battle_state, lang)
     actor = escape(names.get(str(event.get('actor_id')), str(event.get('actor_id') or '?')))
@@ -2033,7 +2035,7 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
             str(item.get('actor_id')) for item in (battle_state.get('participant_states_v1') or {}).values()
             if int(item.get('hp', 0)) > 0
         }
-        valid = action_type in {'basic_attack', 'guard', 'skill', 'flee'}
+        valid = action_type in {'basic_attack', 'guard', 'skill', 'flee', 'cleanse'}
         if target_id and target_id not in living_ids:
             valid = False
         if action_type == 'skill':
@@ -2162,6 +2164,8 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
                 )).fetchone()
         finally:
             conn.close()
+        from game.profession_consumables import CONSUMABLES
+        potions=[pot for pot in potions if pot['item_id'] not in CONSUMABLES or pot['item_id']=='a25_cleanse_draught']
         encounter_id = str(battle_state.get('pve_encounter_id', ''))
         if not encounter_row:
             await query.answer(t('battle.already_over', lang), show_alert=True)
@@ -2178,6 +2182,13 @@ async def handle_battle_buttons(update: Update, context: ContextTypes.DEFAULT_TY
 
         keyboard = []
         for pot, payload in zip(potions, payloads):
+            if pot['item_id']=='a25_cleanse_draught':
+                action={'kind':'cleanse','skill_id':None,'item_id':'a25_cleanse_draught','target_info':{'id':user.id}}
+                order_tokens=issue_combat_intents(user.id,encounter_id=encounter_id,
+                    turn_revision=int(battle_state['turn_revision']),deadline_at=str(battle_state['side_deadline_at']),actions=[action])
+                if order_tokens:
+                    keyboard.append([InlineKeyboardButton(get_item_name(pot['item_id'],lang)+' · '+t('epic_i.cleanse_opportunity',lang),callback_data='battle_v1_'+next(iter(order_tokens.values())))])
+                continue
             keyboard.append([InlineKeyboardButton(
                 f"💊 {get_item_name(pot['item_id'], lang)} x{pot['quantity']}",
                 callback_data=f"battle_use_potion_{tokens[payload]}"

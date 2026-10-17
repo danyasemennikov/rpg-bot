@@ -335,7 +335,8 @@ def lock_preparation(conn, *, engagement_id, now_ms, failed_escape=False):
     context = json.loads(row['reason_context'])
     actors = {}
     for member in sides['initiator'] + sides['defender']:
-        actor = build_actor_snapshot(member['player_id'], conn=conn)
+        from game.profession_consumables import bind_next_battle
+        actor = bind_next_battle(conn,member['player_id'],'pvp',row['id'],build_actor_snapshot(member['player_id'],conn=conn))
         actor['pve_passives_enabled'] = False
         actors[str(member['player_id'])] = actor
     battle = {'state': 'live', 'rules_version': RULES_VERSION, 'world_model_version': 1,

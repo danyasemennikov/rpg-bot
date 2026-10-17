@@ -120,6 +120,8 @@ def build_gear_mutation_preview(player_id: int, action: str, instance_id: int,
         row = conn.execute('''SELECT g.*, p.gear_revision FROM gear_instances g
             JOIN players p ON p.telegram_id=g.telegram_id
             WHERE g.id=? AND g.telegram_id=?''', (instance_id, player_id)).fetchone()
+        player_row=conn.execute('SELECT * FROM players WHERE telegram_id=?',(player_id,)).fetchone()
+        base_allocation={stat:int(player_row[stat]) for stat in ('level','strength','agility','intuition','wisdom')} if player_row else {}
         quote = None
         if action=='sale' and row:
             from game.sale_policy import sale_quote
@@ -154,7 +156,11 @@ def build_gear_mutation_preview(player_id: int, action: str, instance_id: int,
         cost_ref = {**asdict(cost), 'target_tier': target}
     elif action not in {'equip', 'unequip'}:
         return None
+    from game.equip_requirements import resolve_effective_equip_requirements,meets_requirements
+    effective_requirements=resolve_effective_equip_requirements(item,cost_ref['target_tier'] if action=='advance' else int(instance['item_tier']))
+    will_unequip=bool(action=='advance' and instance.get('equipped_slot') and not meets_requirements(base_allocation,effective_requirements))
     parameters = dict(
+        requirements_policy_version=1,base_allocation=base_allocation,expected_slot=instance.get('equipped_slot'),
         action=action,
         instance_id=int(instance['id']),
         instance_revision=int(instance['revision']),
@@ -165,7 +171,7 @@ def build_gear_mutation_preview(player_id: int, action: str, instance_id: int,
     if action=='sale':
         parameters.update(sale_quote=quote,sale_confirmed=sale_confirmed)
     payload = _json_payload(**parameters)
-    return {'instance': instance, 'cost': cost_ref, 'payload': payload}
+    return {'instance': instance, 'cost': cost_ref, 'payload': payload,'requirements':effective_requirements,'will_unequip':will_unequip}
 
 
 def issue_gear_intent(player_id: int, action: str, instance_id: int, *, target_slot: str | None = None,
@@ -301,9 +307,8 @@ def apply_legacy_gear_intent(player_id: int, action: str, token: str, *, failure
             identity = str(get_item_metadata(str(inventory['item_id'])).get('slot_identity') or '')
             if identity != slot and not (identity == 'ring' and slot in {'ring1', 'ring2'}):
                 raise ActionRejected('wrong_equipment_slot')
-            for stat in ('level', 'strength', 'agility', 'intuition', 'wisdom'):
-                if int(player.get(stat, 0)) < int(item.get(f'req_{stat}', 0)):
-                    raise ActionRejected('equipment_requirements')
+            from game.equip_requirements import require_equip
+            require_equip(player,item)
             conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (player_id,))
             conn.execute('UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 '
                          'WHERE telegram_id=? AND equipped_slot=?', (player_id, slot))
@@ -361,6 +366,11 @@ def _load_intent(conn, player_id: int, action: str, token: str) -> tuple[dict, d
         raise ActionRejected('stale_action')
     if action!='sale' and int(player.get('gear_revision', 0)) != int(payload.get('gear_revision', -1)):
         raise ActionRejected('stale_action')
+    if action in ('equip','advance'):
+        current_base={stat:int(player[stat]) for stat in ('level','strength','agility','intuition','wisdom')}
+        if (payload.get('requirements_policy_version')!=1 or payload.get('base_allocation')!=current_base
+                or payload.get('expected_slot')!=instance.get('equipped_slot')):
+            raise ActionRejected('stale_action')
     return player, instance, payload
 
 
@@ -401,9 +411,8 @@ def apply_gear_intent(player_id: int, action: str, token: str, *, rng_roll: floa
             identity = str(get_item_metadata(str(instance['base_item_id'])).get('slot_identity') or '')
             if identity != slot and not (identity == 'ring' and slot in {'ring1', 'ring2'}):
                 raise ActionRejected('wrong_equipment_slot')
-            for stat in ('level', 'strength', 'agility', 'intuition', 'wisdom'):
-                if int(player.get(stat, 0)) < int(item.get(f'req_{stat}', 0)):
-                    raise ActionRejected('equipment_requirements')
+            from game.equip_requirements import require_equip
+            require_equip(player,item,int(instance['item_tier']))
             conn.execute(f'UPDATE equipment SET {slot}=NULL WHERE telegram_id=?', (player_id,))
             conn.execute('UPDATE gear_instances SET equipped_slot=NULL, revision=revision+1 '
                          'WHERE telegram_id=? AND equipped_slot=?', (player_id, slot))
@@ -487,10 +496,12 @@ def apply_gear_intent(player_id: int, action: str, token: str, *, rng_roll: floa
             _consume_stack(conn, player_id, cost.material_id, cost.material_qty)
             conn.execute('UPDATE gear_instances SET item_tier=?, revision=revision+1 WHERE id=? AND telegram_id=?',
                          (target, instance_id, player_id))
+            from game.equip_requirements import normalize_equipment
+            auto_unequipped=normalize_equipment(conn,player_id)
             conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?', (player_id,))
             _clamp_with_conn(conn, player_id)
             result = {'status': 'advanced', 'instance_id': instance_id, 'before': current,
-                      'after': target, 'cost': asdict(cost)}
+                      'after': target, 'cost': asdict(cost),'auto_unequipped':auto_unequipped}
         elif action == 'unequip':
             slot = str(instance.get('equipped_slot') or '')
             if not slot or (payload.get('target_slot') and str(payload.get('target_slot')) != slot):

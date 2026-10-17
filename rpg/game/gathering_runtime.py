@@ -141,8 +141,15 @@ def start_gathering_session(conn, player_id: int, profession: str, *, location_i
     snapshot = _source_snapshot(location,profession)
     conn.execute('INSERT OR IGNORE INTO player_gathering_professions(telegram_id,profession_key) VALUES (?,?)', (player_id,profession))
     level = conn.execute('SELECT level FROM player_gathering_professions WHERE telegram_id=? AND profession_key=?', (player_id,profession)).fetchone()[0]
+    from game.recipe_knowledge import require_knowledge
+    eligible_tiers={1 if e['required_level']==1 else 2 for e in snapshot['entries'] if e['required_level']<=level}
+    eligible_tiers={tier for tier in eligible_tiers if conn.execute(
+        'SELECT 1 FROM player_recipe_knowledge WHERE player_id=? AND recipe_id IN (?,?)',
+        (player_id,f'gp_{profession}_{tier}_a',f'gp_{profession}_{tier}_b')).fetchone()}
+    if not eligible_tiers:
+        raise ActionRejected('recipe_not_known')
     tool = require_tool(conn,player_id,profession)
-    if not any(e['required_level']<=level and e['required_tool_tier']<=tool['tier'] for e in snapshot['entries']):
+    if not any(e['required_level']<=level and (1 if e['required_level']==1 else 2) in eligible_tiers and e['required_tool_tier']<=tool['tier'] for e in snapshot['entries']):
         raise ActionRejected('no_eligible_resource')
     seed = seed or secrets.token_hex(16)
     gather_tick_roll(seed,1,snapshot)  # Validate before committing an unusable session.
@@ -233,12 +240,26 @@ def commit_gathering_tick(conn, session_id: str, *, now_ms: int) -> dict:
         return {'status':'interrupted','reason':str(exc),'session_id':session_id}
     profession = conn.execute('SELECT * FROM player_gathering_professions WHERE telegram_id=? AND profession_key=?', (player_id,session['profession_key'])).fetchone()
     eligible = selected and profession['level']>=selected['required_level'] and tool['tier']>=selected['required_tool_tier']
+    if eligible:
+        tier=1 if selected['required_level']==1 else 2
+        eligible=bool(conn.execute('SELECT 1 FROM player_recipe_knowledge WHERE player_id=? AND recipe_id IN (?,?)',
+            (player_id,f"gp_{session['profession_key']}_{tier}_a",f"gp_{session['profession_key']}_{tier}_b")).fetchone())
     granted,progression,xp = [],None,0
     if eligible:
         item = selected['item_id']
         require_item_delivery(grant_item_to_player(player_id,item,1,source='gathering',conn=conn),1)
-        xp = gathering_profession_xp_for_success(current_profession_level=profession['level'],required_profession_level=selected['required_level'])
-        progression = add_gathering_profession_exp(player_id,session['profession_key'],xp,conn=conn)
+        from game.profession_resources import RESOURCES
+        from game.recipe_knowledge import require_knowledge
+        from game.profession_progression import work_xp
+        from game.profession_state import award_operation
+        from types import SimpleNamespace
+        resource=RESOURCES[item]
+        require_knowledge(conn,player_id,session['profession_key'],resource.resource_tier)
+        attempted=work_xp(gathering=True,work_tier=resource.resource_tier,category=resource.work_category,current_level=profession['level'])
+        fact=award_operation(conn,player_id,session['profession_key'],operation_id=request_id,mode='personal',
+            source_id=item,context_id=session_id,attempted=attempted,now_ms=now_ms)
+        progression=SimpleNamespace(**fact)
+        xp=fact['applied']
         from game.player_feedback import record_progression
         record_progression(conn,player_id,session['profession_key'],progression,request_id)
         register_contract_objective(conn,player_id,'gather',item,1,session['location_id'])

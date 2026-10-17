@@ -877,6 +877,8 @@ def apply_prepared_settlement(encounter_id: str, *, failure_hook: FailureHook | 
         for player_id in all_participant_ids:
             if not _has_other_live_engagement(conn, int(player_id), encounter_id):
                 conn.execute('UPDATE players SET in_battle=0 WHERE telegram_id=?', (int(player_id),))
+                from game.profession_consumables import clamp_after_battle
+                clamp_after_battle(conn,int(player_id))
         conn.execute("UPDATE pve_encounter_participants SET status='victory', updated_at=CURRENT_TIMESTAMP "
                      "WHERE encounter_id=? AND status='active'", (encounter_id,))
         conn.execute("UPDATE pve_encounters SET status='victory', updated_at=CURRENT_TIMESTAMP, "

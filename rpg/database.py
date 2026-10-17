@@ -92,20 +92,8 @@ def init_db():
     _add_column_if_missing(conn, 'players', 'pvp_respawn_protection_until', "INTEGER DEFAULT 0")
     _add_column_if_missing(conn, 'players', 'gear_revision', 'INTEGER NOT NULL DEFAULT 0')
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS player_gathering_professions (
-            telegram_id     INTEGER NOT NULL,
-            profession_key  TEXT NOT NULL,
-            level           INTEGER NOT NULL DEFAULT 1,
-            exp             INTEGER NOT NULL DEFAULT 0,
-            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (telegram_id, profession_key),
-            CHECK (profession_key IN (
-                'herbalism', 'woodcutting', 'mining', 'fishing', 'hunting'
-            )),
-            FOREIGN KEY (telegram_id) REFERENCES players(telegram_id)
-        )
-    ''')
+    from game.profession_schema import create_profession_table
+    create_profession_table(conn,'player_gathering_professions','telegram_id',GATHERING_PROFESSION_KEYS,gathering=True)
 
     # ────────────────────────────────────────
     # СПРАВОЧНИК ПРЕДМЕТОВ
@@ -495,19 +483,8 @@ def add_gathering_profession_exp(telegram_id: int, profession_key: str, exp: int
             current_exp=row['exp'],
             xp_awarded=exp,
         )
-        conn.execute(
-            '''
-            UPDATE player_gathering_professions
-            SET level=?, exp=?, updated_at=CURRENT_TIMESTAMP
-            WHERE telegram_id=? AND profession_key=?
-            ''',
-            (
-                result.new_level,
-                result.new_exp,
-                int(telegram_id),
-                profession_key,
-            ),
-        )
+        from game.profession_state import write_progression
+        write_progression(conn,int(telegram_id),profession_key,result)
         if owns_connection:
             conn.commit()
         return result

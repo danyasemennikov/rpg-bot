@@ -1,4 +1,6 @@
 """Compact inventory projections over existing gear, inventory and tool owners."""
+from game.profession_tools import TOOL_CAPACITY
+
 
 from html import escape
 import json
@@ -65,7 +67,7 @@ def inventory_card(player_id,category,lang,page=0):
         finally:
             conn.close()
         for tool in tools:
-            label = t('pxe1.tool.'+TOOL_NAMES[tool['profession_key']],lang)+f" · {tool['durability']}/{60*tool['tier']}"
+            label = t('pxe1.tool.'+TOOL_NAMES[tool['profession_key']],lang)+f" · {tool['durability']}/{TOOL_CAPACITY[tool['tier']]}"
             entries.append((True,'tool:'+tool['profession_key'],0,label,'px:tool:'+tool['profession_key']))
     entries.sort(key=lambda row:row[:3])
     pages = max(1,(len(entries)+5)//6)
@@ -73,6 +75,11 @@ def inventory_card(player_id,category,lang,page=0):
     lines = [t('inventory.title',lang)+' · '+t('pxe1.inventory.'+category,lang)]
     if pages>1:
         lines.append(t('gear.page',lang,page=page+1,pages=pages))
+    conn=get_connection()
+    try:
+        for prepared in conn.execute('SELECT slot,item_id FROM player_consumable_slots WHERE player_id=? AND item_id IS NOT NULL ORDER BY slot',(player_id,)):
+            lines.append(t('epic_i.prepared_'+prepared['slot'],lang,name=get_item_name(prepared['item_id'],lang)))
+    finally:conn.close()
     rows = []
     for _,_,_,label,callback in entries[page*6:(page+1)*6]:
         if not callback.startswith('px:'):
@@ -124,8 +131,8 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
             lines.append(t('inventory.damage',lang,min=resolved['damage_min'],max=resolved['damage_max']))
         else:
             lines.append(t('inventory.defense',lang,val=resolved['defense']))
-        requirements = [t('common.level',lang)+' '+str(item['req_level'])]
-        requirements += [STAT_NAMES.get(lang,STAT_NAMES['en'])[key]+' '+str(item['req_'+key]) for key in ('strength','agility','intuition','wisdom') if item['req_'+key]>0]
+        requirements = [t('common.level',lang)+' '+str(resolved['req_level'])]
+        requirements += [STAT_NAMES.get(lang,STAT_NAMES['en'])[key]+' '+str(resolved['req_'+key]) for key in ('strength','agility','intuition','wisdom') if resolved['req_'+key]>0]
         lines.append(t('inventory.reqs',lang,val=', '.join(requirements)))
         bonuses = resolved.get('resolved_stat_bonus') if entry['entry_type']=='gear_instance' else json.loads(item['stat_bonus_json'] or '{}')
         if bonuses:
@@ -135,9 +142,14 @@ def item_card(player_id,entry_token,category,lang,*,more=False):
         if slot:
             lines.append(t('inventory.equipped',lang))
     elif item['item_type']=='potion':
-        effects = json.loads(item['stat_bonus_json'] or '{}')
-        lines.append(f"❤️ +{effects.get('heal',0)} · 🔵 +{effects.get('mana',0)}")
-        lines.append(t('pxe1.inventory.supplies_restrictions',lang))
+        from game.profession_consumables import CONSUMABLES
+        from game.i18n import get_item_description
+        if entry['item_id'] in CONSUMABLES:
+            lines.append(get_item_description(entry['item_id'],lang))
+        else:
+            effects = json.loads(item['stat_bonus_json'] or '{}')
+            lines.append(f"❤️ +{effects.get('heal',0)} · 🔵 +{effects.get('mana',0)}")
+            lines.append(t('pxe1.inventory.supplies_restrictions',lang))
     usable = True
     if item['item_type']=='potion':
         from game.action_receipts import ActionRejected,peaceful_player

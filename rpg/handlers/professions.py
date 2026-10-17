@@ -1,6 +1,7 @@
 """Paginated PEV1 profession journal, handbook, learning, and crafting UI."""
 
 from __future__ import annotations
+from game.profession_tools import TOOL_CAPACITY
 
 from html import escape
 from math import ceil
@@ -59,8 +60,7 @@ def _recipe_name(recipe, lang: str) -> str:
     if recipe.output_spec.kind=='tool':
         from game.profession_tools import TOOL_NAMES
         return f"{t('pxe1.tool.tier.'+str(recipe.output_spec.tool_tier),lang)} · {t('pxe1.tool.'+TOOL_NAMES[recipe.output_spec.profession_key],lang)}"
-    band = 1 if recipe.required_level <= 2 else recipe.required_level
-    return f"{get_item_name(recipe.output_spec.item_id, lang)} · {t(f'professions.band_{band}', lang)}"
+    return get_item_name(recipe.output_spec.item_id,lang)+' · '+t('epic_i.recipe_label',lang,label=recipe.recipe_label)
 
 
 def _milestone_rows(key: str):
@@ -89,6 +89,8 @@ def _peaceful_guild_access(player_id: int) -> bool:
 
 
 def _receipt_action_label(receipt: dict, lang: str) -> str:
+    if receipt.get('action_kind') in ('epic_i','profession_supply','profession_commission'):
+        return t('epic_i.work' if receipt['action_kind']=='epic_i' else 'epic_i.supply' if receipt['action_kind']=='profession_supply' else 'epic_i.tools',lang)
     if receipt.get('action_kind')=='combat_order_ack_pxe1':
         return t('pxe1.combat.order_label',lang)
     key={'gather_tick_pxe1':'pxe1.gather.collecting',
@@ -105,6 +107,8 @@ def _historical_label(key,lang):
 
 
 def _receipt_status_label(receipt: dict, lang: str) -> str:
+    if receipt.get('status') in ('done','purchased'):
+        return t('epic_i.done',lang)
     if receipt.get('action_kind')=='combat_order_ack_pxe1':
         return t('pxe1.combat.order_ack',lang)
     status=receipt.get('status')
@@ -144,7 +148,8 @@ def build_overview(player: dict, page: int = 0, *, group=None):
     for key in rows_on_page:
         state = gathering.get(key) or crafting.get(key)
         name = t(f'professions.names.{key}', lang)
-        needed = int(state['level']) * 50 if int(state['level']) < 20 else '—'
+        from game.profession_progression import profession_exp_needed
+        needed=profession_exp_needed(state['level']) if state['level'] not in (15,30) else '—'
         lines.append(f"• {escape(name)} — {t('pxe1.profession.level_xp', lang, level=state['level'], exp=state['exp'], needed=needed)}")
         rows.append([InlineKeyboardButton(name, callback_data=f'pe_p:{key}')])
     nav = []
@@ -159,40 +164,8 @@ def build_overview(player: dict, page: int = 0, *, group=None):
 
 
 def build_profession(player: dict, key: str):
-    lang, player_id = player.get('lang', 'ru'), int(player['telegram_id'])
-    gathering, crafting, _ = _state(player_id)
-    state = gathering.get(key) or crafting.get(key)
-    if not state:
-        return build_overview(player)
-    name = t(f'professions.names.{key}', lang)
-    level, exp = int(state['level']), int(state['exp'])
-    progress = (t('pxe1.profession.at_cap', lang) if level >= 20
-                else t('pxe1.profession.level_xp', lang, level=level, exp=exp, needed=level * 50))
-    milestones = _milestone_rows(key)
-    unlocked = [row for row in milestones if row[0] <= level]
-    future = [row for row in milestones if row[0] > level]
-    current = unlocked[-1] if unlocked else milestones[0]
-    lines = [f'<b>{escape(name)}</b>', escape(t(f'professions.descriptions.{key}', lang)), progress,
-             t('professions.current_milestone', lang, level=current[0],
-               content=escape(_milestone_label(key, current[1], lang)))]
-    if future:
-        lines.append(t('professions.next_unlock', lang, level=future[0][0],
-                       content=escape(_milestone_label(key, future[0][1], lang))))
-    else:
-        lines.append(t('professions.no_more_unlocks', lang))
-    rows = []
-    if key in CRAFTING_PROFESSION_KEYS:
-        ceilings = [get_recipe(content_id).training_ceiling for required, content_id in milestones if required <= level]
-        ceiling = max(ceilings or [6])
-        lines.append(t('professions.training_ceiling', lang, ceiling=ceiling))
-        if level >= ceiling:
-            lines.append(t('professions.current_band_zero_xp', lang))
-        for filter_key in ('known', 'learnable', 'locked'):
-            rows.append([InlineKeyboardButton(t(f'professions.{filter_key}', lang), callback_data=f'pe_l:{key}:{filter_key}:0')])
-    else:
-        rows.append([InlineKeyboardButton(t('professions.sources', lang), callback_data=f'pe_g:{key}:0')])
-    rows.append([InlineKeyboardButton(t('professions.back', lang), callback_data='pe_o:0')])
-    return '\n'.join(lines), _kb(rows)
+    from handlers.profession_guild_views import profession_home
+    return profession_home(player,key)
 
 
 def build_resource_list(player: dict, key: str, page: int = 0):
@@ -293,12 +266,11 @@ def _legacy_recipe(player: dict, recipe_id: str):
                        hp=int(bonuses.get('heal', 0)), mana=int(bonuses.get('mana', 0))))
     if recipe.output_spec.kind != 'tool':
         lines.append(t('professions.output_sale',lang,gold=int(output_item.get('sell_price',0))))
-    lines.append(t('professions.recipe_xp_ceiling', lang, ceiling=recipe.training_ceiling))
     xp_award = crafting_xp_for_success(
         current_level=int(state['level']),
         current_exp=int(state['exp']),
         recipe_level=recipe.required_level,
-        material_value=recipe.material_value,
+        material_value=recipe.material_value,category=recipe.work_category,
     )
     if xp_award:
         lines.append(t('professions.recipe_xp_award', lang, xp=xp_award))
@@ -468,7 +440,7 @@ def build_mutation_result(player: dict, receipt: dict, recipe_id: str = ''):
             from game.profession_tools import TOOL_NAMES
             name = t('pxe1.tool.'+TOOL_NAMES[output['profession_key']],lang)
             lines.append(escape(name)+' · '+t('pxe1.tool.tier.'+str(output['tool_tier']),lang))
-            lines.append(t('pxe1.profession.tool_output',lang,capacity=60*output['tool_tier']))
+            lines.append(t('pxe1.profession.tool_output',lang,capacity=TOOL_CAPACITY[output['tool_tier']]))
         else:
             lines.append(escape(get_item_name(output['item_id'],lang))+f" ×{output['quantity']}")
             if output.get('instance_ids'):
@@ -527,6 +499,9 @@ async def handle_profession_buttons(update, context):
             from handlers.recipe_views import recipe_card
             prefix,recipe_id,*page = data.split(':')
             view = recipe_card(player,recipe_id,details=prefix=='pe_details',commission=prefix=='pe_commission',inputs_page=int(page[0]) if page else None)
+        elif data.startswith('pe_b:'):
+            from handlers.recipe_views import recipe_card
+            _,recipe_id,count=data.split(':');view=recipe_card(player,recipe_id,count=int(count))
         elif data.startswith('pe_r:'):
             view = build_recipe(player, data.split(':', 1)[1])
         elif data.startswith('pe_tc:'):

@@ -13,14 +13,15 @@ class ProfessionResource:
     resource_group: str
     sell_price: int
     is_new: bool = False
+    work_category: str = 'S'
 
     @property
     def resource_tier(self) -> int:
-        return 4 if self.required_level >= 18 else 3 if self.required_level >= 12 else 2 if self.required_level >= 6 else 1
+        return 2 if self.required_level>=16 else 1
 
     @property
     def required_tool_tier(self) -> int:
-        return self.resource_tier
+        return 4 if self.resource_tier==2 else 1
 
 
 RESOURCE_ROWS = (
@@ -54,13 +55,16 @@ RESOURCE_ROWS = (
     ('troll_sinew', 'hunting', 18, 'monster_part', 18, True),
 )
 
-RESOURCES = {row[0]: ProfessionResource(*row) for row in RESOURCE_ROWS}
-RESOURCES.update({
-    'dry_reagent': ProfessionResource('dry_reagent','herbalism',1,'herb_base',4),
-    'marsh_mushroom': ProfessionResource('marsh_mushroom','herbalism',1,'herb_base',4),
-})
-MANDATORY_RESOURCE_IDS = tuple(row[0] for row in RESOURCE_ROWS)
-NEW_MATERIAL_IDS = tuple(row[0] for row in RESOURCE_ROWS if row[5])
+from pathlib import Path
+import json
+_materials = json.loads(Path(__file__).with_name('profession_catalog_v3.json').read_text(encoding='utf-8'))['materials']
+_old_groups = {r[0]:r[3] for r in RESOURCE_ROWS}
+_groups = {'woodcutting':'wood','mining':'ore','herbalism':'herb_base','fishing':'fish','hunting':'monster_part'}
+RESOURCES = {r['item_id']:ProfessionResource(r['item_id'],r['profession'],1 if r['tier']==1 else 16,
+    _old_groups.get(r['item_id'],_groups[r['profession']]),r['value'],r['item_id'].startswith('a25_'),r['work'])
+    for r in _materials}
+MANDATORY_RESOURCE_IDS = tuple(RESOURCES)
+NEW_MATERIAL_IDS = tuple(i for i in RESOURCES if i.startswith('a25_'))
 
 # Location order is authoritative. Each tuple is (item_id, unconditional chance).
 ENVIRONMENTAL_SOURCES: dict[str, tuple[tuple[str, float], ...]] = {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-MAX_GATHERING_PROFESSION_LEVEL = 20
+MAX_GATHERING_PROFESSION_LEVEL = 30
 
 
 @dataclass(frozen=True)
@@ -23,8 +23,8 @@ class GatheringProfessionProgressionResult:
 
 
 def gathering_profession_exp_needed(level: int) -> int:
-    """Return XP needed to advance from the current profession level."""
-    return max(1, int(level)) * 50
+    from game.profession_progression import profession_exp_needed
+    return profession_exp_needed(level)
 
 
 def gathering_profession_xp_for_success(
@@ -32,21 +32,9 @@ def gathering_profession_xp_for_success(
     current_profession_level: int,
     required_profession_level: int,
 ) -> int:
-    """Return deterministic XP for one successfully granted resource."""
-    current_level = max(1, int(current_profession_level))
-    if current_level >= MAX_GATHERING_PROFESSION_LEVEL:
-        return 0
-
-    required_level = max(1, int(required_profession_level))
-    base_xp = 8 + (2 * required_level)
-    level_gap = current_level - required_level
-    if level_gap <= 4:
-        scaled_xp = base_xp
-    elif level_gap == 5:
-        scaled_xp = base_xp // 2
-    else:
-        scaled_xp = 0
-    return max(0, scaled_xp)
+    from game.profession_progression import work_xp, profession_tier
+    return work_xp(gathering=True,work_tier=profession_tier(required_profession_level),
+                   category='S',current_level=current_profession_level)
 
 
 def apply_gathering_profession_progression(
@@ -56,42 +44,11 @@ def apply_gathering_profession_progression(
     current_exp: int,
     xp_awarded: int,
 ) -> GatheringProfessionProgressionResult:
-    """Apply current-level XP, including multiple level-ups and cap handling."""
-    old_level = int(current_level)
-    old_exp = int(current_exp)
-    awarded = 0 if old_level >= MAX_GATHERING_PROFESSION_LEVEL else max(0, int(xp_awarded))
-    if awarded == 0:
-        return GatheringProfessionProgressionResult(
-            profession_key=profession_key, old_level=old_level, new_level=old_level,
-            old_exp=old_exp, new_exp=old_exp, xp_awarded=0, leveled_up=False,
-            levels_gained=0,
-            exp_needed=None if old_level >= MAX_GATHERING_PROFESSION_LEVEL else gathering_profession_exp_needed(old_level),
-            at_cap=old_level >= MAX_GATHERING_PROFESSION_LEVEL,
-        )
-
-    new_level = old_level
-    new_exp = old_exp + awarded
-    while (
-        new_level < MAX_GATHERING_PROFESSION_LEVEL
-        and new_exp >= gathering_profession_exp_needed(new_level)
-    ):
-        new_exp -= gathering_profession_exp_needed(new_level)
-        new_level += 1
-
-    at_cap = new_level >= MAX_GATHERING_PROFESSION_LEVEL
-    if at_cap:
-        new_exp = 0
-
-    levels_gained = new_level - old_level
+    from game.profession_progression import apply_profession_xp
+    result = apply_profession_xp(current_level,current_exp,xp_awarded)
+    halted = result.new_level in (15,30)
     return GatheringProfessionProgressionResult(
-        profession_key=profession_key,
-        old_level=old_level,
-        new_level=new_level,
-        old_exp=old_exp,
-        new_exp=new_exp,
-        xp_awarded=awarded,
-        leveled_up=levels_gained > 0,
-        levels_gained=levels_gained,
-        exp_needed=None if at_cap else gathering_profession_exp_needed(new_level),
-        at_cap=at_cap,
-    )
+        profession_key=profession_key,old_level=result.old_level,new_level=result.new_level,
+        old_exp=result.old_exp,new_exp=result.new_exp,xp_awarded=result.applied,
+        leveled_up=result.new_level>result.old_level,levels_gained=result.new_level-result.old_level,
+        exp_needed=None if halted else gathering_profession_exp_needed(result.new_level),at_cap=halted)

@@ -221,6 +221,8 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_settings_buttons, pattern='^settings_'))
     app.add_handler(CallbackQueryHandler(handle_chapter_buttons, pattern='^alpha_'))
     app.add_handler(CallbackQueryHandler(handle_profession_buttons, pattern='^pe_'))
+    from handlers.profession_guild_views import handle_guild_buttons
+    app.add_handler(CallbackQueryHandler(handle_guild_buttons,pattern='^ei:'))
     app.add_handler(CallbackQueryHandler(handle_activity_buttons,pattern='^px:'))
     app.add_handler(CallbackQueryHandler(handle_regional_buttons, pattern='^rv:'))
 

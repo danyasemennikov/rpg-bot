@@ -1,0 +1,4921 @@
+{
+  "recipes": [
+    {
+      "recipe_id": "pe_sword_1h_01",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "iron_ore",
+          3
+        ],
+        [
+          "coal",
+          1
+        ],
+        [
+          "wood_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_1h",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_sword_1h_12",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "wolf_fang",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_1h",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_sword_1h_18",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "sunscar_ore",
+          3
+        ],
+        [
+          "iron_ore",
+          3
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "ancient_bark",
+          1
+        ],
+        [
+          "troll_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_1h",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_sword_2h_01",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "wood_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_2h",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_sword_2h_12",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "wolf_fang",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_2h",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_sword_2h_18",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "sunscar_ore",
+          5
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "ancient_bark",
+          1
+        ],
+        [
+          "troll_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_2h",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_axe_2h_01",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "wood_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_axe_2h",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_axe_2h_12",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "wolf_fang",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_axe_2h",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_axe_2h_18",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "sunscar_ore",
+          5
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "ancient_bark",
+          1
+        ],
+        [
+          "troll_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_axe_2h",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_daggers_01",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "iron_ore",
+          3
+        ],
+        [
+          "coal",
+          1
+        ],
+        [
+          "wolf_pelt",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_daggers",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_daggers_12",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "bear_hide",
+          1
+        ],
+        [
+          "wolf_fang",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_daggers",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_daggers_18",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "sunscar_ore",
+          3
+        ],
+        [
+          "iron_ore",
+          2
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "bear_hide",
+          1
+        ],
+        [
+          "troll_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_daggers",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_bow_01",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          4
+        ],
+        [
+          "reed_bundle",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_bow",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_bow_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "frostpine_wood",
+          4
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_bow",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_bow_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "ancient_bark",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "troll_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_bow",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_magic_staff_01",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          3
+        ],
+        [
+          "reed_bundle",
+          1
+        ],
+        [
+          "herb_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_magic_staff",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_magic_staff_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "frostpine_wood",
+          3
+        ],
+        [
+          "spider_silk",
+          1
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "herb_magic",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_magic_staff",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_magic_staff_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "ancient_bark",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "herb_magic",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_magic_staff",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_wand_01",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          2
+        ],
+        [
+          "reed_bundle",
+          1
+        ],
+        [
+          "herb_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_wand",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_wand_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "spider_silk",
+          1
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "herb_magic",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_wand",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_wand_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "ancient_bark",
+          1
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "herb_magic",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_wand",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_holy_staff_01",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          3
+        ],
+        [
+          "reed_bundle",
+          1
+        ],
+        [
+          "shore_herbs",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_staff",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_holy_staff_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "frostpine_wood",
+          3
+        ],
+        [
+          "spider_silk",
+          1
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "shore_herbs",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_staff",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_holy_staff_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "ancient_bark",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "desert_plant",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_staff",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_holy_rod_01",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          2
+        ],
+        [
+          "reed_bundle",
+          1
+        ],
+        [
+          "shore_herbs",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_rod",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_holy_rod_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "spider_silk",
+          1
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "shore_herbs",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_rod",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_holy_rod_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "ancient_bark",
+          1
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "desert_plant",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_rod",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_tome_01",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "reed_bundle",
+          4
+        ],
+        [
+          "wolf_pelt",
+          1
+        ],
+        [
+          "herb_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_tome",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_tome_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "reed_bundle",
+          4
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "herb_magic",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_tome",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_tome_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "reed_bundle",
+          6
+        ],
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "ancient_bark",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_tome",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_shield_06",
+      "profession_key": "blacksmith",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "stone_chunk",
+          2
+        ],
+        [
+          "wolf_fang",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_shield",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_shield_12",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "iron_ore",
+          5
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "bear_hide",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_shield",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_shield_18",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "sunscar_ore",
+          4
+        ],
+        [
+          "iron_ore",
+          3
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "troll_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_shield",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_focus_06",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_dark",
+          2
+        ],
+        [
+          "stone_chunk",
+          2
+        ],
+        [
+          "reed_bundle",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_focus",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_focus_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "herb_magic",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_focus",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_focus_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "ancient_bark",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "toxic_herb",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_focus",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_censer_06",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_dark",
+          2
+        ],
+        [
+          "stone_chunk",
+          2
+        ],
+        [
+          "shore_herbs",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_censer",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_censer_12",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "desert_plant",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_censer",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_censer_18",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "ancient_bark",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "desert_plant",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_censer",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_heavy_chest_01",
+      "profession_key": "heavy_armor",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_chest",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_heavy_helmet_06",
+      "profession_key": "heavy_armor",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "iron_ore",
+          3
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "stone_chunk",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_helmet",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_heavy_legs_12",
+      "profession_key": "heavy_armor",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_legs",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_heavy_chest_18",
+      "profession_key": "heavy_armor",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "sunscar_ore",
+          6
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "troll_sinew",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_chest",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "trail_vest",
+      "profession_key": "medium_armor",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wolf_pelt",
+          2
+        ],
+        [
+          "wood_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "trail_vest",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_medium_helmet_06",
+      "profession_key": "medium_armor",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wolf_pelt",
+          2
+        ],
+        [
+          "wood_dark",
+          1
+        ],
+        [
+          "wolf_fang",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_helmet",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_medium_legs_12",
+      "profession_key": "medium_armor",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "bear_hide",
+          3
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "frostpine_wood",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_legs",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_medium_chest_18",
+      "profession_key": "medium_armor",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "bear_hide",
+          4
+        ],
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "ancient_bark",
+          1
+        ],
+        [
+          "troll_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_chest",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_light_chest_01",
+      "profession_key": "light_armor",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "reed_bundle",
+          4
+        ],
+        [
+          "herb_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_chest",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_light_helmet_06",
+      "profession_key": "light_armor",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "reed_bundle",
+          3
+        ],
+        [
+          "spider_silk",
+          1
+        ],
+        [
+          "marsh_herb",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_helmet",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "pe_light_legs_12",
+      "profession_key": "light_armor",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "reed_bundle",
+          3
+        ],
+        [
+          "herb_magic",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_legs",
+        "item_tier": 5,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "pe_light_chest_18",
+      "profession_key": "light_armor",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "spider_silk",
+          4
+        ],
+        [
+          "reed_bundle",
+          4
+        ],
+        [
+          "herb_magic",
+          2
+        ],
+        [
+          "toxic_herb",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_chest",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "field_tonic",
+      "profession_key": "alchemy",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "herb_common",
+          3
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "health_potion_small",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "field_mana",
+      "profession_key": "alchemy",
+      "recipe_label": 2,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "herb_common",
+          5
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "mana_potion",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_alchemy_health_06",
+      "profession_key": "alchemy",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "herb_common",
+          3
+        ],
+        [
+          "marsh_herb",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "health_potion",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_alchemy_mana_12",
+      "profession_key": "alchemy",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "herb_magic",
+          2
+        ],
+        [
+          "desert_plant",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_mana_potion_medium",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_alchemy_health_18",
+      "profession_key": "alchemy",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "herb_common",
+          4
+        ],
+        [
+          "toxic_herb",
+          2
+        ],
+        [
+          "desert_plant",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_health_potion_large",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_alchemy_mana_18",
+      "profession_key": "alchemy",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "herb_magic",
+          3
+        ],
+        [
+          "toxic_herb",
+          2
+        ],
+        [
+          "desert_plant",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_mana_potion_large",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "trail_ration",
+      "profession_key": "cooking",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "boar_meat",
+          1
+        ],
+        [
+          "herb_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "field_ration",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_cooking_shore_01",
+      "profession_key": "cooking",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "shore_fish",
+          1
+        ],
+        [
+          "shore_herbs",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_shore_broth",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_cooking_marsh_06",
+      "profession_key": "cooking",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "marsh_fish",
+          2
+        ],
+        [
+          "marsh_herb",
+          1
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_marsh_stew",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_cooking_boar_12",
+      "profession_key": "cooking",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "boar_meat",
+          3
+        ],
+        [
+          "forest_mushroom",
+          2
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_boar_feast",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_cooking_oasis_12",
+      "profession_key": "cooking",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "oasis_fish",
+          2
+        ],
+        [
+          "desert_plant",
+          1
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_oasis_meal",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pe_cooking_deep_18",
+      "profession_key": "cooking",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "deep_marsh_fish",
+          2
+        ],
+        [
+          "boar_meat",
+          2
+        ],
+        [
+          "forest_mushroom",
+          2
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "pe_deep_marsh_meal",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_woodcutting_1",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          4
+        ],
+        [
+          "iron_ore",
+          2
+        ],
+        [
+          "coal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "woodcutting",
+        "tool_tier": 1
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_woodcutting_2",
+      "profession_key": "blacksmith",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          8
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "wood_dark",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "woodcutting",
+        "tool_tier": 2
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_woodcutting_3",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          12
+        ],
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "woodcutting",
+        "tool_tier": 3
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_woodcutting_4",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          16
+        ],
+        [
+          "iron_ore",
+          8
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "woodcutting",
+        "tool_tier": 4
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_mining_1",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          4
+        ],
+        [
+          "iron_ore",
+          2
+        ],
+        [
+          "coal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "mining",
+        "tool_tier": 1
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_mining_2",
+      "profession_key": "blacksmith",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          8
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "wood_dark",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "mining",
+        "tool_tier": 2
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_mining_3",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          12
+        ],
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "mining",
+        "tool_tier": 3
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_mining_4",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          16
+        ],
+        [
+          "iron_ore",
+          8
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "mining",
+        "tool_tier": 4
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_herbalism_1",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          4
+        ],
+        [
+          "iron_ore",
+          2
+        ],
+        [
+          "coal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "herbalism",
+        "tool_tier": 1
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_herbalism_2",
+      "profession_key": "blacksmith",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          8
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "wood_dark",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "herbalism",
+        "tool_tier": 2
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_herbalism_3",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          12
+        ],
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "herbalism",
+        "tool_tier": 3
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_herbalism_4",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          16
+        ],
+        [
+          "iron_ore",
+          8
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "herbalism",
+        "tool_tier": 4
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_fishing_1",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          4
+        ],
+        [
+          "iron_ore",
+          2
+        ],
+        [
+          "coal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "fishing",
+        "tool_tier": 1
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_fishing_2",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          8
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "wood_dark",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "fishing",
+        "tool_tier": 2
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_fishing_3",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          12
+        ],
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "fishing",
+        "tool_tier": 3
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_fishing_4",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          16
+        ],
+        [
+          "iron_ore",
+          8
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "fishing",
+        "tool_tier": 4
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_hunting_1",
+      "profession_key": "blacksmith",
+      "recipe_label": 1,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          4
+        ],
+        [
+          "iron_ore",
+          2
+        ],
+        [
+          "coal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "hunting",
+        "tool_tier": 1
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_hunting_2",
+      "profession_key": "blacksmith",
+      "recipe_label": 6,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          8
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "wood_dark",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "hunting",
+        "tool_tier": 2
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_hunting_3",
+      "profession_key": "blacksmith",
+      "recipe_label": 12,
+      "tier": 1,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          12
+        ],
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "hunting",
+        "tool_tier": 3
+      }
+    },
+    {
+      "recipe_id": "pxe_tool_hunting_4",
+      "profession_key": "blacksmith",
+      "recipe_label": 18,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wood_common",
+          16
+        ],
+        [
+          "iron_ore",
+          8
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "hunting",
+        "tool_tier": 4
+      }
+    },
+    {
+      "recipe_id": "a25_H_01",
+      "profession_key": "heavy_armor",
+      "recipe_label": 4,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "iron_ore",
+          2
+        ],
+        [
+          "coal",
+          1
+        ],
+        [
+          "wood_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_boots",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "a25_M_01",
+      "profession_key": "medium_armor",
+      "recipe_label": 4,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "wolf_pelt",
+          1
+        ],
+        [
+          "wood_common",
+          2
+        ],
+        [
+          "reed_bundle",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_boots",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "a25_L_01",
+      "profession_key": "light_armor",
+      "recipe_label": 4,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "reed_bundle",
+          3
+        ],
+        [
+          "herb_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_boots",
+        "item_tier": 1,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "a25_H_02",
+      "profession_key": "heavy_armor",
+      "recipe_label": 8,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "iron_ore",
+          3
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "stone_chunk",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_gloves",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "a25_M_02",
+      "profession_key": "medium_armor",
+      "recipe_label": 8,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wolf_pelt",
+          2
+        ],
+        [
+          "spider_silk",
+          1
+        ],
+        [
+          "wood_dark",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_gloves",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "a25_L_02",
+      "profession_key": "light_armor",
+      "recipe_label": 8,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "reed_bundle",
+          3
+        ],
+        [
+          "spider_silk",
+          1
+        ],
+        [
+          "marsh_herb",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_gloves",
+        "item_tier": 5,
+        "rarity": "common",
+        "secondary_policy": "none"
+      }
+    },
+    {
+      "recipe_id": "a25_H_03",
+      "profession_key": "heavy_armor",
+      "recipe_label": 16,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "gem_common",
+          1
+        ],
+        [
+          "frostpine_wood",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_heavy_resist_chest",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_M_03",
+      "profession_key": "medium_armor",
+      "recipe_label": 16,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "bear_hide",
+          3
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "wolf_fang",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_medium_survival_chest",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_L_03",
+      "profession_key": "light_armor",
+      "recipe_label": 16,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "reed_bundle",
+          4
+        ],
+        [
+          "herb_magic",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_light_survival_chest",
+        "item_tier": 10,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_H_04",
+      "profession_key": "heavy_armor",
+      "recipe_label": 22,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "sunscar_ore",
+          3
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_helmet",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_M_04",
+      "profession_key": "medium_armor",
+      "recipe_label": 22,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "bear_hide",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ],
+        [
+          "ancient_bark",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_helmet",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_L_04",
+      "profession_key": "light_armor",
+      "recipe_label": 22,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "herb_magic",
+          2
+        ],
+        [
+          "reed_bundle",
+          4
+        ],
+        [
+          "toxic_herb",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_helmet",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_H_05",
+      "profession_key": "heavy_armor",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "iron_ore",
+          5
+        ],
+        [
+          "coal",
+          3
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_legs",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_M_05",
+      "profession_key": "medium_armor",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_resilient_sinew",
+          2
+        ],
+        [
+          "bear_hide",
+          3
+        ],
+        [
+          "spider_silk",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_legs",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_L_05",
+      "profession_key": "light_armor",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "reed_bundle",
+          4
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_legs",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_H_06",
+      "profession_key": "heavy_armor",
+      "recipe_label": 28,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "sunscar_ore",
+          3
+        ],
+        [
+          "coal",
+          3
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_boots",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_M_06",
+      "profession_key": "medium_armor",
+      "recipe_label": 28,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "bear_hide",
+          3
+        ],
+        [
+          "spider_silk",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_boots",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_L_06",
+      "profession_key": "light_armor",
+      "recipe_label": 28,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "herb_magic",
+          2
+        ],
+        [
+          "reed_bundle",
+          4
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_boots",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_H_07",
+      "profession_key": "heavy_armor",
+      "recipe_label": 28,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_frost_quartz",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "iron_ore",
+          6
+        ],
+        [
+          "coal",
+          4
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_heavy_precision_chest",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_M_07",
+      "profession_key": "medium_armor",
+      "recipe_label": 28,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_pale_silk",
+          2
+        ],
+        [
+          "a25_resilient_sinew",
+          2
+        ],
+        [
+          "bear_hide",
+          4
+        ],
+        [
+          "ancient_bark",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_medium_precision_chest",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_L_07",
+      "profession_key": "light_armor",
+      "recipe_label": 28,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_pale_silk",
+          2
+        ],
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "herb_magic",
+          3
+        ],
+        [
+          "reed_bundle",
+          5
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_light_support_chest",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_H_08",
+      "profession_key": "heavy_armor",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_echo_crystal",
+          1
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          3
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_heavy_gloves",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_M_08",
+      "profession_key": "medium_armor",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_glass_scale",
+          1
+        ],
+        [
+          "a25_resilient_sinew",
+          2
+        ],
+        [
+          "a25_whisper_bark",
+          1
+        ],
+        [
+          "spider_silk",
+          3
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_medium_gloves",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_L_08",
+      "profession_key": "light_armor",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_seal_blossom",
+          1
+        ],
+        [
+          "a25_pale_silk",
+          2
+        ],
+        [
+          "a25_whisper_bark",
+          1
+        ],
+        [
+          "reed_bundle",
+          4
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_light_gloves",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_sword_1h_24",
+      "profession_key": "blacksmith",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "iron_ore",
+          4
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "frostpine_wood",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_1h",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_sword_1h_30",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_frost_quartz",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "sunscar_ore",
+          3
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "a25_resilient_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_1h",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_sword_2h_24",
+      "profession_key": "blacksmith",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          3
+        ],
+        [
+          "iron_ore",
+          5
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "frostpine_wood",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_2h",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_sword_2h_30",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_frost_quartz",
+          3
+        ],
+        [
+          "a25_layered_ore",
+          3
+        ],
+        [
+          "sunscar_ore",
+          4
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "a25_resilient_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_sword_2h",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_axe_2h_24",
+      "profession_key": "blacksmith",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          3
+        ],
+        [
+          "iron_ore",
+          5
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "bear_hide",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_axe_2h",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_axe_2h_30",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_frost_quartz",
+          3
+        ],
+        [
+          "a25_layered_ore",
+          3
+        ],
+        [
+          "sunscar_ore",
+          4
+        ],
+        [
+          "coal",
+          4
+        ],
+        [
+          "a25_resilient_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_axe_2h",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_daggers_24",
+      "profession_key": "blacksmith",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "iron_ore",
+          3
+        ],
+        [
+          "coal",
+          2
+        ],
+        [
+          "spider_silk",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_daggers",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_daggers_30",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_frost_quartz",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "sunscar_ore",
+          2
+        ],
+        [
+          "coal",
+          3
+        ],
+        [
+          "a25_resilient_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_daggers",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_bow_24",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "frostpine_wood",
+          4
+        ],
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "a25_resilient_sinew",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_bow",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_bow_30",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_heartwood",
+          3
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ],
+        [
+          "a25_resilient_sinew",
+          2
+        ],
+        [
+          "spider_silk",
+          3
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_bow",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_magic_staff_24",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "frostpine_wood",
+          3
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "herb_magic",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_magic_staff",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_magic_staff_30",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_heartwood",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          2
+        ],
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_magic_staff",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_wand_24",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "herb_magic",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_wand",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_wand_30",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_heartwood",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ],
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_wand",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_holy_staff_24",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "frostpine_wood",
+          3
+        ],
+        [
+          "shore_herbs",
+          4
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_staff",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_holy_staff_30",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_heartwood",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ],
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "desert_plant",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_staff",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_holy_rod_24",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "frostpine_wood",
+          2
+        ],
+        [
+          "shore_herbs",
+          3
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_rod",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_holy_rod_30",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_heartwood",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ],
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "desert_plant",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_holy_rod",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_tome_24",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "reed_bundle",
+          5
+        ],
+        [
+          "spider_silk",
+          3
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_tome",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_tome_30",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_pale_silk",
+          2
+        ],
+        [
+          "a25_heartwood",
+          1
+        ],
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "reed_bundle",
+          5
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "field_tome",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_precision_setting",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          1
+        ],
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "gem_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_precision_ring",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_reserve_setting",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ],
+        [
+          "reed_bundle",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_reserve_amulet",
+        "item_tier": 15,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_support_setting",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_frost_quartz",
+          2
+        ],
+        [
+          "a25_relic_lichen",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_support_amulet",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_anchor_setting",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "a25_resilient_sinew",
+          2
+        ],
+        [
+          "gem_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "gear",
+        "item_id": "a25_anchor_ring",
+        "item_tier": 20,
+        "rarity": "uncommon",
+        "secondary_policy": "ordinary_one"
+      }
+    },
+    {
+      "recipe_id": "a25_resin_salve",
+      "profession_key": "alchemy",
+      "recipe_label": 4,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "dry_reagent",
+          2
+        ],
+        [
+          "herb_common",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_resin_salve",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_antivenom",
+      "profession_key": "alchemy",
+      "recipe_label": 8,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "marsh_herb",
+          2
+        ],
+        [
+          "shore_herbs",
+          2
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_antivenom",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_clear_sight",
+      "profession_key": "alchemy",
+      "recipe_label": 16,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "dry_reagent",
+          2
+        ],
+        [
+          "desert_plant",
+          2
+        ],
+        [
+          "gem_common",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_clear_sight",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_mana_infusion",
+      "profession_key": "alchemy",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_relic_lichen",
+          1
+        ],
+        [
+          "herb_magic",
+          2
+        ],
+        [
+          "marsh_mushroom",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_mana_infusion",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_cleanse_draught",
+      "profession_key": "alchemy",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_bitterroot",
+          1
+        ],
+        [
+          "a25_oil_fish",
+          1
+        ],
+        [
+          "toxic_herb",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_cleanse_draught",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_balanced_elixir",
+      "profession_key": "alchemy",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_seal_blossom",
+          1
+        ],
+        [
+          "a25_abyss_fish",
+          1
+        ],
+        [
+          "a25_whisper_bark",
+          1
+        ],
+        [
+          "herb_magic",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_balanced_elixir",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_mushroom_soup",
+      "profession_key": "cooking",
+      "recipe_label": 4,
+      "tier": 1,
+      "work_category": "S",
+      "requirements": [
+        [
+          "marsh_mushroom",
+          2
+        ],
+        [
+          "herb_common",
+          1
+        ],
+        [
+          "shore_fish",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_mushroom_soup",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_dry_ration",
+      "profession_key": "cooking",
+      "recipe_label": 8,
+      "tier": 1,
+      "work_category": "R",
+      "requirements": [
+        [
+          "boar_meat",
+          2
+        ],
+        [
+          "dry_reagent",
+          1
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_dry_ration",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_hunters_stew",
+      "profession_key": "cooking",
+      "recipe_label": 16,
+      "tier": 2,
+      "work_category": "S",
+      "requirements": [
+        [
+          "boar_meat",
+          2
+        ],
+        [
+          "forest_mushroom",
+          2
+        ],
+        [
+          "shore_herbs",
+          2
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_hunters_stew",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_oil_fish_broth",
+      "profession_key": "cooking",
+      "recipe_label": 24,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "a25_oil_fish",
+          1
+        ],
+        [
+          "marsh_mushroom",
+          2
+        ],
+        [
+          "marsh_herb",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_oil_fish_broth",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_long_trail_meal",
+      "profession_key": "cooking",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_reed_perch",
+          1
+        ],
+        [
+          "a25_bitterroot",
+          1
+        ],
+        [
+          "boar_meat",
+          2
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_long_trail_meal",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_deepwater_supper",
+      "profession_key": "cooking",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "a25_abyss_fish",
+          1
+        ],
+        [
+          "a25_seal_blossom",
+          1
+        ],
+        [
+          "forest_mushroom",
+          2
+        ],
+        [
+          "salt_crystal",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "consumable",
+        "item_id": "a25_deepwater_supper",
+        "quantity": 1
+      }
+    },
+    {
+      "recipe_id": "a25_tool_woodcutting_5",
+      "profession_key": "blacksmith",
+      "recipe_label": 26,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          20
+        ],
+        [
+          "iron_ore",
+          10
+        ],
+        [
+          "coal",
+          5
+        ],
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "a25_layered_ore",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "woodcutting",
+        "tool_tier": 5
+      }
+    },
+    {
+      "recipe_id": "a25_tool_woodcutting_6",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          24
+        ],
+        [
+          "iron_ore",
+          12
+        ],
+        [
+          "coal",
+          6
+        ],
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "woodcutting",
+        "tool_tier": 6
+      }
+    },
+    {
+      "recipe_id": "a25_tool_mining_5",
+      "profession_key": "blacksmith",
+      "recipe_label": 26,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          20
+        ],
+        [
+          "iron_ore",
+          10
+        ],
+        [
+          "coal",
+          5
+        ],
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "a25_layered_ore",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "mining",
+        "tool_tier": 5
+      }
+    },
+    {
+      "recipe_id": "a25_tool_mining_6",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          24
+        ],
+        [
+          "iron_ore",
+          12
+        ],
+        [
+          "coal",
+          6
+        ],
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "mining",
+        "tool_tier": 6
+      }
+    },
+    {
+      "recipe_id": "a25_tool_herbalism_5",
+      "profession_key": "blacksmith",
+      "recipe_label": 26,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          20
+        ],
+        [
+          "iron_ore",
+          10
+        ],
+        [
+          "coal",
+          5
+        ],
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "a25_layered_ore",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "herbalism",
+        "tool_tier": 5
+      }
+    },
+    {
+      "recipe_id": "a25_tool_herbalism_6",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          24
+        ],
+        [
+          "iron_ore",
+          12
+        ],
+        [
+          "coal",
+          6
+        ],
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "herbalism",
+        "tool_tier": 6
+      }
+    },
+    {
+      "recipe_id": "a25_tool_fishing_5",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 26,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          20
+        ],
+        [
+          "iron_ore",
+          10
+        ],
+        [
+          "coal",
+          5
+        ],
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "a25_layered_ore",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "fishing",
+        "tool_tier": 5
+      }
+    },
+    {
+      "recipe_id": "a25_tool_fishing_6",
+      "profession_key": "arcane_engineer",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          24
+        ],
+        [
+          "iron_ore",
+          12
+        ],
+        [
+          "coal",
+          6
+        ],
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "fishing",
+        "tool_tier": 6
+      }
+    },
+    {
+      "recipe_id": "a25_tool_hunting_5",
+      "profession_key": "blacksmith",
+      "recipe_label": 26,
+      "tier": 2,
+      "work_category": "R",
+      "requirements": [
+        [
+          "wood_common",
+          20
+        ],
+        [
+          "iron_ore",
+          10
+        ],
+        [
+          "coal",
+          5
+        ],
+        [
+          "a25_binding_resin",
+          1
+        ],
+        [
+          "a25_layered_ore",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "hunting",
+        "tool_tier": 5
+      }
+    },
+    {
+      "recipe_id": "a25_tool_hunting_6",
+      "profession_key": "blacksmith",
+      "recipe_label": 30,
+      "tier": 2,
+      "work_category": "C",
+      "requirements": [
+        [
+          "wood_common",
+          24
+        ],
+        [
+          "iron_ore",
+          12
+        ],
+        [
+          "coal",
+          6
+        ],
+        [
+          "a25_binding_resin",
+          2
+        ],
+        [
+          "a25_layered_ore",
+          2
+        ],
+        [
+          "a25_frost_quartz",
+          1
+        ]
+      ],
+      "output_spec": {
+        "kind": "tool",
+        "profession_key": "hunting",
+        "tool_tier": 6
+      }
+    }
+  ],
+  "materials": [
+    {
+      "item_id": "herb_common",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "S",
+      "value": 3
+    },
+    {
+      "item_id": "herb_magic",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "R",
+      "value": 12
+    },
+    {
+      "item_id": "shore_herbs",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "marsh_herb",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "R",
+      "value": 4
+    },
+    {
+      "item_id": "desert_plant",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "C",
+      "value": 4
+    },
+    {
+      "item_id": "toxic_herb",
+      "profession": "herbalism",
+      "tier": 2,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "forest_mushroom",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "reed_bundle",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "wood_common",
+      "profession": "woodcutting",
+      "tier": 1,
+      "work": "S",
+      "value": 3
+    },
+    {
+      "item_id": "wood_dark",
+      "profession": "woodcutting",
+      "tier": 1,
+      "work": "R",
+      "value": 10
+    },
+    {
+      "item_id": "frostpine_wood",
+      "profession": "woodcutting",
+      "tier": 1,
+      "work": "C",
+      "value": 6
+    },
+    {
+      "item_id": "ancient_bark",
+      "profession": "woodcutting",
+      "tier": 2,
+      "work": "S",
+      "value": 30
+    },
+    {
+      "item_id": "iron_ore",
+      "profession": "mining",
+      "tier": 1,
+      "work": "S",
+      "value": 6
+    },
+    {
+      "item_id": "coal",
+      "profession": "mining",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "stone_chunk",
+      "profession": "mining",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "salt_crystal",
+      "profession": "mining",
+      "tier": 1,
+      "work": "R",
+      "value": 4
+    },
+    {
+      "item_id": "gem_common",
+      "profession": "mining",
+      "tier": 1,
+      "work": "C",
+      "value": 35
+    },
+    {
+      "item_id": "sunscar_ore",
+      "profession": "mining",
+      "tier": 2,
+      "work": "S",
+      "value": 8
+    },
+    {
+      "item_id": "shore_fish",
+      "profession": "fishing",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "marsh_fish",
+      "profession": "fishing",
+      "tier": 1,
+      "work": "R",
+      "value": 4
+    },
+    {
+      "item_id": "oasis_fish",
+      "profession": "fishing",
+      "tier": 1,
+      "work": "C",
+      "value": 4
+    },
+    {
+      "item_id": "deep_marsh_fish",
+      "profession": "fishing",
+      "tier": 2,
+      "work": "S",
+      "value": 8
+    },
+    {
+      "item_id": "boar_meat",
+      "profession": "hunting",
+      "tier": 1,
+      "work": "S",
+      "value": 5
+    },
+    {
+      "item_id": "wolf_pelt",
+      "profession": "hunting",
+      "tier": 1,
+      "work": "S",
+      "value": 8
+    },
+    {
+      "item_id": "wolf_fang",
+      "profession": "hunting",
+      "tier": 1,
+      "work": "S",
+      "value": 12
+    },
+    {
+      "item_id": "spider_silk",
+      "profession": "hunting",
+      "tier": 1,
+      "work": "R",
+      "value": 18
+    },
+    {
+      "item_id": "bear_hide",
+      "profession": "hunting",
+      "tier": 1,
+      "work": "C",
+      "value": 12
+    },
+    {
+      "item_id": "troll_sinew",
+      "profession": "hunting",
+      "tier": 2,
+      "work": "S",
+      "value": 18
+    },
+    {
+      "item_id": "dry_reagent",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "marsh_mushroom",
+      "profession": "herbalism",
+      "tier": 1,
+      "work": "S",
+      "value": 4
+    },
+    {
+      "item_id": "a25_binding_resin",
+      "profession": "woodcutting",
+      "tier": 2,
+      "work": "S",
+      "value": 10
+    },
+    {
+      "item_id": "a25_heartwood",
+      "profession": "woodcutting",
+      "tier": 2,
+      "work": "R",
+      "value": 14
+    },
+    {
+      "item_id": "a25_whisper_bark",
+      "profession": "woodcutting",
+      "tier": 2,
+      "work": "C",
+      "value": 18
+    },
+    {
+      "item_id": "a25_layered_ore",
+      "profession": "mining",
+      "tier": 2,
+      "work": "S",
+      "value": 10
+    },
+    {
+      "item_id": "a25_frost_quartz",
+      "profession": "mining",
+      "tier": 2,
+      "work": "R",
+      "value": 14
+    },
+    {
+      "item_id": "a25_echo_crystal",
+      "profession": "mining",
+      "tier": 2,
+      "work": "C",
+      "value": 18
+    },
+    {
+      "item_id": "a25_relic_lichen",
+      "profession": "herbalism",
+      "tier": 2,
+      "work": "S",
+      "value": 10
+    },
+    {
+      "item_id": "a25_bitterroot",
+      "profession": "herbalism",
+      "tier": 2,
+      "work": "R",
+      "value": 14
+    },
+    {
+      "item_id": "a25_seal_blossom",
+      "profession": "herbalism",
+      "tier": 2,
+      "work": "C",
+      "value": 18
+    },
+    {
+      "item_id": "a25_oil_fish",
+      "profession": "fishing",
+      "tier": 2,
+      "work": "S",
+      "value": 10
+    },
+    {
+      "item_id": "a25_reed_perch",
+      "profession": "fishing",
+      "tier": 2,
+      "work": "R",
+      "value": 14
+    },
+    {
+      "item_id": "a25_abyss_fish",
+      "profession": "fishing",
+      "tier": 2,
+      "work": "C",
+      "value": 18
+    },
+    {
+      "item_id": "a25_resilient_sinew",
+      "profession": "hunting",
+      "tier": 2,
+      "work": "S",
+      "value": 10
+    },
+    {
+      "item_id": "a25_pale_silk",
+      "profession": "hunting",
+      "tier": 2,
+      "work": "R",
+      "value": 14
+    },
+    {
+      "item_id": "a25_glass_scale",
+      "profession": "hunting",
+      "tier": 2,
+      "work": "C",
+      "value": 18
+    }
+  ]
+}

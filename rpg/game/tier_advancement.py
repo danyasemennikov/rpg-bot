@@ -122,6 +122,7 @@ def is_instance_eligible_for_tier_advancement(instance_row: dict) -> bool:
 def advance_gear_instance_tier(request: AdvancementRequest) -> AdvancementResult:
     conn = get_connection()
     try:
+        conn.execute('BEGIN IMMEDIATE')
         row = conn.execute(
             'SELECT id, telegram_id, base_item_id, item_tier, rarity, enhance_level FROM gear_instances WHERE telegram_id=? AND id=?',
             (request.telegram_id, request.instance_id),
@@ -147,6 +148,8 @@ def advance_gear_instance_tier(request: AdvancementRequest) -> AdvancementResult
                 target_tier=target_tier,
             )
 
+        from game.equip_requirements import resolve_effective_equip_requirements
+        resolve_effective_equip_requirements(get_item(instance['base_item_id']),target_tier)
         rarity = str(instance.get('rarity') or 'common')
         cost = resolve_advancement_cost(current_tier=current_tier, target_tier=target_tier, rarity=rarity)
 
@@ -178,7 +181,6 @@ def advance_gear_instance_tier(request: AdvancementRequest) -> AdvancementResult
                 cost=cost,
             )
 
-        conn.execute('BEGIN')
         conn.execute('UPDATE players SET gold=? WHERE telegram_id=?', (current_gold - cost.gold, request.telegram_id))
         new_material_qty = current_material - cost.material_qty
         if new_material_qty > 0:
@@ -186,9 +188,12 @@ def advance_gear_instance_tier(request: AdvancementRequest) -> AdvancementResult
         else:
             conn.execute('DELETE FROM inventory WHERE id=?', (material_row['id'],))
         conn.execute(
-            'UPDATE gear_instances SET item_tier=? WHERE telegram_id=? AND id=?',
+            'UPDATE gear_instances SET item_tier=?,revision=revision+1 WHERE telegram_id=? AND id=?',
             (target_tier, request.telegram_id, request.instance_id),
         )
+        from game.equip_requirements import normalize_equipment
+        normalize_equipment(conn,request.telegram_id)
+        conn.execute('UPDATE players SET gear_revision=gear_revision+1 WHERE telegram_id=?',(request.telegram_id,))
         conn.commit()
 
         return AdvancementResult(

@@ -1,0 +1,242 @@
+[
+  {
+    "job_key": "gj_wc_05",
+    "profession_key": "woodcutting",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "wood_common",
+      "wood_dark"
+    ]
+  },
+  {
+    "job_key": "gj_wc_20",
+    "profession_key": "woodcutting",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "a25_binding_resin",
+      "a25_heartwood"
+    ]
+  },
+  {
+    "job_key": "gj_mn_05",
+    "profession_key": "mining",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "iron_ore",
+      "stone_chunk"
+    ]
+  },
+  {
+    "job_key": "gj_mn_20",
+    "profession_key": "mining",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "a25_layered_ore",
+      "a25_frost_quartz"
+    ]
+  },
+  {
+    "job_key": "gj_hb_05",
+    "profession_key": "herbalism",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "herb_common",
+      "reed_bundle"
+    ]
+  },
+  {
+    "job_key": "gj_hb_20",
+    "profession_key": "herbalism",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "a25_relic_lichen",
+      "a25_bitterroot"
+    ]
+  },
+  {
+    "job_key": "gj_fs_05",
+    "profession_key": "fishing",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "shore_fish",
+      "marsh_fish"
+    ]
+  },
+  {
+    "job_key": "gj_fs_20",
+    "profession_key": "fishing",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "a25_oil_fish",
+      "a25_reed_perch"
+    ]
+  },
+  {
+    "job_key": "gj_ht_05",
+    "profession_key": "hunting",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "boar_meat",
+      "wolf_pelt"
+    ]
+  },
+  {
+    "job_key": "gj_ht_20",
+    "profession_key": "hunting",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "a25_resilient_sinew",
+      "a25_pale_silk"
+    ]
+  },
+  {
+    "job_key": "gj_bs_05",
+    "profession_key": "blacksmith",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "pe_sword_1h_01",
+      "pxe_tool_mining_1"
+    ]
+  },
+  {
+    "job_key": "gj_bs_20",
+    "profession_key": "blacksmith",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "pe_sword_1h_18",
+      "pe_shield_18"
+    ]
+  },
+  {
+    "job_key": "gj_ae_05",
+    "profession_key": "arcane_engineer",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "pe_wand_01",
+      "pxe_tool_fishing_1"
+    ]
+  },
+  {
+    "job_key": "gj_ae_20",
+    "profession_key": "arcane_engineer",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "pe_wand_18",
+      "pe_focus_18"
+    ]
+  },
+  {
+    "job_key": "gj_ha_05",
+    "profession_key": "heavy_armor",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "pe_heavy_chest_01",
+      "a25_H_01"
+    ]
+  },
+  {
+    "job_key": "gj_ha_20",
+    "profession_key": "heavy_armor",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "pe_heavy_chest_18",
+      "a25_H_03"
+    ]
+  },
+  {
+    "job_key": "gj_ma_05",
+    "profession_key": "medium_armor",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "trail_vest",
+      "a25_M_01"
+    ]
+  },
+  {
+    "job_key": "gj_ma_20",
+    "profession_key": "medium_armor",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "pe_medium_chest_18",
+      "a25_M_03"
+    ]
+  },
+  {
+    "job_key": "gj_la_05",
+    "profession_key": "light_armor",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "pe_light_chest_01",
+      "a25_L_01"
+    ]
+  },
+  {
+    "job_key": "gj_la_20",
+    "profession_key": "light_armor",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "pe_light_chest_18",
+      "a25_L_03"
+    ]
+  },
+  {
+    "job_key": "gj_al_05",
+    "profession_key": "alchemy",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "field_tonic",
+      "field_mana"
+    ]
+  },
+  {
+    "job_key": "gj_al_20",
+    "profession_key": "alchemy",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "pe_alchemy_health_18",
+      "a25_clear_sight"
+    ]
+  },
+  {
+    "job_key": "gj_ck_05",
+    "profession_key": "cooking",
+    "tier": 1,
+    "unlock_P": 5,
+    "sources": [
+      "trail_ration",
+      "pe_cooking_shore_01"
+    ]
+  },
+  {
+    "job_key": "gj_ck_20",
+    "profession_key": "cooking",
+    "tier": 2,
+    "unlock_P": 20,
+    "sources": [
+      "pe_cooking_deep_18",
+      "a25_hunters_stew"
+    ]
+  }
+]

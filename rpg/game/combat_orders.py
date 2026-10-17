@@ -132,7 +132,7 @@ def consume_combat_intent(player_id: int, token: str) -> dict[str, Any]:
                 actor = conn.execute('SELECT location_id,gold FROM players WHERE telegram_id=?',(player_id,)).fetchone()
                 result = {'schema_version':1,'catalog_version':2,'action_kind':COMBAT_ACK_KIND,
                     'status':'ordered','player_id':player_id,'location_id':actor['location_id'],'recipe_id':None,
-                    'consumed':[],'granted':[],'gold_delta':0,'gold_after':actor['gold'],'progression':[],
+                    'consumed':([{'item_id':'a25_cleanse_draught','quantity':1}] if action.get('kind')=='cleanse' else []),'granted':[],'gold_delta':0,'gold_after':actor['gold'],'progression':[],
                     'source':{'intent':payload},'details':{'accepted':True,**payload}}
                 store_receipt(conn,player_id,'ui:'+token,COMBAT_ACK_KIND,intent_hash(COMBAT_ACK_KIND,player_id,payload),result,catalog_version=2)
         conn.commit()
@@ -187,7 +187,15 @@ def _validate_pxe1_pve_order(conn,encounter,player_id,action):
     target=str(target) if target is not None else None
     live_allies={str(a['actor_id']) for a in allies if int(a['hp'])>0 and not a.get('dead')}
     live_enemies={str(e['unit_id']) for e in enemies if int(e['hp'])>0 and not e.get('dead')}
-    if kind=='basic_attack':
+    if kind=='cleanse':
+        if action.get('item_id')!='a25_cleanse_draught' or target not in {None,str(player_id)}:
+            raise ActionRejected('invalid_action')
+        if not any(e.get('kind')=='poison' for e in actor.get('effects',[])):
+            raise ActionRejected('no_poison')
+        if any(e.get('kind')=='freeze' for e in actor.get('effects',[])):
+            raise ActionRejected('not_your_turn')
+        selected={'kind':'cleanse','manual':True}
+    elif kind=='basic_attack':
         if target not in live_enemies: raise ActionRejected('invalid_target')
         selected={'kind':'normal','target_id':target,'manual':True}
     elif kind=='guard':
@@ -260,6 +268,22 @@ def submit_combat_order(
             if owns:
                 conn.rollback()
             return {"accepted": identical, "duplicate": identical, "reason": "duplicate" if identical else "conflicting_order"}
+        if action.get('kind')=='cleanse':
+            if encounter_kind!='pve':
+                raise ActionRejected('invalid_action')
+            encounter=conn.execute('SELECT * FROM pve_encounters WHERE encounter_id=?',(encounter_id,)).fetchone()
+            participant=conn.execute("SELECT status FROM pve_encounter_participants WHERE encounter_id=? AND player_id=?",(encounter_id,actor_id)).fetchone()
+            if (not encounter or encounter['status']!='active' or encounter['rules_version']!=RULES_VERSION
+                    or not participant or participant['status']!='active'
+                    or int(turn_revision)!=int(encounter['turn_revision'])
+                    or datetime.now(timezone.utc)>=datetime.fromisoformat(deadline_at.replace('Z','+00:00'))):
+                raise ActionRejected('stale_action')
+            _validate_pxe1_pve_order(conn,encounter,actor_id,action)
+            owned=conn.execute("SELECT * FROM inventory WHERE telegram_id=? AND item_id='a25_cleanse_draught' AND quantity>0 ORDER BY id LIMIT 1",(actor_id,)).fetchone()
+            if not owned:
+                raise ActionRejected('not_enough_materials')
+            from game.profession_consumables import debit_item
+            debit_item(conn,owned)
         result = conn.execute('''INSERT OR IGNORE INTO combat_orders_v1
             (encounter_kind, encounter_id, turn_revision, actor_id, action_json,
              target_id, rules_version, deadline_at, order_kind)

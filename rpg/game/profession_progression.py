@@ -1,41 +1,40 @@
-"""Shared PEV1 profession thresholds and separate crafting XP policy."""
-
-from __future__ import annotations
-
+"""Frozen Epic I profession policy, independent of character progression."""
 from dataclasses import dataclass
 
-MAX_PROFESSION_LEVEL = 20
+MAX_PROFESSION_LEVEL = 30
+PROFESSION_TIER_RANGES = tuple((15*i+1, 15*(i+1)) for i in range(8))
+POLICY_VERSION = 3
+
+
+def profession_tier(level: int) -> int:
+    if type(level) is not int or not 1 <= level <= 120:
+        raise ValueError('invalid_profession_level')
+    return (level-1)//15+1
 
 
 def profession_exp_needed(level: int) -> int:
-    return max(1, int(level)) * 50
+    if 1 <= level <= 14:
+        return 100+20*(level-1)
+    if 16 <= level <= 29:
+        return 300+30*(level-16)
+    raise ValueError('profession_xp_halted')
 
 
 def xp_to_level(current_level: int, current_exp: int, target_level: int) -> int:
-    return max(0, sum(profession_exp_needed(level) for level in range(current_level, target_level)) - int(current_exp))
+    return max(0, sum(profession_exp_needed(p) for p in range(current_level,target_level))-current_exp)
 
 
-def crafting_training_ceiling(recipe_level: int) -> int:
-    if recipe_level <= 2:
-        return 6
-    if recipe_level <= 6:
-        return 12
-    if recipe_level <= 12:
-        return 18
-    return 20
+def work_xp(*, gathering: bool, work_tier: int, category: str, current_level: int) -> int:
+    if work_tier not in (1,2) or category not in ('S','R','C'):
+        raise ValueError('invalid_work_policy')
+    base = ((3,4,5) if gathering else (6,12,18))[('S','R','C').index(category)]*work_tier
+    return max(1,base//5) if current_level >= 16 and work_tier == 1 else base
 
 
 def crafting_xp_for_success(*, current_level: int, current_exp: int, recipe_level: int,
-                            material_value: int) -> int:
-    ceiling = crafting_training_ceiling(recipe_level)
-    if current_level >= ceiling or current_level >= MAX_PROFESSION_LEVEL:
-        return 0
-    if not isinstance(material_value,int) or isinstance(material_value,bool) or material_value<=0:
-        raise ValueError('invalid recipe material value')
-    base = min(10+5*int(recipe_level),material_value)
-    gap = int(current_level)-int(recipe_level)
-    award = base if gap<=2 else max(1,base//2) if gap<=4 else max(1,base//4)
-    return min(award,xp_to_level(current_level,current_exp,ceiling))
+                            material_value: int, category: str = 'S') -> int:
+    attempted=work_xp(gathering=False,work_tier=profession_tier(recipe_level),category=category,current_level=current_level)
+    return apply_profession_xp(current_level,current_exp,attempted).applied
 
 
 @dataclass(frozen=True)
@@ -45,16 +44,36 @@ class ProfessionProgression:
     new_level: int
     new_exp: int
     xp_awarded: int
+    attempted: int = 0
+    applied: int = 0
+    discarded: int = 0
 
 
 def apply_profession_xp(current_level: int, current_exp: int, xp_awarded: int) -> ProfessionProgression:
-    old_level, old_exp = int(current_level), int(current_exp)
-    if old_level >= MAX_PROFESSION_LEVEL or xp_awarded <= 0:
-        return ProfessionProgression(old_level, old_exp, old_level, old_exp, 0)
-    level, exp = old_level, old_exp + int(xp_awarded)
-    while level < MAX_PROFESSION_LEVEL and exp >= profession_exp_needed(level):
-        exp -= profession_exp_needed(level)
-        level += 1
-    if level >= MAX_PROFESSION_LEVEL:
-        exp = 0
-    return ProfessionProgression(old_level, old_exp, level, exp, int(xp_awarded))
+    if (type(current_level) is not int or not 1 <= current_level <= 30
+            or type(current_exp) is not int or current_exp < 0
+            or type(xp_awarded) is not int or xp_awarded < 0):
+        raise ValueError('invalid_profession_xp')
+    cap = 15 if current_level <= 15 else 30
+    level, exp = current_level, current_exp
+    if level == cap:
+        if exp:
+            raise ValueError('invalid_profession_cap_exp')
+        applied = 0
+    else:
+        applied = min(xp_awarded,xp_to_level(level,exp,cap))
+        exp += applied
+        while level < cap and exp >= profession_exp_needed(level):
+            exp -= profession_exp_needed(level)
+            level += 1
+        if level == cap:
+            exp = 0
+    return ProfessionProgression(current_level,current_exp,level,exp,applied,xp_awarded,applied,xp_awarded-applied)
+
+
+def personal_batch_limit(level: int) -> int:
+    return 4 if level >= 25 else 2 if level >= 10 else 1
+
+
+def processing_duration_ms(level: int) -> int:
+    return 108000 if level >= 25 else 114000 if level >= 10 else 120000

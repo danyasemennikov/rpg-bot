@@ -33,22 +33,32 @@ def guild_route(player_id):
         conn.close()
 
 
-def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=None):
+def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=None,count=1):
     from handlers.professions import _recipe_name,_state,_peaceful_guild_access,_legacy_recipe
-    from game.profession_tools import commission_inputs,get_tool
+    from game.profession_tools import commission_inputs,get_tool,TOOL_CAPACITY
     recipe = get_recipe(recipe_id)
     if not recipe:
         from handlers.professions import build_overview
         return build_overview(player)
     player_id,lang = player['telegram_id'],player.get('lang','ru')
+    if commission:
+        from handlers.profession_guild_views import commission_view
+        return commission_view(player,recipe.output_spec.profession_key,tier=recipe.output_spec.tool_tier)
     _,crafting,inventory = _state(player_id)
     state = crafting[recipe.profession_key]
     known = recipe_id in known_recipe_ids(player_id)
-    required = dict(recipe.requirements)
+    from game.profession_progression import personal_batch_limit
+    if type(count) is not int or count not in (1,2,4) or count>personal_batch_limit(state['level']) or recipe.output_spec.kind=='tool' and count!=1:
+        raise ActionRejected('batch_limit')
+    required={i:q*count for i,q in recipe.requirements}
     gold,supplied,tool = 0,{},None
     reason = None
+    learning_price=recipe.learning_gold
     conn = get_connection()
     try:
+        if recipe.tier==1 and conn.execute('SELECT 1 FROM profession_vouchers WHERE player_id=? AND profession_key=? AND knowledge_id IS NULL',
+            (player_id,recipe.profession_key)).fetchone():
+            learning_price=0
         if recipe.output_spec.kind=='tool':
             tool = get_tool(conn,player_id,recipe.output_spec.profession_key)
         if commission:
@@ -87,11 +97,11 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
         validate_surface(text,keyboard,long_detail=True)
         return text,keyboard
     lines = [f'<b>{escape(_recipe_name(recipe,lang))}</b> ×{recipe.output_spec.quantity}',
-             t('professions.known' if known else 'professions.learnable' if state['level']>=recipe.required_level else 'professions.locked',lang)+' · '+t('professions.recipe_level',lang,level=recipe.required_level)]
+             t('professions.known' if known else 'professions.learnable' if state['level']>=recipe.required_level else 'professions.locked',lang)+' · '+t('epic_i.tier',lang,tier=recipe.tier)]
     ingredients = [f'{escape(get_item_name(item,lang))}: {inventory.get(item,0)}/{quantity}' for item,quantity in required.items()]
     lines.extend(' · '.join(ingredients[i:i+3]) for i in range(0,len(ingredients),3))
     if recipe.output_spec.kind=='tool':
-        lines.append(t('pxe1.profession.tool_output',lang,capacity=60*recipe.output_spec.tool_tier))
+        lines.append(t('pxe1.profession.tool_output',lang,capacity=TOOL_CAPACITY[recipe.output_spec.tool_tier]))
     else:
         from game.items_data import get_item
         output = get_item(recipe.output_spec.item_id)
@@ -105,7 +115,7 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
         else:
             effects = json.loads(output['stat_bonus_json'] or '{}')
             lines.append(f"❤️ +{effects.get('heal',0)} · 🔵 +{effects.get('mana',0)}")
-    xp = crafting_xp_for_success(current_level=state['level'],current_exp=state['exp'],recipe_level=recipe.required_level,material_value=recipe.material_value)
+    xp = crafting_xp_for_success(current_level=state['level'],current_exp=state['exp'],recipe_level=recipe.required_level,material_value=recipe.material_value,category=recipe.work_category)
     lines.append((t('professions.recipe_xp_award',lang,xp=xp) if xp else t('pxe1.profession.no_xp',lang))+' · '+t('pxe1.location.guild',lang))
     if commission:
         if reason:
@@ -115,14 +125,17 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
             if supplied:
                 lines.append(t('pxe1.commission_supplied',lang,items=', '.join(get_item_name(item,lang)+f' ×{quantity}' for item,quantity in supplied.items())))
     enough = all(inventory.get(item,0)>=quantity for item,quantity in required.items()) and player['gold']>=gold
-    legal = known and state['level']>=recipe.required_level and enough and _peaceful_guild_access(player_id) and not reason
+    legal = state['registered_at'] is not None and known and state['level']>=recipe.required_level and enough and _peaceful_guild_access(player_id) and not reason
     downgrade = bool(tool and tool['tier']>recipe.output_spec.tool_tier)
     if downgrade:
         legal = False
     rows = []
+    if recipe.output_spec.kind!='tool':
+        lines.append(t('epic_i.batch_rule',lang,count=count))
+        rows.append([InlineKeyboardButton('×'+str(n),callback_data=f'pe_b:{recipe_id}:{n}') for n in (1,2,4) if n<=personal_batch_limit(state['level'])])
     if legal:
-        payload = recipe_intent_payload(recipe_id,tool_revision=tool['revision'] if tool else None,commission=commission)
-        if tool:
+        payload = recipe_intent_payload(recipe_id,tool_revision=tool['revision'] if tool else 0,commission=commission)
+        if recipe.output_spec.kind=='tool':
             parameters = json.loads(payload)
             parameters['input_snapshot'] = {item:inventory.get(item,0) for item in required}
             parameters['gold'] = gold
@@ -132,13 +145,23 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
             token = issue_actions(player_id,'tool_craft_preview',[payload])[payload]
             callback = 'pe_tc:'+token
         else:
+            from game.crafting_runtime import create_craft_batch
+            writer=get_connection()
+            try:
+                writer.execute('BEGIN IMMEDIATE')
+                batch=create_craft_batch(writer,player_id,recipe_id,count)
+                writer.commit()
+            finally:writer.close()
+            parameters=json.loads(payload)
+            parameters.update(batch_id=batch['batch_id'],count=count)
+            payload=json.dumps(parameters,sort_keys=True,separators=(',',':'))
             token = issue_actions(player_id,'craft',[payload])[payload]
             callback = 'pe_a:'+token
         rows.append([InlineKeyboardButton(t('pxe1.tool.commission' if commission else 'professions.craft',lang),callback_data=callback)])
     elif not known and state['level']>=recipe.required_level and _peaceful_guild_access(player_id):
         payload = recipe_intent_payload(recipe_id)
         token = issue_actions(player_id,'learn',[payload])[payload]
-        rows.append([InlineKeyboardButton(t('professions.learn',lang)+f' · {recipe.learning_gold} 💰',callback_data='pe_a:'+token)])
+        rows.append([InlineKeyboardButton(t('professions.learn',lang)+f' · {learning_price} 💰',callback_data='pe_a:'+token)])
     else:
         blocker = 'recipe_need_knowledge' if not known else 'recipe_need_level' if state['level']<recipe.required_level else 'recipe_need_guild' if not _peaceful_guild_access(player_id) else 'recipe_no_downgrade' if downgrade else 'recipe_need_inputs'
         lines.append(t('pxe1.'+blocker,lang))
@@ -158,7 +181,7 @@ def recipe_card(player,recipe_id,*,commission=False,details=False,inputs_page=No
 
 def tool_craft_confirmation(player,token):
     from game.locations import resolve_location_id
-    from game.profession_tools import get_tool
+    from game.profession_tools import get_tool,TOOL_CAPACITY
     from handlers.professions import _recipe_name
     player_id,lang = player['telegram_id'],player.get('lang','ru')
     conn = get_connection()
@@ -170,19 +193,20 @@ def tool_craft_confirmation(player,token):
         intent = json.loads(row['payload'])
         recipe = get_recipe(intent['recipe_id'])
         tool = get_tool(conn,player_id,recipe.output_spec.profession_key)
-        if not tool or tool['revision']!=intent['tool_revision']:
+        if (tool['revision'] if tool else 0)!=intent['tool_revision']:
             raise ActionRejected('tool_changed')
         for item,owned in intent['input_snapshot'].items():
             current = conn.execute('SELECT COALESCE(SUM(quantity),0) FROM inventory WHERE telegram_id=? AND item_id=?',(player_id,item)).fetchone()[0]
             if current!=owned:
                 raise ActionRejected('tool_quote_changed')
     finally: conn.close()
+    tool=tool or {'tier':1,'durability':0}
     intent['replacement_confirmed'] = True
     payload = json.dumps(intent,sort_keys=True,separators=(',',':'))
     mutation = issue_actions(player_id,'craft',[payload])[payload]
     lines = [f'<b>{escape(_recipe_name(recipe,lang))}</b>',
-             t('pxe1.tool.replace_confirm',lang,tier=tool['tier'],current=tool['durability'],maximum=60*tool['tier']),
-             t('pxe1.profession.tool_output',lang,capacity=60*recipe.output_spec.tool_tier)]
+             t('pxe1.tool.replace_confirm',lang,tier=tool['tier'],current=tool['durability'],maximum=TOOL_CAPACITY[tool['tier']]),
+             t('pxe1.profession.tool_output',lang,capacity=TOOL_CAPACITY[recipe.output_spec.tool_tier])]
     consumed = [escape(get_item_name(item,lang))+f' ×{quantity}' for item,quantity in intent['required'].items()]
     lines += [' · '.join(consumed[i:i+3]) for i in range(0,len(consumed),3)]
     if intent['gold']: lines.append(t('pxe1.tool.commission_cost',lang,gold=intent['gold']))

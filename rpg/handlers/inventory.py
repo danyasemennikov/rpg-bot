@@ -373,7 +373,8 @@ def try_sell_inventory_item(telegram_id: int, action_token: str) -> dict:
 
 
 def consume_owned_potion(conn, telegram_id: int, inventory_id: int, *, hp: int, mana: int,
-                        max_hp: int, max_mana: int, expected_quantity: int | None = None) -> dict:
+                        max_hp: int, max_mana: int, expected_quantity: int | None = None,
+                        slot_revision=None, confirmed=False, in_battle=False) -> dict:
     """Shared inventory/battle consumption, using caller-owned transaction and caps."""
     from game.action_receipts import ActionRejected
     row = conn.execute('SELECT * FROM inventory WHERE id=? AND telegram_id=?', (inventory_id, telegram_id)).fetchone()
@@ -382,6 +383,10 @@ def consume_owned_potion(conn, telegram_id: int, inventory_id: int, *, hp: int, 
     item = get_item(row['item_id'])
     if not item or item['item_type'] != 'potion':
         raise ActionRejected('stale_action')
+    from game.profession_consumables import CONSUMABLES,consume
+    if row['item_id'] in CONSUMABLES:
+        return consume(conn,telegram_id,row,hp=hp,mana=mana,max_hp=max_hp,max_mana=max_mana,
+                       expected_revision=slot_revision,confirmed=confirmed,in_battle=in_battle)
     bonus = json.loads(item['stat_bonus_json'])
     heal = _calc_safe_restore_amount(hp, max_hp, bonus.get('heal', 0))
     mana_gain = _calc_safe_restore_amount(mana, max_mana, bonus.get('mana', 0))
@@ -411,15 +416,17 @@ def use_inventory_consumable(telegram_id: int, action_token: str) -> dict:
         payload = consume_action(conn, telegram_id, 'use', action_token, payload=payload)
         authorized = True
         player = peaceful_player(conn, telegram_id)
-        inv_id, expected_quantity = (int(value) for value in payload.split(':'))
-        effective = get_player_effective_stats(telegram_id, player)
+        options=json.loads(payload) if payload.startswith('{') else {}
+        inv_id, expected_quantity = (options['inventory_id'],options['quantity']) if options else tuple(int(value) for value in payload.split(':'))
+        effective = get_player_effective_stats(telegram_id, player, conn=conn)
         result = consume_owned_potion(conn, telegram_id, inv_id, hp=player['hp'], mana=player['mana'],
-                    max_hp=effective['max_hp'], max_mana=effective['max_mana'], expected_quantity=expected_quantity)
+                    max_hp=effective['max_hp'], max_mana=effective['max_mana'], expected_quantity=expected_quantity,
+                    slot_revision=options.get('slot_revision'),confirmed=options.get('confirmed',False))
         receipt = {'schema_version':1,'action_kind':'consume','status':'used','player_id':telegram_id,
                    'location_id':player['location_id'],'recipe_id':None,
                    'consumed':[{'item_id':result['item_id'],'quantity':1}],'granted':[],
                    'gold_delta':0,'gold_after':player['gold'],'progression':[],
-                   'source':{'inventory_id':inv_id},'details':{'heal':result['heal'],'mana':result['mana']}}
+                   'source':{'inventory_id':inv_id},'details':{'heal':result['heal'],'mana':result['mana'],'slot':result.get('slot')}}
         store_receipt(conn,telegram_id,f'ui:{action_token}','consume',receipt_hash,receipt)
         conn.commit()
         return {**receipt, **result}
@@ -496,7 +503,7 @@ def use_battle_consumable(telegram_id: int, action_token: str, encounter_id: str
             raise ActionRejected('stale_action')
         result = consume_owned_potion(conn, telegram_id, int(inv_id),
                     hp=hp, mana=mana, max_hp=max_hp, max_mana=max_mana,
-                    expected_quantity=int(quantity))
+                    expected_quantity=int(quantity),in_battle=True)
         if actor is not None:
             actor['hp'] = hp + int(result['heal'])
             actor['mana'] = mana + int(result['mana'])
@@ -629,6 +636,7 @@ def _legacy_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang:
         resolved_instance = resolve_gear_instance_item_data(inv_row.get('instance', {}))
         rarity_key = resolved_instance.get('instance_rarity', rarity_key)
         tier_value = int(resolved_instance.get('item_tier', 1))
+        item={**item,**{key:value for key,value in resolved_instance.items() if key.startswith('req_')}}
 
     rarity_emoji = t(f"inventory.{RARITY_KEYS.get(rarity_key, 'rarity_common')}", lang)
     rarity_name  = RARITY_NAME.get(lang, RARITY_NAME['ru']).get(rarity_key, '')
@@ -797,7 +805,10 @@ def _legacy_item_detail(telegram_id: int, entry_token: str, back_tab: str, lang:
                     )])
     elif item['item_type'] == 'potion':
         from game.action_receipts import issue_actions
-        payload = f"{inv_row['id']}:{inv_row['quantity']}"
+        from game.profession_consumables import use_payload
+        conn=get_connection()
+        try: payload=use_payload(conn,telegram_id,inv_row['id'],inv_row['quantity'])
+        finally: conn.close()
         token = issue_actions(telegram_id, 'use', [payload])[payload]
         keyboard.append([InlineKeyboardButton(t('inventory.use_btn', lang), callback_data=f"inv_use_{token}_{back_tab}")])
 
@@ -1365,17 +1376,52 @@ async def handle_inventory_buttons(update: Update, context: ContextTypes.DEFAULT
         await query.answer(t('gear.state_changed', lang), show_alert=True)
         return
 
+    if data.startswith('inv_prepconfirm_'):
+        parts=data.split('_')
+        if len(parts)!=4:
+            await query.answer(t('chapter.stale_action',lang),show_alert=True)
+            return
+        # The confirmation button already holds the final persisted use intent.
+        # Its token is also the receipt identity after a lost response/restart.
+        result=use_inventory_consumable(user.id,parts[2])
+        await query.answer(t('epic_i.consumable_ready' if result['status']=='used' else 'epic_i.changed',lang),show_alert=True)
+        text,keyboard=build_inventory_list(user.id,parts[3],lang)
+        await query.edit_message_text(text,reply_markup=keyboard,parse_mode='HTML')
+        return
+
     # ── Использовать зелье ──
     if data.startswith('inv_use_'):
         parts = data.split('_')
         if len(parts) != 4:
             await query.answer(t('chapter.stale_action', lang), show_alert=True)
             return
+        from game.profession_consumables import CONSUMABLES,pending_slot
+        conn=get_connection()
+        try:
+            original=conn.execute("SELECT payload FROM player_ui_actions WHERE player_id=? AND token=? AND kind='use' AND used=0",(user.id,parts[2])).fetchone()
+            options=json.loads(original['payload']) if original and str(original['payload']).startswith('{') else {}
+            owned=conn.execute('SELECT item_id FROM inventory WHERE id=? AND telegram_id=?',(options.get('inventory_id',0),user.id)).fetchone()
+            spec=CONSUMABLES.get(owned['item_id'] if owned else '',{})
+            existing=pending_slot(conn,user.id,spec['slot']) if 'slot' in spec else {}
+        finally:conn.close()
+        if existing.get('item_id'):
+            if options.get('slot_revision')!=existing['revision']:
+                await query.answer(t('epic_i.changed',lang),show_alert=True)
+                return
+            from game.action_receipts import issue_actions
+            options['confirmed']=True
+            payload=json.dumps(options,sort_keys=True,separators=(',',':'))
+            confirmed_token=issue_actions(user.id,'use',[payload])[payload]
+            keyboard=InlineKeyboardMarkup([[InlineKeyboardButton(t('common.confirm',lang),callback_data=f'inv_prepconfirm_{confirmed_token}_{parts[3]}')],
+                [InlineKeyboardButton(t('common.back',lang),callback_data=f'inv_tab_{parts[3]}')]])
+            await query.edit_message_text(t('epic_i.consumable_replace',lang,name=get_item_name(existing['item_id'],lang)),reply_markup=keyboard,parse_mode='HTML')
+            await query.answer()
+            return
         result = use_inventory_consumable(user.id, parts[2])
         if result['status'] != 'used':
-            await query.answer(t(f"chapter.{result['status']}", lang), show_alert=True)
+            await query.answer(t("epic_i.consumable_wrong_context" if result["status"]=="consumable_wrong_context" else f"chapter.{result['status']}", lang), show_alert=True)
             return
-        msg = t('inventory.healed', lang, val=result['heal']) + '\n' + t('inventory.mana_restored', lang, val=result['mana'])
+        msg = t('epic_i.consumable_ready',lang) if result.get('slot') else t('inventory.healed', lang, val=result['heal']) + '\n' + t('inventory.mana_restored', lang, val=result['mana'])
         await query.answer(msg, show_alert=True)
         text, keyboard = build_inventory_list(user.id, parts[3], lang)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode='HTML')
